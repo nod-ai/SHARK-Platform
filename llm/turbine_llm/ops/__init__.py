@@ -4,4 +4,5 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-from shark_turbine.support.logging import get_logger
+from .matmul import *
+from .custom_inference_ops import CustomInferenceOps
