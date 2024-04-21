@@ -537,11 +537,11 @@ def _dataset_load_helper(
 ) -> Dataset:
     path = Path(path)
     suffixes = path.suffixes
-    if file_type == "gguf" or suffixes == [".gguf"] or suffixes[-1] == ".gguf":
+    if file_type == "gguf" or suffixes[-1] == ".gguf":
         from . import gguf_interop
 
         return gguf_interop.load_file(path)
-    elif file_type == "irpa" or suffixes == [".irpa"] or suffixes[-1] == ".irpa":
+    elif file_type == "irpa" or suffixes[-1] == ".irpa":
         return _dataset_load_irpa(path, mmap=mmap)
     else:
         raise IOError(
