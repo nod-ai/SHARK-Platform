@@ -10,7 +10,7 @@ Key concepts:
 
   * DeviceSession: A single HAL device and other process-level globals. Shared global
     memory and corresponding synchronization handles are accessible from here.
-  * WorkQueue: Logical stream of execution, nested under the DeviceSession. Each 
+  * WorkQueue: Logical stream of execution, nested under the DeviceSession. Each
     queue holds a timeline semaphore which sequences invocations. For these models,
     we route workloads of vastly different characteristics to distinct queues (i.e.
     prefill vs decode step).

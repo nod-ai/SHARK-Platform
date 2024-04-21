@@ -3,9 +3,12 @@
 **WARNING: This is an early preview that is in progress. It is not ready for
 general use.**
 
+[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
+
+
 ## Development Getting Started
 
-Use this as a guide to get started developing the project using pinned, 
+Use this as a guide to get started developing the project using pinned,
 pre-release dependencies. You are welcome to deviate as you see fit, but
 these canonical directions mirror what the CI does.
 
@@ -54,3 +57,9 @@ pip install -e shortfin
 pytest sharktank
 pytest shortfin
 ```
+
+### Optional: Pre-commits and developer settings
+
+This project is set up to use the `pre-commit` tooling. To install it in
+your local repo, run: `pre-commit install`. After this point, when making
+commits locally, hooks will run. See https://pre-commit.com/

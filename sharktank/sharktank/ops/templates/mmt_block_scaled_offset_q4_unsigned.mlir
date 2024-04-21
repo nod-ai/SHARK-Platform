@@ -39,8 +39,8 @@ util.func private @sharktank_mmt_block_scaled_offset_q4_unsigned_3d_{n}_{k}_{bs}
           affine_map<(d0, d1, d2) -> (d0, d1, 0)>,
           affine_map<(d0, d1, d2) -> (d0, d1, 0)>,
           affine_map<(d0, d1, d2) -> (d0, d1, d2)>,
-          affine_map<(d0, d1, d2) -> (d0, d1, d2)>], 
-      iterator_types = ["parallel", "parallel", "parallel"] }} 
+          affine_map<(d0, d1, d2) -> (d0, d1, d2)>],
+      iterator_types = ["parallel", "parallel", "parallel"] }}
       ins(%d, %m, %qs : !d_tensor_type, !m_tensor_type, !qs_tensor_type)
       outs(%b_grouped : !b_grouped_tensor_type) {{
   ^bb0(%d_element: !scale_type, %m_element: !scale_type, %q_element: !lowp_type, %out: !a_type):
@@ -63,9 +63,9 @@ util.func private @sharktank_mmt_block_scaled_offset_q4_unsigned_3d_{n}_{k}_{bs}
       indexing_maps = [
           // d0 = b, d1 = m, d2 = n, d3 = group0 (r), d4 = block (r)
           affine_map<(d0, d1, d2, d3, d4) -> (d0, d1, d3, d4)>,
-          affine_map<(d0, d1, d2, d3, d4) -> (d2, d3, d4)>, 
-          affine_map<(d0, d1, d2, d3, d4) -> (d0, d1, d2)>], 
-      iterator_types = ["parallel", "parallel", "parallel", "reduction", "reduction"] }} 
+          affine_map<(d0, d1, d2, d3, d4) -> (d2, d3, d4)>,
+          affine_map<(d0, d1, d2, d3, d4) -> (d0, d1, d2)>],
+      iterator_types = ["parallel", "parallel", "parallel", "reduction", "reduction"] }}
       ins(%aexp, %b_grouped_dequant : !aexp_tensor_type,  !b_grouped_tensor_type)
       outs(%result_fill : !c_tensor_type) {{
   ^bb0(%a_element: !a_type, %b_element: !a_type, %out: !a_type):
