@@ -46,9 +46,12 @@ This assumes you have `SHARK-Turbine` checked out adjacent (note that for the
 moment we rely on pre-release versions, so installation is a bit harder).
 
 ```
-pip install -f https://iree.dev/pip-release-links.html -e ../SHARK-Turbine/core/
-pip install -e sharktank
-pip install -e shortfin
+# Clone and install editable SHARK-Turbine dep in deps/
+pip install -f https://iree.dev/pip-release-links.html --src deps \
+  -e "git+https://github.com/nod-ai/SHARK-Turbine.git#egg=SHARK-Turbine&subdirectory=core"
+
+# Install editable local projects.
+pip install -e sharktank/ shortfin/
 ```
 
 ### Running Tests

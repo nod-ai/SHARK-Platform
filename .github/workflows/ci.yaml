@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - main
+
+concurrency:
+  # A PR number if a pull request and otherwise the commit hash. This cancels
+  # queued and in-progress runs for the same PR (presubmit) or commit
+  # (postsubmit). The workflow name is prepended to avoid conflicts between
+  # different workflows.
+  group: ${{ github.workflow }}-${{ github.event.number || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: "Unit Tests and Type Checking"
+    strategy:
+      matrix:
+        version: [3.11]
+        os: [ubuntu-latest]
+
+    runs-on: ${{matrix.os}}
+    steps:
+      - name: "Setting up Python"
+        uses: actions/setup-python@v3
+        with:
+          python-version: ${{matrix.version}}
+
+      - name: "Checkout Code"
+        uses: actions/checkout@v3
+
+      - name: Sync source deps
+        run: |
+          python -m pip install --upgrade pip
+          # Note: We install in three steps in order to satisfy requirements
+          # from non default locations first. Installing the PyTorch CPU
+          # wheels saves multiple minutes and a lot of bandwidth on runner setup.
+          pip install -r pytorch-cpu-requirements.txt
+          pip install -f https://iree.dev/pip-release-links.html --src deps \
+            -e "git+https://github.com/nod-ai/SHARK-Turbine.git#egg=SHARK-Turbine&subdirectory=core"
+          pip install -e sharktank/ shortfin/
+      - name: Run sharkfin tests
+        if: ${{ !cancelled() }}
+        run: |
+          pytest -n 4 sharkfin/
+
+      - name: Run shortfin tests
+        if: ${{ !cancelled() }}
+        run: |
+          pytest -n 4 shortfin/
+
+      # TODO: Enable type checking of sharktank
+      - name: MyPy Type Checking Shortfin
+        if: ${{ !cancelled() }}
+        run: |
+          (cd shortfin && mypy)
