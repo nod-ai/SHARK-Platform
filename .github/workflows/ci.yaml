@@ -43,10 +43,11 @@ jobs:
           pip install --no-compile -f https://iree.dev/pip-release-links.html --src deps \
             -e "git+https://github.com/nod-ai/SHARK-Turbine.git#egg=SHARK-Turbine&subdirectory=core"
           pip install --no-compile -r requirements.txt -e sharktank/ shortfin/
-      - name: Run sharkfin tests
+
+      - name: Run sharktank tests
         if: ${{ !cancelled() }}
         run: |
-          pytest -n 4 sharkfin/
+          pytest -n 4 sharktank/
 
       - name: Run shortfin tests
         if: ${{ !cancelled() }}
