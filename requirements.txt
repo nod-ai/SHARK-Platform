@@ -1,7 +1,8 @@
-numpy>=1.26.3
-onnx>=1.15.0
-pytest>=8.0.0
-pytest-xdist>=3.5.0
+gguf==0.6.0
+numpy==1.26.3
+onnx==1.15.0
+pytest==8.0.0
+pytest-xdist==3.5.0
 mypy==1.8.0
 types-requests==2.31.0.20240125
 
