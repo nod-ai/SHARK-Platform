@@ -49,23 +49,24 @@ usage in a few key ways:
   Each `InferenceTensor` can be manifested as a specific type of physical
   representation:
 
-  a. `PrimitiveInferenceTensor`: Simply backed by a PyTorch tensor (typically
-     from a memory mapped array in a `Dataset` on storage but can be arbitrary).
-  b. Packed `QuantizedTensor`: These tensors are backed by a single at-rest
-     PyTorch tensor with a specific manner of packing scheme, logically
-     represented by a `Layout`. In practice, each GGUF quantization scheme has
-     a distinct type of packed `QuantizedTensor` implementation. It is an
-     open world, and arbitrary implementations are easily created.
-  c. Planar `QuantizedTensor`: These tensors are backed by an arbitrary
-     dictionary of tensors (i.e. "planes"), logically represented by a `Layout`.
-     Typically, packed `QuantizedTensors` can be converted to planar form.
-     As a tensor compiler, IREE operates best on the planar form for generic
-     kernels, since it is easiest for it to process directly and repack into
-     more architecture specific forms.
+a. `PrimitiveInferenceTensor`: Simply backed by a PyTorch tensor (typically
+    from a memory mapped array in a `Dataset` on storage but can be arbitrary).
+b. Packed `QuantizedTensor`: These tensors are backed by a single at-rest
+    PyTorch tensor with a specific manner of packing scheme, logically
+    represented by a `Layout`. In practice, each GGUF quantization scheme has
+    a distinct type of packed `QuantizedTensor` implementation. It is an
+    open world, and arbitrary implementations are easily created.
+c. Planar `QuantizedTensor`: These tensors are backed by an arbitrary
+    dictionary of tensors (i.e. "planes"), logically represented by a `Layout`.
+    Typically, packed `QuantizedTensors` can be converted to planar form.
+    As a tensor compiler, IREE operates best on the planar form for generic
+    kernels, since it is easiest for it to process directly and repack into
+    more architecture specific forms.
 
 * A `Layout` operates on a planar arrangement, providing the reference math
   to quantize/dequantize, specifically preserving any latent block structure
-  to the underlying data.
+  to the underlying data. Custom kernels are typically keyed on the `Layout`
+  type for specialization.
 * `InferenceOps` are defined for all "hero ops" of modern ML models. These ops
   take as arguments combinations of plain PyTorch tensors and
   `InferenceTensors`. They are pluggable and have a dispatch mechanism for
@@ -118,7 +119,7 @@ use of various key features:
   increasing amounts of mutable state in the form of caches and other
   constructs. Unlike in many prior ML workloads, cache management for modern
   genai can only be done efficiently with in-place and/or indirection at
-  scale. Dynamo and IREE's implementation preserve mutability through to the
+  scale. Dynamo and IREE's implementation preserves mutability through to the
   compiler stack and runtime which lets us express these kinds of dataflows
   naturally.
 * Custom Ops and Fusion: Efficient inference requires specialization of
@@ -128,7 +129,7 @@ use of various key features:
   cheap to specialize such things versus relying on the compiler to get
   everything right from a high level compute graph. In practice, this means that
   we write custom ops for a lot of things, and we have invested in approaches
-  that make this cheap and scalable. In many cases, out custom ops are simply
+  that make this cheap and scalable. In many cases, our custom ops are simply
   bypassing layers of the framework and targeting lower level forms of the
   compiler directly, where there is no ambiguity as to the structure. In other
   cases, we write the implementations in a low-level Pythonic kernel language.
