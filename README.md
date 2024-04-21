@@ -51,7 +51,7 @@ pip install -f https://iree.dev/pip-release-links.html --src deps \
   -e "git+https://github.com/nod-ai/SHARK-Turbine.git#egg=SHARK-Turbine&subdirectory=core"
 
 # Install editable local projects.
-pip install -e sharktank/ shortfin/
+pip install -r requirements -e sharktank/ shortfin/
 ```
 
 ### Running Tests
