@@ -51,11 +51,13 @@ usage in a few key ways:
 
 a. `PrimitiveInferenceTensor`: Simply backed by a PyTorch tensor (typically
     from a memory mapped array in a `Dataset` on storage but can be arbitrary).
+
 b. Packed `QuantizedTensor`: These tensors are backed by a single at-rest
     PyTorch tensor with a specific manner of packing scheme, logically
     represented by a `Layout`. In practice, each GGUF quantization scheme has
     a distinct type of packed `QuantizedTensor` implementation. It is an
     open world, and arbitrary implementations are easily created.
+
 c. Planar `QuantizedTensor`: These tensors are backed by an arbitrary
     dictionary of tensors (i.e. "planes"), logically represented by a `Layout`.
     Typically, packed `QuantizedTensors` can be converted to planar form.
