@@ -34,8 +34,8 @@ util.func private @sharktank_mmtfp_3d_{n}_{k}_{a_type}{bT_type}(
         linalg.yield %in : !bT_type
     }} -> !bT_broadcast_tensor_type
   %result_empty = tensor.empty(%b0, %m) : !c_tensor_type
-  %result_init = linalg.fill 
-    ins(%zero : !a_type) 
+  %result_init = linalg.fill
+    ins(%zero : !a_type)
     outs(%result_empty: !c_tensor_type) -> !c_tensor_type
   %result = linalg.batch_matmul_transpose_b
     ins (%a, %bT_broadcast: !a_tensor_type, !bT_broadcast_tensor_type)

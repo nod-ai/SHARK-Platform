@@ -7,10 +7,10 @@
 """Configuration objects.
 
 Parameters that are intrinsic to a specific model.
-    
+
 In a typical transformer model, the KV cache is organized similar to (mapped to
 our parameter names below):
-    k = tensor.empty(transformer_block_count, batch_size, seq, 
+    k = tensor.empty(transformer_block_count, batch_size, seq,
                     attn_head_count, attn_head_dim)
     v = ...
 
@@ -28,9 +28,9 @@ Therefore, it will be organized like:
 
 In this scenario, we declare that one block holds the KV cache for all transformer
 block layers because it reduces the accounting. As such, for the above example,
-a single position in the sequence will be 524,288 bytes, assuming a 2-byte element 
-type. If we choose to block by block_stride=16 positions, each block will be 8MiB. 
-Assuming we wanted to dedicate 12GiB to the block cache, this would equate to 1536 
+a single position in the sequence will be 524,288 bytes, assuming a 2-byte element
+type. If we choose to block by block_stride=16 positions, each block will be 8MiB.
+Assuming we wanted to dedicate 12GiB to the block cache, this would equate to 1536
 blocks for a total number of sequence positions of 24,576.
 
 These are well-known numbers but are derived above to give a sense of scale.

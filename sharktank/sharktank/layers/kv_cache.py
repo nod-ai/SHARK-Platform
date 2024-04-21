@@ -8,7 +8,7 @@
 
 These are not complete abstractions: they are primarily focused on making
 tightly coupled transformer blocks a bit less "stringy" with loose tensors
-and dims floating around everywhere. 
+and dims floating around everywhere.
 """
 
 import abc

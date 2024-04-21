@@ -25,8 +25,8 @@
 module {{
 
 util.func private @mmt_super_block_scaled_offset_q4_unsigned_3d_{n}_{k}_{sup_count}_{sub_count}_{bs}_{a_type}(
-    %a: !a_tensor_type, 
-    %d: !d_tensor_type, 
+    %a: !a_tensor_type,
+    %d: !d_tensor_type,
     %dmin: !dmin_tensor_type,
     %sb_scales_hi_i8: !sb_hi_i8_type,
     %sb_scales_low_i8: !sb_low_i8_type,
@@ -59,11 +59,11 @@ util.func private @mmt_super_block_scaled_offset_q4_unsigned_3d_{n}_{k}_{sup_cou
           affine_map<(d0, d1, d2, d3) -> (d0, d1, d2)>,      // sb_mins_hi[n, sup, sub]
           affine_map<(d0, d1, d2, d3) -> (d0, d1, d2)>,      // sb_mins_low[n, sup, sub]
           affine_map<(d0, d1, d2, d3) -> (d0, d1, d2, d3)>   // out b_grouped[n, sup, sub, bs]
-      ], 
+      ],
       iterator_types = ["parallel", "parallel", "parallel", "parallel"] }}
       ins(
         %qs, %d, %dmin, %sb_scales_hi, %sb_scales_low, %sb_mins_hi, %sb_mins_low :
-        !qs_tensor_type, !d_tensor_type, !dmin_tensor_type, 
+        !qs_tensor_type, !d_tensor_type, !dmin_tensor_type,
         !sb_hi_i2_type, !sb_low_i4_type, !sb_hi_i2_type, !sb_low_i4_type
       )
       outs(%b_grouped : !b_grouped_tensor_type) {{
@@ -74,7 +74,7 @@ util.func private @mmt_super_block_scaled_offset_q4_unsigned_3d_{n}_{k}_{sup_cou
       %shift_4 = arith.constant 4 : i32
       %d_element_ext = arith.extf %d_element : !scale_type to !a_type
       %dmin_element_ext = arith.extf %dmin_element : !scale_type to !a_type
-      
+
       // Combine sub-block scale.
       %sb_scale_low_i32 = arith.extui %sb_scales_low_element : i4 to i32
       %sb_scale_hi_i32 = arith.extui %sb_scales_hi_element : i2 to i32
@@ -111,8 +111,8 @@ util.func private @mmt_super_block_scaled_offset_q4_unsigned_3d_{n}_{k}_{sup_cou
           affine_map<(d0, d1, d2, d3, d4, d5) -> (d0, d1, d3, d4, d5)>,  // aexp
           affine_map<(d0, d1, d2, d3, d4, d5) -> (d2, d3, d4, d5)>,      // b_grouped_dequant
           affine_map<(d0, d1, d2, d3, d4, d5) -> (d0, d1, d2)>       // out
-      ], 
-      iterator_types = ["parallel", "parallel", "parallel", "reduction", "reduction", "reduction"] }} 
+      ],
+      iterator_types = ["parallel", "parallel", "parallel", "reduction", "reduction", "reduction"] }}
       ins(%aexp, %b_grouped_dequant : !aexp_tensor_type,  !b_grouped_tensor_type)
       outs(%result_fill : !c_tensor_type) {{
   ^bb0(%a_element: !a_type, %b_element: !a_type, %out: !a_type):
