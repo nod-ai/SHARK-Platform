@@ -147,7 +147,7 @@ class Batch:
         trace_tensor("prefill.token_ids", self.token_ids)
         trace_tensor("prefill.seq_block_ids", seq_block_ids_tensor)
         trace_tensor("prefill.attention_mask", attention_mask)
-        logits = model.prefill(
+        logits, self.cache_state = model.prefill(
             self.token_ids,
             attention_mask=attention_mask,
             seq_block_ids=seq_block_ids_tensor,
@@ -180,7 +180,7 @@ class Batch:
         trace_tensor("decode.start_positions", start_positions)
         trace_tensor("decode.seq_block_ids", seq_block_ids_tensor)
         trace_tensor("decode.attention_mask", decode_attention_mask)
-        logits = model.decode(
+        logits, self.cache_state = model.decode(
             self.next_tokens,
             attention_mask=decode_attention_mask,
             start_positions=start_positions,

@@ -65,13 +65,13 @@ def main():
             sl = tokens.shape[1]
             input_mask = model.input_mask(seq_lens, sl)
             attention_mask = model.attention_mask(input_mask, dtype=torch.float32)
-            logits = model.prefill(
+            logits, cache_state = model.prefill(
                 tokens,
                 attention_mask=attention_mask,
                 seq_block_ids=seq_block_ids,
                 cache_state=cache_state,
             )
-            return logits
+            return logits, cache_state
 
     def generate_batch_decode(bs: int):
         tokens = torch.ones(bs, 1, dtype=torch.int64)
@@ -123,7 +123,7 @@ def main():
                 seq_block_ids=seq_block_ids,
                 cache_state=cache_state,
             )
-            return logits
+            return logits, cache_state
 
     generate_batch_prefill(4)
     generate_batch_decode(4)

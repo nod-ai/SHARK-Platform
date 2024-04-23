@@ -85,7 +85,7 @@ def main(args: list[str]):
     )
 
     print(f"Step {start_index}")
-    logits = model.prefill(
+    logits, cache_state = model.prefill(
         next_batch,
         attention_mask=attention_mask,
         seq_block_ids=seq_block_ids,
@@ -114,7 +114,7 @@ def main(args: list[str]):
         ),
         dtype=torch.float32,
     )
-    logits = model.decode(
+    logits, cache_state = model.decode(
         tokens,
         attention_mask=decode_attention_mask,
         start_positions=start_positions,

@@ -348,3 +348,4 @@ class PagedKVCache(BaseKVCache):
 
         for index, partition in enumerate(cache_partitions):
             write_cache_partition(index, partition)
+        return [subblock_table]

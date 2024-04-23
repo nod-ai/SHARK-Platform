@@ -140,6 +140,8 @@ class PagedLlamaModelV1(BaseCausalLMModel):
         h = self.token_embedding(tokens)
         self.trace_tensor("llama.token_embedding", h)
 
+        cache_state = [torch.clone(c) for c in cache_state]
+
         # Iterate over attention blocks.
         for block_idx, block in enumerate(self.attn_blocks):
             if block_idx == 0:
@@ -156,7 +158,7 @@ class PagedLlamaModelV1(BaseCausalLMModel):
 
         h = self.output_norm(h)
         logits = self.output_lm_head(h)
-        return logits
+        return logits, cache_state
 
     def decode(
         self,
@@ -201,6 +203,7 @@ class PagedLlamaModelV1(BaseCausalLMModel):
         )
 
         h = self.token_embedding(tokens)
+        cache_state = [torch.clone(c) for c in cache_state]
         self.trace_tensor("llama.token_embedding", h)
 
         # Iterate over attention blocks.
@@ -222,7 +225,7 @@ class PagedLlamaModelV1(BaseCausalLMModel):
 
         h = self.output_norm(h)
         logits = self.output_lm_head(h)
-        return logits
+        return logits, cache_state
 
 
 ################################################################################
