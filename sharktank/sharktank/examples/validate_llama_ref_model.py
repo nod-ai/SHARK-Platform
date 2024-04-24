@@ -15,6 +15,7 @@ from sharktank.models.llama.llama_ref import *
 
 def main(args: list[str]):
     from ..utils import cli
+
     torch.no_grad().__enter__()
 
     parser = cli.create_parser()
