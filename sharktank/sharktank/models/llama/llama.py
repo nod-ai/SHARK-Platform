@@ -339,6 +339,7 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         keys = xk.transpose(1, 2)
         values = xv.transpose(1, 2)
 
+        # Flash attention.
         attn_output = torch.nn.functional.scaled_dot_product_attention(xq, keys, values, attention_mask)
         attn_output = attn_output.transpose(1, 2).reshape(bs, batch_seq_len, -1)
 

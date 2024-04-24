@@ -210,7 +210,6 @@ class LlamaAttentionBlock(ThetaLayer):
 
         # Flash attention.
         attn_output = torch.nn.functional.scaled_dot_product_attention(xq, keys, values, attention_mask)
-
         attn_output = attn_output.transpose(1, 2).reshape(bs, q_len, -1)
 
         # Project.
