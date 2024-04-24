@@ -339,18 +339,7 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         keys = xk.transpose(1, 2)
         values = xv.transpose(1, 2)
 
-        # Flash attention.
-        attn_weights = torch.matmul(xq, keys.transpose(2, 3)) / math.sqrt(self.head_dim)
-        self.assert_not_nan(attn_weights)
-
-        # Apply attention mask.
-        self.trace_tensor("attn_weights", attn_weights, values=False)
-        if attention_mask is not None:
-            # self.trace_tensor("attn_mask", attention_mask)
-            attn_weights = attn_weights + attention_mask
-
-        attn_weights = F.softmax(attn_weights.float(), dim=-1).type_as(xq)
-        attn_output = torch.matmul(attn_weights, values)  # (bs, heads, slen, head_dim)
+        attn_output = torch.nn.functional.scaled_dot_product_attention(xq, keys, values, attention_mask)
         attn_output = attn_output.transpose(1, 2).reshape(bs, batch_seq_len, -1)
 
         # Project.
