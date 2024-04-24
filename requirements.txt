@@ -3,6 +3,11 @@ gguf==0.6.0
 numpy==1.26.3
 onnx==1.15.0
 
+# Model deps.
+huggingface-hub==0.22.2
+transformers==4.40.0
+sentencepiece==0.2.0
+
 # It is expected that you have installed a PyTorch version/variant specific
 # to your needs, so we only include a minimum version spec.
 # TODO: Use a versioned release once 2.3.0 drops.
