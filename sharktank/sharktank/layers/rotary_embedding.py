@@ -4,6 +4,8 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
+from typing import Optional
+
 import torch
 
 from .base import BaseLayer
@@ -12,10 +14,18 @@ from .base import BaseLayer
 class RotaryEmbeddingLayer(BaseLayer):
     """Computes a rotary embedding in the style popularized by llama (RoPE)."""
 
-    def __init__(self, *, rope_dimension_count: int, max_seqlen: int):
+    def __init__(
+        self,
+        *,
+        rope_dimension_count: int,
+        max_seqlen: int,
+        device: Optional[torch.device] = None,
+    ):
         super().__init__()
+        self.device = device
         self._table = self._create_rotary_embed_table(
-            max_seqlen=max_seqlen, dim=rope_dimension_count
+            max_seqlen=max_seqlen,
+            dim=rope_dimension_count,
         )
 
     def forward(self, *, xq: torch.Tensor, xk: torch.Tensor, start_index: int):
@@ -50,7 +60,7 @@ class RotaryEmbeddingLayer(BaseLayer):
           Tensor of [bs, sl, 1, d] that will be later passed to apply_batch_mask.
         """
         self.trace_tensor("rope.start_positions", start_positions)
-        positions_seq = torch.arange(0, batch_seq_len).unsqueeze(
+        positions_seq = torch.arange(0, batch_seq_len, device=self.device).unsqueeze(
             0
         ) + start_positions.unsqueeze(1)
         # Broadcast lookup to [b, ...].
@@ -81,12 +91,15 @@ class RotaryEmbeddingLayer(BaseLayer):
         xk_out = torch.view_as_real(xk_ * mask).flatten(3)
         return xq_out.type_as(xq), xk_out.type_as(xk)
 
-    @staticmethod
     def _create_rotary_embed_table(
-        max_seqlen: int, dim: int, theta_value: float = 10000.0
+        self,
+        max_seqlen: int,
+        dim: int,
+        theta_value: float = 10000.0,
     ):
         freqs = 1.0 / (
-            theta_value ** (torch.arange(0, dim, 2)[: (dim // 2)].float() / dim)
+            theta_value
+            ** (torch.arange(0, dim, 2, device=self.device)[: (dim // 2)].float() / dim)
         )
         t = torch.arange(max_seqlen, device=freqs.device)
         freqs = torch.outer(t, freqs).float()
