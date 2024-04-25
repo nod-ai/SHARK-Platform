@@ -55,6 +55,28 @@ class ThetaTest(unittest.TestCase):
         sub_sub_theta = theta("a", "b")
         self.assertEqual("a.b.c", sub_sub_theta.tensors[0].name)
 
+    def testTransform(self):
+        t1 = Theta(
+            _flat_t_dict(
+                _t("a.b.c", 1, 2),
+                _t("a.c.d", 10, 11),
+                _t("1.2.3", 3, 4),
+            )
+        )
+
+        # We are mainly seeing that the structure/tensors were changed.
+        # Without a second device, it is otherwise hard to see an effect.
+        t2 = t1.to(device="cpu:1")
+        self.assertIsNot(t1, t2)
+        it1 = t1.tensor("a", "b", "c")
+        it2 = t2.tensor("a", "b", "c")
+        self.assertIsNot(it1, it2)
+        for k in it1.globals.keys():
+            pt1 = it1.globals[k]
+            pt2 = it2.globals[k]
+            self.assertIsNot(pt1, pt2)
+            torch.testing.assert_close(pt1, pt2)
+
 
 class DatasetTest(unittest.TestCase):
     def setUp(self):
@@ -62,6 +84,20 @@ class DatasetTest(unittest.TestCase):
 
     def tearDown(self):
         shutil.rmtree(self.temp_dir)
+
+    def testDatasetTransform(self):
+        t1 = Theta(
+            _flat_t_dict(
+                _t("a.b.c", 1, 2),
+                _t("a.c.d", 10, 11),
+                _t("1.2.3", 3, 4),
+            )
+        )
+        ds = Dataset({}, t1)
+        ds.to(device="cpu:1")
+        # Just checking that it was in fact transformed. Rely on other
+        # unit tests for leaves transformed correctly.
+        self.assertIsNot(t1, ds.root_theta)
 
     def testDatasetRoundtrip(self):
         theta = Theta(

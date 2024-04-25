@@ -4,14 +4,17 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-from typing import Any, Optional, Union, TypeVar, Generic, Type
+from typing import Any, Callable, Optional, Union, TypeVar, Generic, Type
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 import torch
 
-from shark_turbine.aot import ParameterArchiveBuilder
+from shark_turbine.aot import (
+    ExternalTensorTrait,
+    ParameterArchiveBuilder,
+)
 
 __all__ = [
     "register_quantized_layout",
@@ -185,6 +188,48 @@ class InferenceTensor(ABC):
         """Adds this tensor to the global archive."""
         ...
 
+    def transform_globals(
+        self, *transforms: Callable[[dict[str, torch.Tensor]], dict[str, torch.Tensor]]
+    ) -> "InferenceTensor":
+        """Appplies transformation functions to the InferenceTensors backing
+        globals.
+
+        Each transformation must produce a new dict of a form that the subclass
+        can handle. Practically, this means that placement and layout related
+        changes are always allowed, while more invasive changes (like dtype)
+        are more case by case.
+
+        Returns a new InferenceTensor, mutated.
+        """
+        prev_globals = self.globals
+        for transform in transforms:
+            next_globals = transform(prev_globals)
+            # Copy any metadata from prior to next.
+            for k, prev_t in prev_globals.items():
+                new_t = next_globals.get(k)
+                if new_t is None:
+                    continue
+                if new_t is not prev_t:
+                    ext_trait = ExternalTensorTrait.get(prev_t)
+                    if ext_trait is not None:
+                        ext_trait.set(new_t)
+            prev_globals = next_globals
+        return self._clone_with_globals(prev_globals)
+
+    def to(
+        self, *, device: Optional[Union[str, torch.device]] = None
+    ) -> "InferenceTensor":
+        return self.transform_globals(
+            lambda d: {k: t.to(device=device) for k, t in d.items()}
+        )
+
+    def _clone_with_globals(
+        self, new_globals: dict[str, torch.Tensor]
+    ) -> "InferenceTensor":
+        raise NotImplementedError(
+            f"InferenceTensor {type(self)} does not implement _clone_with_globals"
+        )
+
 
 REGISTERED_INFERENCE_TENSOR_CLASSES: dict[str, Type[InferenceTensor]] = {}
 
@@ -263,6 +308,11 @@ class DefaultPrimitiveTensor(PrimitiveTensor):
         builder.add_tensor(self.name, self._data)
         return InferenceTensorMetadata(self.serialized_name(), {"": self.name})
 
+    def _clone_with_globals(
+        self, new_globals: dict[str, torch.Tensor]
+    ) -> "InferenceTensor":
+        return DefaultPrimitiveTensor(name=self.name, data=new_globals[self.name])
+
     def __repr__(self):
         return f"PrimitiveTensor({self.name}, {self.shape}, {self._data.dtype})"
 
@@ -332,6 +382,35 @@ class PlanarQuantizedTensor(QuantizedTensor):
         global_name = self.name
         planes = self.layout.planes
         return {f"{global_name}:{k}": v for k, v in planes.items()}
+
+    def _clone_with_globals(
+        self, new_globals: dict[str, torch.Tensor]
+    ) -> "InferenceTensor":
+        # Clone it via layout serialization.
+        serialized_name = self.layout.serialized_name()
+        global_prefix = f"{self.name}:"
+        orig_planes = self.layout.planes
+        new_planes = {}
+        for plane_name in orig_planes.keys():
+            # Planes are stored in the globals dict with the inference
+            # tensor's name and colon prepended, so look up that way.
+            new_planes[plane_name] = new_globals[f"{global_prefix}{plane_name}"]
+
+        # Create a new layout via the serialization adaptor.
+        try:
+            layout_clazz = REGISTERED_LAYOUT_CLASSES[serialized_name]
+        except KeyError:
+            raise IOError(
+                f"Cannot deserialize PlanarQuantizedTensor because of unregistered layout "
+                f"{serialized_name}"
+            )
+        new_layout = layout_clazz.create(self.shape, self.layout.metadata, new_planes)
+
+        return PlanarQuantizedTensor(
+            name=self.name,
+            shape=self.shape,
+            layout=new_layout,
+        )
 
     @classmethod
     def create(

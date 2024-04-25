@@ -12,7 +12,6 @@ from typing import Optional, Union
 import math
 import os
 
-
 __all__ = [
     "load_tokenizer",
     "InferenceTokenizer",
