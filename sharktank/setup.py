@@ -92,7 +92,7 @@ setup(
     packages=packages,
     package_data={"sharktank": ["py.typed"]},
     install_requires=[
-        "shark-turbine",
+        "iree-turbine",
     ],
     extras_require={
         "testing": [

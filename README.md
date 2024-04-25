@@ -42,16 +42,13 @@ pip install -r pytorch-rocm-requirements.txt
 
 ### Install Development Packages
 
-This assumes you have `SHARK-Turbine` checked out adjacent (note that for the
-moment we rely on pre-release versions, so installation is a bit harder).
-
 ```
-# Clone and install editable SHARK-Turbine dep in deps/
+# Clone and install editable iree-turbine dep in deps/
 pip install -f https://iree.dev/pip-release-links.html --src deps \
-  -e "git+https://github.com/nod-ai/SHARK-Turbine.git#egg=SHARK-Turbine&subdirectory=core"
+  -e "git+https://github.com/iree-org/iree-turbine.git#egg=SHARK-Turbine"
 
 # Install editable local projects.
-pip install -r requirements -e sharktank/ shortfin/
+pip install -r requirements.txt -e sharktank/ shortfin/
 ```
 
 ### Running Tests

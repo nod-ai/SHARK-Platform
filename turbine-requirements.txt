@@ -1,1 +1,1 @@
--e "git+https://github.com/nod-ai/SHARK-Turbine.git#egg=SHARK-Turbine&subdirectory=core"
+-e "git+https://github.com/nod-ai/iree-turbine.git#egg=SHARK-Turbine"
