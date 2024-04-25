@@ -43,7 +43,7 @@ def main():
         tokens = torch.empty(bs, 64, dtype=torch.int64)
         seq_lens = torch.empty(bs, dtype=torch.int64)
         seq_block_ids = torch.empty(bs, 4, dtype=torch.int64)
-        cache_state = model.cache.allocate(128, torch.float32)
+        cache_state = model.cache.allocate(128)
         block_dim = torch.export.Dim("block", max=2047 // 16)
         sl_dim = 16 * block_dim
         page_dim = torch.export.Dim("page")
@@ -64,7 +64,7 @@ def main():
         def _(model, tokens, seq_lens, seq_block_ids, cache_state):
             sl = tokens.shape[1]
             input_mask = model.input_mask(seq_lens, sl)
-            attention_mask = model.attention_mask(input_mask, dtype=torch.float32)
+            attention_mask = model.attention_mask(input_mask)
             logits = model.prefill(
                 tokens,
                 attention_mask=attention_mask,
@@ -78,7 +78,7 @@ def main():
         seq_lens = torch.ones(bs, dtype=torch.int64)
         start_positions = torch.ones(bs, dtype=torch.int64)
         seq_block_ids = torch.zeros(bs, 4, dtype=torch.int64)
-        cache_state = model.cache.allocate(128, torch.float32)
+        cache_state = model.cache.allocate(128)
         block_dim = torch.export.Dim("block", max=2047 // 16)
         page_dim = torch.export.Dim("page")
         dynamic_shapes = {
@@ -113,9 +113,7 @@ def main():
             input_mask = model.input_mask(
                 seq_lens, seq_block_ids.shape[1] * model.cache.block_seq_stride
             )
-            attention_mask = model.decode_attention_mask(
-                input_mask, dtype=torch.float32
-            )
+            attention_mask = model.decode_attention_mask(input_mask)
             logits = model.decode(
                 tokens,
                 attention_mask=attention_mask,
