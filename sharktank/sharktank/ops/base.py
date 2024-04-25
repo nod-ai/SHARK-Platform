@@ -8,11 +8,13 @@ from typing import Sequence
 
 import logging
 from pathlib import Path
+import textwrap
 
 from shark_turbine.support.ir_imports import (
     util_d,
     FlatSymbolRefAttr,
     FunctionType,
+    MLIRError,
     Operation,
     RankedTensorType,
     StringAttr,
@@ -62,16 +64,17 @@ def inline_template_function(
     try:
         return kb.symbol_table[function_name]
     except KeyError:
-        source_module_op = load_mlir_template(kb, template_file, **kwargs)
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(
-                "Generated kernel IR %s:\n%s", function_name, str(source_module_op)
-            )
-        merger = Merger(
-            source_module_op, kb.module_body.owner, target_symbol_table=kb.symbol_table
+        pass
+    source_module_op = load_mlir_template(kb, template_file, **kwargs)
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(
+            "Generated kernel IR %s:\n%s", function_name, str(source_module_op)
         )
-        merger.merge()
-        return kb.symbol_table[function_name]
+    merger = Merger(
+        source_module_op, kb.module_body.owner, target_symbol_table=kb.symbol_table
+    )
+    merger.merge()
+    return kb.symbol_table[function_name]
 
 
 def load_mlir_template(kb: KernelBuilder, template_file: str, **kwargs) -> Operation:
@@ -83,5 +86,14 @@ def load_mlir_template(kb: KernelBuilder, template_file: str, **kwargs) -> Opera
     template_path = TEMPLATES_DIR / template_file
     template_text = template_path.read_text()
     asm = template_text.format(**kwargs)
-    module_op = Operation.parse(asm, source_name=str(template_path), context=kb.context)
+    try:
+        module_op = Operation.parse(
+            asm, source_name=str(template_path), context=kb.context
+        )
+    except MLIRError as e:
+        raise RuntimeError(
+            f"Error parsing generated op template:"
+            f"\n{textwrap.indent(str(e), '  ')}"
+            f"\n{textwrap.indent(asm, '    >> ')}"
+        )
     return module_op.operation

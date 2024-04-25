@@ -6,17 +6,19 @@
 
 !a_type = {a_type}
 !bT_type = {bT_type}
+!accum_type = {accum_type}
 !a_tensor_type = tensor<?x?x{k}x!a_type>
 !bT_tensor_type = tensor<{n}x{k}x!bT_type>
+!accum_tensor_type = tensor<?x?x{n}x!accum_type>
 !c_tensor_type = tensor<?x?x{n}x!a_type>
 !bT_broadcast_tensor_type = tensor<?x{n}x{k}x!bT_type>
 
 module {{
 
-util.func private @sharktank_mmtfp_3d_{n}_{k}_{a_type}{bT_type}(
+util.func private @sharktank_mmtfp_3d_{n}_{k}_{a_type}{bT_type}{accum_type}(
     %a: !a_tensor_type, %bT: !bT_tensor_type)
     -> !c_tensor_type {{
-  %zero = arith.constant 0.000000e+00 : !a_type
+  %zero = arith.constant 0.000000e+00 : !accum_type
   %c0 = arith.constant 0 : index
   %c1 = arith.constant 1 : index
   %b0 = tensor.dim %a, %c0 : !a_tensor_type
@@ -33,14 +35,18 @@ util.func private @sharktank_mmtfp_3d_{n}_{k}_{a_type}{bT_type}(
       ^bb0(%in: !bT_type, %out: !bT_type):
         linalg.yield %in : !bT_type
     }} -> !bT_broadcast_tensor_type
-  %result_empty = tensor.empty(%b0, %m) : !c_tensor_type
+  %result_empty = tensor.empty(%b0, %m) : !accum_tensor_type
   %result_init = linalg.fill
-    ins(%zero : !a_type)
-    outs(%result_empty: !c_tensor_type) -> !c_tensor_type
-  %result = linalg.batch_matmul_transpose_b
+    ins(%zero : !accum_type)
+    outs(%result_empty: !accum_tensor_type) -> !accum_tensor_type
+  %result_accum = linalg.batch_matmul_transpose_b
     ins (%a, %bT_broadcast: !a_tensor_type, !bT_broadcast_tensor_type)
-    outs (%result_init: !c_tensor_type) -> !c_tensor_type
-  util.return %result : !c_tensor_type
+    outs (%result_init: !accum_tensor_type) -> !accum_tensor_type
+  %result_cast_empty = tensor.empty(%b0, %m) : !c_tensor_type
+  %result_cast = linalg.copy
+    ins(%result_accum : !accum_tensor_type)
+    outs(%result_cast_empty : !c_tensor_type) -> !c_tensor_type
+  util.return %result_cast : !c_tensor_type
 }}
 
 }}

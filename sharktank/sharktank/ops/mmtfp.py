@@ -62,21 +62,28 @@ class mmtfp(CustomOp):
         n, k = bT_tensor_type.shape
         a_type_str = str(a_tensor_type.element_type)
         bT_type_str = str(bT_tensor_type.element_type)
+        try:
+            accum_type_str = _ACCUMULATOR_TYPE[f"{a_type_str}{bT_type_str}"]
+        except KeyError:
+            raise ValueError(
+                f"mmtfp: No accumulator type defined for {a_type_str} x {bT_type_str}"
+            )
         kwargs = {
             "n": n,
             "k": k,
             "a_type": a_type_str,
             "bT_type": bT_type_str,
+            "accum_type": accum_type_str,
         }
         if rank == 2:
             template_file = "mmtfp_2d.mlir"
             target_function_name = (
-                f"sharktank_mmtfp_2d_{n}_{k}_{a_type_str}{bT_type_str}"
+                f"sharktank_mmtfp_2d_{n}_{k}_{a_type_str}{bT_type_str}{accum_type_str}"
             )
         elif rank == 3:
             template_file = "mmtfp_3d.mlir"
             target_function_name = (
-                f"sharktank_mmtfp_3d_{n}_{k}_{a_type_str}{bT_type_str}"
+                f"sharktank_mmtfp_3d_{n}_{k}_{a_type_str}{bT_type_str}{accum_type_str}"
             )
 
         target_function = inline_template_function(
@@ -86,3 +93,11 @@ class mmtfp(CustomOp):
             **kwargs,
         )
         kb.yield_results(*call_function(target_function, *kb.arg_bindings))
+
+
+_ACCUMULATOR_TYPE: dict[str, str] = {
+    "f16f32": "f32",
+    "f32f16": "f32",
+    "f32f32": "f32",
+    "f16f16": "f32",
+}
