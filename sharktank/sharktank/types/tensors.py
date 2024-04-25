@@ -33,7 +33,8 @@ MetaDataValueType = Union[int, bool, float, str]
 
 class QuantizedLayout(ABC):
     @abstractmethod
-    def dequant(self, dtype: Optional[torch.dtype] = None) -> torch.Tensor: ...
+    def dequant(self, dtype: Optional[torch.dtype] = None) -> torch.Tensor:
+        ...
 
     @classmethod
     @abstractmethod
@@ -48,7 +49,8 @@ class QuantizedLayout(ABC):
         shape: list[int],
         metadata: Optional[dict[str, MetaDataValueType]],
         planes: dict[str, torch.Tensor],
-    ) -> "QuantizedLayout": ...
+    ) -> "QuantizedLayout":
+        ...
 
     @property
     @abstractmethod
@@ -329,7 +331,8 @@ class QuantizedTensor(InferenceTensor, Generic[QuantizedLayoutT]):
         self.layout_type = layout_type
 
     @abstractmethod
-    def unpack(self) -> QuantizedLayoutT: ...
+    def unpack(self) -> QuantizedLayoutT:
+        ...
 
     def to_planar(self) -> "PlanarQuantizedTensor":
         """Converts this QuantizedTensor to a generic planar form.

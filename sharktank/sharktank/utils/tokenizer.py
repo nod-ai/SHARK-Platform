@@ -52,10 +52,12 @@ class InferenceTokenizer(ABC):
         return self._decode(tokens)
 
     @abstractmethod
-    def _encode(self, texts: list[str]) -> list[list[int]]: ...
+    def _encode(self, texts: list[str]) -> list[list[int]]:
+        ...
 
     @abstractmethod
-    def _decode(self, tokens: list[list[int]]) -> list[str]: ...
+    def _decode(self, tokens: list[list[int]]) -> list[str]:
+        ...
 
 
 def load_tokenizer(*posargs, tokenizer_type: str = "transformers", **kwargs):
