@@ -80,12 +80,7 @@ def inline_template_function(
         return kb.symbol_table[function_name]
     except KeyError:
         pass
-    if template_type == "format":
-        source_module_op = load_mlir_template(kb, template_file, **kwargs)
-    elif template_type == "jinja":
-        source_module_op = load_jinja_template(kb, template_file, **kwargs)
-    else:
-        raise ValueError(f"Unsupported template_type: {template_type}")
+    source_module_op = load_jinja_template(kb, template_file, **kwargs)
     if logger.isEnabledFor(logging.DEBUG):
         logger.debug(
             "Generated kernel IR %s:\n%s", function_name, str(source_module_op)
@@ -103,37 +98,17 @@ def load_jinja_template(kb: KernelBuilder, template_file: str, **kwargs) -> Oper
     The file is loaded relative to the templates/ directory. It is interpolated
     with **kwargs and loaded into the KernelBuilder.
     """
-    # template_path = TEMPLATES_DIR / template_file
-    # template_text = template_path.read_text()
     asm = _get_jinja2_env().get_template(template_file).render(**kwargs)
     try:
         module_op = Operation.parse(asm, context=kb.context)
     except MLIRError as e:
+        lines = asm.splitlines()
+        lines_numbered = "\n".join(
+            [f"      {str(i+1):>5}: {l}" for i, l in enumerate(lines)]
+        )
         raise RuntimeError(
             f"Error parsing generated op template:"
             f"\n{textwrap.indent(str(e), '  ')}"
-            f"\n{textwrap.indent(asm, '    >> ')}"
-        )
-    return module_op.operation
-
-
-def load_mlir_template(kb: KernelBuilder, template_file: str, **kwargs) -> Operation:
-    """Loads an MLIR template by name.
-
-    The file is loaded relative to the templates/ directory. It is interpolated
-    with **kwargs and loaded into the KernelBuilder.
-    """
-    template_path = TEMPLATES_DIR / template_file
-    template_text = template_path.read_text()
-    asm = template_text.format(**kwargs)
-    try:
-        module_op = Operation.parse(
-            asm, source_name=str(template_path), context=kb.context
-        )
-    except MLIRError as e:
-        raise RuntimeError(
-            f"Error parsing generated op template:"
-            f"\n{textwrap.indent(str(e), '  ')}"
-            f"\n{textwrap.indent(asm, '    >> ')}"
+            f"\n{lines_numbered}"
         )
     return module_op.operation

@@ -91,7 +91,6 @@ class mmt_block_scaled_q8(CustomOp):
             kb,
             template_file,
             target_function_name,
-            template_type="jinja",
             n=n,
             k=k,
             bs=bs,
