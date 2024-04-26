@@ -41,8 +41,6 @@ class LlamaHParams:
     attention_layer_norm_rms_epsilon: float
     attention_head_count_kv: int
 
-    activation_dtype: torch.dtype = torch.float32
-
     @staticmethod
     def from_gguf_props(p: dict[str, Any]):
         attention_head_count = _int_prop(p, "llama.attention.head_count")

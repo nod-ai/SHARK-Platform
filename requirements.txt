@@ -1,10 +1,7 @@
+# Runtime deps.
 gguf==0.6.0
 numpy==1.26.3
 onnx==1.15.0
-pytest==8.0.0
-pytest-xdist==3.5.0
-mypy==1.8.0
-types-requests==2.31.0.20240125
 
 # It is expected that you have installed a PyTorch version/variant specific
 # to your needs, so we only include a minimum version spec.
@@ -13,3 +10,12 @@ torch>=2.3.0.dev1
 
 # Used for managing pre-commit flows.
 pre-commit
+
+# Type checking
+mypy==1.8.0
+types-requests==2.31.0.20240125
+
+# Testing
+parameterized
+pytest==8.0.0
+pytest-xdist==3.5.0
