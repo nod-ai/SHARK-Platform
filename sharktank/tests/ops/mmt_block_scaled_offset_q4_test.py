@@ -40,9 +40,7 @@ class mmt_block_scaled_offset_q4_unsigned_test(unittest.TestCase):
         # Tolerances are empirical and results are not expected to match exactly.
         qs_i8 = layout_utils.promote_linear_i4_block_to_i8(qs)
         b = (d.to(ref_dtype) * qs_i8.to(ref_dtype) + m.to(ref_dtype)).flatten(1)
-        print(b)
         ref = torch.matmul(a.to(ref_dtype), b.T.to(ref_dtype))
-        print(ref)
         torch.testing.assert_close(result.to(ref_dtype), ref, atol=atol, rtol=rtol)
 
     def testExportDynamicDims(self):

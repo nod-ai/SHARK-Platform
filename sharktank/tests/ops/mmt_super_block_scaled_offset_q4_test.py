@@ -9,6 +9,7 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 
 import unittest
+from parameterized import parameterized
 
 import torch
 
@@ -21,32 +22,46 @@ class mmt_super_block_scaled_offset_q4_unsigned(unittest.TestCase):
     def setUp(self):
         torch.manual_seed(42)
 
-    @unittest.skip(
-        "compiler bad tile selection:"
-        "https://github.com/openxla/iree/issues/17078#issuecomment-2062331207"
+    @parameterized.expand(
+        [
+            (torch.float32, torch.float32, torch.float32, 1e-2, 1e-3),
+            (torch.float32, torch.float16, torch.float32, 1e-2, 1e-3),
+            (torch.float16, torch.float16, torch.float32, 1e-2, 1e-3),
+        ]
     )
-    def test_basic(self):
+    @unittest.skip(
+        "compiler bad tile selection. fixed by: "
+        "https://github.com/iree-org/iree/pull/17115 "
+        "TODO: There is still a numeric bug in the implementation. Triage once lands."
+    )
+    def test_basic(self, a_dtype, d_dtype, ref_dtype, atol, rtol):
         # n = 2560, k = 5120, sup = 20, sub = 8, bs = 32
-        a = torch.rand([4, 16, 5120], dtype=torch.float32)
-        d = torch.rand([2560, 20, 1], dtype=torch.float16)
-        dmin = torch.rand([2560, 20, 1], dtype=torch.float16)
-        sb_scales_hi = (torch.rand([2560, 20, 2], dtype=torch.float32) * 127).to(
+        a = torch.rand([4, 16, 5120], dtype=a_dtype) / 256.0
+        d = torch.rand([2560, 20, 1], dtype=d_dtype) / 256.0
+        dmin = torch.rand([2560, 20, 1], dtype=d_dtype) * 5.0
+        sb_scales_hi = (torch.rand([2560, 20, 2], dtype=d_dtype) * 127).to(torch.uint8)
+        sb_scales_low = (torch.rand([2560, 20, 4], dtype=d_dtype) * 127).to(torch.uint8)
+        sb_mins_hi = (torch.rand([2560, 20, 2], dtype=d_dtype) * 127).to(torch.uint8)
+        sb_mins_low = (torch.rand([2560, 20, 4], dtype=d_dtype) * 127).to(torch.uint8)
+        qs = (torch.rand([2560, 20, 8, 16], dtype=torch.float32) * 255.0).to(
             torch.uint8
         )
-        sb_scales_low = (torch.rand([2560, 20, 4], dtype=torch.float32) * 127).to(
-            torch.uint8
-        )
-        sb_mins_hi = (torch.rand([2560, 20, 2], dtype=torch.float32) * 127).to(
-            torch.uint8
-        )
-        sb_mins_low = (torch.rand([2560, 20, 4], dtype=torch.float32) * 127).to(
-            torch.uint8
-        )
-        qs = (torch.rand([2560, 20, 8, 16], dtype=torch.float32) * 127).to(torch.uint8)
         result = ops.mmt_super_block_scaled_offset_q4_unsigned(
             a, d, dmin, sb_scales_hi, sb_scales_low, sb_mins_hi, sb_mins_low, qs
         )
-        # TODO: Validate numerics once enabled and crash bug fixed.
+
+        ref_qs = layout_utils.promote_linear_i4_block_to_i8(qs)
+        ref_sb_scales = layout_utils.promote_linear_i6_block_to_i8(
+            sb_scales_hi, sb_scales_low
+        )
+        ref_sb_mins = layout_utils.promote_linear_i6_block_to_i8(
+            sb_mins_hi, sb_mins_low
+        )
+        ref_d_scaled = (d.to(ref_dtype) * ref_sb_scales.to(ref_dtype)).unsqueeze(-1)
+        ref_dmin_scaled = (dmin.to(ref_dtype) * ref_sb_mins.to(ref_dtype)).unsqueeze(-1)
+        ref_b = (ref_d_scaled * ref_qs.to(ref_dtype) - ref_dmin_scaled).flatten(1)
+        ref = torch.matmul(a.to(ref_dtype), ref_b.T.to(ref_dtype))
+        torch.testing.assert_close(result.to(ref_dtype), ref, atol=atol, rtol=rtol)
 
     def testExportDynamicDims(self):
         # n = 2560, k = 5120, sup = 20, sub = 8, bs = 32
