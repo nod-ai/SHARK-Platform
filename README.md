@@ -45,7 +45,7 @@ pip install -r pytorch-rocm-requirements.txt
 ```
 # Clone and install editable iree-turbine dep in deps/
 pip install -f https://iree.dev/pip-release-links.html --src deps \
-  -e "git+https://github.com/iree-org/iree-turbine.git#egg=SHARK-Turbine"
+  -e "git+https://github.com/iree-org/iree-turbine.git#egg=shark-turbine"
 
 # Install editable local projects.
 pip install -r requirements.txt -e sharktank/ shortfin/
