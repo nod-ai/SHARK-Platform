@@ -30,9 +30,13 @@ class BaseCausalLMModel(ThetaLayer):
         context_length: int,
         static_context_mask: bool = True,
         device: Optional[torch.device] = None,
+        activation_dtype: torch.dtype = torch.float32,
+        attention_dtype: torch.dtype = torch.float32,
     ):
         super().__init__(theta)
         self.device = device
+        self.activation_dtype = activation_dtype
+        self.attention_dtype = attention_dtype
         self.context_length = context_length
 
         if static_context_mask:
@@ -42,12 +46,16 @@ class BaseCausalLMModel(ThetaLayer):
         else:
             self.causal_context_mask = None
 
-    def _assert_device(self, *ts: torch.Tensor):
+    def _assert_device(self, *ts: torch.Tensor, dtype: Optional[torch.dtype] = None):
         if self.device is not None:
             for t in ts:
                 assert (
                     t.device == self.device
                 ), f"Expected tensor to be on device {self.device} but it is on {t.device}"
+                if dtype is not None:
+                    assert (
+                        t.dtype == dtype
+                    ), f"Expected tensor to have dtype {dtype} but it is {t.dtype}"
 
     def _maximally_negative_value(self, dtype):
         """Returns a maximally negative value for the given dtype.
@@ -82,9 +90,8 @@ class BaseCausalLMModel(ThetaLayer):
         mask = range_vector >= matrix
         return mask
 
-    def decode_attention_mask(
-        self, boolean_input_mask: torch.Tensor, dtype: torch.dtype
-    ):
+    def decode_attention_mask(self, boolean_input_mask: torch.Tensor):
+        dtype = self.attention_dtype
         numeric_mask = torch.zeros_like(boolean_input_mask, dtype=dtype)
         numeric_mask.masked_fill_(
             boolean_input_mask, self._maximally_negative_value(dtype)
@@ -95,7 +102,6 @@ class BaseCausalLMModel(ThetaLayer):
         self,
         input_mask: torch.Tensor,
         *,
-        dtype: torch.dtype,
         causal_context_mask: Optional[torch.Tensor] = None,
     ):
         """Generates a causal attention mask of [1, 1, sl, sl] of activation dtype.
@@ -113,6 +119,7 @@ class BaseCausalLMModel(ThetaLayer):
             causal_context_mask = self._generate_causal_context_mask()
 
         # Combine the causal context mask and input mask.
+        dtype = self.attention_dtype
         _, batch_seq_len = input_mask.shape
         causal_mask = causal_context_mask[:, :, :batch_seq_len, :batch_seq_len]
         boolean_mask = causal_mask + input_mask[:, None, None, :]

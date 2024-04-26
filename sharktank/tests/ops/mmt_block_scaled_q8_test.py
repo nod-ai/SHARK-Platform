@@ -9,6 +9,7 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 
 import unittest
+from parameterized import parameterized
 
 import torch
 
@@ -20,16 +21,24 @@ class mmt_block_scaled_q8_test(unittest.TestCase):
     def setUp(self):
         torch.manual_seed(42)
 
-    def testF32BS32(self):
-        a = torch.rand([4, 16, 3200], dtype=torch.float32)
-        d = torch.rand([3200, 100, 1], dtype=torch.float16)
-        qs = (torch.rand([3200, 100, 32], dtype=torch.float32) * 32.0).to(torch.int8)
+    @parameterized.expand(
+        [
+            (torch.float32, torch.float32, torch.float32, 1e-3, 1e-5),
+            (torch.float32, torch.float16, torch.float32, 1e-3, 1e-5),
+            (torch.float16, torch.float16, torch.float32, 1e-3, 1e-5),
+        ]
+    )
+    def testBS32(self, a_dtype, d_dtype, ref_dtype, atol, rtol):
+        a = torch.rand([4, 16, 3200], dtype=a_dtype) * 64
+        d = torch.rand([3200, 100, 1], dtype=d_dtype) * 64
+        qs = (torch.rand([3200, 100, 32], dtype=ref_dtype) * 32.0).to(torch.int8)
         result = ops.mmt_block_scaled_q8(a, d, qs)
 
         # Dequantize and test with normal matmul.
         # Tolerances are empirical and results are not expected to match exactly.
-        b = (d.to(torch.float32) * qs.to(torch.float32)).flatten(1)
-        torch.testing.assert_close(result, torch.matmul(a, b.T), atol=1e-1, rtol=1e-5)
+        b = (d.to(ref_dtype) * qs.to(ref_dtype)).flatten(1)
+        ref = torch.matmul(a.to(ref_dtype), b.T.to(ref_dtype)).to(a_dtype)
+        torch.testing.assert_close(result, ref, atol=atol, rtol=rtol)
 
     def testExportDynamicDims(self):
         class MyModule(torch.nn.Module):

@@ -90,6 +90,7 @@ class DirectKVCache(BaseKVCache):
         attn_head_count: int,
         attn_head_dim: int,
         seq_length: int,
+        dtype: torch.dtype = torch.float32,
         device: Optional[torch.device] = None,
     ):
         self.block_seq_stride = block_seq_stride
@@ -98,12 +99,13 @@ class DirectKVCache(BaseKVCache):
         self.attn_head_dim = attn_head_dim
         self.seq_length = seq_length
         self.device = device
+        self.dtype = dtype
 
     @property
     def pad_sequence_stride(self) -> int:
         return self.block_seq_stride
 
-    def allocate(self, *, bs: int, dtype: torch.dtype) -> list[torch.Tensor]:
+    def allocate(self, *, bs: int) -> list[torch.Tensor]:
         """Allocates 2*transformer_block_count K/V cache tensors for the
         given batch size and sequence length.
 
@@ -112,7 +114,7 @@ class DirectKVCache(BaseKVCache):
         return [
             torch.empty(
                 [bs, self.seq_length, self.attn_head_count, self.attn_head_dim],
-                dtype=dtype,
+                dtype=self.dtype,
                 device=self.device,
             )
             for _ in range(2 * self.transformer_block_count)
@@ -146,6 +148,7 @@ class PagedKVCache(BaseKVCache):
         attn_head_dim: int,
         cache_partition_count: int = 2,
         block_seq_stride: int = 16,
+        dtype: torch.dtype = torch.float32,
         device: Optional[torch.device] = None,
     ):
         self.transformer_block_count = transformer_block_count
@@ -164,6 +167,7 @@ class PagedKVCache(BaseKVCache):
         ]
         self.page_slab_flat_dim = math.prod(self.sub_page_dims)
         self.device = device
+        self.dtype = dtype
 
     def unflatten_page_table(self, state: list[torch.Tensor]) -> torch.Tensor:
         """Unflattens the 2D page table to a 6D tensor."""
@@ -184,13 +188,15 @@ class PagedKVCache(BaseKVCache):
     def pad_sequence_stride(self) -> int:
         return self.block_seq_stride
 
-    def allocate(self, page_count: int, dtype: torch.dtype) -> list[torch.Tensor]:
+    def allocate(self, page_count: int) -> list[torch.Tensor]:
         """Allocates tensor state for a page table for the given capacity in
         pages.
         """
         return [
             torch.empty(
-                [page_count, self.page_slab_flat_dim], dtype=dtype, device=self.device
+                [page_count, self.page_slab_flat_dim],
+                dtype=self.dtype,
+                device=self.device,
             )
         ]
 
