@@ -49,21 +49,21 @@ usage in a few key ways:
   Each `InferenceTensor` can be manifested as a specific type of physical
   representation:
 
-a. `PrimitiveInferenceTensor`: Simply backed by a PyTorch tensor (typically
-    from a memory mapped array in a `Dataset` on storage but can be arbitrary).
+    - `PrimitiveInferenceTensor`: Simply backed by a PyTorch tensor (typically
+        from a memory mapped array in a `Dataset` on storage but can be arbitrary).
 
-b. Packed `QuantizedTensor`: These tensors are backed by a single at-rest
-    PyTorch tensor with a specific manner of packing scheme, logically
-    represented by a `Layout`. In practice, each GGUF quantization scheme has
-    a distinct type of packed `QuantizedTensor` implementation. It is an
-    open world, and arbitrary implementations are easily created.
+    - Packed `QuantizedTensor`: These tensors are backed by a single at-rest
+        PyTorch tensor with a specific manner of packing scheme, logically
+        represented by a `Layout`. In practice, each GGUF quantization scheme has
+        a distinct type of packed `QuantizedTensor` implementation. It is an
+        open world, and arbitrary implementations are easily created.
 
-c. Planar `QuantizedTensor`: These tensors are backed by an arbitrary
-    dictionary of tensors (i.e. "planes"), logically represented by a `Layout`.
-    Typically, packed `QuantizedTensors` can be converted to planar form.
-    As a tensor compiler, IREE operates best on the planar form for generic
-    kernels, since it is easiest for it to process directly and repack into
-    more architecture specific forms.
+    - Planar `QuantizedTensor`: These tensors are backed by an arbitrary
+        dictionary of tensors (i.e. "planes"), logically represented by a `Layout`.
+        Typically, packed `QuantizedTensors` can be converted to planar form.
+        As a tensor compiler, IREE operates best on the planar form for generic
+        kernels, since it is easiest for it to process directly and repack into
+        more architecture specific forms.
 
 * A `Layout` operates on a planar arrangement, providing the reference math
   to quantize/dequantize, specifically preserving any latent block structure
@@ -216,7 +216,7 @@ present, is pre-scaled.
 
 The dequantization formula:
 
-```
+```python
 result = d.to(dtype) * qs.to(dtype) + m.to(dtype)
 ```
 
@@ -271,7 +271,7 @@ Where: `K == SUP_COUNT * SUB_COUNT * BS`
 Given this and hi/lo combined into a single value, the dequantization
 formula is:
 
-```
+```python
 d_scaled = (d * sb_scales).unsqueeze(-1)
 dmin_scaled = (dmin * sb_mins).unsqueeze(-1)
 return d_scaled * qs - dmin_scaled
@@ -283,7 +283,7 @@ return d_scaled * qs - dmin_scaled
 
 Corresponds to GGML Q8_0 quantization (8 bit, symmetric).
 
-```
+```c
 #define QK8_0 32
 typedef struct {
     ggml_fp16_t d;         // delta
@@ -298,7 +298,7 @@ packed, optimized kernel is available.
 
 Correspnds to GGML Q4_1 quantization (4bit qs with FP scale/offset).
 
-```
+```c
 #define QK4_1 32
 typedef struct {
     ggml_fp16_t d;          // delta
@@ -316,7 +316,7 @@ Corresponds to GGML Q4_K quantization (4 bit qs with super/sub-blocks, where
 the super-block scale/offset is FP and the sub-block scale/offset is 6bit
 unsigned integers).
 
-```
+```c
 #define QK_K 256
 #define K_SCALE_SIZE 12
 typedef struct {
@@ -363,7 +363,7 @@ Where: `K == SUP_COUNT * SUB_COUNT * BS`
 Given this and hi/lo combined into a single value, the dequantization
 formula is:
 
-```
+```python
 d_scaled = (d * sb_scales).unsqueeze(-1)
 dmin_scaled = (dmin * sb_mins).unsqueeze(-1)
 return d_scaled * qs - dmin_scaled
