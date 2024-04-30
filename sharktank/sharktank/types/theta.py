@@ -597,7 +597,7 @@ def _dataset_load_helper(
         from . import gguf_interop
 
         return gguf_interop.load_file(path)
-    elif file_type == "irpa" or suffixes == [".irpa"]:
+    elif file_type == "irpa" or suffixes[-1] == ".irpa":
         return _dataset_load_irpa(path, mmap=mmap)
     else:
         raise IOError(
