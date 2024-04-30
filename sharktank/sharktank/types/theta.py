@@ -593,7 +593,7 @@ def _dataset_load_helper(
 ) -> Dataset:
     path = Path(path)
     suffixes = path.suffixes
-    if file_type == "gguf" or suffixes == [".gguf"]:
+    if file_type == "gguf" or suffixes[-1] == ".gguf":
         from . import gguf_interop
 
         return gguf_interop.load_file(path)
