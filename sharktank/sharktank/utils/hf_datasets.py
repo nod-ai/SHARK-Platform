@@ -196,6 +196,57 @@ Dataset(
     ),
 ).alias_to("llama2_70b_q4_k_s_gguf")
 
+Dataset(
+    "TheBloke/Mistral-7B-v0.1-GGUF_q4_k_m",
+    (
+        RemoteFile(
+            "gguf",
+            "TheBloke/Mistral-7B-v0.1-GGUF",
+            "mistral-7b-v0.1.Q4_K_M.gguf",
+        ),
+        RemoteFile(
+            "tokenizer_config.json",
+            "TheBloke/Mistral-7B-v0.1-GPTQ",
+            "tokenizer_config.json",
+            extra_filenames=["tokenizer.model"],
+        ),
+    ),
+).alias_to("mistral_7b_q4_k_m_gguf")
+
+Dataset(
+    "TheBloke/Mistral-7B-v0.1-GGUF_q8_0",
+    (
+        RemoteFile(
+            "gguf",
+            "TheBloke/Mistral-7B-v0.1-GGUF",
+            "mistral-7b-v0.1.Q8_0.gguf",
+        ),
+        RemoteFile(
+            "tokenizer_config.json",
+            "TheBloke/Mistral-7B-v0.1-GPTQ",
+            "tokenizer_config.json",
+            extra_filenames=["tokenizer.model"],
+        ),
+    ),
+).alias_to("mistral_7b_q8_0_gguf")
+
+Dataset(
+    "TheBloke/Mixtral-8x7B-v0.1-GGUF",
+    (
+        RemoteFile(
+            "gguf",
+            "TheBloke/Mixtral-8x7B-v0.1-GGUF",
+            "mixtral-8x7b-v0.1.Q8_0.gguf",
+        ),
+        RemoteFile(
+            "tokenizer_config.json",
+            "TheBloke/Mixtral-8x7B-v0.1-GPTQ",
+            "tokenizer_config.json",
+            extra_filenames=["tokenizer.model"],
+        ),
+    ),
+).alias_to("mixtral_8x7b_q8_0_gguf")
+
 ################################################################################
 # Tool entrypoint
 ################################################################################
