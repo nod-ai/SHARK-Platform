@@ -4,7 +4,7 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-from typing import Any, Callable, Optional, Union, Collection
+from typing import Any, Callable, Optional, Union, Collection, Sequence
 
 import json
 from pathlib import Path
@@ -54,18 +54,41 @@ IOReportCallback = Callable[[str], None]
 # implementation for operating on the InferenceTensors.
 ################################################################################
 
+InferenceTensorTransform = Callable[[InferenceTensor], InferenceTensor]
+
+
+class InferenceTensorTransforms:
+    """Container for common transformations on InferenceTensors."""
+
+    @staticmethod
+    def identity() -> InferenceTensorTransform:
+        return lambda x: x
+
+    @staticmethod
+    def to_device(
+        device: Optional[Union[str, torch.device]]
+    ) -> InferenceTensorTransform:
+        if device is not None:
+            return lambda it: it.to(device=device)
+        return InferenceTensorTransforms.identity()
+
 
 class Theta:
     """Subset of parameter tensors used for inference."""
 
     def __init__(
         self,
-        tensors: dict,
+        tensors: Union[Sequence[InferenceTensor], dict[str, InferenceTensor]],
         *,
         ops: Optional["BaseInferenceOps"] = None,
-        already_nested: bool = False,
     ):
-        self._tensors = tensors if already_nested else _flat_to_nested_dict(tensors)
+        if not isinstance(tensors, dict):
+            tensors = {t.name: t for t in tensors}
+        self._tensors = _flat_to_nested_dict(tensors)
+        assert (
+            isinstance(k, str) and isinstance(v, InferenceTensor)
+            for k, v in tensors.items()
+        )
         if ops is None:
             # Use the custom op library by default. Note that since the ops
             # namespace depends on types, we have to lazy load it.
@@ -73,6 +96,22 @@ class Theta:
 
             ops = CustomInferenceOps()
         self.ops = ops
+
+    def transform(self, *transforms: InferenceTensorTransform) -> "Theta":
+        """Transforms all inference tensors by applying transform functions.
+
+        Returns a modified theta.
+        """
+        orig_flat_tensors = self.flatten().values()
+        tran_flat_tensors = []
+        for it in orig_flat_tensors:
+            for transform in transforms:
+                it = transform(it)
+            tran_flat_tensors.append(it)
+        return Theta(tran_flat_tensors)
+
+    def to(self, *, device: Optional[Union[str, torch.device]] = None) -> "Theta":
+        return self.transform(InferenceTensorTransforms.to_device(device))
 
     def flatten(self) -> dict[str, InferenceTensor]:
         results = {}
@@ -212,10 +251,27 @@ class Dataset:
 
     @staticmethod
     def load(
-        path: Union[str, Path], *, file_type: Optional[str] = None, mmap: bool = True
+        path: Union[str, Path],
+        *,
+        file_type: Optional[str] = None,
+        mmap: bool = True,
+        device: Optional[Union[str, torch.device]] = None,
     ) -> "Dataset":
         """Loads a dataset from a parameter archive constructed with save."""
-        return _dataset_load_helper(path, file_type=file_type, mmap=mmap)
+        ds = _dataset_load_helper(path, file_type=file_type, mmap=mmap)
+        if device is not None:
+            ds.to(device=device)
+        return ds
+
+    def transform(self, *transforms: InferenceTensorTransform):
+        """Does an in-place transformation of `root_theta`.
+
+        The result of the transformation is stored back into `root_theta`.
+        """
+        self.root_theta = self.root_theta.transform(*transforms)
+
+    def to(self, *, device: Optional[Union[str, torch.device]] = None):
+        self.transform(InferenceTensorTransforms.to_device(device))
 
 
 ################################################################################

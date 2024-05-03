@@ -6,6 +6,8 @@
 
 """Inference support for the PagedLLMV1 protocol of models."""
 
+from typing import Optional
+
 import math
 import sys
 
@@ -34,9 +36,7 @@ class TorchGenerator:
         self.model = model
         self.tokenizer = tokenizer
         if model.cache.is_paged:
-            self.shared_cache_state = model.cache.paged.allocate(
-                page_cache_size, dtype=torch.float32
-            )
+            self.shared_cache_state = model.cache.paged.allocate(page_cache_size)
         else:
             self.shared_cache_state = None
         self.free_pages = list(range(1, 128))
@@ -50,14 +50,12 @@ class TorchGenerator:
         token_ids, seq_lens = self.tokenizer.encode(
             prompts, pad_to_multiple_of=self.model.cache.pad_sequence_stride
         )
-        token_ids = torch.tensor(token_ids)
-        seq_lens = torch.tensor(seq_lens)
+        token_ids = torch.tensor(token_ids, device=self.model.device)
+        seq_lens = torch.tensor(seq_lens, device=self.model.device)
         if self.shared_cache_state is not None:
             cache_state = self.shared_cache_state
         else:
-            cache_state = self.model.cache.direct.allocate(
-                bs=len(prompts), dtype=torch.float32
-            )
+            cache_state = self.model.cache.direct.allocate(bs=len(prompts))
         return Batch(self, token_ids, seq_lens, cache_state)
 
     def alloc_page(self) -> int:
@@ -139,8 +137,7 @@ class Batch:
     def prefill(self):
         model = self.parent.model
         attention_mask = model.attention_mask(
-            model.input_mask(self.seq_lens, self.token_ids.shape[1]),
-            dtype=torch.float32,
+            model.input_mask(self.seq_lens, self.token_ids.shape[1])
         )
         seq_block_ids_tensor = self.pad_block_ids()
         print(f":: Invoke prefill:")
@@ -153,6 +150,8 @@ class Batch:
             seq_block_ids=seq_block_ids_tensor,
             cache_state=self.cache_state,
         )
+
+        # TODO: Generalize the sampling and don't make it swap on/off cpu.
         # TODO: Normalize the output of extract_tokens_from_logits into
         # tensor [bs, 1].
         tokens = torch.tensor(
@@ -160,7 +159,7 @@ class Batch:
         ).unsqueeze(1)
         print(f":: Prefill results:\n{tokens.tolist()}")
         self.add_result_token(tokens)
-        self.next_tokens = tokens
+        self.next_tokens = tokens.to(device=model.device)
 
     def decode(self):
         model = self.parent.model
@@ -173,8 +172,7 @@ class Batch:
             model.input_mask(
                 self.seq_lens,
                 seq_block_ids_tensor.shape[1] * self.parent.block_seq_stride,
-            ),
-            dtype=torch.float32,
+            )
         )
         trace_tensor("decode.token_ids", self.next_tokens)
         trace_tensor("decode.start_positions", start_positions)
@@ -191,7 +189,8 @@ class Batch:
         # TODO: Normalize the output of extract_tokens_from_logits into
         # tensor [bs, 1].
         tokens = torch.tensor(
-            model.extract_tokens_from_logits(logits, [1] * self.bs)
+            model.extract_tokens_from_logits(logits, [1] * self.bs),
+            device=self.parent.model.device,
         ).unsqueeze(1)
         self.add_result_token(tokens)
         self.next_tokens = tokens
@@ -199,7 +198,7 @@ class Batch:
     def pad_block_ids(self) -> torch.Tensor:
         max_length = max(len(r) for r in self.seq_block_ids)
         rows = [r + (max_length - len(r)) * [0] for r in self.seq_block_ids]
-        return torch.tensor(rows)
+        return torch.tensor(rows, device=self.parent.model.device)
 
 
 def main():
@@ -208,19 +207,31 @@ def main():
     parser = cli.create_parser()
     parser.add_argument("prompt", nargs="+", help="Prompt strings")
     parser.add_argument("--kv-cache-type", default="paged", help="KV cache type")
+    parser.add_argument("--device", help="Torch device (or default)")
+    parser.add_argument(
+        "--activation-dtype",
+        help="DType to use for activations in the model",
+        default="float32",
+    )
     cli.add_gguf_dataset_options(parser)
     cli.add_tokenizer_options(parser)
     args = cli.parse(parser)
 
+    device = torch.device(args.device) if args.device else None
+    activation_dtype = getattr(torch, args.activation_dtype)
+    assert isinstance(activation_dtype, torch.dtype)
     data_files = cli.get_gguf_data_files(args)
     tokenizer = cli.get_tokenizer(args, data_files=data_files)
-    dataset = Dataset.load(data_files["gguf"])
+    dataset = Dataset.load(data_files["gguf"], device=device)
     prompts = args.prompt
 
     config = LlamaModelConfig(
         hp=configs.LlamaHParams.from_gguf_props(dataset.properties),
         block_seq_stride=16,
         kv_cache_type=args.kv_cache_type,
+        device=device,
+        activation_dtype=activation_dtype,
+        attention_dtype=activation_dtype,
     )
     model = PagedLlamaModelV1(dataset.root_theta, config)
     generator = TorchGenerator(model, tokenizer)

@@ -24,9 +24,19 @@ class BaseCausalLMModel(ThetaLayer):
     """
 
     def __init__(
-        self, theta: Theta, *, context_length: int, static_context_mask: bool = True
+        self,
+        theta: Theta,
+        *,
+        context_length: int,
+        static_context_mask: bool = True,
+        device: Optional[torch.device] = None,
+        activation_dtype: torch.dtype = torch.float32,
+        attention_dtype: torch.dtype = torch.float32,
     ):
         super().__init__(theta)
+        self.device = device
+        self.activation_dtype = activation_dtype
+        self.attention_dtype = attention_dtype
         self.context_length = context_length
 
         if static_context_mask:
@@ -35,6 +45,17 @@ class BaseCausalLMModel(ThetaLayer):
             )
         else:
             self.causal_context_mask = None
+
+    def _assert_device(self, *ts: torch.Tensor, dtype: Optional[torch.dtype] = None):
+        if self.device is not None:
+            for t in ts:
+                assert (
+                    t.device == self.device
+                ), f"Expected tensor to be on device {self.device} but it is on {t.device}"
+                if dtype is not None:
+                    assert (
+                        t.dtype == dtype
+                    ), f"Expected tensor to have dtype {dtype} but it is {t.dtype}"
 
     def _maximally_negative_value(self, dtype):
         """Returns a maximally negative value for the given dtype.
@@ -46,7 +67,9 @@ class BaseCausalLMModel(ThetaLayer):
     def generate_causal_context_mask(self) -> torch.Tensor:
         context_length = self.context_length
         causal_context_mask = torch.triu(
-            torch.ones([context_length, context_length], dtype=torch.bool),
+            torch.ones(
+                [context_length, context_length], dtype=torch.bool, device=self.device
+            ),
             diagonal=1,
         )[None, None, :, :]
         return causal_context_mask
@@ -62,26 +85,24 @@ class BaseCausalLMModel(ThetaLayer):
         The mask will be [bs, batch_seqlen] with True at any position that is
         masked.
         """
-        range_vector = torch.arange(0, batch_seqlen, 1)
+        range_vector = torch.arange(0, batch_seqlen, 1, device=self.device)
         matrix = torch.unsqueeze(seq_lens, dim=-1)
         mask = range_vector >= matrix
         return mask
 
-    def decode_attention_mask(
-        self, boolean_input_mask: torch.Tensor, dtype: torch.dtype
-    ):
+    def decode_attention_mask(self, boolean_input_mask: torch.Tensor):
+        dtype = self.attention_dtype
         numeric_mask = torch.zeros_like(boolean_input_mask, dtype=dtype)
         numeric_mask.masked_fill_(
             boolean_input_mask, self._maximally_negative_value(dtype)
         )
-        return numeric_mask.unsqueeze(1).unsqueeze(1)
+        return numeric_mask.unsqueeze(1).unsqueeze(1).to(self.device)
 
     def attention_mask(
         self,
         input_mask: torch.Tensor,
         *,
-        dtype: torch.dtype,
-        causal_context_mask: Optional[torch.Tensor] = None
+        causal_context_mask: Optional[torch.Tensor] = None,
     ):
         """Generates a causal attention mask of [1, 1, sl, sl] of activation dtype.
 
@@ -98,12 +119,13 @@ class BaseCausalLMModel(ThetaLayer):
             causal_context_mask = self._generate_causal_context_mask()
 
         # Combine the causal context mask and input mask.
+        dtype = self.attention_dtype
         _, batch_seq_len = input_mask.shape
         causal_mask = causal_context_mask[:, :, :batch_seq_len, :batch_seq_len]
         boolean_mask = causal_mask + input_mask[:, None, None, :]
         numeric_mask = torch.zeros_like(boolean_mask, dtype=dtype)
         numeric_mask.masked_fill_(boolean_mask, self._maximally_negative_value(dtype))
-        return numeric_mask
+        return numeric_mask.to(self.device)
 
     def extract_tokens_from_logits(
         self, logits: torch.Tensor, seq_lens: list[int]

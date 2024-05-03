@@ -9,6 +9,7 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 
 import unittest
+from parameterized import parameterized
 
 import torch
 
@@ -20,17 +21,35 @@ class mmtfp_test(unittest.TestCase):
     def setUp(self):
         torch.manual_seed(42)
 
-    def test2DF32(self):
-        a = torch.rand([128, 32], dtype=torch.float32)
-        b = torch.rand([256, 32], dtype=torch.float32)
+    @parameterized.expand(
+        [
+            (torch.float32, torch.float32, torch.float32),
+            (torch.float16, torch.float16, torch.float16),
+            (torch.float16, torch.float32, torch.float16),
+            (torch.float32, torch.float16, torch.float32),
+        ]
+    )
+    def test2D(self, a_dtype, b_dtype, ref_dtype):
+        a = torch.rand([128, 32], dtype=a_dtype)
+        b = torch.rand([256, 32], dtype=b_dtype)
         result = ops.mmtfp(a, b)
-        torch.testing.assert_close(result, torch.matmul(a, b.T))
+        ref = torch.matmul(a.to(ref_dtype), b.T.to(ref_dtype)).to(a_dtype)
+        torch.testing.assert_close(result, ref)
 
-    def test3DF32(self):
-        a = torch.rand([4, 128, 32], dtype=torch.float32)
-        b = torch.rand([256, 32], dtype=torch.float32)
+    @parameterized.expand(
+        [
+            (torch.float32, torch.float32, torch.float32),
+            (torch.float16, torch.float16, torch.float16),
+            (torch.float16, torch.float32, torch.float16),
+            (torch.float32, torch.float16, torch.float32),
+        ]
+    )
+    def test3DF(self, a_dtype, b_dtype, ref_dtype):
+        a = torch.rand([4, 128, 32], dtype=a_dtype)
+        b = torch.rand([256, 32], dtype=b_dtype)
         result = ops.mmtfp(a, b)
-        torch.testing.assert_close(result, torch.matmul(a, b.T))
+        ref = torch.matmul(a.to(ref_dtype), b.T.to(ref_dtype)).to(a_dtype)
+        torch.testing.assert_close(result, ref)
 
     def testExportDynamicDims(self):
         class MyModule(torch.nn.Module):

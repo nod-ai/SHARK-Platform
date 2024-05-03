@@ -10,7 +10,12 @@ from .base import Theta, ThetaLayer
 
 
 class RMSNormLayer(ThetaLayer):
-    """Computes the unbiased full RMS layer normalization."""
+    """Computes the unbiased full RMS layer normalization.
+
+    Because normalization is sensitive to floating point error, we support
+    an explicit dtype that the input will be casted to prior to performing
+    the compute. The result will be cast back to the input dtype.
+    """
 
     def __init__(
         self,
@@ -18,10 +23,18 @@ class RMSNormLayer(ThetaLayer):
         *,
         weight_name: str = "weight",
         epsilon: float = 1e-6,
+        dtype: torch.dtype = torch.float32,
     ):
         super().__init__(theta)
         self.weight = self.theta_tensor(weight_name)
         self.epsilon = epsilon
+        self.dtype = dtype
 
     def forward(self, x: torch.Tensor):
-        return self.theta.ops.rms_norm(x, self.weight, epsilon=self.epsilon)
+        orig_dtype = x.dtype
+        x = x.to(self.dtype)
+        norm = self.theta.ops.rms_norm(x, self.weight, epsilon=self.epsilon)
+        # Will automatically upcast to the dtype of the weight, which is
+        # often in higher precision. Downcast back to expected.
+        norm = norm.to(orig_dtype)
+        return norm

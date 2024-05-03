@@ -37,6 +37,15 @@ class LlamaModelConfig:
     # Either "paged" or "direct".
     kv_cache_type: str = "paged"
 
+    # The device on which to place intermediate state.
+    device: Optional[torch.device] = None
+
+    # Dtype to use for general FP activations not otherwise configured.
+    activation_dtype: torch.dtype = torch.float32
+
+    # Dtype to use for attention.
+    attention_dtype: torch.dtype = torch.float32
+
     def create_kv_cache(self) -> BaseKVCache:
         hp = self.hp
         if self.kv_cache_type == "direct":
@@ -46,6 +55,8 @@ class LlamaModelConfig:
                 attn_head_count=hp.attention_head_count_kv,
                 attn_head_dim=hp.attn_head_dim,
                 seq_length=hp.context_length,
+                device=self.device,
+                dtype=self.attention_dtype,
             )
         elif self.kv_cache_type == "paged":
             return PagedKVCache(
@@ -54,6 +65,8 @@ class LlamaModelConfig:
                 attn_head_dim=hp.attn_head_dim,
                 cache_partition_count=2,  # One for each of K/V.
                 block_seq_stride=self.block_seq_stride,
+                device=self.device,
+                dtype=self.attention_dtype,
             )
         else:
             raise NotImplementedError(f"kv_cache_type = {self.kv_cache_type}")
@@ -88,19 +101,27 @@ class PagedLlamaModelV1(BaseCausalLMModel):
 
     def __init__(self, theta: Theta, config: LlamaModelConfig):
         hp = config.hp
-        super().__init__(theta, context_length=config.hp.context_length)
+        super().__init__(
+            theta,
+            context_length=config.hp.context_length,
+            device=config.device,
+            activation_dtype=config.activation_dtype,
+            attention_dtype=config.attention_dtype,
+        )
         self.config = config
         self.hp = hp
         self.cache = config.create_kv_cache()
+        self.activation_dtype = config.activation_dtype
         self.add_module(
             "token_embedding",
-            TokenEmbeddingLayer(theta("token_embd"), dtype=hp.activation_dtype),
+            TokenEmbeddingLayer(theta("token_embd"), dtype=config.activation_dtype),
         )
         self.add_module(
             "attention_embedding",
             RotaryEmbeddingLayer(
                 rope_dimension_count=hp.rope_dimension_count,
                 max_seqlen=hp.context_length,
+                device=self.device,
             ),
         )
         self.add_module(
@@ -137,6 +158,10 @@ class PagedLlamaModelV1(BaseCausalLMModel):
         seq_block_ids: torch.Tensor,
         cache_state: list[torch.Tensor],
     ):
+        self._assert_device(tokens)
+        self._assert_device(attention_mask, dtype=self.activation_dtype)
+        self._assert_device(seq_block_ids)
+        self._assert_device(*cache_state, dtype=self.activation_dtype)
         h = self.token_embedding(tokens)
         self.trace_tensor("llama.token_embedding", h)
 
@@ -171,6 +196,10 @@ class PagedLlamaModelV1(BaseCausalLMModel):
         seq_block_ids: torch.Tensor,
         cache_state: list[torch.Tensor],
     ):
+        self._assert_device(tokens)
+        self._assert_device(attention_mask, dtype=self.activation_dtype)
+        self._assert_device(start_positions)
+        self._assert_device(*cache_state, dtype=self.activation_dtype)
         bs, _ = tokens.shape
         # Precompute a position based mask for computing rope embeddings
         # as it is the same for all blocks.
@@ -188,7 +217,8 @@ class PagedLlamaModelV1(BaseCausalLMModel):
                 self.hp.attention_head_count_kv,
                 self.hp.attn_head_dim,
             ],
-            dtype=self.hp.activation_dtype,
+            dtype=self.config.activation_dtype,
+            device=self.device,
         )
         xv_temp = torch.empty(
             [
@@ -197,7 +227,8 @@ class PagedLlamaModelV1(BaseCausalLMModel):
                 self.hp.attention_head_count_kv,
                 self.hp.attn_head_dim,
             ],
-            dtype=self.hp.activation_dtype,
+            dtype=self.config.activation_dtype,
+            device=self.device,
         )
 
         h = self.token_embedding(tokens)
