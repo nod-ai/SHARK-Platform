@@ -336,10 +336,6 @@ class PagedLlamaAttentionBlock(ThetaLayer):
                 xq=xq, xk=xk, mask=embedding_batch_mask
             )
 
-        # TODO: Some model variants do some form of kv repetition to expand the
-        # count of kv heads to the count of attention heads used by the q.
-        assert self.head_count == self.head_count_kv, "NYI: KV expansion"
-
         # Full sequence length.
         kv_seq_len = seq_block_ids.shape[1] * self.cache.block_seq_stride
 
@@ -364,6 +360,22 @@ class PagedLlamaAttentionBlock(ThetaLayer):
             )
         else:
             raise NotImplementedError(f"Unsupported KV cache type: {type(self.cache)}")
+
+        # Expand kv heads for GQA.
+        gqa_n_rep = self.head_count // self.head_count_kv
+        assert gqa_n_rep > 0
+        if gqa_n_rep > 1:
+
+            def repeat_kv(x: torch.Tensor) -> torch.Tensor:
+                bs, slen, n_kv_heads, head_dim = x.shape
+                return (
+                    x.unsqueeze(-2)
+                    .expand(bs, slen, n_kv_heads, gqa_n_rep, head_dim)
+                    .reshape(bs, slen, n_kv_heads * gqa_n_rep, head_dim)
+                )
+
+            xk = repeat_kv(xk)
+            xv = repeat_kv(xv)
 
         # Tranpose into [bs, heads, sl, dim]
         xq = xq.transpose(1, 2)

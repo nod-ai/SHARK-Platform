@@ -84,6 +84,40 @@ def alias_dataset(from_name: str, to_name: str):
 ################################################################################
 
 Dataset(
+    "QuantFactory/Llama-3-8B_q4_1_gguf",
+    (
+        RemoteFile(
+            "gguf",
+            "QuantFactory/Meta-Llama-3-8B-GGUF",
+            "Meta-Llama-3-8B.Q4_1.gguf",
+        ),
+        RemoteFile(
+            "tokenizer_config.json",
+            "NousResearch/Meta-Llama-3-8B",
+            "tokenizer_config.json",
+            extra_filenames=["tokenizer.json"],
+        ),
+    ),
+).alias_to("llama3_8B_q4_1")
+
+Dataset(
+    "QuantFactory/Llama-3-8B_q8_0_gguf",
+    (
+        RemoteFile(
+            "gguf",
+            "QuantFactory/Meta-Llama-3-8B-GGUF",
+            "Meta-Llama-3-8B.Q8_0.gguf",
+        ),
+        RemoteFile(
+            "tokenizer_config.json",
+            "NousResearch/Meta-Llama-3-8B",
+            "tokenizer_config.json",
+            extra_filenames=["tokenizer.json"],
+        ),
+    ),
+).alias_to("llama3_8B_q8_0")
+
+Dataset(
     "SlyEcho/open_llama_3b_v2_f16_gguf",
     (
         RemoteFile(
