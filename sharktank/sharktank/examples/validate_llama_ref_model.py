@@ -14,8 +14,16 @@ from sharktank.models.llama.llama_ref import *
 
 
 def main(args: list[str]):
+    from ..utils import cli
+
     torch.no_grad().__enter__()
-    config = Dataset.load(args[0])
+
+    parser = cli.create_parser()
+    cli.add_gguf_dataset_options(parser)
+    args = cli.parse(parser)
+
+    data_files = cli.get_gguf_data_files(args)
+    config = Dataset.load(data_files["gguf"])
     hp = configs.LlamaHParams.from_gguf_props(config.properties)
     model = DirectCacheLlamaModelV1(config.root_theta, hp)
 
