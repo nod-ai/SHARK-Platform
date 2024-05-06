@@ -22,6 +22,11 @@ def main():
 
     parser = cli.create_parser()
     cli.add_gguf_dataset_options(parser)
+    parser.add_argument(
+        "--output",
+        help="Output file path for exported MLIR file",
+        default="/tmp/batch_llama_v1.mlir",
+    )
     args = cli.parse(parser)
 
     data_files = cli.get_gguf_data_files(args)
@@ -132,8 +137,8 @@ def main():
 
     print("Exporting")
     output = export(fxb)
-    print("Saving")
-    output.save_mlir("/tmp/batch_llama_v1.mlir")
+    print(f"Saving to '{args.output}'")
+    output.save_mlir(args.output)
 
 
 if __name__ == "__main__":
