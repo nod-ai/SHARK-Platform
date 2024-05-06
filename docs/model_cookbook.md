@@ -31,7 +31,17 @@ Another example:
 huggingface-cli login
 huggingface-cli download --local-dir /tmp/mistral-7b mistralai/Mistral-7B-v0.1
 python ~/llama.cpp/convert.py --outtype f32 --outfile /tmp/mistral-7b-v0.1-f32.gguf /tmp/mistral-7b
-python -m sharktank.examples.paged_llm_v1 --gguf-file=/tmp/mistral-7b-v0.1-f32.gguf --tokenizer-config-json=/tmp/mistral-7b/tokenizer_config.json "Prompt"
+
+# Run through reference implementation
+python -m sharktank.examples.paged_llm_v1 \
+  --gguf-file=/tmp/mistral-7b-v0.1-f32.gguf \
+  --tokenizer-config-json=/tmp/mistral-7b/tokenizer_config.json \
+  "Prompt"
+
+# Export as MLIR
+python -m sharktank.examples.export_paged_llm_v1 \
+  --gguf-file=/tmp/mistral-7b-v0.1-f32.gguf \
+  --output=/tmp/mistral-7b-v0.1-f32.mlir
 ```
 
 See also the documentation at
@@ -56,7 +66,10 @@ For example, to run the
 ```bash
 python -m sharktank.examples.paged_llm_v1 --hf-dataset=open_llama_3b_v2_q8_0_gguf "Prompt 1"
 
-open-llama-3b-v2-q8_0.gguf: 100%|█████████████████████████████| 3.64G/3.64G [01:35<00:00, 38.3MB/s] tokenizer.model: 100%|███████████████████████████████████████████| 512k/512k [00:00<00:00, 128MB/s] tokenizer_config.json: 100%|██████████████████████████████████████████████| 593/593 [00:00<?, ?B/s] :: Prompting:
+open-llama-3b-v2-q8_0.gguf: 100%|█████████████████████████████| 3.64G/3.64G [01:35<00:00, 38.3MB/s]
+tokenizer.model: 100%|███████████████████████████████████████████| 512k/512k [00:00<00:00, 128MB/s]
+tokenizer_config.json: 100%|██████████████████████████████████████████████| 593/593 [00:00<?, ?B/s]
+:: Prompting:
     b'Prompt 1'
 :: Prompt tokens: tensor([[    1,  6874,   448, 29500, 29532,     0,     0,     0,     0,     0,
              0,     0,     0,     0,     0,     0]])
