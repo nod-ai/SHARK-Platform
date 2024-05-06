@@ -15,7 +15,7 @@ certain quantized (e.g. 8 bit or lower) types. For example,
 https://huggingface.co/SlyEcho/open_llama_3b_v2_gguf has these types:
 `[f16, q4_0, q4_1, q5_0, q5_1, q8_0]`.
 
-To convert our own Llama-3-8B F16 gguf, we can find a source model (i.e.
+To convert our own Llama-3-8B F16 GGUF, we can find a source model (i.e.
 safetensors or PyTorch) like https://huggingface.co/NousResearch/Meta-Llama-3-8B
 and use the following commands:
 
@@ -23,6 +23,15 @@ and use the following commands:
 huggingface-cli download --local-dir . NousResearch/Meta-Llama-3-8B
 
 python ~/llama.cpp/convert.py --outtype f16 --outfile Meta-Llama-3-8B-f16.gguf . --vocab-type bpe
+```
+
+Another example:
+
+```bash
+huggingface-cli login
+huggingface-cli download --local-dir /tmp/mistral-7b mistralai/Mistral-7B-v0.1
+python ~/llama.cpp/convert.py --outtype f32 --outfile /tmp/mistral-7b-v0.1-f32.gguf /tmp/mistral-7b
+python -m sharktank.examples.paged_llm_v1 --gguf-file=/tmp/mistral-7b-v0.1-f32.gguf --tokenizer-config-json=/tmp/mistral-7b/tokenizer_config.json "Prompt"
 ```
 
 See also the documentation at
