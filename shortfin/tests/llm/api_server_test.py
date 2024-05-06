@@ -5,17 +5,34 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 import os
+from contextlib import closing
 from pathlib import Path
 import pytest
 import requests
+import socket
 import subprocess
 import sys
 import time
 
 
+def find_free_port():
+    """This tries to find a free port to run a server on for the test.
+
+    Race conditions are possible - the port can be acquired between when this
+    runs and when the server starts.
+
+    https://stackoverflow.com/questions/1365265/on-localhost-how-do-i-pick-a-free-port-number
+    """
+    with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
+        s.bind(("localhost", 0))
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        return s.getsockname()[1]
+
+
 class ServerRunner:
     def __init__(self, args):
-        self.url = "http://localhost:8000"
+        port = str(find_free_port())
+        self.url = "http://localhost:" + port
         env = os.environ.copy()
         env["PYTHONUNBUFFERED"] = "1"
         self.process = subprocess.Popen(
@@ -24,6 +41,7 @@ class ServerRunner:
                 "-m",
                 "shortfin.llm.api.rest_server",
                 "--testing-mock-service",
+                "--port=" + port,
             ]
             + args,
             env=env,
