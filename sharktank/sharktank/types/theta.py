@@ -498,11 +498,11 @@ class DatasetMetadata:
         # __SHARK_SHARD_RANKS__ list.
         if self.shard_ranks:
             shard_ranks_blob = json.dumps(self.shard_ranks)
-        if io_report_callback:
-            io_report_callback(
-                f"Add __SHARK_SHARD_RANKS__: {shard_ranks_blob.encode()}"
-            )
-        builder.add_blob("__SHARK_SHARD_RANKS__", shard_ranks_blob.encode())
+            if io_report_callback:
+                io_report_callback(
+                    f"Add __SHARK_SHARD_RANKS__: {shard_ranks_blob.encode()}"
+                )
+            builder.add_blob("__SHARK_SHARD_RANKS__", shard_ranks_blob.encode())
 
         # __SHARK_INFERENCE_TENSORS__ blob.
         try:
