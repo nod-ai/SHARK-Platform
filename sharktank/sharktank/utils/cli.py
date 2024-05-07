@@ -6,10 +6,13 @@
 
 """Utilities for building command line tools."""
 
-from typing import Dict, Optional
+from typing import Dict, Optional, Sequence
 
 import argparse
+import logging
 from pathlib import Path
+
+from ..types import Dataset
 
 from . import hf_datasets
 from . import tokenizer
@@ -22,19 +25,19 @@ def create_parser(
     description: Optional[str] = None,
 ) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog=prog, usage=usage, description=description)
-
     return parser
 
 
-def parse(parser: argparse.ArgumentParser):
+def parse(parser: argparse.ArgumentParser, *, args: Sequence[str] | None = None):
     """Parses arguments and does any prescribed global process setup."""
-    return parser.parse_args()
+    parsed_args = parser.parse_args(args)
+    return parsed_args
 
 
-def add_gguf_dataset_options(parser: argparse.ArgumentParser):
+def add_input_dataset_options(parser: argparse.ArgumentParser):
     """Adds options to load a GGUF dataset.
 
-    Either the `--hf-dataset` or `--gguf-file` argument can be present.
+    Either the `--hf-dataset`, `--gguf-file`, or `--irpa-file` argument can be present.
     """
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument(
@@ -42,6 +45,20 @@ def add_gguf_dataset_options(parser: argparse.ArgumentParser):
         help=f"HF dataset to use (available: {list(hf_datasets.ALL_DATASETS.keys())})",
     )
     group.add_argument("--gguf-file", type=Path, help="GGUF file to load")
+    group.add_argument("--irpa-file", type=Path, help="IRPA file to load")
+
+
+def add_output_dataset_options(parser: argparse.ArgumentParser):
+    """Adds options to save a dataset.
+
+    This will result in the --output-irpa-file argument being added.
+    """
+    parser.add_argument(
+        "--output-irpa-file",
+        type=Path,
+        required=True,
+        help="IRPA file to save dataset to",
+    )
 
 
 def add_tokenizer_options(parser: argparse.ArgumentParser):
@@ -60,34 +77,46 @@ def add_tokenizer_options(parser: argparse.ArgumentParser):
     )
 
 
-def get_gguf_data_files(args) -> Dict[str, Path]:
-    """Gets the path to the gguf file for the dataset."""
+def get_input_data_files(args) -> Optional[dict[str, Path]]:
+    """Gets data files given the input arguments.
+
+    Keys may contain:
+      * tokenizer_config.json
+      * gguf
+      * irpa
+    """
     if args.hf_dataset is not None:
         dataset = hf_datasets.get_dataset(args.hf_dataset).download()
-        if "gguf" not in dataset:
-            raise ValueError(
-                f"Argument --hf-dataset refers to a dataset that does not contain a "
-                f"gguf file ({dataset})"
-            )
         return dataset
-    else:
+    elif args.gguf_file is not None:
         return {"gguf": args.gguf_file}
+    elif args.irpa_file is not None:
+        return {"irpa": args.irpa_file}
 
 
-def get_tokenizer(
-    args, *, data_files: Optional[Dict[str, Path]] = None
-) -> tokenizer.InferenceTokenizer:
+def get_input_dataset(args) -> Dataset:
+    """Loads and returns a dataset from the given args.
+
+    Presumes that the arg parser was initialized with |add_input_dataset|.
+    """
+    data_files = get_input_data_files(args)
+    if "gguf" in data_files:
+        return Dataset.load(data_files["gguf"], file_type="gguf")
+
+    if "irpa" in data_files:
+        return Dataset.load(data_files["irpa"], file_type="irpa")
+
+
+def get_tokenizer(args) -> tokenizer.InferenceTokenizer:
     """Gets a tokenizer based on arguments.
 
     If the data_files= dict is present and explicit tokenizer options are not
     set, we will try to infer a tokenizer from the data files.
     """
-    if data_files is None:
-        data_files = {}
-    else:
-        data_files = dict(data_files)
     if args.tokenizer_config_json is not None:
-        data_files["tokenizer_config.json"] = args.tokenizer_config_json
+        data_files = {"tokenizer_config.json", args.tokenizer_config_json}
+    else:
+        data_files = get_input_data_files(args)
 
     tokenizer_type = args.tokenizer_type
     if tokenizer_type is None:

@@ -13,8 +13,9 @@ import torch
 
 from shark_turbine.aot import (
     ExternalTensorTrait,
-    ParameterArchiveBuilder,
 )
+
+from ..utils.io import ShardedArchiveBuilder
 
 __all__ = [
     "register_quantized_layout",
@@ -25,6 +26,8 @@ __all__ = [
     "PrimitiveTensor",
     "QuantizedTensor",
     "QuantizedLayout",
+    "ShardedTensor",
+    "ShardedPrimitiveTensor",
 ]
 
 # JSON encodable value types.
@@ -182,9 +185,7 @@ class InferenceTensor(ABC):
         ...
 
     @abstractmethod
-    def add_to_archive(
-        self, builder: ParameterArchiveBuilder
-    ) -> InferenceTensorMetadata:
+    def add_to_archive(self, builder: ShardedArchiveBuilder) -> InferenceTensorMetadata:
         """Adds this tensor to the global archive."""
         ...
 
@@ -249,6 +250,11 @@ def register_inference_tensor(ty: Type[QuantizedLayoutT]) -> Type[QuantizedLayou
     return ty
 
 
+########################################################################################
+# Primitive tensors
+########################################################################################
+
+
 class PrimitiveTensor(InferenceTensor):
     """An InferenceTensor without any kind of special layout.
 
@@ -301,9 +307,7 @@ class DefaultPrimitiveTensor(PrimitiveTensor):
             self.name: self._data,
         }
 
-    def add_to_archive(
-        self, builder: ParameterArchiveBuilder
-    ) -> InferenceTensorMetadata:
+    def add_to_archive(self, builder: ShardedArchiveBuilder) -> InferenceTensorMetadata:
         """Adds this tensor to the global archive."""
         builder.add_tensor(self.name, self._data)
         return InferenceTensorMetadata(self.serialized_name(), {"": self.name})
@@ -315,6 +319,11 @@ class DefaultPrimitiveTensor(PrimitiveTensor):
 
     def __repr__(self):
         return f"PrimitiveTensor({self.name}, {self.shape}, {self._data.dtype})"
+
+
+########################################################################################
+# Quantized tensors
+########################################################################################
 
 
 class QuantizedTensor(InferenceTensor, Generic[QuantizedLayoutT]):
@@ -344,9 +353,7 @@ class QuantizedTensor(InferenceTensor, Generic[QuantizedLayoutT]):
         """
         return PlanarQuantizedTensor(self.name, self.shape, self.unpack())
 
-    def add_to_archive(
-        self, builder: ParameterArchiveBuilder
-    ) -> InferenceTensorMetadata:
+    def add_to_archive(self, builder: ShardedArchiveBuilder) -> InferenceTensorMetadata:
         """By default all QuantizedTensors serialize as a generic PlanarQuantizedTensor.
 
         If this is not desirable, subclasses should override.
@@ -438,9 +445,7 @@ class PlanarQuantizedTensor(QuantizedTensor):
         layout = layout_clazz.create(shape, layout_metadata, raw_tensors)
         return PlanarQuantizedTensor(name, shape, layout)
 
-    def add_to_archive(
-        self, builder: ParameterArchiveBuilder
-    ) -> InferenceTensorMetadata:
+    def add_to_archive(self, builder: ShardedArchiveBuilder) -> InferenceTensorMetadata:
         """Adds this tensor to the global archive."""
         root_name = self.name
         layout = self.unpack()
@@ -466,3 +471,122 @@ class PlanarQuantizedTensor(QuantizedTensor):
         return (
             f"PlanarQuantized({self.name}, {self.shape}, planes={self.globals.keys()})"
         )
+
+
+########################################################################################
+# Sharded tensors
+########################################################################################
+
+
+class ShardedTensor(InferenceTensor):
+    """A sharded tensor contains a list of tensor-parallel shards, one for each rank.
+
+    The shape of the overall sharded tensor is the un-sharded shape.
+    """
+
+    def __init__(self, name: str, shape: list[int], shard_dim: int):
+        super().__init__(name, shape)
+        self.shard_dim = shard_dim
+
+    @property
+    @abstractmethod
+    def shard_count(self) -> int:
+        ...
+
+    @property
+    @abstractmethod
+    def shards(self) -> tuple[InferenceTensor]:
+        """Accesses the underlying shards"""
+        ...
+
+
+@register_inference_tensor
+class ShardedPrimitiveTensor(ShardedTensor):
+    """Sharded tensor which contains primitive tensors.
+
+    The sharded tensors have names with this tensor's name as the stem and
+    a suffix of f".shard.{i}" where i is from 0..shard_count-1.
+    """
+
+    def __init__(
+        self, name: str, shape: list[int], shard_dim: int, ts: list[torch.Tensor]
+    ):
+        super().__init__(name, shape, shard_dim)
+        assert len(ts) > 0
+        first_shape = ts[0].shape
+        shard_dim_size = first_shape[shard_dim]
+        for t in ts[1:]:
+            assert (
+                t.shape == first_shape
+            ), f"Shape mismatch for sharded tensors: {t.shape} vs {first_shape}"
+            shard_dim_size += t.shape[shard_dim]
+        assert (
+            shard_dim_size == shape[shard_dim]
+        ), f"Sharding mismatch: Sharded dims do not cover the whole volume {shard_dim_size} vs {shape[shard_dim]}"
+        self._shards: tuple[DefaultPrimitiveTensor] = tuple(
+            DefaultPrimitiveTensor(f"{name}.shard.{i}", t) for i, t in enumerate(ts)
+        )
+
+    @property
+    def shard_count(self) -> int:
+        return len(self._shards)
+
+    @property
+    def shards(self) -> tuple[InferenceTensor]:
+        return self._shards
+
+    @classmethod
+    def serialized_name(cls) -> str:
+        return "ShardedPrimitiveTensor"
+
+    @property
+    def globals(self) -> dict[str, torch.Tensor]:
+        return {pt.name: pt._data for pt in self._shards}
+
+    def add_to_archive(self, builder: ShardedArchiveBuilder) -> InferenceTensorMetadata:
+        for i, pt in enumerate(self._shards):
+            builder.for_rank(i).add_tensor(pt.name, pt._data)
+        return InferenceTensorMetadata(
+            self.serialized_name(),
+            {str(i): pt.name for i, pt in enumerate(self._shards)},
+            extra_properties={
+                "shard_count": len(self._shards),
+                "shape": list(self.shape),
+                "shard_dim": self.shard_dim,
+            },
+        )
+
+    def _clone_with_globals(
+        self, new_globals: dict[str, torch.Tensor]
+    ) -> "InferenceTensor":
+        ts = []
+        for k in self.globals.keys():
+            ts.append(new_globals[ts[k]])
+        return ShardedPrimitiveTensor(
+            name=self.name, shape=self.shape, shard_dim=self.shard_dim, ts=ts
+        )
+
+    @classmethod
+    def create(
+        cls,
+        name: str,
+        raw_tensors: dict[str, torch.Tensor],
+        extra_properties: dict[str, Any],
+    ) -> "InferenceTensor":
+        shard_count = int(extra_properties["shard_count"])
+        shape = list(extra_properties["shape"])
+        shard_dim = int(extra_properties["shard_dim"])
+        ts = []
+        for i in range(shard_count):
+            t_name = str(i)
+            try:
+                t = raw_tensors[t_name]
+                ts.append(t)
+            except KeyError as e:
+                raise IOError(
+                    f"Missing component tensor '{t_name}' in {raw_tensors.keys()}"
+                ) from e
+        return cls(name=name, shape=shape, shard_dim=shard_dim, ts=ts)
+
+    def __repr__(self):
+        return f"ShardedPrimitiveTensor({self.name}, {self.shape}, shard_dim={self.shard_dim}, shard_count={len(self._shards)})"

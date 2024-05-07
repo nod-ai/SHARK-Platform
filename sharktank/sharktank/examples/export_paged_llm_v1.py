@@ -21,16 +21,14 @@ def main():
     from ..utils import cli
 
     parser = cli.create_parser()
-    cli.add_gguf_dataset_options(parser)
+    cli.add_input_dataset_options(parser)
     parser.add_argument(
         "--output",
         help="Output file path for exported MLIR file",
         default="/tmp/batch_llama_v1.mlir",
     )
     args = cli.parse(parser)
-
-    data_files = cli.get_gguf_data_files(args)
-    dataset = Dataset.load(data_files["gguf"])
+    dataset = cli.get_input_dataset(args)
 
     hp = configs.LlamaHParams.from_gguf_props(dataset.properties)
     model = PagedLlamaModelV1(dataset.root_theta, LlamaModelConfig(hp))

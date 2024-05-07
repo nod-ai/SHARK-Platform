@@ -213,16 +213,15 @@ def main():
         help="DType to use for activations in the model",
         default="float32",
     )
-    cli.add_gguf_dataset_options(parser)
+    cli.add_input_dataset_options(parser)
     cli.add_tokenizer_options(parser)
     args = cli.parse(parser)
 
     device = torch.device(args.device) if args.device else None
     activation_dtype = getattr(torch, args.activation_dtype)
     assert isinstance(activation_dtype, torch.dtype)
-    data_files = cli.get_gguf_data_files(args)
-    tokenizer = cli.get_tokenizer(args, data_files=data_files)
-    dataset = Dataset.load(data_files["gguf"], device=device)
+    dataset = cli.get_input_dataset(args)
+    tokenizer = cli.get_tokenizer(args)
     prompts = args.prompt
 
     config = LlamaModelConfig(

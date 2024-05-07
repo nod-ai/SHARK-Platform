@@ -19,8 +19,9 @@ from shark_turbine.aot import (
     ExternalTensorTrait,
     ParameterArchive,
     ParameterArchiveEntry,
-    ParameterArchiveBuilder,
 )
+
+from ..utils.io import ShardedArchiveBuilder
 
 from .tensors import (
     InferenceTensor,
@@ -54,7 +55,9 @@ IOReportCallback = Callable[[str], None]
 # implementation for operating on the InferenceTensors.
 ################################################################################
 
-InferenceTensorTransform = Callable[[InferenceTensor], InferenceTensor]
+InferenceTensorTransform = Callable[
+    [InferenceTensor], Union[None, InferenceTensor, Sequence[InferenceTensor]]
+]
 
 
 class InferenceTensorTransforms:
@@ -103,12 +106,19 @@ class Theta:
         Returns a modified theta.
         """
         orig_flat_tensors = self.flatten().values()
-        tran_flat_tensors = []
-        for it in orig_flat_tensors:
-            for transform in transforms:
-                it = transform(it)
-            tran_flat_tensors.append(it)
-        return Theta(tran_flat_tensors)
+        for transform in transforms:
+            tran_flat_tensors = []
+            for it in orig_flat_tensors:
+                results = transform(it)
+                if results is None:
+                    continue
+                if isinstance(results, InferenceTensor):
+                    tran_flat_tensors.append(results)
+                else:
+                    tran_flat_tensors.extend(results)
+            orig_flat_tensors = tran_flat_tensors
+
+        return Theta(orig_flat_tensors)
 
     def to(self, *, device: Optional[Union[str, torch.device]] = None) -> "Theta":
         return self.transform(InferenceTensorTransforms.to_device(device))
@@ -163,7 +173,7 @@ class Theta:
 
     def add_tensors_to_archive(
         self,
-        irpa: ParameterArchiveBuilder,
+        irpa: "ShardedArchiveBuilder",
         inference_tensor_metas: dict[str, InferenceTensorMetadata],
         *,
         io_report_callback: Optional[IOReportCallback] = None,
@@ -456,10 +466,11 @@ class DatasetMetadata:
 
     properties: dict
     inference_tensors: dict[str, InferenceTensorMetadata]
+    shard_ranks: tuple[int] = ()
 
     def save(
         self,
-        builder: ParameterArchiveBuilder,
+        builder: ShardedArchiveBuilder,
         *,
         io_report_callback: Optional[IOReportCallback] = None,
     ):
@@ -484,6 +495,15 @@ class DatasetMetadata:
             )
         builder.add_blob("__SHARK_DATASET__", properties_json_blob.encode())
 
+        # __SHARK_SHARD_RANKS__ list.
+        if self.shard_ranks:
+            shard_ranks_blob = json.dumps(self.shard_ranks)
+            if io_report_callback:
+                io_report_callback(
+                    f"Add __SHARK_SHARD_RANKS__: {shard_ranks_blob.encode()}"
+                )
+            builder.add_blob("__SHARK_SHARD_RANKS__", shard_ranks_blob.encode())
+
         # __SHARK_INFERENCE_TENSORS__ blob.
         try:
             inference_tensors_blob = json.dumps(inference_tensors_object, indent=2)
@@ -499,8 +519,7 @@ class DatasetMetadata:
             )
         builder.add_blob("__SHARK_INFERENCE_TENSORS__", inference_tensors_blob.encode())
 
-    @staticmethod
-    def load(entries: dict[str, ParameterArchiveEntry]) -> "DatasetMetadata":
+    def load_metadata(self, entries: dict[str, ParameterArchiveEntry]):
         # Load properties.
         try:
             properties_entry = entries["__SHARK_DATASET__"]
@@ -510,7 +529,18 @@ class DatasetMetadata:
             )
         properties_obj = json.loads(bytes(properties_entry.raw.file_view))
         assert isinstance(properties_obj, dict)
+        self.properties.update(properties_obj)
 
+        # __SHARK_SHARD_RANKS__
+        shard_ranks_entry = entries.get("__SHARK_SHARD_RANKS__")
+        if shard_ranks_entry is not None:
+            shark_ranks_obj = json.loads(bytes(shard_ranks_entry.raw.file_view))
+            assert isinstance(shark_ranks_obj, list) and all(
+                isinstance(i, int) for i in shark_ranks_obj
+            )
+            self.shard_ranks = tuple(shark_ranks_obj)
+
+    def load_tensors(self, entries: dict[str, ParameterArchiveEntry]):
         # Load inference tensors.
         try:
             inference_tensors_entry = entries["__SHARK_INFERENCE_TENSORS__"]
@@ -521,7 +551,7 @@ class DatasetMetadata:
         inference_tensors_obj = json.loads(bytes(inference_tensors_entry.raw.file_view))
         assert isinstance(inference_tensors_obj, dict)
 
-        inference_tensors: dict[str, InferenceTensorMetadata] = {}
+        inference_tensors = self.inference_tensors
         for tensor_name, tensor_meta_obj in inference_tensors_obj.items():
             tensor_meta = InferenceTensorMetadata.from_json(tensor_meta_obj)
             # Map the raw_tensors dict to tensors from the archive.
@@ -556,8 +586,6 @@ class DatasetMetadata:
             )
             inference_tensors[tensor_name] = inference_tensor
 
-        return DatasetMetadata(properties_obj, inference_tensors)
-
 
 def _dataset_save_helper(
     dataset: Dataset,
@@ -565,24 +593,22 @@ def _dataset_save_helper(
     *,
     io_report_callback: Optional[IOReportCallback] = None,
 ):
-    builder = ParameterArchiveBuilder()
+    builder = ShardedArchiveBuilder(Path(path))
     ds_meta = DatasetMetadata(dict(dataset.properties), {})
     # Add tensors.
-    # TODO: We need some form of streaming save upstream and then use that.
-    # For computed tensors, the memory overhead of this style is large
-    # because intermediates are retained until the `builder.save()`.
     dataset.root_theta.add_tensors_to_archive(
         builder,
         ds_meta.inference_tensors,
         io_report_callback=io_report_callback,
     )
+    ds_meta.shard_ranks = tuple(builder._rank_builders.keys())
 
-    # Serialize the metadata.
+    # Add metadata.
     ds_meta.save(builder, io_report_callback=io_report_callback)
 
     if io_report_callback:
         io_report_callback("Saving file")
-    builder.save(path)
+    builder.commit()
 
 
 def _dataset_load_helper(
@@ -606,9 +632,21 @@ def _dataset_load_helper(
 
 
 def _dataset_load_irpa(path: Path, mmap: bool) -> Dataset:
+    # Need to load in two phases: first read metadata from the root archive.
+    meta = DatasetMetadata(properties={}, inference_tensors={})
     archive = ParameterArchive(path, mmap=mmap)
-    # Note that there may be duplicates. Last wins.
     entries = {k: v for k, v in archive.items()}
-    meta = DatasetMetadata.load(entries)
+    meta.load_metadata(entries)
+
+    # Then we know what side-car rank archives should exist, so load those.
+    for rank in meta.shard_ranks:
+        rank_path = ShardedArchiveBuilder.path_for_rank(path, rank)
+        archive.load(rank_path, mmap=mmap)
+
+    # Finally, load all inference tensors.
+    entries = {k: v for k, v in archive.items()}
+    meta.load_tensors(entries)
+
+    # Note that there may be duplicates. Last wins.
     dataset = Dataset(meta.properties, Theta(meta.inference_tensors))
     return dataset
