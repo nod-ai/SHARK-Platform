@@ -25,7 +25,7 @@ class ShardedArchiveBuilder(ParameterArchiveBuilder):
         self._rank_builders: dict[int, ParameterArchiveBuilder] = {}
 
     def for_rank(self, rank: int) -> ParameterArchiveBuilder:
-        """Returns a ParameterArchiveBuilder for"""
+        """Returns a ParameterArchiveBuilder for tensors specific to the given rank."""
         if rank in self._rank_builders:
             return self._rank_builders[rank]
         b = ParameterArchiveBuilder()

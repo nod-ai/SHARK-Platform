@@ -37,7 +37,7 @@ def parse(parser: argparse.ArgumentParser):
 def add_input_dataset_options(parser: argparse.ArgumentParser):
     """Adds options to load a GGUF dataset.
 
-    Either the `--hf-dataset` or `--gguf-file` argument can be present.
+    Either the `--hf-dataset`, `--gguf-file`, or `--irpa-file` argument can be present.
     """
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument(
