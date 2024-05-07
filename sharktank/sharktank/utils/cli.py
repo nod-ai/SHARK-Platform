@@ -6,7 +6,7 @@
 
 """Utilities for building command line tools."""
 
-from typing import Dict, Optional
+from typing import Dict, Optional, Sequence
 
 import argparse
 import logging
@@ -28,10 +28,10 @@ def create_parser(
     return parser
 
 
-def parse(parser: argparse.ArgumentParser):
+def parse(parser: argparse.ArgumentParser, *, args: Sequence[str] | None = None):
     """Parses arguments and does any prescribed global process setup."""
-    args = parser.parse_args()
-    return args
+    parsed_args = parser.parse_args(args)
+    return parsed_args
 
 
 def add_input_dataset_options(parser: argparse.ArgumentParser):
