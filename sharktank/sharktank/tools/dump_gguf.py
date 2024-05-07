@@ -18,7 +18,7 @@ def main():
     from ..utils import cli
 
     parser = cli.create_parser()
-    cli.add_gguf_dataset_options(parser)
+    cli.add_input_dataset_options(parser)
     parser.add_argument(
         "--dump-tensor-dir", type=Path, help="Dump tensor contents to a directory"
     )
@@ -29,9 +29,7 @@ def main():
         "--save", type=Path, help="Save the GGUF dataset to an IRPA file"
     )
     args = cli.parse(parser)
-
-    data_files = cli.get_gguf_data_files(args)
-    config = Dataset.load(data_files["gguf"])
+    config = cli.get_input_dataset(args)
 
     if args.save is not None:
 
@@ -54,17 +52,19 @@ def main():
         if isinstance(tensor, PrimitiveTensor):
             torch_tensor = tensor.as_torch()
             print(
-                f"  : torch.Tensor({list(torch_tensor.shape)}, "
+                f"    : torch.Tensor({list(torch_tensor.shape)}, "
                 f"dtype={torch_tensor.dtype}) = {tensor.as_torch()}"
             )
-        else:
-            assert isinstance(tensor, QuantizedTensor), f"Got {type(tensor)}"
-            print(f"  : QuantizedTensor({tensor.layout_type.__name__})")
+        elif isinstance(tensor, QuantizedTensor):
+            print(f"    : QuantizedTensor({tensor.layout_type.__name__})")
             try:
                 unpacked = tensor.unpack()
                 print(f"    {unpacked}")
             except NotImplementedError:
                 print(f"     NOT IMPLEMENTED")
+        elif isinstance(tensor, ShardedTensor):
+            for i, pt in enumerate(tensor.shards):
+                print(f"    {i}: {pt}")
 
         _maybe_dump_tensor(args, tensor)
 
