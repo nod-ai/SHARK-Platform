@@ -4,6 +4,8 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
+# TODO: DO NOT SUBMIT. This needs to be adapted to the new way.
+
 from typing import Callable, Union
 
 from types import NotImplementedType
