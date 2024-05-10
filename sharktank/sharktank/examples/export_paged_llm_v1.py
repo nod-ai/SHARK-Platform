@@ -158,7 +158,7 @@ def main():
     output = export(fxb)
     print(f"Saving to '{args.output_mlir}'")
     output.save_mlir(args.output_config)
-    json.dump(config, open("/tmp/batch_llama_v1.json", "w"))
+    json.dump(config, open(args.output_config, "w"))
 
 
 if __name__ == "__main__":
