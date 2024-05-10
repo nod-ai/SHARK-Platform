@@ -40,7 +40,6 @@ def main():
     hp = configs.LlamaHParams.from_gguf_props(dataset.properties)
     model = PagedLlamaModelV1(dataset.root_theta, LlamaModelConfig(hp))
 
-
     def generate_params_json(hp, prefill_bs: list[int], decode_bs: list[int]):
         return {
             "module_name": "module",
