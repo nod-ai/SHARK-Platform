@@ -64,6 +64,7 @@ from iree.runtime import (  # type: ignore
 
 import json
 
+
 @dataclass
 class ModelParams:
     """Parameters for a specific compiled model, sufficient to do cache planning and
@@ -120,9 +121,7 @@ class ModelParams:
     def load_json(path):
         f = open(path)
         j = json.load(f)
-        return ModelParams(
-            attn_dtype=HalElementType.FLOAT_16, **j)
-
+        return ModelParams(attn_dtype=HalElementType.FLOAT_16, **j)
 
 
 @dataclass

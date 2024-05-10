@@ -41,16 +41,16 @@ def main():
     model = PagedLlamaModelV1(dataset.root_theta, LlamaModelConfig(hp))
 
 
-    def generate_params_json(hp, prefill_bs:list[int], decode_bs:list[int]):
+    def generate_params_json(hp, prefill_bs: list[int], decode_bs: list[int]):
         return {
-            "module_name":"module",
-            "module_abi_version":1,
-            "max_seq_len" : hp.context_length,
-            "attn_head_count" : hp.attention_head_count,
-            "attn_head_dim" : hp.attn_head_dim,
-            "prefill_batch_sizes" : prefill_bs,
-            "decode_batch_sizes" : decode_bs,
-            "transformer_block_count" : hp.block_count,
+            "module_name": "module",
+            "module_abi_version": 1,
+            "max_seq_len": hp.context_length,
+            "attn_head_count": hp.attention_head_count,
+            "attn_head_dim": hp.attn_head_dim,
+            "prefill_batch_sizes": prefill_bs,
+            "decode_batch_sizes": decode_bs,
+            "transformer_block_count": hp.block_count,
         }
 
     # Unrolling cache updates by batch row makes dynamo sad without an
