@@ -75,3 +75,22 @@ tokenizer_config.json: 100%|█████████████████�
              0,     0,     0,     0,     0,     0]])
 :: Invoke prefill:
 ```
+
+# Create a quantized .irpa file
+
+Some models on Hugging Face have GGUF files with mixed quantized types that
+we do not currently support. For example,
+https://huggingface.co/QuantFactory/Meta-Llama-3-8B-GGUF has a `q4_1` GGUF, however,
+transcoding into IRPA using `sharktank.tools.dump_gguf` shows the output type
+is `q6_k`, which is currently unimplemented.
+
+To transcode a GGUF to IRPA in only `q4_1` we can use use the following commands
+to quantize/transcode from the `f16` GGUF to `q4_1` IRPA:
+
+```bash
+~/llama.cpp/build/bin/quantize --pure /tmp/Meta-Llama-3-8B-f16.gguf /tmp/Meta-Llama-3-8B-q4_1.gguf Q4_1
+
+python -m sharktank.tools.dump_gguf \
+  --gguf-file=/tmp/Meta-Llama-3-8B-q4_1.gguf \
+  --save /tmp/Meta-Llama-3-8B-q4_1.irpa
+```
