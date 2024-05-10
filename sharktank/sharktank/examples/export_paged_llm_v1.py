@@ -6,6 +6,7 @@
 
 """Inference support for the PagedLLMV1 protocol of models."""
 
+import json
 import torch
 
 from shark_turbine.aot import *
@@ -23,15 +24,33 @@ def main():
     parser = cli.create_parser()
     cli.add_input_dataset_options(parser)
     parser.add_argument(
-        "--output",
+        "--output_mlir",
         help="Output file path for exported MLIR file",
         default="/tmp/batch_llama_v1.mlir",
+    )
+
+    parser.add_argument(
+        "--output_config",
+        help="Output file path for exported config file",
+        default="/tmp/batch_llama_v1.json",
     )
     args = cli.parse(parser)
     dataset = cli.get_input_dataset(args)
 
     hp = configs.LlamaHParams.from_gguf_props(dataset.properties)
     model = PagedLlamaModelV1(dataset.root_theta, LlamaModelConfig(hp))
+
+    def generate_params_json(hp, prefill_bs: list[int], decode_bs: list[int]):
+        return {
+            "module_name": "module",
+            "module_abi_version": 1,
+            "max_seq_len": hp.context_length,
+            "attn_head_count": hp.attention_head_count,
+            "attn_head_dim": hp.attn_head_dim,
+            "prefill_batch_sizes": prefill_bs,
+            "decode_batch_sizes": decode_bs,
+            "transformer_block_count": hp.block_count,
+        }
 
     # Unrolling cache updates by batch row makes dynamo sad without an
     # override. There may be a better way to do this.
@@ -128,6 +147,7 @@ def main():
 
     generate_batch_prefill(4)
     generate_batch_decode(4)
+    config = generate_params_json(hp, [4], [4])
     print("GENERATED!")
 
     for name, ep in fxb.programs.items():
@@ -135,8 +155,9 @@ def main():
 
     print("Exporting")
     output = export(fxb)
-    print(f"Saving to '{args.output}'")
-    output.save_mlir(args.output)
+    print(f"Saving to '{args.output_mlir}'")
+    output.save_mlir(args.output_config)
+    json.dump(config, open(args.output_config, "w"))
 
 
 if __name__ == "__main__":
