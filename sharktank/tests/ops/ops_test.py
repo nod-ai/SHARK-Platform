@@ -77,7 +77,6 @@ class MatmulTest(unittest.TestCase):
         )
 
     def testTorchImplTransposedQuantizedRHS_BlockScaledLayout(self):
-        # TODO: Implement when it is easier to fake up quantized test data.
         a_dtype = torch.float32
         d_dtype = torch.float32
         ref_dtype = torch.float32
@@ -95,7 +94,6 @@ class MatmulTest(unittest.TestCase):
         )
 
     def testTorchImplTransposedQuantizedRHS_BlockScaledOffsetI4(self):
-        # TODO: Implement when it is easier to fake up quantized test data.
         a_dtype = torch.float32
         d_dtype = torch.float32
         ref_dtype = torch.float32
