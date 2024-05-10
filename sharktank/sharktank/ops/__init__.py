@@ -3,9 +3,22 @@
 # Licensed under the Apache License v2.0 with LLVM Exceptions.
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+"""This package contains custom operation-like functions which operate on a mix
+of `torch.Tensor` and `InferenceTensor` type hierarchies. Available ops
+are defined in `signatures`. Specific implementations are in `_impl` modules.
+
+There is a simple `_registry` which allows multiple implementations to be
+registered against a signature. Registration is done by type signature. Any
+matching implementations are processed in reverse (salience, def order) order.
+The first one that does not return NotImplemented is used.
+
+In this way, core operations can be defined over a mix of tensor-like types
+and layouts.
+"""
 
 from . import _registry
 from .signatures import *
 
 # Ensure that implementations are registered.
 from . import default_impls
+from . import custom_impls

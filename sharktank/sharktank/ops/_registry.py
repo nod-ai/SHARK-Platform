@@ -28,6 +28,10 @@ _TargetOverride = collections.namedtuple(
 )
 
 
+# When an op is dispatched, it will be stashed here for testing to verify.
+_TEST_LAST_OP_DISPATCH = None
+
+
 class SignatureDispatcher:
     """Replaces an overridable function with a tensor type base dispatcher.
 
@@ -60,21 +64,22 @@ class SignatureDispatcher:
         bound_args.apply_defaults()
         value_spec = tuple(bound_args.arguments[k] for k in tensor_names)
         type_spec = tuple(type(v) for v in value_spec)
-        # TODO: This should iterate over a list of targets that are eligible so that
-        # we can call in sequence and handle if the higher salience ones
-        # return NotImplemented.
-        found_target = self._target_cache.get(type_spec)
-        if found_target is None:
+        found_targets = self._target_cache.get(type_spec)
+        if found_targets is None:
             # Slow-path try to find it.
-            found_target = self._match_target(type_spec)
-            if found_target is None:
-                raise NotImplementedError(
-                    f"Overridable operator {self.__module__}.{self.__qualname__} does not "
-                    f"have an implementation for argument types: "
-                    f"{list(zip(tensor_names, type_spec))}"
-                )
-            self._target_cache[type_spec] = found_target
-        return found_target(*bound_args.args, **bound_args.kwargs)
+            found_targets = self._match_targets(type_spec)
+            self._target_cache[type_spec] = found_targets
+        global _TEST_LAST_OP_DISPATCH
+        for found_target in reversed(found_targets):
+            _TEST_LAST_OP_DISPATCH = found_target
+            result = found_target(*bound_args.args, **bound_args.kwargs)
+            if result is not NotImplemented:
+                return result
+        raise NotImplementedError(
+            f"Overridable operator {self.__module__}.{self.__qualname__} does not "
+            f"have an implementation for argument types: "
+            f"{list(zip(tensor_names, type_spec))}"
+        )
 
     def override(self, *, salience: int = 0, **kwargs: type):
         tensor_names = self._tensor_names
@@ -96,11 +101,9 @@ class SignatureDispatcher:
 
         return decorator
 
-    def _match_target(self, type_spec: tuple):
-        # TODO: This should return a list of targets that are eligible so that
-        # we can call in sequence and handle if the higher salience ones
-        # return NotImplemented.
-        for override in reversed(self._overrides):
+    def _match_targets(self, type_spec: tuple):
+        targets = []
+        for override in self._overrides:
             for expected, actual in zip(override.type_spec, type_spec):
                 if expected is None:
                     continue
@@ -108,8 +111,8 @@ class SignatureDispatcher:
                     continue
                 break
             else:
-                return override.target
-        return None
+                targets.append(override.target)
+        return targets
 
 
 def overridable(f):

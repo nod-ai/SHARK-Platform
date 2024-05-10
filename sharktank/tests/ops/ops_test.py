@@ -48,6 +48,10 @@ class MatmulTest(unittest.TestCase):
         result = ops.matmul(t1, t2)
         expected = torch.matmul(t1, t2.T.to(torch.float32))
         torch.testing.assert_close(result, expected)
+        self.assertIs(
+            ops._registry._TEST_LAST_OP_DISPATCH,
+            ops.custom_impls.matmul_mmtfp_tensor_tensor,
+        )
 
     def testTorchImplNonTransposedRHS(self):
         t1 = torch.rand(32, 16, dtype=torch.float32)
@@ -55,6 +59,10 @@ class MatmulTest(unittest.TestCase):
         result = ops.matmul(t1, t2, transpose_rhs=False)
         expected = torch.matmul(t1, t2.to(torch.float32))
         torch.testing.assert_close(result, expected)
+        self.assertIsNot(
+            ops._registry._TEST_LAST_OP_DISPATCH,
+            ops.custom_impls.matmul_mmtfp_tensor_tensor,
+        )
 
     def testTorchImplTransposedPrimitiveRHS(self):
         t1 = torch.rand(32, 16, dtype=torch.float32)
@@ -63,10 +71,51 @@ class MatmulTest(unittest.TestCase):
         result = ops.matmul(t1, t2_pt)
         expected = torch.matmul(t1, t2.T.to(torch.float32))
         torch.testing.assert_close(result, expected)
+        self.assertIs(
+            ops._registry._TEST_LAST_OP_DISPATCH,
+            ops.custom_impls.matmul_mmtfp_tensor_primitive_tensor,
+        )
 
-    def testTorchImplTransposedQuantizedRHS(self):
+    def testTorchImplTransposedQuantizedRHS_BlockScaledLayout(self):
         # TODO: Implement when it is easier to fake up quantized test data.
-        ...
+        a_dtype = torch.float32
+        d_dtype = torch.float32
+        ref_dtype = torch.float32
+        a = torch.rand([4, 16, 3200], dtype=a_dtype) * 64
+        d = torch.rand([3200, 100, 1], dtype=d_dtype) * 64
+        qs = (torch.rand([3200, 100, 32], dtype=ref_dtype) * 32.0).to(torch.int8)
+        rhs_pqt = PlanarQuantizedTensor(
+            "", [3200, 3200], BlockScaledLayout([3200, 3200], d, qs)
+        )
+        result = ops.matmul(a, rhs_pqt)
+        # Just verifying dispatch. Numerics are tested at the kernel level.
+        self.assertIs(
+            ops._registry._TEST_LAST_OP_DISPATCH,
+            ops.custom_impls.matmul_generic_tensor_block_scaled,
+        )
+
+    def testTorchImplTransposedQuantizedRHS_BlockScaledOffsetI4(self):
+        # TODO: Implement when it is easier to fake up quantized test data.
+        a_dtype = torch.float32
+        d_dtype = torch.float32
+        ref_dtype = torch.float32
+        a = torch.rand([4, 16, 3200], dtype=a_dtype) / 256.0
+        d = torch.rand([3200, 100, 1], dtype=d_dtype) / 256.0
+        qs = (torch.rand([3200, 100, 16], dtype=ref_dtype) * 255.0).to(torch.uint8)
+        m = torch.rand([3200, 100, 1], dtype=d_dtype) + 16.0
+        rhs_pqt = PlanarQuantizedTensor(
+            "",
+            [3200, 3200],
+            BlockScaledI4Layout([3200, 3200], d, qs, m=m, signed=False),
+        )
+        result = ops.matmul(a, rhs_pqt)
+        # Just verifying dispatch. Numerics are tested at the kernel level.
+        self.assertIs(
+            ops._registry._TEST_LAST_OP_DISPATCH,
+            ops.custom_impls.matmul_generic_tensor_block_scaled_i4,
+        )
+
+    # TODO: mmt_super_block_scaled_offset_q4_unsigned
 
 
 class RmsNormTest(unittest.TestCase):
