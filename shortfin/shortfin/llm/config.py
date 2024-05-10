@@ -62,6 +62,7 @@ from iree.runtime import (  # type: ignore
     HalElementType,
 )
 
+import json
 
 @dataclass
 class ModelParams:
@@ -114,6 +115,14 @@ class ModelParams:
     @property
     def max_batch_size(self):
         return max(self.max_prefill_batch_size, self.max_decode_batch_size)
+
+    @staticmethod
+    def load_json(path):
+        f = open(path)
+        j = json.load(f)
+        return ModelParams(
+            attn_dtype=HalElementType.FLOAT_16, **j)
+
 
 
 @dataclass
