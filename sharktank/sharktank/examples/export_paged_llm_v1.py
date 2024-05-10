@@ -24,9 +24,15 @@ def main():
     parser = cli.create_parser()
     cli.add_input_dataset_options(parser)
     parser.add_argument(
-        "--output",
+        "--output_mlir",
         help="Output file path for exported MLIR file",
         default="/tmp/batch_llama_v1.mlir",
+    )
+
+    parser.add_argument(
+        "--output_config",
+        help="Output file path for exported config file",
+        default="/tmp/batch_llama_v1.json",
     )
     args = cli.parse(parser)
     dataset = cli.get_input_dataset(args)
@@ -150,8 +156,8 @@ def main():
 
     print("Exporting")
     output = export(fxb)
-    print(f"Saving to '{args.output}'")
-    output.save_mlir(args.output)
+    print(f"Saving to '{args.output_mlir}'")
+    output.save_mlir(args.output_config)
     json.dump(config, open("/tmp/batch_llama_v1.json", "w"))
 
 
