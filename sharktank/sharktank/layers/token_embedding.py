@@ -6,6 +6,7 @@
 
 import torch
 
+from .. import ops
 from .base import Theta, ThetaLayer
 
 
@@ -22,4 +23,4 @@ class TokenEmbeddingLayer(ThetaLayer):
         self.dtype = dtype
 
     def forward(self, input: torch.Tensor):
-        return self.theta.ops.embedding_lookup(input, self.weight, dtype=self.dtype)
+        return ops.embedding_lookup(input, self.weight, dtype=self.dtype)
