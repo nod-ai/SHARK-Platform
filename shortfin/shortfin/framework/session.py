@@ -35,6 +35,7 @@ import numpy as np
 
 from iree.runtime import (  # type: ignore[import-untyped]
     create_hal_module,
+    create_io_parameters_module,
     get_driver,
     BufferUsage,
     HalBufferView,
@@ -46,6 +47,7 @@ from iree.runtime import (  # type: ignore[import-untyped]
     HalFence,
     HalSemaphore,
     MemoryType,
+    ParameterIndex,
     VmFunction,
     VmInstance,
     VmContext,
@@ -163,11 +165,19 @@ class ModuleSet:
 
     def add(self, *modules: VmModule):
         for module in modules:
+            print(module)
             self.modules.append(module)
 
     def load_vmfb(self, vmfb_path: str):
         logger.info("Loading VMFB %s", vmfb_path)
         self.add(VmModule.mmap(self.session.vm_instance, vmfb_path))
+
+    def load_io_module(self, sources_path: str):
+        logger.info("Loading IO Module %s", sources_path)
+        index = ParameterIndex()
+        index.load(sources_path)
+        par_provider = index.create_provider(scope="model")
+        self.add(create_io_parameters_module(self.session.vm_instance, par_provider))
 
     def initialize(self):
         assert not self.initialized, "Already initialized"
@@ -188,7 +198,7 @@ class ModuleSet:
             if m.name == name:
                 return m
         raise KeyError(
-            f"Module {name} not found. Available: {[m.name for m in self.modules]}"
+            f"Module `{name}` not found. Available: {[m.name for m in self.modules]}"
         )
 
     def function(self, module_name: str, function_name: str) -> VmFunction:
@@ -598,4 +608,4 @@ class TimelineGuarded(Generic[T]):
         return host_context.on_semaphore(self.sem, self.timeline, self.value)
 
     def __repr__(self):
-        return f"TimelineGuarded[{self.sem} @ {self.payload}] = {self.value}"
+        return f"TimelineGuarded[{self.sem} @ {self.timeline}] = {self.value}"
