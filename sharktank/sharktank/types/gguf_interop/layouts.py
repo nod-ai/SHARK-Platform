@@ -8,6 +8,7 @@ import torch
 
 from ..tensors import (
     QuantizedTensor,
+    UnnamedTensorName,
 )
 
 from ..layouts import (
@@ -40,8 +41,10 @@ class Q8_0(QuantizedTensor[BlockScaledLayout]):
     https://github.com/ggerganov/llama.cpp/blob/f026f8120f97090d34a52b3dc023c82e0ede3f7d/ggml-opencl.cpp#L172-L180
     """
 
-    def __init__(self, *, name: str, raw: torch.Tensor, shape: list[int]):
-        super().__init__(name, shape=shape, layout_type=BlockScaledLayout)
+    def __init__(
+        self, *, raw: torch.Tensor, shape: list[int], name: str = UnnamedTensorName
+    ):
+        super().__init__(name=name, shape=shape, layout_type=BlockScaledLayout)
         assert raw.dtype == torch.uint8
         self.raw = raw
 
@@ -98,9 +101,11 @@ class Q4_K(QuantizedTensor[SuperBlockOffsetScaled_4_6_Layout]):
     which the compiler can do more with than a heavily interleaved format.
     """
 
-    def __init__(self, *, name: str, raw: torch.Tensor, shape: list[int]):
+    def __init__(
+        self, *, raw: torch.Tensor, shape: list[int], name: str = UnnamedTensorName
+    ):
         super().__init__(
-            name, shape=shape, layout_type=SuperBlockOffsetScaled_4_6_Layout
+            name=name, shape=shape, layout_type=SuperBlockOffsetScaled_4_6_Layout
         )
         self.raw = raw
 
@@ -215,8 +220,10 @@ def _unpack_gguf_i6_scale_mins(
 class Q5_K(QuantizedTensor[BlockScaledI4Layout]):
     """"""
 
-    def __init__(self, *, name: str, raw: torch.Tensor, shape: list[int]):
-        super().__init__(name, shape=shape, layout_type=BlockScaledI4Layout)
+    def __init__(
+        self, *, raw: torch.Tensor, shape: list[int], name: str = UnnamedTensorName
+    ):
+        super().__init__(name=name, shape=shape, layout_type=BlockScaledI4Layout)
         self.raw = raw
 
     def unpack(self) -> BlockScaledI4Layout:
@@ -233,8 +240,10 @@ class Q5_K(QuantizedTensor[BlockScaledI4Layout]):
 class Q6_K(QuantizedTensor[BlockScaledI4Layout]):
     """"""
 
-    def __init__(self, *, name: str, raw: torch.Tensor, shape: list[int]):
-        super().__init__(name, shape=shape, layout_type=BlockScaledI4Layout)
+    def __init__(
+        self, *, raw: torch.Tensor, shape: list[int], name: str = UnnamedTensorName
+    ):
+        super().__init__(name=name, shape=shape, layout_type=BlockScaledI4Layout)
         self.raw = raw
 
     def unpack(self) -> BlockScaledI4Layout:
@@ -267,8 +276,10 @@ class Q4_1(QuantizedTensor[BlockScaledI4Layout]):
     * `m` is pre-scaled by `delta`.
     """
 
-    def __init__(self, *, name: str, raw: torch.Tensor, shape: list[int]):
-        super().__init__(name, shape=shape, layout_type=BlockScaledI4Layout)
+    def __init__(
+        self, *, raw: torch.Tensor, shape: list[int], name: str = UnnamedTensorName
+    ):
+        super().__init__(name=name, shape=shape, layout_type=BlockScaledI4Layout)
         self.raw = raw
 
     def unpack(self) -> BlockScaledI4Layout:

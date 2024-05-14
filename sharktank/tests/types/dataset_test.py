@@ -16,7 +16,7 @@ from sharktank.types import *
 
 
 def _t(name: str, *dims: int):
-    return DefaultPrimitiveTensor(name, torch.empty(*dims))
+    return DefaultPrimitiveTensor(name=name, data=torch.empty(*dims))
 
 
 def _flat_t_dict(*ts):
@@ -141,7 +141,9 @@ class DatasetTest(unittest.TestCase):
 
     def testRoundtripPlanarQuantizedTensor(self):
         layout_in = self._createTestLayout()
-        t_orig = PlanarQuantizedTensor("a.b.c", shape=layout_in.shape, layout=layout_in)
+        t_orig = PlanarQuantizedTensor(
+            name="a.b.c", shape=layout_in.shape, layout=layout_in
+        )
         self.assertIs(t_orig, t_orig.to_planar())
         ds_orig = Dataset({}, Theta({t_orig.name: t_orig}))
         ds_orig.save(self.temp_dir / "myds.irpa")

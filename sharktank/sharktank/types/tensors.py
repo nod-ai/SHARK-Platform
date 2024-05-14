@@ -32,6 +32,7 @@ __all__ = [
 
 # JSON encodable value types.
 MetaDataValueType = Union[int, bool, float, str]
+UnnamedTensorName = "<unnamed>"
 
 
 class QuantizedLayout(ABC):
@@ -150,7 +151,7 @@ class InferenceTensor(ABC):
     since they often involve a degree of layout on top of the raw data tensor.
     """
 
-    def __init__(self, name: str, shape: list[int]):
+    def __init__(self, *, shape: list[int], name: str = UnnamedTensorName):
         self.name = name
         self.shape = shape
 
@@ -275,8 +276,13 @@ class PrimitiveTensor(InferenceTensor):
 class DefaultPrimitiveTensor(PrimitiveTensor):
     """Concrete implementation of a PrimitiveTensor based on a single tensor."""
 
-    def __init__(self, name: str, data: torch.Tensor):
-        super().__init__(name, list(data.shape))
+    def __init__(
+        self,
+        *,
+        data: torch.Tensor,
+        name: str = UnnamedTensorName,
+    ):
+        super().__init__(name=name, shape=list(data.shape))
         self._data = data
 
     @classmethod
@@ -294,7 +300,7 @@ class DefaultPrimitiveTensor(PrimitiveTensor):
             data = raw_tensors[""]
         except KeyError as e:
             raise IOError(f"Missing component tensor") from e
-        return cls(name, data)
+        return cls(name=name, data=data)
 
     def as_torch(self, *, dtype: Optional[torch.dtype] = None) -> torch.Tensor:
         if dtype is not None:
@@ -331,12 +337,12 @@ class QuantizedTensor(InferenceTensor, Generic[QuantizedLayoutT]):
 
     def __init__(
         self,
-        name: str,
-        shape: list[int],
         *,
+        shape: list[int],
         layout_type: Type[QuantizedLayout],
+        name: str = UnnamedTensorName,
     ):
-        super().__init__(name, shape)
+        super().__init__(name=name, shape=shape)
         self.layout_type = layout_type
 
     @abstractmethod
@@ -369,8 +375,14 @@ class PlanarQuantizedTensor(QuantizedTensor):
     will be done).
     """
 
-    def __init__(self, name: str, shape: list[int], layout: QuantizedLayout):
-        super().__init__(name, shape, layout_type=type(layout))
+    def __init__(
+        self,
+        *,
+        shape: list[int],
+        layout: QuantizedLayout,
+        name: str = UnnamedTensorName,
+    ):
+        super().__init__(name=name, shape=shape, layout_type=type(layout))
         self.layout = layout
 
     def to_planar(self) -> "PlanarQuantizedTensor":
@@ -443,7 +455,7 @@ class PlanarQuantizedTensor(QuantizedTensor):
             )
 
         layout = layout_clazz.create(shape, layout_metadata, raw_tensors)
-        return PlanarQuantizedTensor(name, shape, layout)
+        return PlanarQuantizedTensor(name=name, shape=shape, layout=layout)
 
     def add_to_archive(self, builder: ShardedArchiveBuilder) -> InferenceTensorMetadata:
         """Adds this tensor to the global archive."""
@@ -484,8 +496,10 @@ class ShardedTensor(InferenceTensor):
     The shape of the overall sharded tensor is the un-sharded shape.
     """
 
-    def __init__(self, name: str, shape: list[int], shard_dim: int):
-        super().__init__(name, shape)
+    def __init__(
+        self, *, shape: list[int], shard_dim: int, name: str = UnnamedTensorName
+    ):
+        super().__init__(name=name, shape=shape)
         self.shard_dim = shard_dim
 
     @property
@@ -509,9 +523,14 @@ class ShardedPrimitiveTensor(ShardedTensor):
     """
 
     def __init__(
-        self, name: str, shape: list[int], shard_dim: int, ts: list[torch.Tensor]
+        self,
+        *,
+        shape: list[int],
+        shard_dim: int,
+        ts: list[torch.Tensor],
+        name: str = UnnamedTensorName,
     ):
-        super().__init__(name, shape, shard_dim)
+        super().__init__(name=name, shape=shape, shard_dim=shard_dim)
         assert len(ts) > 0
         first_shape = ts[0].shape
         shard_dim_size = first_shape[shard_dim]
@@ -524,7 +543,8 @@ class ShardedPrimitiveTensor(ShardedTensor):
             shard_dim_size == shape[shard_dim]
         ), f"Sharding mismatch: Sharded dims do not cover the whole volume {shard_dim_size} vs {shape[shard_dim]}"
         self._shards: tuple[DefaultPrimitiveTensor] = tuple(
-            DefaultPrimitiveTensor(f"{name}.shard.{i}", t) for i, t in enumerate(ts)
+            DefaultPrimitiveTensor(name=f"{name}.shard.{i}", data=t)
+            for i, t in enumerate(ts)
         )
 
     @property
