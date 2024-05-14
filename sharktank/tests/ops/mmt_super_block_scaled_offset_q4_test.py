@@ -14,7 +14,7 @@ from parameterized import parameterized
 import torch
 
 from shark_turbine import aot
-from sharktank import kernels
+from sharktank import ops
 from sharktank.types import layout_utils
 
 
@@ -46,7 +46,7 @@ class mmt_super_block_scaled_offset_q4_unsigned(unittest.TestCase):
         qs = (torch.rand([2560, 20, 8, 16], dtype=torch.float32) * 255.0).to(
             torch.uint8
         )
-        result = kernels.mmt_super_block_scaled_offset_q4_unsigned(
+        result = ops.mmt_super_block_scaled_offset_q4_unsigned(
             a, d, dmin, sb_scales_hi, sb_scales_low, sb_mins_hi, sb_mins_low, qs
         )
 
@@ -94,7 +94,7 @@ class mmt_super_block_scaled_offset_q4_unsigned(unittest.TestCase):
                 sb_mins_low,
                 qs,
             ):
-                return kernels.mmt_super_block_scaled_offset_q4_unsigned(
+                return ops.mmt_super_block_scaled_offset_q4_unsigned(
                     a, d, dmin, sb_scales_hi, sb_scales_low, sb_mins_hi, sb_mins_low, qs
                 )
 
@@ -153,7 +153,7 @@ class mmt_super_block_scaled_offset_q4_unsigned(unittest.TestCase):
                 sb_mins_low,
                 qs,
             ):
-                return kernels.mmt_super_block_scaled_offset_q4_unsigned(
+                return ops.mmt_super_block_scaled_offset_q4_unsigned(
                     a, d, dmin, sb_scales_hi, sb_scales_low, sb_mins_hi, sb_mins_low, qs
                 )
 

@@ -14,7 +14,7 @@ from parameterized import parameterized
 import torch
 
 from shark_turbine import aot
-from sharktank import kernels
+from sharktank import ops
 from sharktank.types import layout_utils
 
 
@@ -34,7 +34,7 @@ class mmt_block_scaled_offset_q4_unsigned_test(unittest.TestCase):
         d = torch.rand([3200, 100, 1], dtype=d_dtype) / 256.0
         qs = (torch.rand([3200, 100, 16], dtype=ref_dtype) * 255.0).to(torch.uint8)
         m = torch.rand([3200, 100, 1], dtype=d_dtype) + 16.0
-        result = kernels.mmt_block_scaled_offset_q4_unsigned(a, d, qs, m)
+        result = ops.mmt_block_scaled_offset_q4_unsigned(a, d, qs, m)
 
         # Dequantize and test with normal matmul.
         # Tolerances are empirical and results are not expected to match exactly.
@@ -46,7 +46,7 @@ class mmt_block_scaled_offset_q4_unsigned_test(unittest.TestCase):
     def testExportDynamicDims(self):
         class MyModule(torch.nn.Module):
             def forward(self, a, d, qs, m):
-                return kernels.mmt_block_scaled_offset_q4_unsigned(a, d, qs, m)
+                return ops.mmt_block_scaled_offset_q4_unsigned(a, d, qs, m)
 
         mod = MyModule()
         batch = torch.export.Dim("batch")
@@ -76,7 +76,7 @@ class mmt_block_scaled_offset_q4_unsigned_test(unittest.TestCase):
     def testExportStaticDims(self):
         class MyModule(torch.nn.Module):
             def forward(self, a, d, qs, m):
-                return kernels.mmt_block_scaled_offset_q4_unsigned(a, d, qs, m)
+                return ops.mmt_block_scaled_offset_q4_unsigned(a, d, qs, m)
 
         mod = MyModule()
         ep = torch.export.export(
