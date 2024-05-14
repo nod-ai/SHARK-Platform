@@ -165,7 +165,6 @@ class ModuleSet:
 
     def add(self, *modules: VmModule):
         for module in modules:
-            print(module)
             self.modules.append(module)
 
     def load_vmfb(self, vmfb_path: str):

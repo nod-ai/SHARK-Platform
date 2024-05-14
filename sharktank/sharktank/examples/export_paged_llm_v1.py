@@ -93,8 +93,7 @@ def main():
                 seq_block_ids=seq_block_ids,
                 cache_state=cache_state,
             )
-            argmax = model.theta.ops.argmax(logits)
-            return argmax
+            return logits
 
     def generate_batch_decode(bs: int):
         tokens = torch.ones(bs, 1, dtype=torch.int64)
