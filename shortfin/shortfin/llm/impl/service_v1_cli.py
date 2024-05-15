@@ -1,4 +1,3 @@
-
 import asyncio
 import argparse
 import numpy
@@ -26,12 +25,15 @@ from shortfin.llm.config import (
 from shortfin.llm.impl.service_v1 import GenerateServiceV1
 from shortfin.llm.service import GenerateRequest
 
+
 def setup(vmfb_path, config_path, gguf_path):
     from iree.runtime._binding import disable_leak_checker  # type: ignore
+
     model_params = ModelParams.load_json(config_path)
 
     cache_params = CacheParams(
-        model=model_params, device_block_count=128, block_pos_stride=16)
+        model=model_params, device_block_count=128, block_pos_stride=16
+    )
 
     disable_leak_checker()
     session = DeviceSession(uri="local-task", queue_count=2)
@@ -47,11 +49,11 @@ def setup(vmfb_path, config_path, gguf_path):
     service = GenerateServiceV1(session=session, params=params, cache=attn_block_cache)
     return service
 
+
 def map_buffer(value):
     mapped = value.map()
-    return mapped.asarray(
-        value.shape,
-        HalElementType.map_to_dtype(value.element_type))
+    return mapped.asarray(value.shape, HalElementType.map_to_dtype(value.element_type))
+
 
 async def main(argv):
     parser = argparse.ArgumentParser()
@@ -86,6 +88,7 @@ async def main(argv):
         await state.recycle()
 
     service.shutdown()
+
 
 if __name__ == "__main__":
     asyncio.run(main(sys.argv[1:]))

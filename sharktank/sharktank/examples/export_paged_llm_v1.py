@@ -146,7 +146,9 @@ def main():
             return logits
 
     bsizes = []
-    for bs in [4,]:
+    for bs in [
+        4,
+    ]:
         generate_batch_prefill(bs)
         generate_batch_decode(bs)
         bsizes.append(bs)

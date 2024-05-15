@@ -164,7 +164,7 @@ class GenerateServiceV1(BatchGenerateService):
 
     def start(self) -> "GenerateState":
         return GenerateState(self)
-    
+
     def shutdown(self):
         self.session.shutdown()
 
@@ -406,7 +406,6 @@ class GenerateState(BatchGenerateState):
         self._max_attn_blocks_length = max_attn_blocks_length
         self._max_seq_length = max_seq_length
 
-
     async def decode(self) -> TimelineGuarded[HalBufferView]:
         hc = self.host_context
         service = self._service
@@ -420,12 +419,9 @@ class GenerateState(BatchGenerateState):
         cb = HalCommandBuffer(hc.session.device)
 
         # decode_tokens: array([bs, 1], np.int32)
-        (
-            decode_tokens_host,
-            decode_tokens_device,
-        ) = resources.acquire_transfer_buffer(service.decode_tokens_pool).h2d_array(
-            cb, [bs, 1], HalElementType.SINT_64, fill_value=0
-        )
+        (decode_tokens_host, decode_tokens_device,) = resources.acquire_transfer_buffer(
+            service.decode_tokens_pool
+        ).h2d_array(cb, [bs, 1], HalElementType.SINT_64, fill_value=0)
 
         # decode_seq_lens: array([bs], np.int32)
         (
