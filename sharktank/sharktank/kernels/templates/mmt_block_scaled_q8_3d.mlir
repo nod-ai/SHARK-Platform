@@ -52,7 +52,7 @@ util.func private @sharktank_mmt_block_scaled_q8_3d_{{n}}_{{k}}_{{bs}}_{{a_type}
   } -> !b_grouped_tensor_type
 
   // Expand %a to have the same blocked reduction structure.
-  %aexp = tensor.expand_shape %a [[0], [1], [2, 3]] : !a_tensor_type into !aexp_tensor_type
+  %aexp = tensor.expand_shape %a [[0], [1], [2, 3]] output_shape [%batch0,%m,{{group0}},{{bs}}] : !a_tensor_type into !aexp_tensor_type
 
   // Grouped, batch mm.
   %result_empty = tensor.empty(%batch0, %m) : !accum_tensor_type
