@@ -14,7 +14,7 @@ from parameterized import parameterized
 import torch
 
 from shark_turbine import aot
-from sharktank import kernels
+from sharktank import ops
 
 
 class mmt_block_scaled_q8_test(unittest.TestCase):
@@ -32,7 +32,7 @@ class mmt_block_scaled_q8_test(unittest.TestCase):
         a = torch.rand([4, 16, 3200], dtype=a_dtype) * 64
         d = torch.rand([3200, 100, 1], dtype=d_dtype) * 64
         qs = (torch.rand([3200, 100, 32], dtype=ref_dtype) * 32.0).to(torch.int8)
-        result = kernels.mmt_block_scaled_q8(a, d, qs)
+        result = ops.mmt_block_scaled_q8(a, d, qs)
 
         # Dequantize and test with normal matmul.
         # Tolerances are empirical and results are not expected to match exactly.
@@ -43,7 +43,7 @@ class mmt_block_scaled_q8_test(unittest.TestCase):
     def testExportDynamicDims(self):
         class MyModule(torch.nn.Module):
             def forward(self, a, b, qs):
-                return kernels.mmt_block_scaled_q8(a, b, qs)
+                return ops.mmt_block_scaled_q8(a, b, qs)
 
         mod = MyModule()
         batch = torch.export.Dim("batch")
@@ -71,7 +71,7 @@ class mmt_block_scaled_q8_test(unittest.TestCase):
     def testExportStaticDims(self):
         class MyModule(torch.nn.Module):
             def forward(self, a, b, qs):
-                return kernels.mmt_block_scaled_q8(a, b, qs)
+                return ops.mmt_block_scaled_q8(a, b, qs)
 
         mod = MyModule()
         ep = torch.export.export(

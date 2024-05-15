@@ -14,7 +14,7 @@ from parameterized import parameterized
 import torch
 
 from shark_turbine import aot
-from sharktank import kernels
+from sharktank import ops
 
 
 class mmtfp_test(unittest.TestCase):
@@ -32,7 +32,7 @@ class mmtfp_test(unittest.TestCase):
     def test2D(self, a_dtype, b_dtype, ref_dtype):
         a = torch.rand([128, 32], dtype=a_dtype)
         b = torch.rand([256, 32], dtype=b_dtype)
-        result = kernels.mmtfp(a, b)
+        result = ops.mmtfp(a, b)
         ref = torch.matmul(a.to(ref_dtype), b.T.to(ref_dtype)).to(a_dtype)
         torch.testing.assert_close(result, ref)
 
@@ -47,14 +47,14 @@ class mmtfp_test(unittest.TestCase):
     def test3DF(self, a_dtype, b_dtype, ref_dtype):
         a = torch.rand([4, 128, 32], dtype=a_dtype)
         b = torch.rand([256, 32], dtype=b_dtype)
-        result = kernels.mmtfp(a, b)
+        result = ops.mmtfp(a, b)
         ref = torch.matmul(a.to(ref_dtype), b.T.to(ref_dtype)).to(a_dtype)
         torch.testing.assert_close(result, ref)
 
     def testExportDynamicDims(self):
         class MyModule(torch.nn.Module):
             def forward(self, a, b):
-                return kernels.mmtfp(a, b)
+                return ops.mmtfp(a, b)
 
         mod = MyModule()
         batch = torch.export.Dim("batch")
@@ -78,7 +78,7 @@ class mmtfp_test(unittest.TestCase):
     def testExportStaticDims(self):
         class MyModule(torch.nn.Module):
             def forward(self, a, b):
-                return kernels.mmtfp(a, b)
+                return ops.mmtfp(a, b)
 
         mod = MyModule()
         ep = torch.export.export(
@@ -96,7 +96,7 @@ class mmtfp_test(unittest.TestCase):
     def testExportTooDynamic(self):
         class MyModule(torch.nn.Module):
             def forward(self, a, b):
-                return kernels.mmtfp(a, b)
+                return ops.mmtfp(a, b)
 
         mod = MyModule()
         batch = torch.export.Dim("batch")
