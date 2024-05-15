@@ -6,6 +6,7 @@
 
 import torch
 
+from .. import ops
 from .base import Theta, ThetaLayer
 
 
@@ -32,6 +33,4 @@ class LinearLayer(ThetaLayer):
         self.transpose_weight = transpose_weight
 
     def forward(self, x: torch.Tensor):
-        return self.theta.ops.matmul(
-            x, self.weight, transpose_rhs=self.transpose_weight
-        )
+        return ops.matmul(x, self.weight, transpose_rhs=self.transpose_weight)
