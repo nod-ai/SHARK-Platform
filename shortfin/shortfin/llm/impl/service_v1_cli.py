@@ -1,3 +1,9 @@
+# Copyright 2024 Advanced Micro Devices, Inc
+#
+# Licensed under the Apache License v2.0 with LLVM Exceptions.
+# See https://llvm.org/LICENSE.txt for license information.
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+
 import asyncio
 import argparse
 import numpy
@@ -57,10 +63,10 @@ def map_buffer(value):
 
 async def main(argv):
     parser = argparse.ArgumentParser()
-    parser.add_argument("--tokenizer")
-    parser.add_argument("--config")
-    parser.add_argument("--vmfb")
-    parser.add_argument("--gguf")
+    parser.add_argument("--tokenizer", help="name of hugginface tokenizer to use")
+    parser.add_argument("--config", help="json config file with hyperparameters")
+    parser.add_argument("--vmfb", help="vmfb with compiler LLM kernels")
+    parser.add_argument("--gguf", help="gguf file containing modle coefficients")
     parsed = parser.parse_args(argv)
 
     hf_path = parsed.tokenizer

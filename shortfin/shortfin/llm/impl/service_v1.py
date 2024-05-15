@@ -449,7 +449,6 @@ class GenerateState(BatchGenerateState):
 
         # Populate host buffers for each sequence.
         for i in range(len(sequences)):
-            break
             seq = sequences[i]
             attn_blocks = seq.attn_blocks
 
