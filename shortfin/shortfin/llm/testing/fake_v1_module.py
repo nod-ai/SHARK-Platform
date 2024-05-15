@@ -44,39 +44,34 @@ def create_fake_module(
             token_ids_ref: VmRef,
             seq_lens_ref: VmRef,
             attn_block_indices_ref: VmRef,
-            wait_fence_ref: VmRef,
-            signal_fence_ref: VmRef,
+            attn_block_buffer_view: VmRef,
         ):
             result_array: np.ndarray = np.ndarray([bs, 1], dtype=np.int32)
 
             def run():
                 print(f"FAKE_V1_MODULE: PREFILL bs={bs} : WAIT")
-                wait_fence = wait_fence_ref.deref(HalFence)  # type: HalFence
-                signal_fence = signal_fence_ref.deref(HalFence)  # type: HalFence
-                try:
-                    wait_fence.wait()
-                    print("  - READY")
-                    _format_device_buffer_view(
-                        lambda s: print("  token_ids =", s), token_ids_ref
-                    )
-                    _format_device_buffer_view(
-                        lambda s: print("  seq_lens =", s), seq_lens_ref
-                    )
-                    _format_device_buffer_view(
-                        lambda s: print("  attn_block_indices =", s),
-                        attn_block_indices_ref,
-                    )
+                print("  - READY")
+                _format_device_buffer_view(
+                    lambda s: print("  token_ids =", s), token_ids_ref
+                )
+                _format_device_buffer_view(
+                    lambda s: print("  seq_lens =", s), seq_lens_ref
+                )
+                _format_device_buffer_view(
+                    lambda s: print("  attn_block_indices =", s),
+                    attn_block_indices_ref,
+                )
+                _format_device_buffer_view(
+                    lambda s: print("  attn_block_buffer_view =", s),
+                    attn_block_buffer_view,
+                )
 
-                    # Async populate.
-                    device_array = result_bv.map().asarray(
-                        result_array.shape, result_array.dtype
-                    )
-                    for i in range(bs):
-                        device_array[i, 0] = i + 1
-
-                    signal_fence.signal()
-                except Exception as e:
-                    signal_fence.fail(str(e))
+                # Async populate.
+                device_array = result_bv.map().asarray(
+                    result_array.shape, result_array.dtype
+                )
+                for i in range(bs):
+                    device_array[i, 0] = i + 1
 
             threading.Thread(target=run).start()
 
@@ -100,7 +95,7 @@ def create_fake_module(
         def trampoline(self, *args):
             return self.prefill(bs, *args)
 
-        iface.export(f"prefill_bs{bs}", "0rrrrr_r", trampoline)
+        iface.export(f"prefill_bs{bs}", "0rrrr_r", trampoline)
 
     [add_prefill_bs(bs) for bs in model_params.prefill_batch_sizes]
 

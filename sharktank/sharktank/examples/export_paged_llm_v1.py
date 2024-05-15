@@ -145,9 +145,14 @@ def main():
             )
             return logits
 
-    generate_batch_prefill(4)
-    generate_batch_decode(4)
-    config = generate_params_json(hp, [4], [4])
+    bsizes = []
+    for bs in [
+        4,
+    ]:
+        generate_batch_prefill(bs)
+        generate_batch_decode(bs)
+        bsizes.append(bs)
+    config = generate_params_json(hp, bsizes, bsizes)
     print("GENERATED!")
 
     for name, ep in fxb.programs.items():
@@ -156,7 +161,7 @@ def main():
     print("Exporting")
     output = export(fxb)
     print(f"Saving to '{args.output_mlir}'")
-    output.save_mlir(args.output_config)
+    output.save_mlir(args.output_mlir)
     json.dump(config, open(args.output_config, "w"))
 
 

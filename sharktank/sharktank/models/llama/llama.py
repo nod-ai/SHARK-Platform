@@ -41,10 +41,10 @@ class LlamaModelConfig:
     device: Optional[torch.device] = None
 
     # Dtype to use for general FP activations not otherwise configured.
-    activation_dtype: torch.dtype = torch.float32
+    activation_dtype: torch.dtype = torch.float16
 
     # Dtype to use for attention.
-    attention_dtype: torch.dtype = torch.float32
+    attention_dtype: torch.dtype = torch.float16
 
     def create_kv_cache(self) -> BaseKVCache:
         hp = self.hp
