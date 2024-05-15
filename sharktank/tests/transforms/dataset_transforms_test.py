@@ -41,9 +41,13 @@ class TransformTestBase(unittest.TestCase):
 class MmtRHSShardingTransformTest(TransformTestBase):
     def testPrimitive(self):
         orig_pts = [
-            DefaultPrimitiveTensor("blk.1.attn_k.weight", torch.randn([32, 128])),
-            DefaultPrimitiveTensor("blk.2.attn_q.weight", torch.randn([48, 64])),
-            DefaultPrimitiveTensor("other", torch.randn([2, 2])),
+            DefaultPrimitiveTensor(
+                name="blk.1.attn_k.weight", data=torch.randn([32, 128])
+            ),
+            DefaultPrimitiveTensor(
+                name="blk.2.attn_q.weight", data=torch.randn([48, 64])
+            ),
+            DefaultPrimitiveTensor(name="other", data=torch.randn([2, 2])),
         ]
         ds_orig = Dataset({}, Theta(orig_pts))
         input_path = self.save_dataset(ds_orig, "input")

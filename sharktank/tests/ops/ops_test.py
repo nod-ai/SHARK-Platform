@@ -31,7 +31,7 @@ class EmbeddingLookupTest(unittest.TestCase):
     def testPrimitiveTensorRhs(self):
         t1 = torch.tensor([[1, 2, 4, 5], [4, 3, 2, 9]])
         t2 = torch.rand(10, 3, dtype=torch.float16)
-        t2_pt = DefaultPrimitiveTensor("", t2)
+        t2_pt = DefaultPrimitiveTensor(data=t2)
         result = ops.embedding_lookup(t1, t2_pt, torch.float32)
         expected = F.embedding(t1, t2.to(torch.float32))
         torch.testing.assert_close(result, expected)
@@ -76,7 +76,7 @@ class MatmulTest(unittest.TestCase):
     def testTorchImplTransposedPrimitiveRHS(self):
         t1 = torch.rand(32, 16, dtype=torch.float32)
         t2 = torch.rand(48, 16, dtype=torch.float16)
-        t2_pt = DefaultPrimitiveTensor("", t2)
+        t2_pt = DefaultPrimitiveTensor(data=t2)
         result = ops.matmul(t1, t2_pt)
         expected = torch.matmul(t1, t2.T.to(torch.float32))
         torch.testing.assert_close(result, expected)
@@ -93,7 +93,7 @@ class MatmulTest(unittest.TestCase):
         d = torch.rand([3200, 100, 1], dtype=d_dtype) * 64
         qs = (torch.rand([3200, 100, 32], dtype=ref_dtype) * 32.0).to(torch.int8)
         rhs_pqt = PlanarQuantizedTensor(
-            "", [3200, 3200], BlockScaledLayout([3200, 3200], d, qs)
+            shape=[3200, 3200], layout=BlockScaledLayout([3200, 3200], d, qs)
         )
         result = ops.matmul(a, rhs_pqt)
         # Just verifying dispatch. Numerics are tested at the kernel level.
@@ -111,9 +111,8 @@ class MatmulTest(unittest.TestCase):
         qs = (torch.rand([3200, 100, 16], dtype=ref_dtype) * 255.0).to(torch.uint8)
         m = torch.rand([3200, 100, 1], dtype=d_dtype) + 16.0
         rhs_pqt = PlanarQuantizedTensor(
-            "",
-            [3200, 3200],
-            BlockScaledI4Layout([3200, 3200], d, qs, m=m, signed=False),
+            shape=[3200, 3200],
+            layout=BlockScaledI4Layout([3200, 3200], d, qs, m=m, signed=False),
         )
         result = ops.matmul(a, rhs_pqt)
         # Just verifying dispatch. Numerics are tested at the kernel level.
@@ -142,7 +141,7 @@ class RmsNormTest(unittest.TestCase):
     def testTorchPrimitiveWeightImpl(self):
         t1 = torch.rand(16, 128, dtype=torch.float32)
         t2 = torch.rand(16, 128, dtype=torch.float32)
-        t2_pt = DefaultPrimitiveTensor("", t2)
+        t2_pt = DefaultPrimitiveTensor(data=t2)
         result = ops.rms_norm(t1, t2_pt, epsilon=1e-10)
         actual = self._ref(t1, t2, epsilon=1e-10)
         torch.testing.assert_close(actual, result)
@@ -168,9 +167,8 @@ class TestOpExport(unittest.TestCase):
         class MyModule(torch.nn.Module):
             def forward(self, a, d, qs, m):
                 rhs_pqt = PlanarQuantizedTensor(
-                    "",
-                    [3200, 3200],
-                    BlockScaledI4Layout([3200, 3200], d, qs, m=m, signed=False),
+                    shape=[3200, 3200],
+                    layout=BlockScaledI4Layout([3200, 3200], d, qs, m=m, signed=False),
                 )
                 result = ops.matmul(a, rhs_pqt)
                 return result

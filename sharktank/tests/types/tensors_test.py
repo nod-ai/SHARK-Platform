@@ -26,7 +26,9 @@ def _createTestLayout():
 
 class PlanarQuantizedTensorTest(unittest.TestCase):
     def testTransform(self):
-        pqt1 = PlanarQuantizedTensor("t1", [128, 1024], _createTestLayout())
+        pqt1 = PlanarQuantizedTensor(
+            name="t1", shape=[128, 1024], layout=_createTestLayout()
+        )
 
         def transform1(d):
             new_d = {}

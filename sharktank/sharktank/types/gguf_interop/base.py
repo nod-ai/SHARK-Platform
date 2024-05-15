@@ -98,7 +98,7 @@ def _wrap_tensor(
     logical_shape = list(reversed(logical_shape))
     if type_name in ["F16", "F32", "F64"]:
         return DefaultPrimitiveTensor(
-            name, _externalize_tensor(name, data, logical_shape)
+            name=name, data=_externalize_tensor(name, data, logical_shape)
         )
 
     quantized_type = _quantized_types.get(type_name)
