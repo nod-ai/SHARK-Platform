@@ -9,7 +9,7 @@ import argparse
 import numpy
 import sys
 
-from transformers import LlamaTokenizer
+from transformers import LlamaTokenizer  # type: ignore
 
 from iree.runtime import (  # type: ignore
     HalElementType,
