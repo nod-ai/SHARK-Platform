@@ -167,9 +167,8 @@ class TestOpExport(unittest.TestCase):
         class MyModule(torch.nn.Module):
             def forward(self, a, d, qs, m):
                 rhs_pqt = PlanarQuantizedTensor(
-                    "",
-                    [3200, 3200],
-                    BlockScaledI4Layout([3200, 3200], d, qs, m=m, signed=False),
+                    shape=[3200, 3200],
+                    layout=BlockScaledI4Layout([3200, 3200], d, qs, m=m, signed=False),
                 )
                 result = ops.matmul(a, rhs_pqt)
                 return result
