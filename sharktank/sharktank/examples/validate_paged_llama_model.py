@@ -17,8 +17,10 @@ def main(args: list[str]):
     torch.no_grad().__enter__()
     config = Dataset.load(args[0])
     hp = configs.LlamaHParams.from_gguf_props(config.properties)
-    model = PagedLlamaModelV1(config.root_theta, LlamaModelConfig(hp))
-    cache_state = model.cache.paged.allocate(128, torch.float32)
+    llama_config = LlamaModelConfig(hp)
+    llama_config.activation_dtype = torch.float16
+    model = PagedLlamaModelV1(config.root_theta, llama_config)
+    cache_state = model.cache.paged.allocate(128)
     start_index = 0
     next_batch = torch.tensor(
         [
@@ -81,7 +83,6 @@ def main(args: list[str]):
 
     attention_mask = model.attention_mask(
         model.input_mask(seq_lens, next_batch.shape[1]),
-        dtype=torch.float32,
     )
 
     print(f"Step {start_index}")
@@ -112,7 +113,6 @@ def main(args: list[str]):
             seq_lens,
             seq_block_ids.shape[1] * model.cache.block_seq_stride,
         ),
-        dtype=torch.float32,
     )
     logits = model.decode(
         tokens,
