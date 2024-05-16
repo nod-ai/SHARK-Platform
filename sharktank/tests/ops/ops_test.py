@@ -82,7 +82,7 @@ class MatmulTest(unittest.TestCase):
         torch.testing.assert_close(result, expected)
         self.assertIs(
             ops._registry._TEST_LAST_OP_DISPATCH,
-            ops.custom_impls.matmul_mmtfp_tensor_primitive_tensor,
+            ops.custom_impls.matmul_mmtfp_tensor_tensor,
         )
 
     def testTorchImplTransposedQuantizedRHS_BlockScaledLayout(self):

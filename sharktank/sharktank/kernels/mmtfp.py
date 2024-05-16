@@ -37,11 +37,12 @@ class mmtfp(CustomOp):
             lambda: f"mmtfp arg 'a': Expected 2d or 3d tensor (got {a_desc.t.shape})",
         )
         torch._check(
-            not rest, f"mmtfp arg 'bT': Expected 2d tensor (got {bT_desc.t.shape})"
+            not rest,
+            lambda: f"mmtfp arg 'bT': Expected 2d tensor (got {bT_desc.t.shape})",
         )
         torch._check(
             a_k == bT_k,
-            f"mmtfp arg 'bT': Expected matching K dimension ({a_k} vs {bT_k})",
+            lambda: f"mmtfp arg 'bT': Expected matching K dimension ({a_k} vs {bT_k})",
         )
 
         # Specialize on the k and n dims.

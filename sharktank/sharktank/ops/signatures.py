@@ -12,10 +12,30 @@ from torch import Tensor, dtype
 from ._registry import *
 
 __all__ = [
+    "elementwise",
     "embedding_lookup",
     "matmul",
     "rms_norm",
+    "sharded_cat",
+    "sharded_sum",
 ]
+
+
+@overridable
+def elementwise(operator, *args: AnyTensor) -> AnyTensor:
+    """Applies an elementwise operator against arguments."""
+    raise NotImplementedError
+
+
+@elementwise.trampoline
+def _elementwise_trampoline(d: SignatureDispatcher, operator, *args: AnyTensor):
+    tensors = args
+    for override in d.find_overrides(tensors):
+        result = override(operator, *args)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(tensors)
 
 
 @overridable
@@ -87,6 +107,42 @@ def _rms_norm_trampoline(
     tensors = (x, weight)
     for override in d.find_overrides(tensors):
         result = override(x, weight, epsilon=epsilon)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(tensors)
+
+
+@overridable
+def sharded_cat(maybe_sharded: AnyTensor):
+    """Concats all shards along the sharding dimension.
+
+    Does nothing if not sharded.
+    """
+    raise NotImplementedError
+
+
+@sharded_cat.trampoline
+def _sharded_cat_trampoline(d: SignatureDispatcher, maybe_sharded: AnyTensor):
+    tensors = (maybe_sharded,)
+    for override in d.find_overrides(tensors):
+        result = override(maybe_sharded)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(tensors)
+
+
+@overridable
+def sharded_sum(maybe_sharded: AnyTensor):
+    ...
+
+
+@sharded_sum.trampoline
+def _sharded_sum_trampoline(d: SignatureDispatcher, maybe_sharded: AnyTensor):
+    tensors = (maybe_sharded,)
+    for override in d.find_overrides(tensors):
+        result = override(maybe_sharded)
         if result is not NotImplemented:
             return override, result
     else:

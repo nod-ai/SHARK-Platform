@@ -525,14 +525,21 @@ class ShardedPrimitiveTensor(ShardedTensor):
     def __init__(
         self,
         *,
-        shape: list[int],
         shard_dim: int,
         ts: list[torch.Tensor],
         name: str = UnnamedTensorName,
+        shape: Optional[list[int]] = None,
     ):
-        super().__init__(name=name, shape=shape, shard_dim=shard_dim)
         assert len(ts) > 0
         first_shape = ts[0].shape
+        assert len(first_shape) > shard_dim
+        if shape is None:
+            # Compute the shape.
+            shape = list(first_shape)
+            shape[shard_dim] *= len(ts)
+
+        super().__init__(name=name, shape=shape, shard_dim=shard_dim)
+        # Assert the shape.
         shard_dim_size = first_shape[shard_dim]
         for t in ts[1:]:
             assert (
@@ -609,4 +616,8 @@ class ShardedPrimitiveTensor(ShardedTensor):
         return cls(name=name, shape=shape, shard_dim=shard_dim, ts=ts)
 
     def __repr__(self):
-        return f"ShardedPrimitiveTensor({self.name}, {self.shape}, shard_dim={self.shard_dim}, shard_count={len(self._shards)})"
+        return (
+            f"ShardedPrimitiveTensor({self.name}, {self.shape}, "
+            f"shard_dim={self.shard_dim}, shard_count={len(self._shards)} "
+            f"of {self.shards[0].shape})"
+        )
