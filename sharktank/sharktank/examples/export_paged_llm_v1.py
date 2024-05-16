@@ -24,13 +24,13 @@ def main():
     parser = cli.create_parser()
     cli.add_input_dataset_options(parser)
     parser.add_argument(
-        "--output_mlir",
+        "--output-mlir",
         help="Output file path for exported MLIR file",
         default="/tmp/batch_llama_v1.mlir",
     )
 
     parser.add_argument(
-        "--output_config",
+        "--output-config",
         help="Output file path for exported config file",
         default="/tmp/batch_llama_v1.json",
     )
