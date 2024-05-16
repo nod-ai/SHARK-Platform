@@ -16,29 +16,10 @@ import unittest
 import torch
 
 from sharktank.types import *
+from sharktank.utils.testing import MainRunnerTestBase
 
 
-class TransformTestBase(unittest.TestCase):
-    def setUp(self):
-        self._temp_dir = Path(tempfile.mkdtemp("transform.test"))
-
-    def tearDown(self):
-        shutil.rmtree(self._temp_dir)
-
-    def get_irpa_path(self, name: str) -> Path:
-        return self._temp_dir / f"{name}.irpa"
-
-    def save_dataset(self, ds: Dataset, name: str) -> Path:
-        p = self.get_irpa_path(name)
-        ds.save(p)
-        return p
-
-    def run_main(self, main_func, *args):
-        new_args = [str(arg) for arg in args]
-        main_func(new_args)
-
-
-class MmtRHSShardingTransformTest(TransformTestBase):
+class MmtRHSShardingTransformTest(MainRunnerTestBase):
     def testPrimitive(self):
         orig_pts = [
             DefaultPrimitiveTensor(
