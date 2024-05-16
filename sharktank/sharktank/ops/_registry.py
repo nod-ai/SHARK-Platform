@@ -13,12 +13,14 @@ import inspect
 import functools
 
 import torch
-from ..types import InferenceTensor
+from torch import Tensor
+from ..types import InferenceTensor, PrimitiveTensor
 
 __all__ = [
     "AnyTensor",
     "SignatureDispatcher",
     "overridable",
+    "unbox_tensor",
 ]
 
 AnyTensor = Union[torch.Tensor, InferenceTensor]
@@ -106,10 +108,18 @@ class SignatureDispatcher:
     def _match_targets(self, type_spec: tuple):
         targets = []
         for override in self._overrides:
+            override_type_spec = override.type_spec
+            if len(override_type_spec) != len(type_spec):
+                continue
             for expected, actual in zip(override.type_spec, type_spec):
                 if expected is None:
                     continue
                 if issubclass(actual, expected):
+                    continue
+                # We expect kernels which are parameterized on Tensor to
+                # unbox things that are isomorphic to it.
+                is_expected_unboxed_tensor = issubclass(expected, Tensor)
+                if is_expected_unboxed_tensor and issubclass(actual, PrimitiveTensor):
                     continue
                 break
             else:
@@ -126,3 +136,12 @@ def overridable(f):
     dispatcher = SignatureDispatcher(f)
     functools.update_wrapper(dispatcher, f)
     return dispatcher
+
+
+def unbox_tensor(t: Any) -> Tensor:
+    """Unboxes a value that can be isomorphically interpreted as a Tensor."""
+    if isinstance(t, Tensor):
+        return t
+    elif isinstance(t, PrimitiveTensor):
+        return t.as_torch()
+    raise ValueError(f"Expected a Tensor or PrimitiveTensor but got {type(t)}")

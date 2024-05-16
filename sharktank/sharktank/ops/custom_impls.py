@@ -24,14 +24,15 @@ from ..types import (
     SuperBlockOffsetScaled_4_6_Layout,
 )
 
+from ._registry import unbox_tensor
 from .signatures import *
 
 
 # Fused FP matmul.
 @matmul.override(Tensor, Tensor)
-def matmul_mmtfp_tensor_tensor(
-    lhs: Tensor, rhs: PrimitiveTensor, *, transpose_rhs: bool
-):
+def matmul_mmtfp_tensor_tensor(lhs, rhs, *, transpose_rhs: bool):
+    lhs = unbox_tensor(lhs)
+    rhs = unbox_tensor(rhs)
     # We only accelerate matmuls with transposed RHS set up for inference
     # ... like civilized people.
     if not transpose_rhs:
@@ -42,19 +43,12 @@ def matmul_mmtfp_tensor_tensor(
     return mmtfp(lhs, rhs)
 
 
-@matmul.override(Tensor, PrimitiveTensor)
-def matmul_mmtfp_tensor_primitive_tensor(
-    lhs: Tensor, rhs: PrimitiveTensor, *, transpose_rhs: bool
-):
-    return matmul_mmtfp_tensor_tensor(lhs, rhs.as_torch(), transpose_rhs=transpose_rhs)
-
-
 # Quantized Matmul
 
 
 @matmul.override(Tensor, QuantizedTensor)
 def matmul_generic_tensor_block_scaled(
-    lhs: Tensor, rhs: QuantizedTensor, *, transpose_rhs: bool
+    lhs, rhs: QuantizedTensor, *, transpose_rhs: bool
 ):
     """Generic fallback kernel for block scaled layouts.
 
@@ -62,6 +56,7 @@ def matmul_generic_tensor_block_scaled(
     struct. This may be fine for certain platforms but there is micro-optimization
     potential if specializing further to the packed layout.
     """
+    lhs = unbox_tensor(lhs)
     if not transpose_rhs:
         return NotImplemented
     layout = rhs.layout_type
@@ -74,9 +69,10 @@ def matmul_generic_tensor_block_scaled(
 
 @matmul.override(Tensor, QuantizedTensor)
 def matmul_generic_tensor_block_scaled_i4(
-    lhs: Tensor, rhs: QuantizedTensor, *, transpose_rhs: bool
+    lhs, rhs: QuantizedTensor, *, transpose_rhs: bool
 ):
     """Generic fallback kernel for an unsigned, block scaled Q4."""
+    lhs = unbox_tensor(lhs)
     if not transpose_rhs:
         return NotImplemented
     layout = rhs.layout_type
@@ -92,8 +88,9 @@ def matmul_generic_tensor_block_scaled_i4(
 
 @matmul.override(Tensor, QuantizedTensor)
 def matmul_generic_tensor_super_block_offset_scaled_4_6_i4(
-    lhs: Tensor, rhs: QuantizedTensor, *, transpose_rhs: bool
+    lhs, rhs: QuantizedTensor, *, transpose_rhs: bool
 ):
+    lhs = unbox_tensor(lhs)
     if not transpose_rhs:
         return NotImplemented
     layout = rhs.layout_type
