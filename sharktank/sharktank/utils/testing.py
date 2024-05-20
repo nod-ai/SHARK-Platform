@@ -20,7 +20,7 @@ class MainRunnerTestBase(unittest.TestCase):
         self._temp_dir = Path(tempfile.mkdtemp(type(self).__qualname__))
 
     def tearDown(self):
-        shutil.rmtree(self._temp_dir)
+        shutil.rmtree(self._temp_dir, ignore_errors=True)
 
     def get_file_path(self, name: str) -> Path:
         return self._temp_dir / name
