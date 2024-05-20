@@ -22,7 +22,11 @@ jobs:
       matrix:
         version: [3.11]
         os: [ubuntu-latest, windows-latest]
+      fail-fast: false
     runs-on: ${{matrix.os}}
+    defaults:
+      run:
+        shell: bash
     env:
       PIP_CACHE_DIR: "${{ github.workspace }}/.pip-cache"
     steps:
