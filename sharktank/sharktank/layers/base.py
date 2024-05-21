@@ -21,6 +21,7 @@ __all__ = [
     "RMSNormLayer",
     "ThetaLayer",
     "TokenEmbedding",
+    "MixtralSparseMoeBlock",
 ]
 
 

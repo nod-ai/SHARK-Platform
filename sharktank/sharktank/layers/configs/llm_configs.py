@@ -19,9 +19,7 @@ from typing import Any, Optional
 
 import torch
 
-__all__ = [
-    "LlamaHParams",
-]
+__all__ = ["LlamaHParams"]
 
 
 @dataclass
@@ -40,10 +38,15 @@ class LlamaHParams:
     attn_head_dim: int
     attention_layer_norm_rms_epsilon: float
     attention_head_count_kv: int
+    expert_count: int
+    expert_used_count: int
 
     @staticmethod
     def from_gguf_props(p: dict[str, Any]):
+        default_expert_count = 0
+        default_expert_used_count = 0
         attention_head_count = _int_prop(p, "llama.attention.head_count")
+
         return LlamaHParams(
             context_length=_int_prop(p, "llama.context_length"),
             embedding_length=_int_prop(p, "llama.embedding_length"),
@@ -57,6 +60,12 @@ class LlamaHParams:
             ),
             attention_head_count_kv=_optional_int_prop(
                 p, "llama.attention.head_count_kv", attention_head_count
+            ),
+            expert_count=_optional_int_prop(
+                p, "llama.expert_count", default_expert_count
+            ),
+            expert_used_count=_optional_int_prop(
+                p, "llama.expert_used_count", default_expert_used_count
             ),
         )
 
