@@ -14,12 +14,20 @@ from sharktank.models.llama.llama import *
 
 
 def main(args: list[str]):
+    from ..utils import cli
+
     torch.no_grad().__enter__()
-    config = Dataset.load(args[0])
-    hp = configs.LlamaHParams.from_gguf_props(config.properties)
+
+    parser = cli.create_parser()
+    cli.add_input_dataset_options(parser)
+    args = cli.parse(parser)
+
+    dataset = cli.get_input_dataset(args)
+    hp = configs.LlamaHParams.from_gguf_props(dataset.properties)
     llama_config = LlamaModelConfig(hp)
     llama_config.activation_dtype = torch.float16
-    model = PagedLlamaModelV1(config.root_theta, llama_config)
+    model = PagedLlamaModelV1(dataset.root_theta, llama_config)
+
     cache_state = model.cache.paged.allocate(128)
     start_index = 0
     next_batch = torch.tensor(

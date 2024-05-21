@@ -21,9 +21,12 @@ def main(args: list[str]):
     parser = cli.create_parser()
     cli.add_input_dataset_options(parser)
     args = cli.parse(parser)
-    config = cli.get_input_dataset(args)
-    hp = configs.LlamaHParams.from_gguf_props(config.properties)
-    model = DirectCacheLlamaModelV1(config.root_theta, hp)
+
+    dataset = cli.get_input_dataset(args)
+    hp = configs.LlamaHParams.from_gguf_props(dataset.properties)
+    ref_llama_config = RefLlamaModelConfig(hp)
+    ref_llama_config.activation_dtype = torch.float16
+    model = DirectCacheLlamaModelV1(dataset.root_theta, ref_llama_config)
 
     kv_cache = model.create_cache(bs=1)
     start_index = 0
