@@ -6,6 +6,7 @@
 
 from typing import Optional
 
+from dataclasses import dataclass
 import math
 
 import torch
@@ -16,8 +17,23 @@ from ...layers import *
 from ...types import Theta
 
 __all__ = [
+    "RefLlamaModelConfig",
     "DirectCacheLlamaModelV1",
 ]
+
+
+################################################################################
+# Config
+################################################################################
+
+
+@dataclass
+class RefLlamaModelConfig:
+    hp: configs.LlamaHParams
+
+    # Dtype to use for general FP activations not otherwise configured.
+    activation_dtype: torch.dtype = torch.float16
+
 
 ################################################################################
 # Models
@@ -27,12 +43,15 @@ __all__ = [
 class DirectCacheLlamaModelV1(ThetaLayer):
     """Simple LlamaModel with a direct lookup KV cache for batch-1 inference."""
 
-    def __init__(self, theta: Theta, hp: configs.LlamaHParams):
+    def __init__(self, theta: Theta, config: RefLlamaModelConfig):
         super().__init__(theta)
+        hp = config.hp
+        self.config = config
         self.hp = hp
+        self.activation_dtype = config.activation_dtype
         self.add_module(
             "token_embedding",
-            TokenEmbeddingLayer(theta("token_embd"), dtype=hp.activation_dtype),
+            TokenEmbeddingLayer(theta("token_embd"), dtype=config.activation_dtype),
         )
         self.add_module(
             "attention_embedding",
@@ -72,7 +91,7 @@ class DirectCacheLlamaModelV1(ThetaLayer):
                     self.hp.attention_head_count,
                     self.hp.rope_dimension_count,
                 ),
-                dtype=self.hp.activation_dtype,
+                dtype=self.activation_dtype,
             )
             for _ in range(self.hp.block_count * 2)
         ]
