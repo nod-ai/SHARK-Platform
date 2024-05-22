@@ -53,7 +53,7 @@ class DirectCacheMixtralModelV1(ThetaLayer):
 
         for n in range(hp.block_count):
             attn_blocks.append(
-                MixtralAttentionBlock(
+                AttentionBlock(
                     theta("attn_blk", n),
                     embedding=self.attention_embedding,
                     head_count=hp.attention_head_count,
@@ -63,7 +63,7 @@ class DirectCacheMixtralModelV1(ThetaLayer):
                 )
             )
             attn_blocks.append(
-                MixtralSparseMoeBlock(
+                SparseMoeBlock(
                     theta("moe_blk", n),
                     num_experts=hp.expert_count,
                     top_k_experts=hp.expert_used_count,
@@ -141,101 +141,3 @@ class DirectCacheMixtralModelV1(ThetaLayer):
             return final_token, router_logits
         else:
             return final_token
-
-
-################################################################################
-# Layers
-################################################################################
-
-
-class MixtralAttentionBlock(ThetaLayer):
-    """Implements a self attention layer in the style of Llama."""
-
-    def __init__(
-        self,
-        theta: Theta,
-        *,
-        head_count: int,
-        head_dim: int,
-        head_count_kv: int,
-        embedding: RotaryEmbeddingLayer,
-        rms_epsilon: float,
-    ):
-        super().__init__(theta)
-        self.add_module(
-            "attn_norm", RMSNormLayer(theta("attn_norm"), epsilon=rms_epsilon)
-        )
-        self.add_module("attn_q", LinearLayer(theta("attn_q")))
-        self.add_module("attn_k", LinearLayer(theta("attn_k")))
-        self.add_module("attn_v", LinearLayer(theta("attn_v")))
-        self.add_module("attn_output", LinearLayer(theta("attn_output")))
-
-        self.embedding = embedding
-        self.head_count = head_count
-        self.head_dim = head_dim
-        self.head_count_kv = head_count_kv
-
-    def forward(
-        self,
-        h: torch.Tensor,
-        *,
-        cache_k: torch.Tensor,
-        cache_v: torch.Tensor,
-        start_index: int,
-        attention_mask: Optional[torch.Tensor] = None,
-    ):
-        x = self.attn_norm(h)
-
-        bs, q_len, feature_dim = x.shape
-        kv_seq_len = start_index + q_len
-        assert feature_dim == self.head_count * self.head_dim
-
-        xq = self.attn_q(x)
-        xk = self.attn_k(x)
-        xv = self.attn_v(x)
-
-        xq = xq.view(bs, q_len, self.head_count, self.head_dim)
-        xk = xk.view(bs, q_len, self.head_count_kv, self.head_dim)
-        xv = xv.view(bs, q_len, self.head_count_kv, self.head_dim)
-
-        xq, xk = self.embedding(xq=xq, xk=xk, start_index=start_index)
-
-        # TODO: Some model variants do some form of kv repetition to expand the
-        # count of kv heads to the count of attention heads used by the q.
-        assert self.head_count == self.head_count_kv, "NYI: KV expansion"
-
-        # Update our positions in the cache.
-        cache_k[:bs, start_index:kv_seq_len] = xk
-        cache_v[:bs, start_index:kv_seq_len] = xv
-
-        # Derive keys/values from the entirety of the available sequence.
-        keys = cache_k[:bs, :kv_seq_len]
-        values = cache_v[:bs, :kv_seq_len]
-
-        # Tranpose into [bs, heads, sl, dim]
-        xq = xq.transpose(1, 2)
-        keys = keys.transpose(1, 2)
-        values = values.transpose(1, 2)
-
-        # Flash attention.
-        attn_weights = torch.matmul(xq, keys.transpose(2, 3)) / math.sqrt(self.head_dim)
-
-        # Apply attention mask.
-        if attention_mask is not None:
-            expected_mask_shape = (bs, 1, q_len, kv_seq_len)
-            assert (
-                attention_mask.shape == expected_mask_shape
-            ), f"Attention mask should be of size {expected_mask_shape}, but is {attention_mask.shape}"
-            attn_weights = attn_weights + attention_mask
-
-        attn_weights = F.softmax(attn_weights.float(), dim=-1).type_as(xq)
-        attn_output = torch.matmul(attn_weights, values)  # (bs, heads, slen, head_dim)
-        attn_output = attn_output.transpose(1, 2).reshape(bs, q_len, -1)
-
-        # Project.
-        attn_output = self.attn_output(attn_output)
-
-        # Remainder of the block.
-        h = h + attn_output
-
-        return h
