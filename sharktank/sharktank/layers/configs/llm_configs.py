@@ -89,9 +89,7 @@ def _int_prop(p: dict[str, Any], name: str) -> int:
 
 
 def _optional_int_prop(p: dict[str, Any], name: str, default_value: int) -> int:
-    value = p[name]
-    if value is None:
-        return default_value
+    value = p.get(name, default_value)
     try:
         return int(value)
     except ValueError as e:
