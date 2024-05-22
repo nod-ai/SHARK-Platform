@@ -10,36 +10,14 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .base import Theta, ThetaLayer, LinearLayer, RMSNormLayer
+from .base import Theta, ThetaLayer, LinearLayer, RMSNormLayer, FFN
 
 __all__ = [
-    "MixtralBlockSparseTop2MLP",
-    "MixtralSparseMoeBlock",
+    "SparseMoeBlock",
 ]
 
 
-class MixtralBlockSparseTop2MLP(ThetaLayer):
-    def __init__(
-        self,
-        theta: Theta,
-    ):
-        super().__init__(theta)
-
-        self.add_module("ffn_gate", LinearLayer(theta("ffn_gate")))
-        self.add_module("ffn_up", LinearLayer(theta("ffn_up")))
-        self.add_module("ffn_down", LinearLayer(theta("ffn_down")))
-
-    def forward(
-        self,
-        h: torch.Tensor,
-    ):
-        ffn_gate = F.silu(self.ffn_gate(h))
-        ffn_up = self.ffn_up(h)
-        ffn_down = self.ffn_down(ffn_gate * ffn_up)
-        return ffn_down
-
-
-class MixtralSparseMoeBlock(ThetaLayer):
+class SparseMoeBlock(ThetaLayer):
     """
     This implementation is
     strictly equivalent to standard MoE with full capacity (no
@@ -68,10 +46,8 @@ class MixtralSparseMoeBlock(ThetaLayer):
             "ffn_norm", RMSNormLayer(theta("ffn_norm"), epsilon=rms_epsilon)
         )
 
-        # Add experts
-        self.experts = nn.ModuleList(
-            [MixtralBlockSparseTop2MLP(theta) for _ in range(self.num_experts)]
-        )
+        # Add num_experts x FFN experts
+        self.experts = nn.ModuleList([FFN(theta) for _ in range(self.num_experts)])
 
     def forward(
         self,
@@ -81,23 +57,25 @@ class MixtralSparseMoeBlock(ThetaLayer):
         batch_size, sequence_length, feature_dim = ffn_input.shape
         ffn_input = ffn_input.view(-1, feature_dim)
 
+        # Given a token, the router calculates the routing weights for all experts
         # router_logits: (batch * sequence_length, n_experts)
         router_logits = self.gate(ffn_input)
-
         routing_weights = F.softmax(router_logits, dim=1, dtype=torch.float)
+
+        # Select topk experts from routing weights
         routing_weights, selected_experts = torch.topk(
             routing_weights, self.top_k_experts, dim=-1
         )
         routing_weights /= routing_weights.sum(dim=-1, keepdim=True)
 
-        # we cast back to the input dtype
+        # Cast back to the input dtype
         routing_weights = routing_weights.to(ffn_input.dtype)
 
         final_hidden_states = torch.zeros(
             (batch_size * sequence_length, feature_dim), dtype=ffn_input.dtype
         )
 
-        # Create an expert mask by one hot encoding selected topk experts
+        # Create an expert mask by one hot encoding the selected topk experts
         # used to index which expert is to be invoked
         expert_mask = F.one_hot(selected_experts, num_classes=self.num_experts).permute(
             2, 1, 0
