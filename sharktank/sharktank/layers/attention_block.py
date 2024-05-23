@@ -11,8 +11,10 @@ import math
 import torch
 import torch.nn.functional as F
 
-from ...layers import *
-from ...types import Theta
+from .base import Theta, ThetaLayer
+from .linear import LinearLayer
+from .norm import RMSNormLayer
+from .rotary_embedding import RotaryEmbeddingLayer
 
 __all__ = [
     "AttentionBlock",

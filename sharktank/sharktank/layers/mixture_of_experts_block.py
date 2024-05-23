@@ -10,7 +10,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .base import Theta, ThetaLayer, LinearLayer, RMSNormLayer, FFN
+from .base import Theta, ThetaLayer
+from .linear import LinearLayer
+from .norm import RMSNormLayer
+from .ffn_block import FFN
 
 __all__ = [
     "SparseMoeBlock",
