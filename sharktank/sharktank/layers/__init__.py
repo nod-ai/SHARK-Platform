@@ -12,5 +12,8 @@ from .linear import LinearLayer
 from .norm import RMSNormLayer
 from .rotary_embedding import RotaryEmbeddingLayer
 from .token_embedding import TokenEmbeddingLayer
+from .attention_block import AttentionBlock
+from .ffn_block import FFN
+from .mixture_of_experts_block import SparseMoeBlock
 
 from . import configs

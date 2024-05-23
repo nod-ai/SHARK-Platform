@@ -7,7 +7,8 @@
 import torch
 import torch.nn.functional as F
 
-from .base import Theta, ThetaLayer, LinearLayer
+from .base import Theta, ThetaLayer
+from .linear import LinearLayer
 
 __all__ = [
     "FFN",
