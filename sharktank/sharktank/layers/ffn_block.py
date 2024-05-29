@@ -4,6 +4,8 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
+from typing import Optional
+
 import torch
 import torch.nn.functional as F
 
@@ -19,12 +21,13 @@ class FFN(ThetaLayer):
     def __init__(
         self,
         theta: Theta,
+        expert_idx: Optional[int] = None,
     ):
         super().__init__(theta)
 
-        self.add_module("ffn_gate", LinearLayer(theta("ffn_gate")))
-        self.add_module("ffn_up", LinearLayer(theta("ffn_up")))
-        self.add_module("ffn_down", LinearLayer(theta("ffn_down")))
+        self.add_module("ffn_gate", LinearLayer(theta("ffn_gate", expert_idx)))
+        self.add_module("ffn_up", LinearLayer(theta("ffn_up", expert_idx)))
+        self.add_module("ffn_down", LinearLayer(theta("ffn_down", expert_idx)))
 
     def forward(
         self,
