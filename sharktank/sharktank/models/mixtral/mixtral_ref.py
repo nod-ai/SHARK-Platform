@@ -4,8 +4,6 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-from typing import Optional
-
 from dataclasses import dataclass
 import math
 
@@ -73,7 +71,7 @@ class DirectCacheMixtralModelV1(ThetaLayer):
         for n in range(hp.block_count):
             self.attn_blocks.append(
                 AttentionBlock(
-                    theta("attn_blk", n),
+                    theta("blk", n),
                     embedding=self.attention_embedding,
                     head_count=hp.attention_head_count,
                     head_dim=hp.rope_dimension_count,
@@ -83,7 +81,7 @@ class DirectCacheMixtralModelV1(ThetaLayer):
             )
             self.attn_blocks.append(
                 SparseMoeBlock(
-                    theta("moe_blk", n),
+                    theta("blk", n),
                     num_experts=hp.expert_count,
                     top_k_experts=hp.expert_used_count,
                     rms_epsilon=hp.attention_layer_norm_rms_epsilon,
