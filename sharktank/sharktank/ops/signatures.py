@@ -6,19 +6,74 @@
 
 """Signatures for dynamic dispatch of ops covering our fundamental tensor types."""
 
+from typing import Optional, Sequence, Union
+
 import torch
 from torch import Tensor, dtype
 
 from ._registry import *
 
 __all__ = [
+    "conv2d",
     "elementwise",
     "embedding_lookup",
+    "group_norm_affine",
     "matmul",
     "rms_norm",
     "sharded_cat",
     "sharded_sum",
 ]
+
+IntOrSequenceInt = Union[int, Sequence[int]]
+
+
+@overridable
+def conv2d(
+    input: AnyTensor,
+    weight: AnyTensor,
+    bias: Optional[AnyTensor] = None,
+    *,
+    stride: IntOrSequenceInt = 1,
+    padding: IntOrSequenceInt = 0,
+    dilation: IntOrSequenceInt = 1,
+    groups: IntOrSequenceInt = 1
+):
+    """Equivalent to torch.nn.functional.conv2d with enhancements:
+
+    * Primitive weight/bias tensors will be promoted to the input dtype.
+    """
+    raise NotImplementedError
+
+
+@conv2d.trampoline
+def _conv2d_trampoline(
+    d: SignatureDispatcher,
+    input: AnyTensor,
+    weight: AnyTensor,
+    bias: Optional[AnyTensor] = None,
+    *,
+    stride=1,
+    padding=0,
+    dilation=1,
+    groups=1
+):
+    tensors = [input, weight]
+    if bias is not None:
+        tensors.append(bias)
+    for override in d.find_overrides(tensors):
+        result = override(
+            input,
+            weight,
+            bias,
+            stride=stride,
+            padding=padding,
+            dilation=dilation,
+            groups=groups,
+        )
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(tensors)
 
 
 @overridable
@@ -58,6 +113,33 @@ def _embedding_lookup_trampoline(
     tensors = (input, embedding_matrix)
     for override in d.find_overrides(tensors):
         result = override(input, embedding_matrix, dtype)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(tensors)
+
+
+@overridable
+def group_norm_affine(
+    input: AnyTensor, weight: AnyTensor, bias: AnyTensor, *, num_groups: int, eps: float
+):
+    """Equivalent to torch.nn.functional.group_norm(affine=True)."""
+    raise NotImplementedError
+
+
+@group_norm_affine.trampoline
+def _group_norm_affine_trampoline(
+    d: SignatureDispatcher,
+    input: AnyTensor,
+    weight: AnyTensor,
+    bias: AnyTensor,
+    *,
+    num_groups: int,
+    eps: float
+):
+    tensors = (input, weight, bias)
+    for override in d.find_overrides(tensors):
+        result = override(input, weight, bias, num_groups=num_groups, eps=eps)
         if result is not NotImplemented:
             return override, result
     else:

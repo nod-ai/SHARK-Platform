@@ -18,100 +18,12 @@ import warnings
 import torch
 import torch.nn as nn
 
+from ... import ops
 from ...layers import *
 from ...types import *
 
-
-@dataclass
-class HParams:
-    act_fn: str = "silu"
-    addition_embed_type: str = "text_time"
-    addition_embed_type_num_heads: int = 64
-    addition_time_embed_dim: Optional[int] = None
-    block_out_channels: Sequence[int] = (320, 640, 1280, 1280)
-    class_embed_type: Optional[str] = None
-    center_input_sample: bool = False
-    flip_sin_to_cos: bool = True
-    freq_shift: int = 0
-    projection_class_embeddings_input_dim: Optional[int] = (None,)
-    time_embedding_dim: Optional[int] = None
-    time_embedding_type: str = "positional"
-    timestep_post_act: Optional[str] = None
-
-    def __post_init__(self):
-        # We don't support the full parameterization of the diffusers model, so guard
-        # parameters that we require to be their default. This is a tripwire in case
-        # if we see a config that requires more support.
-        require_default_attrs = [
-            "addition_embed_type",
-            "center_input_sample",
-            "class_embed_type",
-            "flip_sin_to_cos",
-            "freq_shift",
-            "time_embedding_dim",
-            "time_embedding_type",
-            "timestep_post_act",
-        ]
-        for name in require_default_attrs:
-            actual = getattr(self, name)
-            required = getattr(HParams, name)
-            if actual != required:
-                raise ValueError(
-                    f"NYI: HParams.{name} != {required!r} (got {actual!r})"
-                )
-
-    @classmethod
-    def from_dict(cls, d: dict):
-        allowed = inspect.signature(cls).parameters
-        declared_kwargs = {k: v for k, v in d.items() if k in allowed}
-        extra_kwargs = [k for k in d.keys() if k not in allowed]
-        if extra_kwargs:
-            # TODO: Consider making this an error once bringup is done and we
-            # handle everything.
-            warnings.warn(f"Unhandled punet.HParams: {extra_kwargs}")
-        return cls(**declared_kwargs)
-
-
-ACTIVATION_FUNCTIONS = {
-    "swish": nn.SiLU(),
-    "silu": nn.SiLU(),
-    "mish": nn.Mish(),
-    "gelu": nn.GELU(),
-    "relu": nn.ReLU(),
-}
-
-
-class TimestepEmbedding(ThetaLayer):
-    """Computes the embedding of projected timesteps.
-
-    This consists of two linear layers with activation applied between.
-    """
-
-    def __init__(
-        self, theta: Theta, in_channels: int, time_embed_dim: int, act_fn: str
-    ):
-        super().__init__(theta)
-        self.in_channels = in_channels
-        self.time_embed_dim = time_embed_dim
-        try:
-            self.act_fn = ACTIVATION_FUNCTIONS[act_fn]
-        except KeyError as e:
-            raise ValueError(f"Unknown activation function '{act_fn}'") from e
-
-    def forward(self, sample):
-        from ... import ops
-
-        theta = self.theta
-        weight_1 = theta.tensor("linear_1", "weight")
-        bias_1 = theta.tensor("linear_1", "bias")
-        weight_2 = theta.tensor("linear_2", "weight")
-        bias_2 = theta.tensor("linear_2", "bias")
-        h = ops.matmul(sample, weight_1)
-        h = ops.elementwise(torch.add, h, bias_1)
-        h = ops.elementwise(self.act_fn, h)
-        h = ops.matmul(h, weight_2)
-        h = ops.elementwise(torch.add, h, bias_2)
-        return h
+from .config import *
+from .layers import *
 
 
 class Unet2DConditionModel(ThetaLayer):
@@ -123,34 +35,50 @@ class Unet2DConditionModel(ThetaLayer):
     def __init__(self, hp: HParams, theta: Theta):
         super().__init__(theta)
         self.hp = hp
+        # We don't support the full parameterization of the diffusers model, so guard
+        # parameters that we require to be their default. This is a tripwire in case
+        # if we see a config that requires more support.
+        hp.assert_default_values(
+            [
+                "addition_embed_type",
+                "center_input_sample",
+                "class_embed_type",
+                "class_embeddings_concat",
+                "encoder_hid_dim",
+                "encoder_hid_dim_type",
+                "flip_sin_to_cos",
+                "freq_shift",
+                "time_embedding_act_fn",
+                "time_embedding_dim",
+                "time_embedding_type",
+                "timestep_post_act",
+            ]
+        )
         self._setup_timestep_embedding()
         self._setup_addition_embedding()
 
-    def _setup_timestep_embedding(self):
-        hp = self.hp
-        assert hp.time_embedding_type == "positional", "NYI"
-        time_embed_dim = hp.block_out_channels[0] * 2
-        timestep_input_dim = hp.block_out_channels[0]
-        self.time_proj = TimestepProjection(hp.block_out_channels[0])
-        self.time_embedding = TimestepEmbedding(
-            self.theta("time_embedding"),
-            timestep_input_dim,
-            time_embed_dim,
-            act_fn=hp.act_fn,
+        # Input convolution.
+        conv_in_padding = (hp.conv_in_kernel - 1) // 2
+        self.conv_in = Conv2DLayer(
+            theta("conv_in"), padding=(conv_in_padding, conv_in_padding)
         )
 
-    def _setup_addition_embedding(self):
-        hp = self.hp
-        assert hp.addition_embed_type == "text_time", "NYI"
-        self.add_time_proj = TimestepProjection(
-            hp.addition_time_embed_dim, downscale_freq_shift=hp.freq_shift
-        )
-        self.add_embedding = TimestepEmbedding(
-            self.theta("add_embedding"),
-            in_channels=hp.projection_class_embeddings_input_dim,
-            time_embed_dim=hp.time_embedding_dim,
-            act_fn=hp.act_fn,
-        )
+        # Down/up blocks.
+        output_channel = hp.block_out_channels[0]
+        self.down_blocks = nn.ModuleList([])
+        for i, down_block_name in enumerate(hp.down_block_types):
+            input_channel = output_channel
+            output_channel = hp.block_out_channels[i]
+            down_block_theta = theta("down_blocks", i)
+            is_final_block = i == len(hp.block_out_channels) - 1
+            self.down_blocks.append(
+                self._create_down_block(
+                    i,
+                    down_block_theta,
+                    down_block_name,
+                    is_final_block=is_final_block,
+                )
+            )
 
     def forward(
         self,
@@ -194,63 +122,70 @@ class Unet2DConditionModel(ThetaLayer):
         aug_embed = self.add_embedding(add_embeds)
         emb = emb + aug_embed
 
+        # 2. Pre-process.
+        sample = self.conv_in(sample)
 
-class TimestepProjection(nn.Module):
-    """Adapted from diffusers embeddings.get_timestep_embedding(), which claims:
-        'This matches the implementation in Denoising Diffusion Probabilistic Models:
-        Create sinusoidal timestep embeddings.'
+        # 3. Down.
+        downblock_res_samples = (sample,)
+        for downsample_block in self.down_blocks:
+            sample, res_samples = downsample_block(hidden_states=sample, temb=emb)
+            downblock_res_samples += res_samples
 
-    Args:
-      embedding_dim: the dimension of the output.
-      max_period: controls the minimum frequency of the
-                  embeddings.
-    """
+        # 4. Mid.
 
-    def __init__(
-        self,
-        embedding_dim: int,
-        *,
-        max_period: int = 10000,
-        downscale_freq_shift: float = 1.0,
-        scale: float = 1.0,
-    ):
-        super().__init__()
-        self.downscale_freq_shift = downscale_freq_shift
-        self.embedding_dim = embedding_dim
-        self.max_period = max_period
-        self.scale = scale
+        # 5. Up.
 
-    def forward(self, timesteps):
-        """Args:
-          timesteps: a 1-D Tensor of N indices, one per batch element.
-                     These may be fractional.
-        Returns:
-          An [N x dim] Tensor of positional embeddings.
-        """
-        assert len(timesteps.shape) == 1, "Timesteps should be a 1d-array"
-        embedding_dim = self.embedding_dim
-        max_period = self.max_period
-        downscale_freq_shift = self.downscale_freq_shift
+        # 6. Post-process.
 
-        half_dim = embedding_dim // 2
-        exponent = -math.log(max_period) * torch.arange(
-            start=0, end=half_dim, dtype=torch.float32, device=timesteps.device
+    def _create_down_block(
+        self, i: int, down_block_theta: Theta, type_name: str, is_final_block: bool
+    ) -> nn.Module:
+        hp = self.hp
+        if type_name == "DownBlock2D":
+            return DownBlock2D(
+                down_block_theta,
+                num_layers=hp.downblock_layers_per_block[i],
+                add_downsample=is_final_block,
+                resnet_eps=hp.norm_eps,
+                resnet_act_fn=hp.act_fn,
+                resnet_groups=hp.norm_num_groups,
+                resnet_out_scale_factor=None
+                if hp.resnet_out_scale_factor == 1.0
+                else hp.resnet_out_scale_factor,
+                resnet_time_scale_shift=hp.resnet_time_scale_shift,
+                dropout=hp.dropout,
+                downsample_padding=hp.downsample_padding,
+                temb_channels=self.time_embed_dim,
+            )
+        elif type_name == "CrossAttnDownBlock2D":
+            return CrossAttnDownBlock2D(down_block_theta)
+        raise ValueError(f"Unhandled down_block_type: {type_name}")
+
+    def _setup_timestep_embedding(self):
+        hp = self.hp
+        assert hp.time_embedding_type == "positional", "NYI"
+        self.time_embed_dim = time_embed_dim = hp.block_out_channels[0] * 2
+        timestep_input_dim = hp.block_out_channels[0]
+        self.time_proj = TimestepProjection(hp.block_out_channels[0])
+        self.time_embedding = TimestepEmbedding(
+            self.theta("time_embedding"),
+            timestep_input_dim,
+            time_embed_dim,
+            act_fn=hp.act_fn,
         )
-        exponent = exponent / (half_dim - downscale_freq_shift)
 
-        emb = torch.exp(exponent)
-        emb = timesteps[:, None].float() * emb[None, :]
-
-        # scale embeddings
-        emb = self.scale * emb
-
-        # concat sine and cosine embeddings
-        emb = torch.cat([torch.sin(emb), torch.cos(emb)], dim=-1)
-
-        # zero pad
-        if embedding_dim % 2 == 1:
-            emb = torch.nn.functional.pad(emb, (0, 1, 0, 0))
-        return emb
+    def _setup_addition_embedding(self):
+        hp = self.hp
+        assert hp.addition_embed_type == "text_time", "NYI"
+        self.add_time_proj = TimestepProjection(
+            hp.addition_time_embed_dim, downscale_freq_shift=hp.freq_shift
+        )
+        self.add_embedding = TimestepEmbedding(
+            self.theta("add_embedding"),
+            in_channels=hp.projection_class_embeddings_input_dim,
+            time_embed_dim=hp.time_embedding_dim,
+            act_fn=hp.act_fn,
+        )
 
 
 class ClassifierFreeGuidanceUnetModel(torch.nn.Module):
@@ -277,7 +212,10 @@ def main():
     cli.add_input_dataset_options(parser)
     args = cli.parse(parser)
 
+    device = "cuda:0"
     ds = cli.get_input_dataset(args)
+    ds.to(device=device)
+
     cond_unet = Unet2DConditionModel.from_dataset(ds)
     mdl = ClassifierFreeGuidanceUnetModel(cond_unet)
     print(f"Model hparams: {cond_unet.hp}")
@@ -288,12 +226,12 @@ def main():
     height = 1024
     width = 1024
     bs = 1
-    sample = torch.rand(bs, 4, height // 8, width // 8, dtype=dtype)
-    timestep = torch.zeros(1, dtype=torch.int32)
-    prompt_embeds = torch.rand(2 * bs, max_length, 2048, dtype=dtype)
-    text_embeds = torch.rand(2 * bs, 1280, dtype=dtype)
-    time_ids = torch.zeros(2 * bs, 6, dtype=dtype)
-    guidance_scale = torch.tensor([7.5], dtype=dtype)
+    sample = torch.rand(bs, 4, height // 8, width // 8, dtype=dtype).to(device)
+    timestep = torch.zeros(1, dtype=torch.int32).to(device)
+    prompt_embeds = torch.rand(2 * bs, max_length, 2048, dtype=dtype).to(device)
+    text_embeds = torch.rand(2 * bs, 1280, dtype=dtype).to(device)
+    time_ids = torch.zeros(2 * bs, 6, dtype=dtype).to(device)
+    guidance_scale = torch.tensor([7.5], dtype=dtype).to(device)
 
     results = mdl.forward(
         sample=sample,

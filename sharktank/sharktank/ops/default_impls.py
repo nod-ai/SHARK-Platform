@@ -15,6 +15,49 @@ from ..types import InferenceTensor, PrimitiveTensor, QuantizedTensor
 from ._registry import unbox_tensor
 from .signatures import *
 
+# conv2d
+@conv2d.override(Tensor, Tensor, Tensor)
+def conv2d_with_bias(
+    input: Tensor, weight: Tensor, bias: Tensor, *, stride, padding, dilation, groups
+):
+    input = unbox_tensor(input)
+    weight = unbox_tensor(weight)
+    bias = unbox_tensor(bias)
+    if weight.dtype != input.dtype:
+        weight = weight.to(input.dtype)
+    if bias.dtype != input.dtype:
+        bias = bias.to(input.dtype)
+    return F.conv2d(
+        input,
+        weight,
+        bias,
+        stride=stride,
+        padding=padding,
+        dilation=dilation,
+        groups=groups,
+    )
+
+
+@conv2d.override(Tensor, Tensor)
+def conv2d_no_bias(
+    input: Tensor, weight: Tensor, bias, *, stride, padding, dilation, groups
+):
+    assert bias is None
+    input = unbox_tensor(input)
+    weight = unbox_tensor(weight)
+    if weight.dtype != input.dtype:
+        weight = weight.to(input.dtype)
+    return F.conv2d(
+        input,
+        weight,
+        bias,
+        stride=stride,
+        padding=padding,
+        dilation=dilation,
+        groups=groups,
+    )
+
+
 # Elementwise
 @elementwise.override(Tensor)
 def elementwise_unary(operator, x):
@@ -30,8 +73,6 @@ def elementwise_binary(operator, x, y):
 
 
 # Embedding Lookup
-
-
 @embedding_lookup.override(Tensor, Tensor)
 def embedding_lookup_default(input, embedding_matrix, dtype: dtype):
     return F.embedding(unbox_tensor(input), unbox_tensor(embedding_matrix).to(dtype))
@@ -43,6 +84,15 @@ def embedding_lookup_Tensor_QuantizedTensor(
 ):
     dequant = embedding_matrix.unpack().dequant(dtype=dtype)
     return F.embedding(unbox_tensor(input), dequant)
+
+
+# Group norm.
+@group_norm_affine.override(Tensor, Tensor, Tensor)
+def group_norm_affine_default(input, weight, bias, *, num_groups, eps):
+    input = unbox_tensor(input)
+    weight = unbox_tensor(weight)
+    bias = unbox_tensor(bias)
+    return F.group_norm(input, num_groups=num_groups, weight=weight, bias=bias, eps=eps)
 
 
 # Matmul
@@ -65,8 +115,6 @@ def matmul_Tensor_QuantizedTensor(
 
 
 # RMS norm
-
-
 @rms_norm.override(Tensor, Tensor)
 def rms_norm_default(x, weight, *, epsilon: float) -> Tensor:
     x = unbox_tensor(x)
