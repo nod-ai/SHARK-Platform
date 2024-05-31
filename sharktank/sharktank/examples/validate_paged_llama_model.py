@@ -72,7 +72,7 @@ def main(args: list[str]):
                 0,
             ]
             + 48 * [0],
-            64 * [0],
+            [1, 573, 846, 1360, 1833, 2520, 2948, 5108, 4590] + 55 * [0],
             64 * [0],
         ]
     )
@@ -81,7 +81,7 @@ def main(args: list[str]):
         [
             [127, 0, 0, 0],
             [126, 0, 0, 0],
-            [0, 0, 0, 0],
+            [125, 0, 0, 0],
             [0, 0, 0, 0],
         ]
     )
@@ -89,7 +89,7 @@ def main(args: list[str]):
     # Important: Do not use a sequence length of 0 for empty batch slots
     # as it will cause softmax to nan due to a mask of all -inf. This then
     # propagates and causes badness.
-    seq_lens = torch.tensor([12, 6, 1, 1])
+    seq_lens = torch.tensor([12, 6, 9, 1])
 
     attention_mask = model.attention_mask(
         model.input_mask(seq_lens, next_batch.shape[1]),

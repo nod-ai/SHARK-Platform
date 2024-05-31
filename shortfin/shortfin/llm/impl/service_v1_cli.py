@@ -37,12 +37,13 @@ def setup(vmfb_path, config_path, gguf_path):
 
     model_params = ModelParams.load_json(config_path)
 
+    device_block_count = model_params.max_seq_len // model_params.block_seq_stride
     cache_params = CacheParams(
-        model=model_params, device_block_count=128, block_pos_stride=16
+        model=model_params, device_block_count=device_block_count, block_pos_stride=model_params.block_seq_stride
     )
 
     disable_leak_checker()
-    session = DeviceSession(uri="local-task", queue_count=2)
+    session = DeviceSession(uri="local-sync", queue_count=2)
     attn_block_cache = AttnBlockCache(session, cache_params)
 
     lms = session.create_module_set(model_params.module_name, context_count=1)
@@ -78,7 +79,7 @@ async def main(argv):
     tokenizer = LlamaTokenizer.from_pretrained(hf_path)
     state = service.start()
 
-    for line in ["one two three four"]:
+    for line in ["one two three four five six seven eight"]:
         prompt = line.strip()
         if not prompt:
             break
@@ -89,8 +90,17 @@ async def main(argv):
         await state.set_sequences([request])
         logits = await state.prefill()
 
+        seq_len = len(input_ids)
         mapped_logits = map_buffer(logits.value)
-        print(mapped_logits)
+        predicted_tokens = numpy.argmax(mapped_logits[0, :seq_len], axis=-1)
+        predicted_token = predicted_tokens[-1]
+        print(f"Predicted token: {predicted_token}")
+
+        # TODO Determine why decode step crashes
+        # await state.set_decode_step([predicted_token])
+        # logits = await state.decode()
+        # mapped_logits = map_buffer(logits)
+        # print(numpy.argmax(mapped_logits, axis=-1))
         await state.recycle()
 
     service.shutdown()

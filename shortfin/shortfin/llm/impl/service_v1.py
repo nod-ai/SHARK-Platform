@@ -293,8 +293,10 @@ class GenerateState(BatchGenerateState):
         service = self._service
         resources = self._resources
         bs = self._bs
-        max_seq_length = self._max_seq_length
+        service = self._service
+        block_pos_stride = service.block_pos_stride
         max_attn_blocks_length = self._max_attn_blocks_length
+        max_seq_length = max_attn_blocks_length * block_pos_stride
         sequences = self._sequences
         work_queue = self._batch_queue
 
@@ -489,6 +491,5 @@ class GenerateState(BatchGenerateState):
         #   decode_tokens
         outputs = VmVariantList(1)
         # TODO: Async invoke.
-        print("Invoking")
         hc.vm_context.invoke(self._decode_function, inputs, outputs)
         return work_queue.guard(outputs.get_as_ref(0).deref(HalBufferView))
