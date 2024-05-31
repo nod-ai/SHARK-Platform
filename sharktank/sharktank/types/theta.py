@@ -151,7 +151,9 @@ class Theta:
             for part in name_path:
                 current_ts = current_ts[str(part)]
         except KeyError:
-            raise KeyError(f"Sub-theta {name_path} not found")
+            raise KeyError(
+                f"Sub-theta {name_path} not found (of {self._tensors.keys()})"
+            )
         return Theta(current_ts)
 
     def __repr__(self):

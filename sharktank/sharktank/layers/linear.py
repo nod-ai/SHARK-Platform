@@ -26,11 +26,18 @@ class LinearLayer(ThetaLayer):
         theta: Theta,
         *,
         weight_name: str = "weight",
+        bias_name: str = "bias",
         transpose_weight: bool = True,
     ):
         super().__init__(theta)
         self.weight = self.theta_tensor(weight_name)
+        self.bias = None
+        if bias_name in self.theta.keys:
+            self.bias = self.theta_tensor(bias_name)
         self.transpose_weight = transpose_weight
 
     def forward(self, x: torch.Tensor):
-        return ops.matmul(x, self.weight, transpose_rhs=self.transpose_weight)
+        x = ops.matmul(x, self.weight, transpose_rhs=self.transpose_weight)
+        if self.bias is not None:
+            x = ops.elementwise(torch.add, x, self.bias)
+        return x

@@ -44,14 +44,16 @@ class Unet2DConditionModel(ThetaLayer):
                 "center_input_sample",
                 "class_embed_type",
                 "class_embeddings_concat",
+                "dual_cross_attention",
                 "encoder_hid_dim",
                 "encoder_hid_dim_type",
-                "flip_sin_to_cos",
                 "freq_shift",
+                "only_cross_attention",
                 "time_embedding_act_fn",
                 "time_embedding_dim",
                 "time_embedding_type",
                 "timestep_post_act",
+                "upcast_attention",
             ]
         )
         self._setup_timestep_embedding()
@@ -127,9 +129,22 @@ class Unet2DConditionModel(ThetaLayer):
 
         # 3. Down.
         downblock_res_samples = (sample,)
-        for downsample_block in self.down_blocks:
-            sample, res_samples = downsample_block(hidden_states=sample, temb=emb)
+        for i, down_block in enumerate(self.down_blocks):
+            if down_block.has_cross_attention:
+                # Cross attention block.
+                sample, res_samples = down_block(
+                    hidden_states=sample,
+                    temb=emb,
+                    encoder_hidden_states=encoder_hidden_states,
+                    attention_mask=None,
+                    encoder_attention_mask=None,
+                )
+            else:
+                # Simple resnet block.
+                sample, res_samples = down_block(hidden_states=sample, temb=emb)
             downblock_res_samples += res_samples
+
+            self.trace_tensor(f"DB{i}.sample", sample)
 
         # 4. Mid.
 
@@ -144,21 +159,43 @@ class Unet2DConditionModel(ThetaLayer):
         if type_name == "DownBlock2D":
             return DownBlock2D(
                 down_block_theta,
-                num_layers=hp.downblock_layers_per_block[i],
-                add_downsample=is_final_block,
+                num_layers=hp.layers_per_block[i],
+                add_downsample=not is_final_block,
+                downsample_padding=hp.downsample_padding,
                 resnet_eps=hp.norm_eps,
                 resnet_act_fn=hp.act_fn,
                 resnet_groups=hp.norm_num_groups,
-                resnet_out_scale_factor=None
-                if hp.resnet_out_scale_factor == 1.0
-                else hp.resnet_out_scale_factor,
+                resnet_out_scale_factor=(
+                    None
+                    if hp.resnet_out_scale_factor == 1.0
+                    else hp.resnet_out_scale_factor
+                ),
                 resnet_time_scale_shift=hp.resnet_time_scale_shift,
                 dropout=hp.dropout,
-                downsample_padding=hp.downsample_padding,
                 temb_channels=self.time_embed_dim,
             )
         elif type_name == "CrossAttnDownBlock2D":
-            return CrossAttnDownBlock2D(down_block_theta)
+            return CrossAttnDownBlock2D(
+                down_block_theta,
+                num_layers=hp.layers_per_block[i],
+                transformer_layers_per_block=hp.transformer_layers_per_block[i],
+                num_attention_heads=hp.num_attention_heads[i],
+                cross_attention_dim=hp.cross_attention_dim[i],
+                temb_channels=self.time_embed_dim,
+                add_downsample=not is_final_block,
+                downsample_padding=hp.downsample_padding,
+                resnet_eps=hp.norm_eps,
+                resnet_act_fn=hp.act_fn,
+                resnet_groups=hp.norm_num_groups,
+                resnet_out_scale_factor=(
+                    None
+                    if hp.resnet_out_scale_factor == 1.0
+                    else hp.resnet_out_scale_factor
+                ),
+                resnet_time_scale_shift=hp.resnet_time_scale_shift,
+                dropout=hp.dropout,
+                use_linear_projection=hp.use_linear_projection,
+            )
         raise ValueError(f"Unhandled down_block_type: {type_name}")
 
     def _setup_timestep_embedding(self):
@@ -166,7 +203,9 @@ class Unet2DConditionModel(ThetaLayer):
         assert hp.time_embedding_type == "positional", "NYI"
         self.time_embed_dim = time_embed_dim = hp.block_out_channels[0] * 2
         timestep_input_dim = hp.block_out_channels[0]
-        self.time_proj = TimestepProjection(hp.block_out_channels[0])
+        self.time_proj = TimestepProjection(
+            hp.block_out_channels[0], flip_sin_to_cos=hp.flip_sin_to_cos
+        )
         self.time_embedding = TimestepEmbedding(
             self.theta("time_embedding"),
             timestep_input_dim,
@@ -178,7 +217,9 @@ class Unet2DConditionModel(ThetaLayer):
         hp = self.hp
         assert hp.addition_embed_type == "text_time", "NYI"
         self.add_time_proj = TimestepProjection(
-            hp.addition_time_embed_dim, downscale_freq_shift=hp.freq_shift
+            hp.addition_time_embed_dim,
+            downscale_freq_shift=hp.freq_shift,
+            flip_sin_to_cos=hp.flip_sin_to_cos,
         )
         self.add_embedding = TimestepEmbedding(
             self.theta("add_embedding"),
@@ -221,6 +262,7 @@ def main():
     print(f"Model hparams: {cond_unet.hp}")
 
     # Run a step for debugging.
+    torch.random.manual_seed(42)
     dtype = torch.float16
     max_length = 64
     height = 1024

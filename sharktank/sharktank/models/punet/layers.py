@@ -31,6 +31,8 @@ __all__ = [
 
 
 class DownBlock2D(ThetaLayer):
+    has_cross_attention: bool = False
+
     def __init__(
         self,
         theta: Theta,
@@ -62,18 +64,146 @@ class DownBlock2D(ThetaLayer):
                 )
             )
         self.resnets = nn.ModuleList(resnets)
-        assert not add_downsample, "NYI: DownBlock2D add_downsample"
+
+        self.downsamplers = None
+        if add_downsample:
+            self.downsamplers = nn.ModuleList(
+                [Downsample2D(theta("downsamplers", "0"), padding=downsample_padding)]
+            )
 
     def forward(self, hidden_states: torch.Tensor, temb: Optional[torch.Tensor] = None):
         output_states = ()
-        for resnet in self.resnets:
+        for i, resnet in enumerate(self.resnets):
             hidden_states = resnet(hidden_states, temb)
-        output_states = output_states + (hidden_states,)
+            self.trace_tensor(f"DBRESNET{i}.hidden_states", hidden_states, values=True)
+            output_states = output_states + (hidden_states,)
+
+        if self.downsamplers is not None:
+            for downsampler in self.downsamplers:
+                hidden_states = downsampler(hidden_states)
+                self.trace_tensor("DOWNSAMPLE", hidden_states)
+            output_states = output_states + (hidden_states,)
+
         return hidden_states, output_states
 
 
 class CrossAttnDownBlock2D(ThetaLayer):
-    def forward(self, hidden_states: torch.Tensor, temb: Optional[torch.Tensor] = None):
+    has_cross_attention: bool = True
+
+    def __init__(
+        self,
+        theta: Theta,
+        num_layers: int,
+        add_downsample: bool,
+        downsample_padding: int,
+        resnet_eps: float,
+        resnet_act_fn: str,
+        resnet_groups: int,
+        resnet_out_scale_factor: Optional[float],
+        resnet_time_scale_shift: str,
+        temb_channels: int,
+        dropout: float,
+        num_attention_heads: int,
+        transformer_layers_per_block: Sequence[int],
+        cross_attention_dim: int,
+        use_linear_projection: bool,
+    ):
+        super().__init__(theta)
+        resnets = []
+        attentions = []
+
+        transformer_counts = (
+            [transformer_layers_per_block] * num_layers
+            if isinstance(transformer_layers_per_block, int)
+            else transformer_layers_per_block
+        )
+        for i in range(num_layers):
+            resnets.append(
+                ResnetBlock2D(
+                    theta("resnets", i),
+                    groups=resnet_groups,
+                    eps=resnet_eps,
+                    non_linearity=resnet_act_fn,
+                    dropout=dropout,
+                    temb_channels=temb_channels,
+                    time_embedding_norm=resnet_time_scale_shift,
+                    output_scale_factor=resnet_out_scale_factor,
+                )
+            )
+            attentions.append(
+                Transformer2DModel(
+                    theta("attentions", i),
+                    num_attention_heads=num_attention_heads,
+                    num_layers=transformer_counts[i],
+                    cross_attention_dim=cross_attention_dim,
+                    norm_num_groups=resnet_groups,
+                    use_linear_projection=use_linear_projection,
+                )
+            )
+
+        self.attentions = nn.ModuleList(attentions)
+        self.resnets = nn.ModuleList(resnets)
+
+        self.downsamplers = None
+        if add_downsample:
+            self.downsamplers = nn.ModuleList(
+                [Downsample2D(theta("downsamplers", "0"), padding=downsample_padding)]
+            )
+
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        temb: Optional[torch.Tensor] = None,
+        *,
+        encoder_hidden_states: torch.Tensor,
+        attention_mask: Optional[torch.Tensor],
+        encoder_attention_mask: Optional[torch.Tensor],
+    ):
+        output_states = ()
+        blocks = list(zip(self.resnets, self.attentions))
+        for i, (resnet, attn) in enumerate(blocks):
+            hidden_states = resnet(hidden_states, temb)
+            hidden_states = attn(
+                hidden_states,
+                encoder_hidden_states=encoder_hidden_states,
+                attention_mask=attention_mask,
+                encoder_attention_mask=encoder_attention_mask,
+            )[0]
+        output_states = output_states + (hidden_states,)
+
+        if self.downsamplers is not None:
+            for downsampler in self.downsamplers:
+                hidden_states = downsampler(hidden_states)
+            output_states = output_states + (hidden_states,)
+
+        return hidden_states, output_states
+
+
+################################################################################
+# Downsampler blocks.
+################################################################################
+
+
+class Downsample2D(ThetaLayer):
+    def __init__(self, theta: ThetaLayer, padding: int):
+        super().__init__(theta)
+        assert padding != 0
+        self.conv = Conv2DLayer(theta("conv"), padding=[padding, padding], stride=2)
+
+    def forward(self, hidden_states: torch.Tensor):
+        return self.conv(hidden_states)
+
+
+################################################################################
+# Transformer block.
+################################################################################
+
+
+class Transformer2DModel(ThetaLayer):
+    def __init__(self, theta: ThetaLayer, **kwargs):
+        super().__init__(theta)
+
+    def forward(self, x):
         raise NotImplementedError
 
 
@@ -110,12 +240,17 @@ class ResnetBlock2D(ThetaLayer):
             ), f"NYI: ResnetBlock2D(time_embedding_norm={time_embedding_norm})"
             self.time_emb_proj = LinearLayer(theta("time_emb_proj"))
 
+        self.conv_shortcut = None
+        if "conv_shortcut" in theta.keys:
+            self.conv_shortcut = Conv2DLayer(theta("conv_shortcut"), padding=(0, 0))
+
     def forward(self, input_tensor: torch.Tensor, temb: torch.Tensor) -> torch.Tensor:
         hidden_states = input_tensor
         hidden_states = self.norm1(hidden_states)
         hidden_states = ops.elementwise(self.nonlinearity, hidden_states)
         hidden_states = self.conv1(hidden_states)
 
+        assert self.time_emb_proj is not None
         if self.time_emb_proj is not None:
             temb = ops.elementwise(self.nonlinearity, temb)
             temb = self.time_emb_proj(temb)[:, :, None, None]
@@ -125,9 +260,15 @@ class ResnetBlock2D(ThetaLayer):
         hidden_states = ops.elementwise(self.nonlinearity, hidden_states)
         hidden_states = self.conv2(hidden_states)
 
+        if self.conv_shortcut is not None:
+            print("RESNET CONV_SHORTCUT")
+            input_tensor = self.conv_shortcut(input_tensor)
+
         output_tensor = input_tensor + hidden_states
         if self.output_scale_factor is not None:
             output_tensor = output_tensor / self.output_scale_factor
+
+        self.trace_tensor("RESNET.output", output_tensor)
         return output_tensor
 
 
@@ -208,12 +349,14 @@ class TimestepProjection(nn.Module):
         max_period: int = 10000,
         downscale_freq_shift: float = 1.0,
         scale: float = 1.0,
+        flip_sin_to_cos: bool = False,
     ):
         super().__init__()
         self.downscale_freq_shift = downscale_freq_shift
         self.embedding_dim = embedding_dim
         self.max_period = max_period
         self.scale = scale
+        self.flip_sin_to_cos = flip_sin_to_cos
 
     def forward(self, timesteps):
         """Args:
@@ -242,6 +385,10 @@ class TimestepProjection(nn.Module):
         # concat sine and cosine embeddings
         emb = torch.cat([torch.sin(emb), torch.cos(emb)], dim=-1)
 
+        # flip sin and cos embeddings
+        if self.flip_sin_to_cos:
+            emb = torch.cat([emb[:, half_dim:], emb[:, :half_dim]], dim=-1)
+
         # zero pad
         if embedding_dim % 2 == 1:
             emb = torch.nn.functional.pad(emb, (0, 1, 0, 0))
@@ -259,11 +406,13 @@ class Conv2DLayer(ThetaLayer):
 
     """
 
-    def __init__(self, theta: Theta, padding: Optional[Tuple[int, int]] = None):
+    def __init__(
+        self, theta: Theta, padding: Optional[Tuple[int, int]] = None, stride: int = 1
+    ):
         super().__init__(theta)
         assert padding is None or len(padding) == 2
         self.padding = padding
-        self.stride = 1
+        self.stride = stride
         self.dilation = 1
         self.groups = 1
 
