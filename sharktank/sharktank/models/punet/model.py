@@ -8,13 +8,6 @@
 # licensed under Apache2: https://github.com/huggingface/diffusers
 # While much was a simple reverse engineering of the config.json and parameters,
 # code was taken where appropriate.
-from typing import Optional, Sequence, Tuple
-
-from dataclasses import dataclass
-import inspect
-import math
-import warnings
-
 import torch
 import torch.nn as nn
 
@@ -167,8 +160,6 @@ class Unet2DConditionModel(ThetaLayer):
             )
             down_block_res_samples += res_samples
 
-            self.trace_tensor(f"DB{i}.sample", sample)
-
         # 4. Mid.
         sample, _ = self.mid_block(
             hidden_states=sample,
@@ -177,7 +168,6 @@ class Unet2DConditionModel(ThetaLayer):
             attention_mask=None,
             encoder_attention_mask=None,
         )
-        self.trace_tensor(f"MB.sample", sample)
 
         # 5. Up.
         for i, up_block in enumerate(self.up_blocks):
@@ -193,14 +183,12 @@ class Unet2DConditionModel(ThetaLayer):
                 attention_mask=None,
                 encoder_attention_mask=None,
             )
-            self.trace_tensor(f"UB{i}.sample", sample)
 
         # 6. Post-process.
         if self.conv_norm_out:
             sample = self.conv_norm_out(sample)
             sample = ops.elementwise(self.conv_act, sample)
         sample = self.conv_out(sample)
-        self.trace_tensor("OUTPUT", sample)
         return sample
 
     def _create_down_block(
@@ -208,7 +196,7 @@ class Unet2DConditionModel(ThetaLayer):
     ) -> nn.Module:
         hp = self.hp
         if type_name == "DownBlock2D":
-            return DownBlock2D(
+            return UpDownBlock2D(
                 down_block_theta,
                 num_layers=hp.layers_per_block[i],
                 add_downsample=not is_final_block,
@@ -226,7 +214,7 @@ class Unet2DConditionModel(ThetaLayer):
                 temb_channels=self.time_embed_dim,
             )
         elif type_name == "CrossAttnDownBlock2D":
-            return CrossAttnDownBlock2D(
+            return CrossAttnUpDownBlock2D(
                 down_block_theta,
                 num_layers=hp.layers_per_block[i],
                 transformer_layers_per_block=hp.transformer_layers_per_block[i],
@@ -252,7 +240,7 @@ class Unet2DConditionModel(ThetaLayer):
     def _create_mid_block(self, mid_block_theta: Theta) -> nn.Module:
         hp = self.hp
         if hp.mid_block_type == "UNetMidBlock2DCrossAttn":
-            return CrossAttnDownBlock2D(
+            return CrossAttnUpDownBlock2D(
                 mid_block_theta,
                 num_layers=1,
                 num_prefix_resnets=1,  # Mid block always has an additional resnet.
@@ -285,7 +273,7 @@ class Unet2DConditionModel(ThetaLayer):
 
         hp = self.hp
         if type_name == "UpBlock2D":
-            return DownBlock2D(
+            return UpDownBlock2D(
                 up_block_theta,
                 num_layers=r(hp.layers_per_block)[i] + 1,
                 add_upsample=not is_final_block,
@@ -302,7 +290,7 @@ class Unet2DConditionModel(ThetaLayer):
                 temb_channels=self.time_embed_dim,
             )
         elif type_name == "CrossAttnUpBlock2D":
-            return CrossAttnDownBlock2D(
+            return CrossAttnUpDownBlock2D(
                 up_block_theta,
                 num_layers=r(hp.layers_per_block)[i] + 1,
                 transformer_layers_per_block=r(hp.transformer_layers_per_block)[i],
@@ -385,7 +373,6 @@ def main():
 
     cond_unet = Unet2DConditionModel.from_dataset(ds)
     mdl = ClassifierFreeGuidanceUnetModel(cond_unet)
-    print(f"Model hparams: {cond_unet.hp}")
 
     # Run a step for debugging.
     torch.random.manual_seed(42)

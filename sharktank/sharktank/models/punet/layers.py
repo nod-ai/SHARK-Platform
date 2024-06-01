@@ -19,11 +19,11 @@ from .config import *
 __all__ = [
     "ACTIVATION_FUNCTIONS",
     "Conv2DLayer",
-    "CrossAttnDownBlock2D",
-    "DownBlock2D",
+    "CrossAttnUpDownBlock2D",
     "GroupNormLayer",
     "TimestepEmbedding",
     "TimestepProjection",
+    "UpDownBlock2D",
 ]
 
 ################################################################################
@@ -31,7 +31,7 @@ __all__ = [
 ################################################################################
 
 
-class DownBlock2D(ThetaLayer):
+class UpDownBlock2D(ThetaLayer):
     def __init__(
         self,
         theta: Theta,
@@ -111,7 +111,7 @@ class DownBlock2D(ThetaLayer):
         return hidden_states, output_states
 
 
-class CrossAttnDownBlock2D(ThetaLayer):
+class CrossAttnUpDownBlock2D(ThetaLayer):
     def __init__(
         self,
         theta: Theta,
@@ -282,7 +282,6 @@ class ContinuousInputTransformer2DModel(ThetaLayer):
         self.norm = GroupNormLayer(theta("norm"), num_groups=norm_num_groups, eps=1e-6)
         self.proj_in = LinearLayer(theta("proj_in"))
         self.proj_out = LinearLayer(theta("proj_out"))
-        # print("CROSS ATTENTION DIM:", cross_attention_dim)
         self.transformer_blocks = nn.ModuleList(
             [
                 BasicTransformerBlock(
