@@ -38,7 +38,8 @@ class HParams:
     class_embed_type: Optional[str] = None
     class_embeddings_concat: bool = False
     center_input_sample: bool = False
-    conv_in_kernel: int = (3,)
+    conv_in_kernel: int = 3
+    conv_out_kernel: int = 3
     down_block_types: Sequence[str] = ()
     downsample_padding: int = 1
     dropout: float = 0.0
@@ -48,6 +49,8 @@ class HParams:
     flip_sin_to_cos: bool = True
     freq_shift: int = 0
     in_channels: int = 4
+    mid_block_scale_factor: float = 1.0
+    mid_block_type: str = "UNetMidBlock2DCrossAttn"
     norm_eps: float = 1e-5
     norm_num_groups: int = 32
     only_cross_attention: bool = False
@@ -58,6 +61,7 @@ class HParams:
     time_embedding_dim: Optional[int] = None
     time_embedding_type: str = "positional"
     timestep_post_act: Optional[str] = None
+    up_block_types: Sequence[str] = ()
     upcast_attention: bool = False
     use_linear_projection: bool = False
 

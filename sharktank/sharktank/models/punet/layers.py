@@ -21,6 +21,7 @@ __all__ = [
     "Conv2DLayer",
     "CrossAttnDownBlock2D",
     "DownBlock2D",
+    "GroupNormLayer",
     "TimestepEmbedding",
     "TimestepProjection",
 ]
@@ -31,14 +32,11 @@ __all__ = [
 
 
 class DownBlock2D(ThetaLayer):
-    has_cross_attention: bool = False
-
     def __init__(
         self,
         theta: Theta,
         *,
         num_layers: int,
-        add_downsample: bool,
         resnet_eps: float,
         resnet_act_fn: str,
         resnet_groups: int,
@@ -46,7 +44,9 @@ class DownBlock2D(ThetaLayer):
         resnet_time_scale_shift: str,
         temb_channels: int,
         dropout: float,
-        downsample_padding: int,
+        add_upsample: bool = False,
+        add_downsample: bool = False,
+        downsample_padding: int = 0,
     ):
         super().__init__(theta)
         resnets = []
@@ -70,10 +70,32 @@ class DownBlock2D(ThetaLayer):
             self.downsamplers = nn.ModuleList(
                 [Downsample2D(theta("downsamplers", "0"), padding=downsample_padding)]
             )
+        self.upsamplers = None
+        if add_upsample:
+            self.upsamplers = nn.ModuleList(
+                [Upsample2D(theta("upsamplers", 0), padding=1)]
+            )
 
-    def forward(self, hidden_states: torch.Tensor, temb: Optional[torch.Tensor] = None):
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        temb: Optional[torch.Tensor] = None,
+        *,
+        encoder_hidden_states: torch.Tensor,
+        attention_mask: Optional[torch.Tensor],
+        encoder_attention_mask: Optional[torch.Tensor],
+        upsample_size: Optional[int] = None,
+        res_hidden_states_tuple: Tuple[torch.Tensor, ...] = None,
+    ):
         output_states = ()
         for i, resnet in enumerate(self.resnets):
+            # Up blocks will have resnet residuals from the down phase. If present,
+            # pop each one and cat.
+            if res_hidden_states_tuple is not None:
+                res_hidden_states = res_hidden_states_tuple[-1]
+                res_hidden_states_tuple = res_hidden_states_tuple[:-1]
+                hidden_states = torch.cat([hidden_states, res_hidden_states], dim=1)
+
             hidden_states = resnet(hidden_states, temb)
             output_states = output_states + (hidden_states,)
 
@@ -81,19 +103,19 @@ class DownBlock2D(ThetaLayer):
             for downsampler in self.downsamplers:
                 hidden_states = downsampler(hidden_states)
             output_states = output_states + (hidden_states,)
+        if self.upsamplers is not None:
+            for upsampler in self.upsamplers:
+                hidden_states = upsampler(hidden_states, upsample_size)
+            output_states = output_states + (hidden_states,)
 
         return hidden_states, output_states
 
 
 class CrossAttnDownBlock2D(ThetaLayer):
-    has_cross_attention: bool = True
-
     def __init__(
         self,
         theta: Theta,
         num_layers: int,
-        add_downsample: bool,
-        downsample_padding: int,
         resnet_eps: float,
         resnet_act_fn: str,
         resnet_groups: int,
@@ -105,6 +127,10 @@ class CrossAttnDownBlock2D(ThetaLayer):
         transformer_layers_per_block: Sequence[int],
         cross_attention_dim: int,
         use_linear_projection: bool,
+        num_prefix_resnets: int = 0,
+        add_upsample: bool = False,
+        add_downsample: bool = False,
+        downsample_padding: int = 0,
     ):
         super().__init__(theta)
         resnets = []
@@ -115,7 +141,7 @@ class CrossAttnDownBlock2D(ThetaLayer):
             if isinstance(transformer_layers_per_block, int)
             else transformer_layers_per_block
         )
-        for i in range(num_layers):
+        for i in range(num_prefix_resnets + num_layers):
             resnets.append(
                 ResnetBlock2D(
                     theta("resnets", i),
@@ -128,6 +154,8 @@ class CrossAttnDownBlock2D(ThetaLayer):
                     output_scale_factor=resnet_out_scale_factor,
                 )
             )
+
+        for i in range(num_layers):
             attentions.append(
                 ContinuousInputTransformer2DModel(
                     theta("attentions", i),
@@ -145,7 +173,12 @@ class CrossAttnDownBlock2D(ThetaLayer):
         self.downsamplers = None
         if add_downsample:
             self.downsamplers = nn.ModuleList(
-                [Downsample2D(theta("downsamplers", "0"), padding=downsample_padding)]
+                [Downsample2D(theta("downsamplers", 0), padding=downsample_padding)]
+            )
+        self.upsamplers = None
+        if add_upsample:
+            self.upsamplers = nn.ModuleList(
+                [Upsample2D(theta("upsamplers", 0), padding=1)]
             )
 
     def forward(
@@ -156,40 +189,77 @@ class CrossAttnDownBlock2D(ThetaLayer):
         encoder_hidden_states: torch.Tensor,
         attention_mask: Optional[torch.Tensor],
         encoder_attention_mask: Optional[torch.Tensor],
+        upsample_size: Optional[int] = None,
+        res_hidden_states_tuple: Tuple[torch.Tensor, ...] = None,
     ):
         output_states = ()
-        blocks = list(zip(self.resnets, self.attentions))
-        for i, (resnet, attn) in enumerate(blocks):
-            hidden_states = resnet(hidden_states, temb)
-            hidden_states = attn(
-                hidden_states,
-                encoder_hidden_states=encoder_hidden_states,
-                attention_mask=attention_mask,
-                encoder_attention_mask=encoder_attention_mask,
-            )
-        output_states = output_states + (hidden_states,)
+        layer_count = max(len(self.resnets), len(self.attentions))
+        assert len(self.resnets) >= len(self.attentions)
+        for i in range(layer_count):
+            # Up blocks will have resnet residuals from the down phase. If present,
+            # pop each one and cat.
+            if res_hidden_states_tuple is not None:
+                res_hidden_states = res_hidden_states_tuple[-1]
+                res_hidden_states_tuple = res_hidden_states_tuple[:-1]
+                hidden_states = torch.cat([hidden_states, res_hidden_states], dim=1)
+
+            # Alternate resnet, attention layers, allowing attention to be short.
+            hidden_states = self.resnets[i](hidden_states, temb)
+            if i < len(self.attentions):
+                hidden_states = self.attentions[i](
+                    hidden_states,
+                    encoder_hidden_states=encoder_hidden_states,
+                    attention_mask=attention_mask,
+                    encoder_attention_mask=encoder_attention_mask,
+                )
+            output_states = output_states + (hidden_states,)
 
         if self.downsamplers is not None:
             for downsampler in self.downsamplers:
                 hidden_states = downsampler(hidden_states)
+            output_states = output_states + (hidden_states,)
+        if self.upsamplers is not None:
+            for upsampler in self.upsamplers:
+                hidden_states = upsampler(hidden_states, upsample_size)
             output_states = output_states + (hidden_states,)
 
         return hidden_states, output_states
 
 
 ################################################################################
-# Downsampler blocks.
+# Downsample/Upsample blocks.
 ################################################################################
 
 
 class Downsample2D(ThetaLayer):
-    def __init__(self, theta: ThetaLayer, padding: int):
+    def __init__(self, theta: Theta, padding: int):
         super().__init__(theta)
         assert padding != 0
         self.conv = Conv2DLayer(theta("conv"), padding=[padding, padding], stride=2)
 
     def forward(self, hidden_states: torch.Tensor):
         return self.conv(hidden_states)
+
+
+class Upsample2D(ThetaLayer):
+    def __init__(self, theta: Theta, padding: int, interpolate: bool = True):
+        super().__init__(theta)
+        assert padding != 0
+        self.interpolate = interpolate
+        self.conv = Conv2DLayer(theta("conv"), padding=[padding, padding])
+
+    def forward(self, hidden_states: torch.Tensor, output_size: Optional[int] = None):
+        if self.interpolate:
+            if output_size is None:
+                hidden_states = nn.functional.interpolate(
+                    hidden_states, scale_factor=2.0, mode="nearest"
+                )
+            else:
+                hidden_states = nn.functional.interpolate(
+                    hidden_states, size=output_size, mode="nearest"
+                )
+        hidden_states = self.conv(hidden_states)
+        return hidden_states
 
 
 ################################################################################
@@ -200,7 +270,7 @@ class Downsample2D(ThetaLayer):
 class ContinuousInputTransformer2DModel(ThetaLayer):
     def __init__(
         self,
-        theta: ThetaLayer,
+        theta: Theta,
         num_attention_heads,
         num_layers,
         cross_attention_dim,

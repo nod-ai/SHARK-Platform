@@ -48,6 +48,7 @@ class Unet2DConditionModel(ThetaLayer):
                 "encoder_hid_dim",
                 "encoder_hid_dim_type",
                 "freq_shift",
+                "mid_block_scale_factor",
                 "only_cross_attention",
                 "time_embedding_act_fn",
                 "time_embedding_dim",
@@ -65,12 +66,9 @@ class Unet2DConditionModel(ThetaLayer):
             theta("conv_in"), padding=(conv_in_padding, conv_in_padding)
         )
 
-        # Down/up blocks.
-        output_channel = hp.block_out_channels[0]
+        # Down blocks.
         self.down_blocks = nn.ModuleList([])
         for i, down_block_name in enumerate(hp.down_block_types):
-            input_channel = output_channel
-            output_channel = hp.block_out_channels[i]
             down_block_theta = theta("down_blocks", i)
             is_final_block = i == len(hp.block_out_channels) - 1
             self.down_blocks.append(
@@ -81,6 +79,36 @@ class Unet2DConditionModel(ThetaLayer):
                     is_final_block=is_final_block,
                 )
             )
+
+        # Mid block.
+        self.mid_block = self._create_mid_block(theta("mid_block"))
+
+        # Up blocks.
+        self.up_blocks = nn.ModuleList([])
+        for i, up_block_name in enumerate(hp.up_block_types):
+            up_block_theta = theta("up_blocks", i)
+            is_final_block = i == len(hp.block_out_channels) - 1
+            self.up_blocks.append(
+                self._create_up_block(
+                    i,
+                    up_block_theta,
+                    up_block_name,
+                    is_final_block=is_final_block,
+                )
+            )
+
+        # Output.
+        self.conv_norm_out = None
+        self.conv_act = None
+        if hp.norm_num_groups is not None:
+            self.conv_norm_out = GroupNormLayer(
+                theta("conv_norm_out"), num_groups=hp.norm_num_groups, eps=hp.norm_eps
+            )
+            self.conv_act = ACTIVATION_FUNCTIONS[hp.act_fn]
+        conv_out_padding = (hp.conv_out_kernel - 1) // 2
+        self.conv_out = Conv2DLayer(
+            theta("conv_out"), padding=(conv_out_padding, conv_out_padding)
+        )
 
     def forward(
         self,
@@ -128,29 +156,52 @@ class Unet2DConditionModel(ThetaLayer):
         sample = self.conv_in(sample)
 
         # 3. Down.
-        downblock_res_samples = (sample,)
+        down_block_res_samples = (sample,)
         for i, down_block in enumerate(self.down_blocks):
-            if down_block.has_cross_attention:
-                # Cross attention block.
-                sample, res_samples = down_block(
-                    hidden_states=sample,
-                    temb=emb,
-                    encoder_hidden_states=encoder_hidden_states,
-                    attention_mask=None,
-                    encoder_attention_mask=None,
-                )
-            else:
-                # Simple resnet block.
-                sample, res_samples = down_block(hidden_states=sample, temb=emb)
-            downblock_res_samples += res_samples
+            sample, res_samples = down_block(
+                hidden_states=sample,
+                temb=emb,
+                encoder_hidden_states=encoder_hidden_states,
+                attention_mask=None,
+                encoder_attention_mask=None,
+            )
+            down_block_res_samples += res_samples
 
             self.trace_tensor(f"DB{i}.sample", sample)
 
         # 4. Mid.
+        sample, _ = self.mid_block(
+            hidden_states=sample,
+            temb=emb,
+            encoder_hidden_states=encoder_hidden_states,
+            attention_mask=None,
+            encoder_attention_mask=None,
+        )
+        self.trace_tensor(f"MB.sample", sample)
 
         # 5. Up.
+        for i, up_block in enumerate(self.up_blocks):
+            # Rotate res samples in LIFO order.
+            res_samples = down_block_res_samples[-len(up_block.resnets) :]
+            down_block_res_samples = down_block_res_samples[: -len(up_block.resnets)]
+
+            sample, _ = up_block(
+                hidden_states=sample,
+                res_hidden_states_tuple=res_samples,
+                temb=emb,
+                encoder_hidden_states=encoder_hidden_states,
+                attention_mask=None,
+                encoder_attention_mask=None,
+            )
+            self.trace_tensor(f"UB{i}.sample", sample)
 
         # 6. Post-process.
+        if self.conv_norm_out:
+            sample = self.conv_norm_out(sample)
+            sample = ops.elementwise(self.conv_act, sample)
+        sample = self.conv_out(sample)
+        self.trace_tensor("OUTPUT", sample)
+        return sample
 
     def _create_down_block(
         self, i: int, down_block_theta: Theta, type_name: str, is_final_block: bool
@@ -197,6 +248,81 @@ class Unet2DConditionModel(ThetaLayer):
                 use_linear_projection=hp.use_linear_projection,
             )
         raise ValueError(f"Unhandled down_block_type: {type_name}")
+
+    def _create_mid_block(self, mid_block_theta: Theta) -> nn.Module:
+        hp = self.hp
+        if hp.mid_block_type == "UNetMidBlock2DCrossAttn":
+            return CrossAttnDownBlock2D(
+                mid_block_theta,
+                num_layers=1,
+                num_prefix_resnets=1,  # Mid block always has an additional resnet.
+                transformer_layers_per_block=hp.transformer_layers_per_block[-1],
+                num_attention_heads=hp.num_attention_heads[-1],
+                cross_attention_dim=hp.cross_attention_dim[-1],
+                temb_channels=self.time_embed_dim,
+                add_downsample=False,
+                downsample_padding=hp.downsample_padding,
+                resnet_eps=hp.norm_eps,
+                resnet_act_fn=hp.act_fn,
+                resnet_groups=hp.norm_num_groups,
+                resnet_out_scale_factor=(
+                    None
+                    if hp.resnet_out_scale_factor == 1.0
+                    else hp.resnet_out_scale_factor
+                ),
+                resnet_time_scale_shift=hp.resnet_time_scale_shift,
+                dropout=hp.dropout,
+                use_linear_projection=hp.use_linear_projection,
+            )
+
+        raise ValueError("Unhandled mid_block_type: {type_name}")
+
+    def _create_up_block(
+        self, i: int, up_block_theta: Theta, type_name: str, is_final_block: bool
+    ) -> nn.Module:
+        def r(s):
+            return list(reversed(s))
+
+        hp = self.hp
+        if type_name == "UpBlock2D":
+            return DownBlock2D(
+                up_block_theta,
+                num_layers=r(hp.layers_per_block)[i] + 1,
+                add_upsample=not is_final_block,
+                resnet_eps=hp.norm_eps,
+                resnet_act_fn=hp.act_fn,
+                resnet_groups=hp.norm_num_groups,
+                resnet_out_scale_factor=(
+                    None
+                    if hp.resnet_out_scale_factor == 1.0
+                    else hp.resnet_out_scale_factor
+                ),
+                resnet_time_scale_shift=hp.resnet_time_scale_shift,
+                dropout=hp.dropout,
+                temb_channels=self.time_embed_dim,
+            )
+        elif type_name == "CrossAttnUpBlock2D":
+            return CrossAttnDownBlock2D(
+                up_block_theta,
+                num_layers=r(hp.layers_per_block)[i] + 1,
+                transformer_layers_per_block=r(hp.transformer_layers_per_block)[i],
+                num_attention_heads=r(hp.num_attention_heads)[i],
+                cross_attention_dim=r(hp.cross_attention_dim)[i],
+                temb_channels=self.time_embed_dim,
+                add_upsample=not is_final_block,
+                resnet_eps=hp.norm_eps,
+                resnet_act_fn=hp.act_fn,
+                resnet_groups=hp.norm_num_groups,
+                resnet_out_scale_factor=(
+                    None
+                    if hp.resnet_out_scale_factor == 1.0
+                    else hp.resnet_out_scale_factor
+                ),
+                resnet_time_scale_shift=hp.resnet_time_scale_shift,
+                dropout=hp.dropout,
+                use_linear_projection=hp.use_linear_projection,
+            )
+        raise ValueError(f"Unhandled up_block_type: {type_name}")
 
     def _setup_timestep_embedding(self):
         hp = self.hp
