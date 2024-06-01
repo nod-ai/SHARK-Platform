@@ -95,6 +95,16 @@ def group_norm_affine_default(input, weight, bias, *, num_groups, eps):
     return F.group_norm(input, num_groups=num_groups, weight=weight, bias=bias, eps=eps)
 
 
+@layer_norm.override(Tensor, Tensor, Tensor)
+def layer_norm_default(input, weight, bias, *, eps):
+    input = unbox_tensor(input)
+    weight = unbox_tensor(weight)
+    bias = unbox_tensor(bias)
+    return F.layer_norm(
+        input, normalized_shape=weight.shape, weight=weight, bias=bias, eps=eps
+    )
+
+
 # Matmul
 @matmul.override(Tensor, Tensor)
 def matmul_default(lhs, rhs, *, transpose_rhs: bool) -> Tensor:

@@ -18,6 +18,7 @@ __all__ = [
     "elementwise",
     "embedding_lookup",
     "group_norm_affine",
+    "layer_norm",
     "matmul",
     "rms_norm",
     "sharded_cat",
@@ -140,6 +141,34 @@ def _group_norm_affine_trampoline(
     tensors = (input, weight, bias)
     for override in d.find_overrides(tensors):
         result = override(input, weight, bias, num_groups=num_groups, eps=eps)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(tensors)
+
+
+@overridable
+def layer_norm(
+    input: AnyTensor, weight: AnyTensor, bias: Optional[AnyTensor], *, eps: float
+):
+    """Equivalent to torch.nn.functional.layer_norm(elementwise_affine=True)."""
+    raise NotImplementedError
+
+
+@layer_norm.trampoline
+def _layer_norm_trampoline(
+    d: SignatureDispatcher,
+    input: AnyTensor,
+    weight: AnyTensor,
+    bias: Optional[AnyTensor],
+    *,
+    eps: float
+):
+    tensors = [input, weight]
+    if bias is not None:
+        tensors.append(bias)
+    for override in d.find_overrides(tensors):
+        result = override(input, weight, bias, eps=eps)
         if result is not NotImplemented:
             return override, result
     else:

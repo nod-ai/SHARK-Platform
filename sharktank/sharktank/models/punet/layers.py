@@ -75,13 +75,11 @@ class DownBlock2D(ThetaLayer):
         output_states = ()
         for i, resnet in enumerate(self.resnets):
             hidden_states = resnet(hidden_states, temb)
-            self.trace_tensor(f"DBRESNET{i}.hidden_states", hidden_states, values=True)
             output_states = output_states + (hidden_states,)
 
         if self.downsamplers is not None:
             for downsampler in self.downsamplers:
                 hidden_states = downsampler(hidden_states)
-                self.trace_tensor("DOWNSAMPLE", hidden_states)
             output_states = output_states + (hidden_states,)
 
         return hidden_states, output_states
@@ -131,7 +129,7 @@ class CrossAttnDownBlock2D(ThetaLayer):
                 )
             )
             attentions.append(
-                Transformer2DModel(
+                ContinuousInputTransformer2DModel(
                     theta("attentions", i),
                     num_attention_heads=num_attention_heads,
                     num_layers=transformer_counts[i],
@@ -168,7 +166,7 @@ class CrossAttnDownBlock2D(ThetaLayer):
                 encoder_hidden_states=encoder_hidden_states,
                 attention_mask=attention_mask,
                 encoder_attention_mask=encoder_attention_mask,
-            )[0]
+            )
         output_states = output_states + (hidden_states,)
 
         if self.downsamplers is not None:
@@ -199,12 +197,170 @@ class Downsample2D(ThetaLayer):
 ################################################################################
 
 
-class Transformer2DModel(ThetaLayer):
-    def __init__(self, theta: ThetaLayer, **kwargs):
+class ContinuousInputTransformer2DModel(ThetaLayer):
+    def __init__(
+        self,
+        theta: ThetaLayer,
+        num_attention_heads,
+        num_layers,
+        cross_attention_dim,
+        norm_num_groups,
+        use_linear_projection,
+    ):
         super().__init__(theta)
+        assert use_linear_projection, "NYI: not use_linear_projection"
+        self.norm = GroupNormLayer(theta("norm"), num_groups=norm_num_groups, eps=1e-6)
+        self.proj_in = LinearLayer(theta("proj_in"))
+        self.proj_out = LinearLayer(theta("proj_out"))
+        # print("CROSS ATTENTION DIM:", cross_attention_dim)
+        self.transformer_blocks = nn.ModuleList(
+            [
+                BasicTransformerBlock(
+                    theta("transformer_blocks", i),
+                    num_attention_heads=num_attention_heads,
+                    # attention_head_dim=attention_head_dim,
+                )
+                for i in range(num_layers)
+            ]
+        )
 
-    def forward(self, x):
-        raise NotImplementedError
+    def forward(
+        self,
+        hidden_states,
+        encoder_hidden_states,
+        attention_mask,
+        encoder_attention_mask,
+    ):
+        assert attention_mask is None, "NYI: attention_mask != None"
+        assert encoder_attention_mask is None, "NYI: encoder_attention_mask != None"
+
+        # Project input.
+        bs, inner_dim, height, width = hidden_states.shape
+        residual = hidden_states
+        hidden_states = self.norm(hidden_states)
+        hidden_states = hidden_states.permute(0, 2, 3, 1).reshape(
+            bs, height * width, inner_dim
+        )
+        hidden_states = self.proj_in(hidden_states)
+
+        # Transformer Blocks.
+        for block in self.transformer_blocks:
+            hidden_states = block(
+                hidden_states,
+                attention_mask=attention_mask,
+                encoder_hidden_states=encoder_hidden_states,
+                encoder_attention_mask=encoder_attention_mask,
+            )
+
+        # Output.
+        hidden_states = self.proj_out(hidden_states)
+        hidden_states = hidden_states.reshape(bs, height, width, inner_dim).permute(
+            0, 3, 1, 2
+        )
+        output = hidden_states + residual
+        return output
+
+
+class BasicTransformerBlock(ThetaLayer):
+    def __init__(
+        self,
+        theta: Theta,
+        *,
+        num_attention_heads: int,
+        norm_eps: float = 1e-5,
+    ):
+        super().__init__(theta)
+        self.norm1 = LayerNormLayer(theta("norm1"), eps=norm_eps)
+        self.norm2 = LayerNormLayer(theta("norm2"), eps=norm_eps)
+        self.norm3 = LayerNormLayer(theta("norm3"), eps=norm_eps)
+
+        self.attn1 = AttentionLayer(theta("attn1"), heads=num_attention_heads)
+        self.attn2 = AttentionLayer(theta("attn2"), heads=num_attention_heads)
+
+        # Diffusers BasicTransformerBlock has an unfortunate structure for
+        # the FF net layers:
+        #   ff.net.0 = GEGLU
+        #   ff.net.1 = Dropout (unused here)
+        #   ff.net.2 = Linear
+        self.ff_proj_in = GEGLULayer(theta("ff", "net", 0))
+        self.ff_proj_out = LinearLayer(theta("ff", "net", 2))
+
+    def forward(
+        self,
+        hidden_states,
+        *,
+        attention_mask: Optional[torch.Tensor],
+        encoder_hidden_states: Optional[torch.Tensor],
+        encoder_attention_mask: Optional[torch.Tensor],
+    ):
+        # Attention 1.
+        norm_hidden_states = self.norm1(hidden_states)
+        attn_output = self.attn1(
+            norm_hidden_states,
+            encoder_hidden_states=None,
+            attention_mask=attention_mask,
+        )
+        hidden_states = attn_output + hidden_states
+
+        # Attention 2.
+        norm_hidden_states = self.norm2(hidden_states)
+        attn_output = self.attn2(
+            norm_hidden_states,
+            encoder_hidden_states=encoder_hidden_states,
+            attention_mask=attention_mask,
+        )
+        hidden_states = attn_output + hidden_states
+
+        # Feed forward.
+        norm_hidden_states = self.norm3(hidden_states)
+        ff_output = self.ff_proj_in(norm_hidden_states)
+        ff_output = self.ff_proj_out(ff_output)
+        hidden_states = ff_output + hidden_states
+        return hidden_states
+
+
+class AttentionLayer(ThetaLayer):
+    def __init__(self, theta: Theta, *, heads: int):
+        super().__init__(theta)
+        self.heads = heads
+        self.to_q = LinearLayer(theta("to_q"))
+        self.to_k = LinearLayer(theta("to_k"))
+        self.to_v = LinearLayer(theta("to_v"))
+        # Diffusers models this wonky. They have dropout as the second layer of
+        # to_out. But ignored for inference.
+        self.to_out = LinearLayer(theta("to_out", 0))
+
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        attention_mask: Optional[torch.Tensor],
+        encoder_hidden_states: Optional[torch.Tensor],
+    ):
+        if encoder_hidden_states is None:
+            encoder_hidden_states = hidden_states
+        bs, sl, *_ = encoder_hidden_states.shape
+        query = self.to_q(hidden_states)
+        key = self.to_k(encoder_hidden_states)
+        value = self.to_v(encoder_hidden_states)
+
+        # Transpose.
+        inner_dim = key.shape[-1]
+        head_dim = inner_dim // self.heads
+        query = query.view(bs, -1, self.heads, head_dim).transpose(1, 2)
+        key = key.view(bs, -1, self.heads, head_dim).transpose(1, 2)
+        value = value.view(bs, -1, self.heads, head_dim).transpose(1, 2)
+
+        # the output of sdp = (batch, num_heads, seq_len, head_dim)
+        hidden_states = torch.nn.functional.scaled_dot_product_attention(
+            query, key, value, attn_mask=attention_mask, dropout_p=0.0, is_causal=False
+        )
+
+        hidden_states = hidden_states.transpose(1, 2).reshape(bs, -1, inner_dim)
+        hidden_states = hidden_states.to(query.dtype)
+
+        # Linear proj.
+        hidden_states = self.to_out(hidden_states)
+        return hidden_states
 
 
 ################################################################################
@@ -261,30 +417,13 @@ class ResnetBlock2D(ThetaLayer):
         hidden_states = self.conv2(hidden_states)
 
         if self.conv_shortcut is not None:
-            print("RESNET CONV_SHORTCUT")
             input_tensor = self.conv_shortcut(input_tensor)
 
         output_tensor = input_tensor + hidden_states
         if self.output_scale_factor is not None:
             output_tensor = output_tensor / self.output_scale_factor
 
-        self.trace_tensor("RESNET.output", output_tensor)
         return output_tensor
-
-
-class GroupNormLayer(ThetaLayer):
-    def __init__(self, theta: Theta, num_groups: int, eps: float, affine: bool = True):
-        super().__init__(theta)
-        assert affine, "NYI: GroupNormLayer(affine=False)"
-        self.num_groups = num_groups
-        self.eps = eps
-
-    def forward(self, input: torch.Tensor) -> torch.Tensor:
-        weight = self.theta.tensor("weight")
-        bias = self.theta.tensor("bias")
-        return ops.group_norm_affine(
-            input, weight, bias, num_groups=self.num_groups, eps=self.eps
-        )
 
 
 ################################################################################
@@ -431,3 +570,47 @@ class Conv2DLayer(ThetaLayer):
             dilation=self.dilation,
             groups=self.groups,
         )
+
+
+class GroupNormLayer(ThetaLayer):
+    def __init__(self, theta: Theta, num_groups: int, eps: float, affine: bool = True):
+        super().__init__(theta)
+        assert affine, "NYI: GroupNormLayer(affine=False)"
+        self.num_groups = num_groups
+        self.eps = eps
+
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
+        weight = self.theta.tensor("weight")
+        bias = self.theta.tensor("bias")
+        return ops.group_norm_affine(
+            input, weight, bias, num_groups=self.num_groups, eps=self.eps
+        )
+
+
+class LayerNormLayer(ThetaLayer):
+    def __init__(self, theta: Theta, eps: float):
+        super().__init__(theta)
+        self.eps = eps
+        self.weight = theta.tensor("weight")
+        self.bias = None
+        if "bias" in theta.keys:
+            self.bias = theta.tensor("bias")
+
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
+        return ops.layer_norm(
+            input,
+            self.weight,
+            self.bias,
+            eps=self.eps,
+        )
+
+
+class GEGLULayer(ThetaLayer):
+    def __init__(self, theta: Theta):
+        super().__init__(theta)
+        self.proj = LinearLayer(theta("proj"))
+
+    def forward(self, hidden_states: torch.Tensor):
+        hidden_states = self.proj(hidden_states)
+        hidden_states, gate = hidden_states.chunk(2, dim=-1)
+        return hidden_states * nn.functional.gelu(gate)
