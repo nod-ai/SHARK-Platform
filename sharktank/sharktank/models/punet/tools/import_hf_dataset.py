@@ -24,7 +24,7 @@ Properties are separated into a "meta" dict (for "_" prefixed props) and an
 import json
 from pathlib import Path
 
-from ...types import *
+from ....types import *
 
 
 def import_hf_config(config_json_path: Path, params_path: Path) -> Dataset:
@@ -51,7 +51,7 @@ def import_hf_config(config_json_path: Path, params_path: Path) -> Dataset:
 
 
 def main():
-    from ...utils import cli
+    from ....utils import cli
 
     parser = cli.create_parser()
     cli.add_output_dataset_options(parser)

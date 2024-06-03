@@ -5,48 +5,15 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 import torch
-from diffusers import UNet2DConditionModel
 
-
-class ClassifierFreeGuidanceUnetModel(torch.nn.Module):
-    def __init__(self, cond_model):
-        super().__init__()
-        self.cond_model = cond_model
-
-    def forward(
-        self,
-        *,
-        sample: torch.Tensor,
-        timestep,
-        prompt_embeds,
-        text_embeds,
-        time_ids,
-        guidance_scale: torch.Tensor,
-    ):
-        added_cond_kwargs = {
-            "text_embeds": text_embeds,
-            "time_ids": time_ids,
-        }
-        latent_model_input = torch.cat([sample] * 2)
-        noise_pred, *_ = self.cond_model.forward(
-            latent_model_input,
-            timestep,
-            encoder_hidden_states=prompt_embeds,
-            cross_attention_kwargs=None,
-            added_cond_kwargs=added_cond_kwargs,
-            return_dict=False,
-        )
-        noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
-        noise_pred = noise_pred_uncond + guidance_scale * (
-            noise_pred_text - noise_pred_uncond
-        )
-        return noise_pred
+from ..model import Unet2DConditionModel, ClassifierFreeGuidanceUnetModel
 
 
 def main():
     from ....utils import cli
 
     parser = cli.create_parser()
+    cli.add_input_dataset_options(parser)
     parser.add_argument("--device", default="cuda:0", help="Torch device to run on")
     parser.add_argument("--dtype", default="float16", help="DType to run in")
     args = cli.parse(parser)
@@ -54,17 +21,11 @@ def main():
     device = args.device
     dtype = getattr(torch, args.dtype)
 
-    cond_unet = UNet2DConditionModel.from_pretrained(
-        "stabilityai/stable-diffusion-xl-base-1.0",
-        subfolder="unet",
-        low_cpu_mem_usage=False,
-        variant="fp16",
-        torch_dtype=dtype,
-    )
-    print("Created model")
-    cond_unet = cond_unet.to(device)
+    ds = cli.get_input_dataset(args)
+    ds.to(device=device)
+
+    cond_unet = Unet2DConditionModel.from_dataset(ds)
     mdl = ClassifierFreeGuidanceUnetModel(cond_unet)
-    print("Moved to GPU")
 
     # Run a step for debugging.
     torch.random.manual_seed(42)
@@ -79,11 +40,10 @@ def main():
     time_ids = torch.zeros(2 * bs, 6, dtype=dtype).to(device)
     guidance_scale = torch.tensor([7.5], dtype=dtype).to(device)
 
-    print("Calling forward")
     results = mdl.forward(
         sample=sample,
         timestep=timestep,
-        prompt_embeds=prompt_embeds,
+        encoder_hidden_states=prompt_embeds,
         text_embeds=text_embeds,
         time_ids=time_ids,
         guidance_scale=guidance_scale,
