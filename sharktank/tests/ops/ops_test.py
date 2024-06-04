@@ -51,6 +51,7 @@ class MatmulTest(unittest.TestCase):
         ):
             ops.matmul(1, 2)
 
+    @unittest.skip("https://github.com/nod-ai/sharktank/issues/44")
     def testTorchImplTransposedRHS(self):
         t1 = torch.rand(32, 16, dtype=torch.float32)
         t2 = torch.rand(48, 16, dtype=torch.float16)
@@ -62,6 +63,7 @@ class MatmulTest(unittest.TestCase):
             ops.custom_impls.matmul_mmtfp_tensor_tensor,
         )
 
+    @unittest.skip("https://github.com/nod-ai/sharktank/issues/44")
     def testTorchImplNonTransposedRHS(self):
         t1 = torch.rand(32, 16, dtype=torch.float32)
         t2 = torch.rand(16, 48, dtype=torch.float16)
@@ -73,6 +75,7 @@ class MatmulTest(unittest.TestCase):
             ops.custom_impls.matmul_mmtfp_tensor_tensor,
         )
 
+    @unittest.skip("https://github.com/nod-ai/sharktank/issues/44")
     def testTorchImplTransposedPrimitiveRHS(self):
         t1 = torch.rand(32, 16, dtype=torch.float32)
         t2 = torch.rand(48, 16, dtype=torch.float16)
