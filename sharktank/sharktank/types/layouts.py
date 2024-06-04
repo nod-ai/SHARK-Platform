@@ -37,6 +37,117 @@ __all__ = [
 
 
 @register_quantized_layout
+class TensorScaledLayout(QuantizedLayout):
+    """Quantized layout which combines some scalar scale (`d`) tensor with a
+    quantized sample (`qs`) tensor. An optional offset (`m`) scalar tensor
+    can be provided.
+
+    The dequantization formula:
+
+    ```
+    dtype = d.dtype
+    result = d.to(dtype) * qs + m
+    ```
+
+    If provided, `m` must be of the same dtype as `d`. `qs` must be cast
+    compatible to `d.dtype`. Generally, `qs` will be a lower precision
+    floating point format or an integer dtype.
+
+    While it is rare to see such whole-tensor scaled layouts in modern work
+    on integer models (most such algorithms at least use per-axis, if not
+    some form of blocked), the resurgance of low precision floating point has
+    refreshed this approach and made it viable again. Since this is such a
+    common use that needs to be supported/switched on, we prefer to represent
+    this case as dedicated types vs trying to create a layout that can
+    also represent per-axis.
+    """
+
+    def __init__(
+        self,
+        shape: list[int],
+        d: torch.Tensor,
+        qs: torch.Tensor,
+        *,
+        m: Optional[torch.Tensor] = None,
+    ):
+        self._shape = shape
+        self._d = d
+        self._qs = qs
+        self._m = m
+
+    @classmethod
+    def serialized_name(cls) -> str:
+        return "TensorScaledLayout"
+
+    @classmethod
+    def create(
+        cls,
+        shape: list[int],
+        metadata: dict[str, MetaDataValueType],
+        planes: dict[str, torch.Tensor],
+    ):
+        m = planes.get("m")
+        return cls(shape, planes["d"], planes["qs"], m=m)
+
+    @property
+    def planes(self) -> dict[str, torch.Tensor]:
+        p = {
+            "d": self._d,
+            "qs": self._qs,
+        }
+        if self._m is not None:
+            p["m"] = self._m
+        return p
+
+    @property
+    def shape(self) -> list[int]:
+        """The flattened shape of the logical (unblocked) result."""
+        return self._shape
+
+    @property
+    def d(self) -> torch.Tensor:
+        """Per tensor scale."""
+        return self._d
+
+    @property
+    def m(self) -> Optional[torch.Tensor]:
+        """Per tensor offset."""
+        return self._m
+
+    @property
+    def qs(self) -> torch.Tensor:
+        """Per sample quantized values."""
+        return self._qs
+
+    def dequant(self, dtype: Optional[torch.dtype] = None) -> torch.Tensor:
+        return self.dequant_blocked(dtype)
+
+    def dequant_blocked(self, dtype: Optional[torch.dtype] = None) -> torch.Tensor:
+        d = self.d
+        m = self.m
+        qs = self.qs
+        if dtype is not None:
+            d = d.to(dtype)
+            if m is not None:
+                m = m.to(dtype)
+        else:
+            dtype = d.dtype
+            assert m is None or m.dtype == d.dtype
+        scaled = d * qs.to(dtype)
+        shifted = scaled if m is None else scaled + m
+        return shifted
+
+    def __repr__(self):
+        r = (
+            f"{type(self).__name__}(d({list(self.d.shape)}, dtype={self.d.dtype}), "
+            f"qs({list(self.qs.shape)}, dtype={self.qs.dtype}))"
+        )
+        if self.m is not None:
+            r += f", m({list(self.m.shape)}, dtype={self.m.dtype})"
+        return r
+
+
+@register_quantized_layout
 class BlockScaledLayout(QuantizedLayout):
     """Block-quantized representation which consists of a scale (`d`)
     and offset (`m`) per block in a higher precision type. The offset, if

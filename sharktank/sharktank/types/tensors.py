@@ -486,6 +486,53 @@ class PlanarQuantizedTensor(QuantizedTensor):
 
 
 ########################################################################################
+# Quantizer Tensors
+# These tensors contain quantization parameters that can be used to quantize some other
+# tensor. These are typically stored in a dataset to signal a transformation into
+# a quantized representation for some layer (typically for activations or other dynamic
+# value) for which the underlying parameters themselves are fixed.
+#
+# Note that there is no need for a "DequantizerTensor" or a "dequantize" method on
+# this class, since any `QuantizedTensor` already knows how to dequantize itself.
+########################################################################################
+
+
+class QuantizerTensor(InferenceTensor):
+    """A tensor that knows how to quantize some other tensor."""
+
+    @abstractmethod
+    def quantize(self, t: PrimitiveTensor) -> QuantizedTensor:
+        """Performs a quantizing transformation on t, returning a QuantizeTensor."""
+        ...
+
+
+class StaticScaledQuantizer(QuantizedTensor):
+    """Quantizes to a `TensorScaledLayout` (per-tensor) or (TBD) for per-axis.
+
+    It produces a PlanarQuantizedTensor of a TensorScaledLayout where the `d`
+    (scale) is the reciprocal of the scale specified here.
+    """
+
+    ...
+
+
+class DynamicScaledQuantizer(QuantizedTensor):
+    """Quantizer that produced a `TensorScaledLayout` (per-tensor) based on
+    computing the dynamic scale of the source tensor.
+
+    This is done via a computation like:
+
+    ```
+    finfo = torch.finfo(output_dtype)
+    amax = abs(max(x))
+    scale = finfo.max / amax.clamp(eps)
+    ```
+    """
+
+    ...
+
+
+########################################################################################
 # Sharded tensors
 ########################################################################################
 
