@@ -39,7 +39,9 @@ def setup(vmfb_path, config_path, gguf_path):
 
     device_block_count = model_params.max_seq_len // model_params.block_seq_stride
     cache_params = CacheParams(
-        model=model_params, device_block_count=device_block_count, block_pos_stride=model_params.block_seq_stride
+        model=model_params,
+        device_block_count=device_block_count,
+        block_pos_stride=model_params.block_seq_stride,
     )
 
     disable_leak_checker()

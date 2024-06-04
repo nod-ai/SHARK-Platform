@@ -74,11 +74,15 @@ def main():
         tokens = torch.empty(bs, 64, dtype=torch.int64)
         seq_lens = torch.empty(bs, dtype=torch.int64)
         seq_block_ids = torch.empty(bs, 4, dtype=torch.int64)
-        block_dim = torch.export.Dim("block", max=(hp.context_length - 1) // llama_config.block_seq_stride)
+        block_dim = torch.export.Dim(
+            "block", max=(hp.context_length - 1) // llama_config.block_seq_stride
+        )
         sl_dim = llama_config.block_seq_stride * block_dim
 
         if model.config.kv_cache_type == "paged":
-            cache_state = model.cache.allocate(page_count=hp.context_length // llama_config.block_seq_stride)
+            cache_state = model.cache.allocate(
+                page_count=hp.context_length // llama_config.block_seq_stride
+            )
             page_dim = torch.export.Dim("page")
             cache_state_dynamic_shapes = [{0: page_dim}]
         elif model.config.kv_cache_type == "direct":
@@ -121,10 +125,14 @@ def main():
         seq_lens = torch.ones(bs, dtype=torch.int64)
         start_positions = torch.ones(bs, dtype=torch.int64)
         seq_block_ids = torch.zeros(bs, 4, dtype=torch.int64)
-        block_dim = torch.export.Dim("block", max=(hp.context_length - 1) // llama_config.block_seq_stride)
+        block_dim = torch.export.Dim(
+            "block", max=(hp.context_length - 1) // llama_config.block_seq_stride
+        )
 
         if model.config.kv_cache_type == "paged":
-            cache_state = model.cache.allocate(page_count=hp.context_length // llama_config.block_seq_stride)
+            cache_state = model.cache.allocate(
+                page_count=hp.context_length // llama_config.block_seq_stride
+            )
             page_dim = torch.export.Dim("page")
             cache_state_dynamic_shapes = [{0: page_dim}]
         elif model.config.kv_cache_type == "direct":
