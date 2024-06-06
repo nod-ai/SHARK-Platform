@@ -84,7 +84,7 @@ class TensorScaledLayout(QuantizedLayout):
         planes: dict[str, torch.Tensor],
     ):
         m = planes.get("m")
-        return cls(shape, planes["d"], planes["qs"], m=m)
+        return cls(shape=shape, d=planes["d"], qs=planes["qs"], m=m)
 
     @property
     def planes(self) -> dict[str, torch.Tensor]:

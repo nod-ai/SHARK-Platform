@@ -81,7 +81,7 @@ class SuperBlockOffsetScaled_4_6_LayoutTest(unittest.TestCase):
         bs = 32
 
         l = SuperBlockOffsetScaled_4_6_Layout(
-            [n, k],
+            shape=[n, k],
             d=torch.empty(n, sup, 1, dtype=torch.float32),
             dmin=torch.empty(n, sup, 1, dtype=torch.float32),
             sb_scales_high=torch.empty(n, sup, sub // 4, dtype=torch.uint8),
@@ -108,7 +108,7 @@ class TensorScaledLayoutTest(unittest.TestCase):
         n = 128
         k = 2560
         l = TensorScaledLayout(
-            [n, k],
+            shape=[n, k],
             d=torch.tensor(2.0, dtype=torch.float32),
             qs=torch.tensor([2.0, 3.0, 4.0], dtype=torch.float16),
             m=torch.tensor(5.0, dtype=torch.float32),
