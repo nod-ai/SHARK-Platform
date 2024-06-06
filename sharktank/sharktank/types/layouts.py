@@ -33,13 +33,14 @@ __all__ = [
     "BlockScaledI4Layout",
     "BlockScaledLayout",
     "SuperBlockOffsetScaled_4_6_Layout",
+    "TensorScaledLayout",
 ]
 
 
 @register_quantized_layout
 class TensorScaledLayout(QuantizedLayout):
     """Quantized layout which combines some scalar scale (`d`) tensor with a
-    quantized sample (`qs`) tensor. An optional offset (`m`) scalar tensor
+    quantized sample (`qs`) tensor. An optional offset (`m`) tensor
     can be provided.
 
     The dequantization formula:
@@ -53,21 +54,17 @@ class TensorScaledLayout(QuantizedLayout):
     compatible to `d.dtype`. Generally, `qs` will be a lower precision
     floating point format or an integer dtype.
 
-    While it is rare to see such whole-tensor scaled layouts in modern work
-    on integer models (most such algorithms at least use per-axis, if not
-    some form of blocked), the resurgance of low precision floating point has
-    refreshed this approach and made it viable again. Since this is such a
-    common use that needs to be supported/switched on, we prefer to represent
-    this case as dedicated types vs trying to create a layout that can
-    also represent per-axis.
+    If d/m are scalar tensors, then this implements whole tensor quantization.
+    Otherwise, they must be broadcast to the axis along which scaling is
+    performed.
     """
 
     def __init__(
         self,
+        *,
         shape: list[int],
         d: torch.Tensor,
         qs: torch.Tensor,
-        *,
         m: Optional[torch.Tensor] = None,
     ):
         self._shape = shape

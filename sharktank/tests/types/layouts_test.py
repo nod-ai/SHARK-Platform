@@ -97,5 +97,33 @@ class SuperBlockOffsetScaled_4_6_LayoutTest(unittest.TestCase):
         self.assertEqual(l.metadata, l_new.metadata)
 
 
+class TensorScaledLayoutTest(unittest.TestCase):
+    def testRegistered(self):
+        self.assertIs(
+            TensorScaledLayout,
+            REGISTERED_LAYOUT_CLASSES[TensorScaledLayout.serialized_name()],
+        )
+
+    def testRoundtripWithOffset(self):
+        n = 128
+        k = 2560
+        l = TensorScaledLayout(
+            [n, k],
+            d=torch.tensor(2.0, dtype=torch.float32),
+            qs=torch.tensor([2.0, 3.0, 4.0], dtype=torch.float16),
+            m=torch.tensor(5.0, dtype=torch.float32),
+        )
+        d = l.dequant()
+        torch.testing.assert_close(
+            d, torch.tensor([9.0, 11.0, 13.0], dtype=torch.float32)
+        )
+
+        l_new = TensorScaledLayout.create(l.shape, l.metadata, l.planes)
+        d = l_new.dequant()
+        torch.testing.assert_close(
+            d, torch.tensor([9.0, 11.0, 13.0], dtype=torch.float32)
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
