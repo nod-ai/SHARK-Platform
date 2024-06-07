@@ -13,6 +13,7 @@ __all__ = [
     "promote_linear_i2_block_to_i8",
     "promote_linear_i4_block_to_i8",
     "promote_linear_i6_block_to_i8",
+    "saturate_cast",
 ]
 
 
@@ -144,3 +145,14 @@ def _view_uint8_tensor(data: torch.Tensor) -> torch.Tensor:
         return data.view(torch.uint8)
     else:
         raise AssertionError(f"Expected tensor to by uint8 or int8. Got: {dtype}")
+
+
+def saturate_cast(t: torch.Tensor, dtype: torch.dtype) -> torch.Tensor:
+    """Does a saturating cast to the given dtype. For floating point
+    values, this is a simple cast. For integer types, it will saturate to the
+    min/max range.
+    """
+    if dtype.is_floating_point:
+        return t.to(dtype=dtype)
+    iinfo = torch.iinfo(dtype)
+    return t.clamp(iinfo.min, iinfo.max).to(dtype=dtype)

@@ -26,6 +26,10 @@ from .layouts import (
     TensorScaledLayout,
 )
 
+from .layout_utils import (
+    saturate_cast,
+)
+
 from .tensors import (
     InferenceTensor,
     InferenceTensorMetadata,
@@ -48,8 +52,33 @@ __all__ = [
 class QuantizerTensor(InferenceTensor):
     """A tensor that knows how to quantize some other tensor."""
 
+    def quantize(
+        self, t: torch.Tensor | InferenceTensor, *, name: str = UnnamedTensorName
+    ) -> QuantizedTensor:
+        """Quantize from an arbitrary source tensor (framework or inference).
+
+        This has some additional heuristics for unpacking and rescaling
+        of InferenceTensors.
+        """
+        if isinstance(t, InferenceTensor):
+            if isinstance(t, PrimitiveTensor):
+                raw_tensor = t.as_torch()
+            elif isinstance(t, QuantizedTensor):
+                import warnings
+
+                warnings.warn(f"Requantizing already quantized tensor {t} to {self}")
+                raw_tensor = t.unpack().dequant()
+            else:
+                raise TypeError(
+                    f"Unsupported tensor type in QuantizerTensor.quantize: {type(t)}"
+                )
+        else:
+            assert isinstance(t, torch.Tensor)
+            raw_tensor = t
+        return self._quantize_raw_tensor(raw_tensor, name=name)
+
     @abstractmethod
-    def quantize(self, t: PrimitiveTensor) -> QuantizedTensor:
+    def _quantize_raw_tensor(self, t: torch.Tensor, *, name: str) -> QuantizedTensor:
         """Performs a quantizing transformation on t, returning a QuantizeTensor."""
         ...
 
@@ -95,7 +124,7 @@ class StaticScaledQuantizer(QuantizerTensor):
         else:
             assert len(self._scale.shape) == 0, "Expected per-tensor scale to be 0D"
 
-    def quantize(self, t: PrimitiveTensor) -> QuantizedTensor:
+    def _quantize_raw_tensor(self, t: torch.Tensor, *, name: str) -> QuantizedTensor:
         """Performs a quantizing transformation on t, returning a QuantizeTensor."""
         shape = list(t.shape)
         axis = self._axis
@@ -103,11 +132,12 @@ class StaticScaledQuantizer(QuantizerTensor):
         if axis is None:
             # Per tensor.
             if offset is None:
-                qs = (t * self._scale).to(dtype=self.dtype)
+                qs = saturate_cast(t * self._scale, self.dtype)
             else:
-                qs = ((t - offset) * self._scale).to(dtype=self.dtype)
+                qs = saturate_cast((t - offset) * self._scale, dtype=self.dtype)
             return PlanarQuantizedTensor(
                 shape=shape,
+                name=name,
                 layout=TensorScaledLayout(
                     shape=shape,
                     d=self._reciprocal_scale,
@@ -135,6 +165,7 @@ class StaticScaledQuantizer(QuantizerTensor):
                 qs = ((t - broadcast_offset) * broadcast_scale).to(dtype=self.dtype)
             return PlanarQuantizedTensor(
                 shape=shape,
+                name=name,
                 layout=TensorScaledLayout(
                     shape=shape,
                     d=broadcast_reciprocal_scale,
@@ -253,7 +284,8 @@ class StaticScaledQuantizer(QuantizerTensor):
         )
 
 
-class DynamicScaledQuantizer(QuantizedTensor):
+@register_inference_tensor
+class DynamicScaledQuantizer(QuantizerTensor):
     """Quantizer that produced a `TensorScaledLayout` (per-tensor) based on
     computing the dynamic scale of the source tensor.
 
@@ -264,6 +296,95 @@ class DynamicScaledQuantizer(QuantizedTensor):
     amax = abs(max(x))
     scale = finfo.max / amax.clamp(eps)
     ```
+
+    Note that this quantizer has only been used for testing and bringup, and
+    it could use some more diligence done on the algorithm for determining
+    scales in a dtype specific way.
     """
 
-    ...
+    def __init__(
+        self,
+        *,
+        dtype: torch.dtype,
+        name: str = UnnamedTensorName,
+    ):
+        super().__init__(shape=(), name=name)
+        self._dtype = dtype
+        assert (
+            dtype.is_floating_point or dtype.is_signed
+        ), f"DynamicScaledQuantizer dtype must be fp or signed but got {dtype}"
+
+    def _quantize_raw_tensor(self, t: torch.Tensor, *, name: str) -> QuantizedTensor:
+        dtype = self._dtype
+        amax = torch.max(torch.abs(t))
+        if dtype.is_floating_point:
+            finfo = torch.finfo(dtype)
+            scale = finfo.max / amax.clamp(finfo.eps)
+            reciprocal_scale = 1 / scale
+            qs = saturate_cast(t * scale, self.dtype)
+        else:
+            eps = 1e-4
+            iinfo = torch.iinfo(dtype)
+            scale = iinfo.max / amax.clamp(eps)
+            reciprocal_scale = 1.0 / scale
+            qs = saturate_cast(t * scale, self.dtype)
+        shape = list(t.shape)
+        return PlanarQuantizedTensor(
+            shape=shape,
+            name=name,
+            layout=TensorScaledLayout(
+                shape=shape,
+                d=reciprocal_scale,
+                qs=qs,
+            ),
+        )
+
+    @property
+    def dtype(self) -> torch.dtype:
+        return self._dtype
+
+    @classmethod
+    def serialized_name(cls) -> str:
+        return "DynamicScaledQuantizer"
+
+    @classmethod
+    def create(
+        cls,
+        name: str,
+        raw_tensors: dict[str, torch.Tensor],
+        extra_properties: dict[str, Any],
+    ):
+        try:
+            dtype_name = extra_properties["dtype"]
+        except KeyError as e:
+            raise IOError("Missing property") from e
+        dtype = _serialized_name_to_dtype(dtype_name)
+        return cls(
+            name=name,
+            dtype=dtype,
+        )
+
+    @property
+    def globals(self) -> dict[str, torch.Tensor]:
+        return {}
+
+    def add_to_archive(self, builder: ShardedArchiveBuilder) -> InferenceTensorMetadata:
+        """Adds this tensor to the global archive."""
+        extra_properties = {"dtype": _dtype_to_serialized_name(self._dtype)}
+        raw_tensors = {}
+        return InferenceTensorMetadata(
+            self.serialized_name(),
+            raw_tensors=raw_tensors,
+            extra_properties=extra_properties,
+        )
+
+    def _clone_with_globals(
+        self, new_globals: dict[str, torch.Tensor]
+    ) -> "InferenceTensor":
+        return DynamicScaledQuantizer(
+            name=self.name,
+            dtype=self.dtype,
+        )
+
+    def __repr__(self):
+        return f"DynamicScaledQuantizer({self.name}) " f"-> dtype={self._dtype})"

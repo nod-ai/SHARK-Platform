@@ -123,18 +123,26 @@ class Theta:
         accum("", self._tensors)
         return results
 
-    def tensor(self, *name_path: Union[str, int]) -> InferenceTensor:
-        current_ts = self._tensors
+    def tensor(self, *name_path: str | int) -> InferenceTensor:
+        t = self.optional_tensor(*name_path)
+        if t is None:
+            raise KeyError(
+                f"Could not find tensor {name_path[-1]} in theta {name_path[0:-1]}"
+            )
+        return t
+
+    def optional_tensor(self, *name_path: str | int) -> Optional[InferenceTensor]:
         try:
+            current_ts = self._tensors
             for part in name_path[0:-1]:
                 current_ts = current_ts[str(part)]
             last = name_path[-1]
-            t = current_ts[str(last)]
         except KeyError:
             raise KeyError(
                 f"Unknown parameter {name_path} (in Theta object "
                 f"containing {self.keys})"
             )
+        t = current_ts.get(str(last))
         return t
 
     @property
