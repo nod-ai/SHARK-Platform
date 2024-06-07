@@ -47,7 +47,7 @@ class TensorScaledLayout(QuantizedLayout):
 
     ```
     dtype = d.dtype
-    result = d.to(dtype) * qs + m
+    result = d.to(dtype) * (qs - m)
     ```
 
     If provided, `m` must be of the same dtype as `d`. `qs` must be cast
@@ -125,14 +125,14 @@ class TensorScaledLayout(QuantizedLayout):
         qs = self.qs
         if dtype is not None:
             d = d.to(dtype)
-            if m is not None:
-                m = m.to(dtype)
         else:
             dtype = d.dtype
-            assert m is None or m.dtype == d.dtype
-        scaled = d * qs.to(dtype)
-        shifted = scaled if m is None else scaled + m
-        return shifted
+        qs = qs.to(dtype=dtype)
+        if m is not None:
+            m = m.to(dtype)
+            return (qs - m) * d
+        else:
+            return qs * d
 
     def __repr__(self):
         r = (

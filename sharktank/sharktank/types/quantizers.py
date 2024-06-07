@@ -91,8 +91,13 @@ class StaticScaledQuantizer(QuantizerTensor):
     TensorScaledLayout where the `d` (scale) is the reciprocal of the scale
     specified here.
 
-    An optional `offset` can be provided. If provided, when quantizing, this
-    will be subtracted from the value. Upon dequantizing, it will be added.
+    An optional pre-scaled `offset` can be provided that:
+
+    * Quantizing: Will be added to the scaled value prior to rounding/clamping.
+    * Dequantizing: Will be subtracted from the quantized value prior to
+      scaling.
+
+    If provided, the offset must be of the specified target `dtype`.
     """
 
     def __init__(
@@ -118,7 +123,7 @@ class StaticScaledQuantizer(QuantizerTensor):
         assert self._scale.dtype == self._reciprocal_scale.dtype
         if self._offset is not None:
             assert self._offset.shape == self._scale.shape
-            assert self._offset.dtype == self._scale.dtype
+            assert self._offset.dtype == dtype
         if self._axis is not None:
             assert len(self._scale.shape) == 1, "Expected per-axis scale to be 1D"
         else:
@@ -132,11 +137,9 @@ class StaticScaledQuantizer(QuantizerTensor):
         if axis is None:
             # Per tensor.
             if offset is None:
-                qs = saturate_cast(t * self._scale, self.dtype, round_int=True)
+                qs = saturate_cast(t * self._scale, dtype=self.dtype)
             else:
-                qs = saturate_cast(
-                    (t - offset) * self._scale, dtype=self.dtype, round_int=True
-                )
+                qs = saturate_cast(t * self._scale + offset, dtype=self.dtype)
             return PlanarQuantizedTensor(
                 shape=shape,
                 name=name,
@@ -161,10 +164,12 @@ class StaticScaledQuantizer(QuantizerTensor):
             broadcast_reciprocal_scale = reciprocal_scale.reshape(scale_shape)
             if offset is None:
                 broadcast_offset = None
-                qs = (t * broadcast_scale).to(dtype=self.dtype)
+                qs = saturate_cast(t * broadcast_scale, dtype=self.dtype)
             else:
                 broadcast_offset = offset.reshape(scale_shape)
-                qs = ((t - broadcast_offset) * broadcast_scale).to(dtype=self.dtype)
+                qs = saturate_cast(
+                    t * broadcast_scale + broadcast_offset, dtype=self.dtype
+                )
             return PlanarQuantizedTensor(
                 shape=shape,
                 name=name,

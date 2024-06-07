@@ -54,7 +54,11 @@ def _load_theta(st_source) -> Theta:
     return Theta(tensors)
 
 
-def apply_per_layer_quant(theta: Theta, qp):
+def apply_per_layer_quant(
+    ds: Dataset, layer_name: str, qp, updated_tensors: dict[str, InferenceTensor]
+):
+    layer_theta = ds.root_theta(layer_name)
+
     # The config file has tensors as 1d and a _shape suffixed array with the
     # concrete shape.
     def _get_json_tensor(name: str, dtype: torch.dtype) -> Optional[torch.Tensor]:
@@ -65,14 +69,17 @@ def apply_per_layer_quant(theta: Theta, qp):
         return torch.tensor(data_1d, dtype=dtype).reshape(shape)
 
     input_scale = _get_json_tensor("input_scale", torch.float32)
-    input_zp = _get_json_tensor("input_zp", torch.int32)
+    input_zp = _get_json_tensor("input_zp", torch.uint8)
     weight_scale = _get_json_tensor("weight_scale", torch.float32)
-    weight_zp = _get_json_tensor("weight_zp", torch.int32)
+    weight_zp = _get_json_tensor("weight_zp", torch.uint8)
     assert (
         weight_scale is not None and weight_zp is not None
     ), f"Could not find weight scale (in {qp.keys()})"
+    assert input_scale is not None, f"Could not find input scale (in {qp.keys()})"
 
-    weight = theta.tensor("weight")
+    # Weight scaling.
+    weight = layer_theta.tensor("weight")
+    weight_dtype = weight.as_torch().dtype
     # TODO: There is ambiguity with respect to the axis of quantization and the
     # shape of the scale. I think the intent was that the scale should have a
     # broadcast ready shape, but they are all 1d. This model only does axis-0
@@ -80,28 +87,53 @@ def apply_per_layer_quant(theta: Theta, qp):
     assert weight.shape[0] == weight_scale.shape[0], "Mismatched quantization axis"
 
     # There is an implicit assumption that the weight is asym (uint8) quantized.
-    # Our quantizer uses scale/offset style:
-    #  round(t - offset) * scale)
-    #  round(t * scale - offset * scale)
-    # Whereas the params here are scale/zero-point:
-    #  round(t / scale + zp)
-    # We haven't used our infra for much asymmetric quant and may want to adapt
-    # zero point handling if rounding/precision is an issue.
-    quant_scale = 1.0 / weight_scale
-    quant_rscale = weight_scale
-    quant_offset = torch.neg(weight_zp * quant_rscale)
-    quantizer = StaticScaledQuantizer(
-        scale=quant_scale,
-        reciprocal_scale=quant_rscale,
+    # Our quantizer uses scale/offset nomenclature. The offset maps to
+    # zero-point, and the scale maps to the *dequant* scale (so terms differ
+    # by reciprocal).
+    weight_quantizer = StaticScaledQuantizer(
+        scale=1.0 / weight_scale,
+        reciprocal_scale=weight_scale,
         axis=0,
-        offset=quant_offset,
+        offset=None if torch.count_nonzero(weight_zp) == 0 else weight_zp,
         dtype=torch.uint8,
     )
-    weight_quant = quantizer.quantize(weight)
-    layout = weight_quant.unpack()
-    weight_dequant = layout.dequant()
-    print(f"ORIG:\n{weight.as_torch()[0]}")
-    print(f"DEQUANT:\n{weight_dequant[0]}")
+    weight_quant = weight_quantizer.quantize(weight, name=weight.name)
+    updated_tensors[weight_quant.name] = weight_quant
+    # Spot check that things look sane.
+    # weight_dequant = weight_quant.unpack().dequant()
+    # print(f"ORIG:\n{weight.as_torch()[0]}")
+    # print(f"DEQUANT:\n{weight_dequant[0]}")
+
+    # Input scaling.
+    # Assume per tensor scaling of input.
+    assert torch.count_nonzero(input_zp) == 0
+    assert len(input_scale.shape) == 0
+    input_quantizer = StaticScaledQuantizer(
+        name=f"{layer_name}.q_input",
+        scale=1.0 / input_scale,
+        reciprocal_scale=input_scale,
+        dtype=torch.int8,
+    )
+    updated_tensors[input_quantizer.name] = input_quantizer
+
+    # Output dequant back to high precision.
+    output_scale = input_quantizer.scale * weight_quantizer.scale
+    output_quantizer = StaticScaledQuantizer(
+        name=f"{layer_name}.dq_output",
+        scale=output_scale,
+        axis=0,
+        dtype=weight_dtype,
+    )
+    updated_tensors[output_quantizer.name] = output_quantizer
+
+    # Optional activation pre-multiplier.
+    smoothquant_mul = _get_json_tensor("smoothquant_mul", dtype=weight_dtype)
+    if smoothquant_mul is not None:
+        premul_input = DefaultPrimitiveTensor(
+            name=f"{layer_name}.premul_input",
+            data=smoothquant_mul,
+        )
+        updated_tensors[premul_input.name] = premul_input
 
 
 def main():
@@ -144,16 +176,19 @@ def main():
     # The quant_params_struct has quantization parameter structs keyed by full
     # layer name. We process each of these in turn to produce a per-layer
     # quantization scheme where no quantized tensors escape their layer.
+    updated_tensors: dict[str, InferenceTensor] = {}
     for layer_name, qp in quant_params_struct.items():
         print(f"Applying per-layer quants: {layer_name}")
-        layer_theta = theta(layer_name)
-        apply_per_layer_quant(layer_theta, qp)
-        break
+        apply_per_layer_quant(ds, layer_name, qp, updated_tensors)
+
+    # Apply updates into a new Theta.
+    flat_tensors = theta.flatten()
+    flat_tensors.update(updated_tensors)
+    ds.root_theta = Theta(flat_tensors)
 
     # TODO: Post-process to introduce fused cross-layer connections.
-    return
 
-    dataset.save(args.output_irpa_file, io_report_callback=print)
+    ds.save(args.output_irpa_file, io_report_callback=print)
 
 
 if __name__ == "__main__":
