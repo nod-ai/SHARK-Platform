@@ -4,12 +4,8 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-"""Imports huggingface config and params into a Dataset.
-
-This tool simply imports tensors and config with no transformation given a
-config.json and a safetensors file. Once sharding configurations are worked
-out, this should be replaced with a more general tool that can source from
-either HF or an existing IRPA file and transform/save in one step.
+"""Imports Brevitas pre-processed weights and quantization config into a 
+Dataset.
 
 Usage:
   python -m sharktank.models.punet.import_hf_dataset \
@@ -19,6 +15,9 @@ Usage:
 The resulting dataset has all tensors as nested in the original model.
 Properties are separated into a "meta" dict (for "_" prefixed props) and an
 "hparams" dict.
+
+Default flag values assume that there is a quant_param.json and 
+params.safetensors adjacent to the HF config.json file.
 """
 from typing import Optional
 
