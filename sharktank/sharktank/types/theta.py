@@ -124,6 +124,7 @@ class Theta:
         return results
 
     def tensor(self, *name_path: str | int) -> InferenceTensor:
+        name_path = _norm_name_path(name_path)
         t = self.optional_tensor(*name_path)
         if t is None:
             raise KeyError(
@@ -132,6 +133,7 @@ class Theta:
         return t
 
     def optional_tensor(self, *name_path: str | int) -> Optional[InferenceTensor]:
+        name_path = _norm_name_path(name_path)
         try:
             current_ts = self._tensors
             for part in name_path[0:-1]:
@@ -153,7 +155,8 @@ class Theta:
     def tensors(self) -> Collection[InferenceTensor]:
         return [v for v in self._tensors.values() if isinstance(v, InferenceTensor)]
 
-    def __call__(self, *name_path: Union[str, int]) -> "Theta":
+    def __call__(self, *name_path: str | int) -> "Theta":
+        name_path = _norm_name_path(name_path)
         current_ts = self._tensors
         try:
             for part in name_path:
@@ -207,6 +210,14 @@ def _flat_to_nested_dict(flat: dict[str, Any]) -> dict[str, Any]:
     for name, value in flat.items():
         add_to_dict(name, value)
     return nested
+
+
+def _norm_name_path(name_parts) -> list[str]:
+    accum = []
+    for part in name_parts:
+        part = str(part)
+        accum.extend(part.split("."))
+    return accum
 
 
 ################################################################################

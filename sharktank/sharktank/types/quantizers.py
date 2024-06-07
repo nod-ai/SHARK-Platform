@@ -132,9 +132,11 @@ class StaticScaledQuantizer(QuantizerTensor):
         if axis is None:
             # Per tensor.
             if offset is None:
-                qs = saturate_cast(t * self._scale, self.dtype)
+                qs = saturate_cast(t * self._scale, self.dtype, round_int=True)
             else:
-                qs = saturate_cast((t - offset) * self._scale, dtype=self.dtype)
+                qs = saturate_cast(
+                    (t - offset) * self._scale, dtype=self.dtype, round_int=True
+                )
             return PlanarQuantizedTensor(
                 shape=shape,
                 name=name,
@@ -321,13 +323,13 @@ class DynamicScaledQuantizer(QuantizerTensor):
             finfo = torch.finfo(dtype)
             scale = finfo.max / amax.clamp(finfo.eps)
             reciprocal_scale = 1 / scale
-            qs = saturate_cast(t * scale, self.dtype)
+            qs = saturate_cast(t * scale, self.dtype, round_int=True)
         else:
             eps = 1e-4
             iinfo = torch.iinfo(dtype)
             scale = iinfo.max / amax.clamp(eps)
             reciprocal_scale = 1.0 / scale
-            qs = saturate_cast(t * scale, self.dtype)
+            qs = saturate_cast(t * scale, self.dtype, round_int=True)
         shape = list(t.shape)
         return PlanarQuantizedTensor(
             shape=shape,

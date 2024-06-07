@@ -147,7 +147,9 @@ def _view_uint8_tensor(data: torch.Tensor) -> torch.Tensor:
         raise AssertionError(f"Expected tensor to by uint8 or int8. Got: {dtype}")
 
 
-def saturate_cast(t: torch.Tensor, dtype: torch.dtype) -> torch.Tensor:
+def saturate_cast(
+    t: torch.Tensor, dtype: torch.dtype, round_int: bool = True
+) -> torch.Tensor:
     """Does a saturating cast to the given dtype. For floating point
     values, this is a simple cast. For integer types, it will saturate to the
     min/max range.
@@ -155,4 +157,6 @@ def saturate_cast(t: torch.Tensor, dtype: torch.dtype) -> torch.Tensor:
     if dtype.is_floating_point:
         return t.to(dtype=dtype)
     iinfo = torch.iinfo(dtype)
+    if round_int:
+        t = torch.round(t)
     return t.clamp(iinfo.min, iinfo.max).to(dtype=dtype)
