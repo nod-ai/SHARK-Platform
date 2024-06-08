@@ -7,5 +7,6 @@
 from .layouts import *
 from .tensors import *
 from .theta import *
+from .quantizers import *
 
 from . import gguf_interop

@@ -25,14 +25,15 @@ def main(args: list[str]):
     dataset = cli.get_input_dataset(args)
     hp = configs.LlamaHParams.from_gguf_props(dataset.properties)
     llama_config = LlamaModelConfig(hp)
-    llama_config.kv_cache_type = "paged"
+    llama_config.kv_cache_type = "direct"
     llama_config.activation_dtype = torch.float16
     model = PagedLlamaModelV1(dataset.root_theta, llama_config)
 
-    cache_state = model.cache.allocate(page_count=128)
+    # bs ("batch size") == 1
+    cache_state = model.cache.allocate(bs=1)
 
     start_index = 0
-    next_batch = torch.tensor(
+    tokens = torch.tensor(
         [
             [
                 1,
@@ -53,51 +54,27 @@ def main(args: list[str]):
                 0,
             ]
             + 48 * [0],
-            [
-                1,
-                1059,
-                31871,
-                1217,
-                322,
-                31871,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-            ]
-            + 48 * [0],
-            64 * [0],
-            64 * [0],
         ]
     )
-    assert next_batch.shape[1] % model.cache.block_seq_stride == 0
+    assert tokens.shape[1] % model.cache.block_seq_stride == 0
     seq_block_ids = torch.tensor(
         [
             [127, 0, 0, 0],
-            [126, 0, 0, 0],
-            [0, 0, 0, 0],
-            [0, 0, 0, 0],
         ]
     )
 
     # Important: Do not use a sequence length of 0 for empty batch slots
     # as it will cause softmax to nan due to a mask of all -inf. This then
     # propagates and causes badness.
-    seq_lens = torch.tensor([12, 6, 1, 1])
+    seq_lens = torch.tensor([12])
 
     attention_mask = model.attention_mask(
-        model.input_mask(seq_lens, next_batch.shape[1]),
+        model.input_mask(seq_lens, tokens.shape[1]),
     )
 
     print(f"Step {start_index}")
     logits = model.prefill(
-        next_batch,
+        tokens,
         attention_mask=attention_mask,
         seq_block_ids=seq_block_ids,
         cache_state=cache_state,
@@ -107,15 +84,16 @@ def main(args: list[str]):
         1
     )
     print(f"  : tokens = {tokens}")
-    print(f"  : cache[127] = {cache_state[0][127]}")
-    print(f"  : cache[126] = {cache_state[0][126]}")
-    print(f"  : cache[0] = {cache_state[0][0]}")
-    print(f"  : cache[1] = {cache_state[0][1]}")
+    # TODO(scotttodd): flatten then print? or index into full tensor?
+    # print(f"  : cache[127] = {cache_state[0][127]}")
+    # print(f"  : cache[126] = {cache_state[0][126]}")
+    # print(f"  : cache[0] = {cache_state[0][0]}")
+    # print(f"  : cache[1] = {cache_state[0][1]}")
 
     # Decode a step.
     print("Decoding...")
     print(tokens.shape, tokens)
-    start_positions = torch.tensor([12, 6, 0, 0])
+    start_positions = torch.tensor([12])
     seq_lens = seq_lens + 1
     decode_attention_mask = model.decode_attention_mask(
         model.input_mask(
@@ -130,14 +108,12 @@ def main(args: list[str]):
         seq_block_ids=seq_block_ids,
         cache_state=cache_state,
     )
-    tokens = torch.tensor(
-        model.extract_tokens_from_logits(logits, [1, 1, 1, 1])
-    ).unsqueeze(1)
+    tokens = torch.tensor(model.extract_tokens_from_logits(logits, [1])).unsqueeze(1)
     print(f"  : tokens = {tokens}")
-    print(f"  : cache[127] = {cache_state[0][127]}")
-    print(f"  : cache[126] = {cache_state[0][126]}")
-    print(f"  : cache[0] = {cache_state[0][0]}")
-    print(f"  : cache[1] = {cache_state[0][1]}")
+    # print(f"  : cache[127] = {cache_state[0][127]}")
+    # print(f"  : cache[126] = {cache_state[0][126]}")
+    # print(f"  : cache[0] = {cache_state[0][0]}")
+    # print(f"  : cache[1] = {cache_state[0][1]}")
 
     # from sharktank.models import llama
     # print(f"+++PREFILL XK = {llama.DEBUG_PREFILL_XK.shape}\n{llama.DEBUG_PREFILL_XK}")
@@ -158,9 +134,9 @@ def main(args: list[str]):
                 super().__init__()
                 self.add_module("prefill", model)
 
-            def forward(self, next_batch, attention_mask, seq_block_ids, *cache_state):
+            def forward(self, tokens, attention_mask, seq_block_ids, *cache_state):
                 return self.prefill.prefill(
-                    next_batch,
+                    tokens,
                     attention_mask=attention_mask,
                     seq_block_ids=seq_block_ids,
                     cache_state=list(cache_state),
@@ -168,7 +144,7 @@ def main(args: list[str]):
 
         infmod = InferenceModule()
         prog = torch.export.export(
-            infmod, (next_batch, attention_mask, seq_block_ids) + tuple(cache_state)
+            infmod, (tokens, attention_mask, seq_block_ids) + tuple(cache_state)
         )
 
         print(f"FX prog:", prog)

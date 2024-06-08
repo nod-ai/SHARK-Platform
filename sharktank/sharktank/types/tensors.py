@@ -621,3 +621,69 @@ class ShardedPrimitiveTensor(ShardedTensor):
             f"shard_dim={self.shard_dim}, shard_count={len(self._shards)} "
             f"of {self.shards[0].shape})"
         )
+
+
+########################################################################################
+# Serialization helpers
+########################################################################################
+
+
+def _dtype_to_serialized_name(dtype: torch.dtype) -> str:
+    try:
+        return _DTYPE_TO_NAME[dtype]
+    except KeyError as e:
+        raise KeyError(
+            f"Missing mapping for dtype {dtype}. Please add to the _NAME_TO_DTYPE dict"
+        ) from e
+
+
+def _serialized_name_to_dtype(dtype_name: str) -> torch.dtype:
+    try:
+        return _NAME_TO_DTYPE[dtype_name]
+    except KeyError as e:
+        raise KeyError(
+            f"Missing mapping for dtype '{dtype_name}'. Please add to the _NAME_TO_DTYPE dict"
+        ) from e
+
+
+_NAME_TO_DTYPE: dict[str, torch.dtype] = {
+    "float32": torch.float32,
+    "float64": torch.float64,
+    "complex64": torch.complex64,
+    "complex128": torch.complex128,
+    "float16": torch.float16,
+    "bfloat16": torch.bfloat16,
+    "uint8": torch.uint8,
+    "int8": torch.int8,
+    "int16": torch.int16,
+    "int32": torch.int32,
+    "int64": torch.int64,
+    "bool": torch.bool,
+}
+
+
+def _maybe_dtype(*names: str):
+    for name in names:
+        try:
+            cls = getattr(torch, name)
+        except AttributeError:
+            pass
+        else:
+            _NAME_TO_DTYPE[name] = cls
+
+
+_maybe_dtype(
+    "float8_e4m3fn",
+    "float8_e4m3fnuz",
+    "float8_e5m2",
+    "float8_e5m2fnuz",
+    "uint1",
+    "uint2",
+    "uint3",
+    "uint4",
+    "uint5",
+    "uint6",
+    "uint7",
+)
+
+_DTYPE_TO_NAME: dict[torch.dtype, str] = {v: k for k, v in _NAME_TO_DTYPE.items()}
