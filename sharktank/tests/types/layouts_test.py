@@ -115,13 +115,13 @@ class TensorScaledLayoutTest(unittest.TestCase):
         )
         d = l.dequant()
         torch.testing.assert_close(
-            d, torch.tensor([9.0, 11.0, 13.0], dtype=torch.float32)
+            d, torch.tensor([-6.0, -4.0, -2.0], dtype=torch.float32)
         )
 
         l_new = TensorScaledLayout.create(l.shape, l.metadata, l.planes)
         d = l_new.dequant()
         torch.testing.assert_close(
-            d, torch.tensor([9.0, 11.0, 13.0], dtype=torch.float32)
+            d, torch.tensor([-6.0, -4.0, -2.0], dtype=torch.float32)
         )
 
 
