@@ -4,7 +4,7 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-"""Imports Brevitas pre-processed weights and quantization config into a 
+"""Imports Brevitas pre-processed weights and quantization config into a
 Dataset.
 
 Usage:
@@ -16,7 +16,7 @@ The resulting dataset has all tensors as nested in the original model.
 Properties are separated into a "meta" dict (for "_" prefixed props) and an
 "hparams" dict.
 
-Default flag values assume that there is a quant_param.json and 
+Default flag values assume that there is a quant_param.json and
 params.safetensors adjacent to the HF config.json file.
 """
 from typing import Optional
