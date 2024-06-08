@@ -277,6 +277,7 @@ class StaticScaledQuantizer(QuantizerTensor):
         return StaticScaledQuantizer(
             name=self.name,
             dtype=self.dtype,
+            axis=self.axis,
             scale=new_globals[f"{self.name}:scale"],
             reciprocal_scale=new_globals[f"{self.name}:rscale"],
             offset=new_globals.get(offset_name),

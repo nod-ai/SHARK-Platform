@@ -67,9 +67,9 @@ def apply_per_layer_quant(
         shape = qp[f"{name}_shape"]
         return torch.tensor(data_1d, dtype=dtype).reshape(shape)
 
-    input_scale = _get_json_tensor("input_scale", torch.float32)
+    input_scale = _get_json_tensor("input_scale", torch.float16)
     input_zp = _get_json_tensor("input_zp", torch.uint8)
-    weight_scale = _get_json_tensor("weight_scale", torch.float32)
+    weight_scale = _get_json_tensor("weight_scale", torch.float16)
     weight_zp = _get_json_tensor("weight_zp", torch.uint8)
     assert (
         weight_scale is not None and weight_zp is not None
@@ -116,11 +116,9 @@ def apply_per_layer_quant(
     updated_tensors[input_quantizer.name] = input_quantizer
 
     # Output dequant back to high precision.
-    output_scale = input_quantizer.scale * weight_quantizer.scale
-    output_quantizer = StaticScaledQuantizer(
+    # TODO: We are still working out output quantizer and how it interplays.
+    output_quantizer = DynamicScaledQuantizer(
         name=f"{layer_name}.dq_output",
-        scale=output_scale,
-        axis=0,
         dtype=weight_dtype,
     )
     updated_tensors[output_quantizer.name] = output_quantizer

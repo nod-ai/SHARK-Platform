@@ -18,7 +18,6 @@ from .config import *
 
 __all__ = [
     "ACTIVATION_FUNCTIONS",
-    "Conv2DLayer",
     "CrossAttnUpDownBlock2D",
     "GroupNormLayer",
     "TimestepEmbedding",
@@ -606,39 +605,6 @@ class TimestepProjection(nn.Module):
 ################################################################################
 # Layers that need to be made common once stable.
 ################################################################################
-
-
-class Conv2DLayer(ThetaLayer):
-    """Theta based conv2d layer. This assumes weight/bias naming as per the nn.Conv2D
-    module ("weight", "bias").
-
-    """
-
-    def __init__(
-        self, theta: Theta, padding: Optional[Tuple[int, int]] = None, stride: int = 1
-    ):
-        super().__init__(theta)
-        assert padding is None or len(padding) == 2
-        self.padding = padding
-        self.stride = stride
-        self.dilation = 1
-        self.groups = 1
-
-    def forward(self, input: torch.Tensor) -> torch.Tensor:
-        weight = self.theta.tensor("weight")
-        if "bias" in self.theta.keys:
-            bias = self.theta.tensor("bias")
-        else:
-            bias = None
-        return ops.conv2d(
-            input,
-            weight=weight,
-            bias=bias,
-            stride=self.stride,
-            padding=self.padding,
-            dilation=self.dilation,
-            groups=self.groups,
-        )
 
 
 class GroupNormLayer(ThetaLayer):

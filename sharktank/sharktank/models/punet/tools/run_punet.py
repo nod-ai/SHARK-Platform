@@ -4,7 +4,11 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
+from pathlib import Path
+
 import torch
+
+from shark_turbine import aot
 
 from ..model import Unet2DConditionModel, ClassifierFreeGuidanceUnetModel
 
@@ -16,6 +20,7 @@ def main():
     cli.add_input_dataset_options(parser)
     parser.add_argument("--device", default="cuda:0", help="Torch device to run on")
     parser.add_argument("--dtype", default="float16", help="DType to run in")
+    parser.add_argument("--export", type=Path, help="Export to path (vs run)")
     args = cli.parse(parser)
 
     device = args.device
@@ -40,15 +45,30 @@ def main():
     time_ids = torch.zeros(2 * bs, 6, dtype=dtype).to(device)
     guidance_scale = torch.tensor([7.5], dtype=dtype).to(device)
 
-    results = mdl.forward(
-        sample=sample,
-        timestep=timestep,
-        encoder_hidden_states=prompt_embeds,
-        text_embeds=text_embeds,
-        time_ids=time_ids,
-        guidance_scale=guidance_scale,
-    )
-    print("1-step resutls:", results)
+    if args.export:
+        # Temporary: Need a dedicated exporter.
+        output = aot.export(
+            mdl,
+            kwargs={
+                "sample": sample,
+                "timestep": timestep,
+                "encoder_hidden_states": prompt_embeds,
+                "text_embeds": text_embeds,
+                "time_ids": time_ids,
+                "guidance_scale": guidance_scale,
+            },
+        )
+        output.save_mlir(args.export)
+    else:
+        results = mdl.forward(
+            sample=sample,
+            timestep=timestep,
+            encoder_hidden_states=prompt_embeds,
+            text_embeds=text_embeds,
+            time_ids=time_ids,
+            guidance_scale=guidance_scale,
+        )
+        print("1-step results:", results)
 
 
 if __name__ == "__main__":

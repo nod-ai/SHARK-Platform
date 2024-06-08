@@ -28,6 +28,8 @@ class LinearLayer(ThetaLayer):
     """Linear layer which computes:
 
     ```
+    if premul_input is not None:
+      x = x * premul_input
     matmul(x, weight.T) + bias
     ```
 
@@ -95,8 +97,8 @@ class LinearLayer(ThetaLayer):
 
     * For input quantizers, quantization parameters will be derived dynamically
       based on the actual activation values.
-    * For output quantizers, quantization parameters will be estimated
-      dynamically based on the input/weight/bias quantizer/type.
+    * For output quantizers, custom fused kernels which internally estimate
+      their output scales will be used.
 
     The bias tensor is expected to be either a `QuantizedTensor` with the
     same scaling as the output or a primitive tensor that will be dynamically
@@ -118,22 +120,38 @@ class LinearLayer(ThetaLayer):
             self.bias = self.theta_tensor(bias_name)
         self.transpose_weight = transpose_weight
 
+        # Input premultiplier.
+        self.premul_input = theta.optional_tensor("premul_input")
+
         # Get mode specific tensors.
         self.mode: Optional[str] = None
-        self.fq_input: QuantizerTensor = theta.optional_tensor("fq_input")
-        self.fq_output: QuantizerTensor = theta.optional_tensor("fq_output")
+        self.fq_input: Optional[QuantizerTensor] = theta.optional_tensor("fq_input")
+        self.fq_output: Optional[QuantizerTensor] = theta.optional_tensor("fq_output")
+        self.q_input: Optional[QuantizerTensor] = theta.optional_tensor("q_input")
+        self.q_output: Optional[QuantizerTensor] = theta.optional_tensor("q_output")
+        self.dq_output: Optional[QuantizerTensor] = theta.optional_tensor("dq_output")
 
         if self.fq_input is not None:
             assert self.mode is None, f"Cannot enable fq mode and {self.mode}"
             self.mode = "fq"
             self._validate_fake_quant_mode()
 
+        if (
+            self.q_input is not None
+            or self.q_output is not None
+            or self.dq_output is not None
+        ):
+            assert self.mode is None, f"Cannot enable native quant mode and {self.mode}"
+            self.mode = "native_quant"
+            self._validate_native_quant_mode()
+
     def forward(self, x):
         mode = self.mode
         weight = self.weight
         bias = self.bias
 
-        # TODO: Implement native quant mode.
+        if self.premul_input is not None:
+            x = ops.elementwise(torch.mul, x, self.premul_input)
 
         # Regular or fakequant mode.
         if mode is None or mode == "fq":
@@ -155,33 +173,41 @@ class LinearLayer(ThetaLayer):
             # Output conditioning.
             if self.mode == "fq":
                 fq_output = self.fq_output
-                if fq_output is None:
-                    # Dynamic output quantization.
-                    # TODO: With a bit of work, we could create a Quantizer
-                    # and use the normal arithmetic flow vs faking it here.
-                    # Dynamically compute output quant and simulate.
-                    # TODO: Better estimate of the output dynamic quant.
-                    reciprocal_scale = orig_weight_layout.d + orig_x_layout.d
-                    scale = 1.0 / reciprocal_scale
-                    offset = orig_weight_layout.m
-                    # Simulate quant.
-                    if offset is not None:
-                        qs = (y - offset) * scale
-                    else:
-                        qs = y * scale
-                    output_quant_dtype = orig_x_layout.qs.dtype
-                    qs = saturate_cast(qs, output_quant_dtype)
-                    # Dequant.
-                    output_dequant = reciprocal_scale * qs.to(y.dtype)
-                    if offset is not None:
-                        output_dequant = output_dequant + offset
-                    y = output_dequant
-                else:
+                if fq_output is not None:
                     # Static output quantization.
                     y = fq_output.quantize(y).unpack().dequant()
             return y
 
-        raise AssertionError(f"LinearLayer unhandled mode")
+        # Native quant mode.
+        # TODO: This needs to be completely replumbed into a couple of different
+        # fused ops. For the moment, though, we skate by with simulating it
+        # via normal ops.
+        if mode == "native_quant":
+            q_input = self.q_input
+            q_output = self.q_output
+            dq_output = self.dq_output
+            if q_input is not None:
+                x = q_input.quantize(x)
+
+            # TODO: We should be calling an explicit qmatmul that can take
+            # the output quantizer. For the moment, we ignore dq_output
+            # entirely and only act on a q_output.
+            y = ops.matmul(x, weight, transpose_rhs=self.transpose_weight)
+
+            if dq_output is not None and not isinstance(
+                dq_output, DynamicScaledQuantizer
+            ):
+                y = dq_output.quantize(y).unpack().dequant()
+
+            if bias is not None:
+                y = ops.elementwise(torch.add, y, bias)
+
+            if q_output is not None:
+                y = q_output.quantize(y)
+
+            return y
+
+        raise AssertionError(f"LinearLayer unhandled mode '{mode}'")
 
     def _validate_fake_quant_mode(self):
         fq_input = self.fq_input
@@ -219,3 +245,20 @@ class LinearLayer(ThetaLayer):
                     f"LinearLayer with a fq_output=None requires a QuantizedTensor "
                     f"weight with TensorScaledLayout, but got: {weight.layout_type}"
                 )
+
+    def _validate_native_quant_mode(self):
+        q_input = self.q_input
+        q_output = self.q_output
+        dq_output = self.dq_output
+
+        if q_output is None and dq_output is None:
+            raise AssertionError(
+                f"One of q_output or dq_output must be specified in native "
+                f"quantized mode for LinearLayer"
+            )
+
+        if q_output is not None and dq_output is not None:
+            raise AssertionError(
+                f"Only one of q_output or dq_output can be specified for a "
+                f"LinearLayer but got both."
+            )

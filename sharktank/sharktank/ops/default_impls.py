@@ -16,7 +16,7 @@ from ._registry import unbox_tensor
 from .signatures import *
 
 # conv2d
-@conv2d.override(Tensor, Tensor, Tensor)
+@conv2d.override(Tensor, Tensor, Tensor, auto_dequant=True)
 def conv2d_with_bias(
     input: Tensor, weight: Tensor, bias: Tensor, *, stride, padding, dilation, groups
 ):
@@ -38,7 +38,7 @@ def conv2d_with_bias(
     )
 
 
-@conv2d.override(Tensor, Tensor)
+@conv2d.override(Tensor, Tensor, auto_dequant=True)
 def conv2d_no_bias(
     input: Tensor, weight: Tensor, bias, *, stride, padding, dilation, groups
 ):
@@ -106,22 +106,13 @@ def layer_norm_default(input, weight, bias, *, eps):
 
 
 # Matmul
-@matmul.override(Tensor, Tensor)
+@matmul.override(Tensor, Tensor, auto_dequant=True)
 def matmul_default(lhs, rhs, *, transpose_rhs: bool) -> Tensor:
     lhs = unbox_tensor(lhs)
     rhs = unbox_tensor(rhs)
     if transpose_rhs:
         rhs = rhs.T
     return torch.matmul(lhs, rhs.to(lhs.dtype))
-
-
-@matmul.override(Tensor, QuantizedTensor)
-def matmul_Tensor_QuantizedTensor(
-    lhs, rhs: QuantizedTensor, *, transpose_rhs: bool
-) -> Tensor:
-    lhs = unbox_tensor(lhs)
-    rhs_torch = rhs.unpack().dequant(lhs.dtype)
-    return matmul_default(lhs, rhs_torch, transpose_rhs=transpose_rhs)
 
 
 # RMS norm
