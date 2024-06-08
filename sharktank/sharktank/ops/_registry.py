@@ -14,7 +14,7 @@ import functools
 
 import torch
 from torch import Tensor
-from ..types import InferenceTensor, PrimitiveTensor
+from ..types import InferenceTensor, PrimitiveTensor, QuantizedTensor
 
 __all__ = [
     "AnyTensor",
@@ -26,7 +26,8 @@ __all__ = [
 AnyTensor = Union[torch.Tensor, InferenceTensor]
 
 _TargetOverride = collections.namedtuple(
-    "_TargetOverride", "salience, target, type_spec"
+    "_TargetOverride",
+    "salience, target, type_spec, auto_unbox, auto_dequant",
 )
 
 
@@ -70,12 +71,24 @@ class SignatureDispatcher:
         else:
             return results
 
-    def override(self, *type_spec: tuple[type, ...], salience: int = 0):
+    def override(
+        self,
+        *type_spec: tuple[type, ...],
+        salience: int = 0,
+        auto_unbox: bool = True,
+        auto_dequant: bool = False,
+    ):
         def decorator(f):
             if f.__name__ == "_":
                 f.__name__ = f"{self.__name__}__override"
             self._overrides.append(
-                _TargetOverride(salience=salience, target=f, type_spec=type_spec)
+                _TargetOverride(
+                    salience=salience,
+                    target=f,
+                    type_spec=type_spec,
+                    auto_unbox=auto_unbox,
+                    auto_dequant=auto_dequant,
+                )
             )
             self._overrides.sort(key=lambda v: v.salience)
             self._target_cache.clear()  # Need to recompute all targets
@@ -118,9 +131,13 @@ class SignatureDispatcher:
                     continue
                 # We expect kernels which are parameterized on Tensor to
                 # unbox things that are isomorphic to it.
-                is_expected_unboxed_tensor = issubclass(expected, Tensor)
-                if is_expected_unboxed_tensor and issubclass(actual, PrimitiveTensor):
-                    continue
+                is_expected_tensor = issubclass(expected, Tensor)
+                if is_expected_tensor:
+                    if override.auto_unbox and issubclass(actual, PrimitiveTensor):
+                        continue
+                    # Similarly, we conditionally allow auto dequant.
+                    if override.auto_dequant and issubclass(actual, QuantizedTensor):
+                        continue
                 break
             else:
                 targets.append(override.target)
@@ -144,4 +161,6 @@ def unbox_tensor(t: Any) -> Tensor:
         return t
     elif isinstance(t, PrimitiveTensor):
         return t.as_torch()
+    elif isinstance(t, QuantizedTensor):
+        return t.unpack().dequant()
     raise ValueError(f"Expected a Tensor or PrimitiveTensor but got {type(t)}")

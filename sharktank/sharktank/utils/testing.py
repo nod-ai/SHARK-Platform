@@ -13,14 +13,16 @@ import unittest
 from ..types import *
 
 
-class MainRunnerTestBase(unittest.TestCase):
-    """Performs an in-process test of a `main(args)` func."""
-
+class TempDirTestBase(unittest.TestCase):
     def setUp(self):
         self._temp_dir = Path(tempfile.mkdtemp(type(self).__qualname__))
 
     def tearDown(self):
         shutil.rmtree(self._temp_dir, ignore_errors=True)
+
+
+class MainRunnerTestBase(TempDirTestBase):
+    """Performs an in-process test of a `main(args)` func."""
 
     def get_file_path(self, name: str) -> Path:
         return self._temp_dir / name
