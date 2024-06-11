@@ -22,6 +22,8 @@ from ..types import (
 from ._registry import unbox_tensor, AnyTensor
 from .signatures import *
 
+_CUDA_HACK = True
+
 ################################################################################
 # qlinear
 ################################################################################
@@ -84,7 +86,14 @@ def qlinear_tensor_scaled_integer(
     # Fall back to automatic fusion based on integer, high precision matmul.
     x_qs = x_qs.to(accum_dtype)
     weight_qs = weight_qs.to(accum_dtype)
-    y_qs = torch.matmul(x_qs, weight_qs.T)
+    # TODO: CUDA doesn't have an implementation of integer matmul. So promote
+    # for now.
+    if _CUDA_HACK:
+        y_qs = torch.matmul(
+            x_qs.to(dtype=torch.float32), weight_qs.to(dtype=torch.float32).T
+        ).to(dtype=accum_dtype)
+    else:
+        y_qs = torch.matmul(x_qs, weight_qs.T)
 
     # Offset correction. By applying the offset correction in post, it is
     # set up to fuse with its consumer, which is already doing additional

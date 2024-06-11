@@ -53,12 +53,13 @@ class LinearLayer(ThetaLayer):
         self.q_input: Optional[QuantizerTensor] = theta.optional_tensor("q_input")
 
     def forward(self, x):
-        if self.premul_input is not None:
-            x = ops.elementwise(torch.mul, x, self.premul_input)
-
         weight = self.weight
         bias = self.bias
         q_input = self.q_input
+
+        if self.premul_input is not None:
+            x = ops.elementwise(torch.mul, x, self.premul_input)
+
         if q_input is not None:
             x = q_input.quantize(x)
         y = ops.linear(x, weight, bias)

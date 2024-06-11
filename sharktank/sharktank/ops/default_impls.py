@@ -7,6 +7,8 @@
 # This file contains overrides of the standard ops for normal torch and
 # generic primitive/quantized types.
 
+from typing import Optional
+
 import torch
 from torch import Tensor, dtype
 import torch.nn.functional as F
@@ -16,13 +18,22 @@ from ._registry import unbox_tensor
 from .signatures import *
 
 # conv2d
-@conv2d.override(Tensor, Tensor, Tensor, auto_dequant=True)
-def conv2d_with_bias(
-    input: Tensor, weight: Tensor, bias: Tensor, *, stride, padding, dilation, groups
+
+
+def conv2d_default(
+    input: Tensor,
+    weight: Tensor,
+    bias: Optional[Tensor],
+    *,
+    stride,
+    padding,
+    dilation,
+    groups
 ):
     input = unbox_tensor(input)
     weight = unbox_tensor(weight)
-    bias = unbox_tensor(bias)
+    if bias is not None:
+        bias = unbox_tensor(bias)
     if weight.dtype != input.dtype:
         weight = weight.to(input.dtype)
     if bias.dtype != input.dtype:
@@ -38,25 +49,8 @@ def conv2d_with_bias(
     )
 
 
-@conv2d.override(Tensor, Tensor, auto_dequant=True)
-def conv2d_no_bias(
-    input: Tensor, weight: Tensor, bias, *, stride, padding, dilation, groups
-):
-    assert bias is None
-    input = unbox_tensor(input)
-    weight = unbox_tensor(weight)
-    if weight.dtype != input.dtype:
-        weight = weight.to(input.dtype)
-    return F.conv2d(
-        input,
-        weight,
-        bias,
-        stride=stride,
-        padding=padding,
-        dilation=dilation,
-        groups=groups,
-    )
-
+conv2d.override(Tensor, Tensor, Tensor, auto_dequant=True)(conv2d_default)
+conv2d.override(Tensor, Tensor, auto_dequant=True)(conv2d_default)
 
 # Elementwise
 @elementwise.override(Tensor)
