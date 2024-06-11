@@ -27,13 +27,15 @@ class mmt_scaled_q8(CustomOp):
     will be specialized for all values of N, K and LHS dtype.
     """
 
-    signature = "mmt_scaled_q8(Tensor a, Tensor d, Tensor qs, Tensor qs2) -> (Tensor)"
+    signature = "mmt_scaled_q8(Tensor lhs, Tensor rhs, Tensor scale0, Tensor scale1, Tensor zp0, Tensor zp1) -> (Tensor)"
 
     def select(self, ksel: KernelSelection):
         lhs_desc = ksel.arg_tensor(0)  # Shape [b, ] m, k
         scale0_desc = ksel.arg_tensor(2)  # Shape [N, K // BLOCK_SIZE, BLOCK_SIZE]
         scale1_desc = ksel.arg_tensor(3)  # Shape [N, K // BLOCK_SIZE, BLOCK_SIZE]
         rhs_desc = ksel.arg_tensor(1)  # Shape [N, K // BLOCK_SIZE, 1]
+        zp0_desc = ksel.arg_tensor(4)
+        zp1_desc = ksel.arg_tensor(5)
 
         # a arg
         lhs_m, lhs_k = lhs_desc.t.shape
@@ -50,6 +52,8 @@ class mmt_scaled_q8(CustomOp):
         scale0_desc.specialize_all_dims()
         scale1_desc.specialize_all_dims()
         rhs_desc.specialize_all_dims()
+        zp0_desc.specialize_all_dims()
+        zp1_desc.specialize_all_dims()
 
         # Shape batch..., m, n
         c_desc = ksel.return_new_tensor([lhs_m, rhs_n], dtype=torch.float32)
@@ -64,6 +68,10 @@ class mmt_scaled_q8(CustomOp):
         scale0_tensor_type = RankedTensorType(scale0.type)
         scale1 = kb.arg_value(3)
         scale1_tensor_type = RankedTensorType(scale1.type)
+        zp0 = kb.arg_value(4)
+        zp0_tensor_type = RankedTensorType(zp0.type)
+        zp1 = kb.arg_value(5)
+        zp1_tensor_type = RankedTensorType(zp1.type)
 
         m, k = lhs_tensor_type.shape
         n, k = rhs_tensor_type.shape
