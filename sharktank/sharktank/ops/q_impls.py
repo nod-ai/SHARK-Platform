@@ -69,20 +69,36 @@ def qlinear_tensor_scaled_integer(
     weight_qs = weight_layout.qs
     weight_m = weight_layout.m
 
+    # Only implemented for per-tensor or axis-0 quantization.
+    x_d_shape = x_d.shape
+    if len(x_d.shape) > 0 and x_d_shape[-1] != 1:
+        # Should be scalar or per-axis 0. Example: [16, 1]
+        return NotImplemented
+    weight_d_shape = weight_d.shape
+    if len(weight_d_shape) > 0 and weight_d_shape[-1] != 1:
+        # Should be scalar or per-axis 0. Example: [16, 1]
+        return NotImplemented
+
     # TODO: Handle permutation that we have a kernel for.
 
-    # Fall back to exact simulation using higher precision types.
-    # Note that if implemented in a kernel, the offsets ('m') would be applied
-    # to each dot-product row. However, since working layerwise, we just
-    # apply them after promoting to the higher precision type. These are
-    # mathematically equivalent but not necessarily performance equivalent.
+    # Fall back to automatic fusion based on integer, high precision matmul.
     x_qs = x_qs.to(accum_dtype)
-    if x_m is not None:
-        x_qs = x_qs - x_m
     weight_qs = weight_qs.to(accum_dtype)
-    if weight_m is not None:
-        weight_qs = weight_qs - weight_m
     y_qs = torch.matmul(x_qs, weight_qs.T)
+
+    # Offset correction. By applying the offset correction in post, it is
+    # set up to fuse with its consumer, which is already doing additional
+    # activation manipulation. Whereas if applied before, it either blocks
+    # matmul fusion or fuses additional arithmetic into the O(n^3) operation.
+    if x_m is not None:
+        x_offset_fix = torch.sum(weight_qs, axis=0, keepdim=True) * x_m
+        y_qs = y_qs - x_offset_fix
+    if weight_m is not None:
+        weight_offset_fix = torch.sum(x_qs, axis=-1, keepdim=True) * weight_m.T
+        y_qs = y_qs - weight_offset_fix
+    if x_m is not None and weight_m is not None:
+        xweight_offset_fix = x_m * weight_m.T * x_qs.shape[-1]
+        y_qs = y_qs + xweight_offset_fix
 
     # We don't have a great way to verify that the bias has been scaled
     # properly, and this is just an invariant that it is compatible with
