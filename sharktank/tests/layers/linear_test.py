@@ -51,8 +51,8 @@ class LinearQuantTest(unittest.TestCase):
         rhs = _randomize_per_axis(
             torch.rand(16, 128, dtype=torch.float32), axis=0, offset_range=0.02
         )
-        # bias = torch.rand(16, dtype=torch.float32) + 5.0
-        bias = torch.zeros(16, dtype=torch.float32)
+        bias = torch.rand(16, dtype=torch.float32) + 5.0
+        # bias = torch.zeros(16, dtype=torch.float32)
 
         lhs_scale = _scale_per_tensor_i8(lhs)
         rhs_scale, rhs_offset = _scale_offset_per_axis_ui8(rhs, 1)
@@ -66,11 +66,11 @@ class LinearQuantTest(unittest.TestCase):
         rhs_quant = rhs_quantizer.quantize(rhs, name="weight")
 
         # Sanity check that dequant'ing the RHS is roughly the same.
-        rhs_dequant = rhs_quant.unpack().dequant()
-        print("RHS_DIFF:", torch.abs(rhs_dequant - rhs))
+        # rhs_dequant = rhs_quant.unpack().dequant()
+        # print("RHS_DIFF:", torch.abs(rhs_dequant - rhs))
         # print("RHS:", rhs)
         # print("RHS_DEQUANT:", rhs_dequant)
-        torch.testing.assert_close(rhs_dequant, rhs, atol=1e-1, rtol=1e-2)
+        # torch.testing.assert_close(rhs_dequant, rhs, atol=1e-1, rtol=1e-2)
 
         theta = Theta(
             [
@@ -84,6 +84,7 @@ class LinearQuantTest(unittest.TestCase):
         output = linear(lhs)
         output_ref = torch.matmul(lhs, rhs.T) + bias
         print(torch.abs(output - output_ref))
+        torch.testing.assert_close(output, output_ref, atol=1e-1, rtol=1e-1)
 
     def testFakeQuantPerTensorDynamic(self):
         # TODO: Testing matmuls on unscaled random data like this produces

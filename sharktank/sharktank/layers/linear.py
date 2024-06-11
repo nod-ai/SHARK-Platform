@@ -167,24 +167,14 @@ class LinearLayer(ThetaLayer):
     def _native_quant(self, x):
         weight = self.weight
         bias = self.bias
-        accum_dtype = x.dtype  # TODO: unbox
+        dequant_dtype = x.dtype  # TODO: unbox
         q_input = self.q_input
         q_output = self.q_output
         if q_input is not None:
             x = q_input.quantize(x)
 
         # Simulate quantization with per-axis accumulate/offset.
-        y = ops.qlinear_dequant_accum(x, weight, bias, accum_dtype=accum_dtype)
-
-        # TODO: We should be calling an explicit qmatmul that can take
-        # the output quantizer. For the moment, we ignore dq_output
-        # entirely and only act on a q_output.
-        # y = ops.matmul(x, weight, transpose_rhs=self.transpose_weight)
-        # if bias is not None:
-        #     y = ops.elementwise(torch.add, y, bias)
-        # if q_output is not None:
-        #     y = q_output.quantize(y)
-
+        y = ops.qlinear_dequant(x, weight, bias, dequant_dtype=dequant_dtype)
         return y
 
     def _fake_quant(self, x):

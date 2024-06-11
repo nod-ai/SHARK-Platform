@@ -21,7 +21,7 @@ __all__ = [
     "layer_norm",
     "matmul",
     "rms_norm",
-    "qlinear_dequant_accum",
+    "qlinear_dequant",
     "sharded_cat",
     "sharded_sum",
 ]
@@ -38,7 +38,7 @@ def conv2d(
     stride: IntOrSequenceInt = 1,
     padding: IntOrSequenceInt = 0,
     dilation: IntOrSequenceInt = 1,
-    groups: IntOrSequenceInt = 1
+    groups: IntOrSequenceInt = 1,
 ):
     """Equivalent to torch.nn.functional.conv2d with enhancements:
 
@@ -57,7 +57,7 @@ def _conv2d_trampoline(
     stride=1,
     padding=0,
     dilation=1,
-    groups=1
+    groups=1,
 ):
     tensors = [input, weight]
     if bias is not None:
@@ -137,7 +137,7 @@ def _group_norm_affine_trampoline(
     bias: AnyTensor,
     *,
     num_groups: int,
-    eps: float
+    eps: float,
 ):
     tensors = (input, weight, bias)
     for override in d.find_overrides(tensors):
@@ -163,7 +163,7 @@ def _layer_norm_trampoline(
     weight: AnyTensor,
     bias: Optional[AnyTensor],
     *,
-    eps: float
+    eps: float,
 ):
     tensors = [input, weight]
     if bias is not None:
@@ -226,32 +226,36 @@ def _rms_norm_trampoline(
 
 
 @overridable
-def qlinear_dequant_accum(
+def qlinear_dequant(
     x: AnyTensor,
     weight: AnyTensor,
     bias: Optional[AnyTensor],
     *,
-    accum_dtype: torch.dtype
+    dequant_dtype: torch.dtype,
+    accum_dtype: torch.dtype = torch.int32,
 ) -> torch.Tensor:
     """Quantized linear operator which dequantizes and accumulates the matmul
     in a high precision/floating point type. If a bias is provided, it must
-    be of a cast compatible type to `accum_dtype` and will be added directly.
+    be of a cast compatible type to `dequant_dtype` and will be added directly.
     """
     raise NotImplementedError
 
 
-@qlinear_dequant_accum.trampoline
+@qlinear_dequant.trampoline
 def _qlinear_dequant_accum_trampoline(
     d: SignatureDispatcher,
     x: AnyTensor,
     weight: AnyTensor,
     bias: Optional[AnyTensor],
     *,
-    accum_dtype: torch.dtype
+    dequant_dtype: torch.dtype,
+    accum_dtype: torch.dtype = torch.int32,
 ):
     tensors = (x, weight) if bias is None else (x, weight, bias)
     for override in d.find_overrides(tensors):
-        result = override(x, weight, bias, accum_dtype=accum_dtype)
+        result = override(
+            x, weight, bias, dequant_dtype=dequant_dtype, accum_dtype=accum_dtype
+        )
         if result is not NotImplemented:
             return override, result
     else:

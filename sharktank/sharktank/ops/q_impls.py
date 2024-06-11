@@ -37,11 +37,12 @@ from .signatures import *
 ################################################################################
 
 
-def qlinear_dequant_accum_tensor_scaled(
+def qlinear_dequant_tensor_scaled(
     x: QuantizedTensor,
     weight: QuantizedTensor,
     bias: Optional[AnyTensor],
     *,
+    dequant_dtype: torch.dtype,
     accum_dtype: torch.dtype
 ) -> torch.Tensor:
     if not issubclass(x.layout_type, TensorScaledLayout) or not issubclass(
@@ -67,15 +68,20 @@ def qlinear_dequant_accum_tensor_scaled(
     # TODO: Handle permutation that we have a kernel for.
 
     # Fall back to exact simulation using higher precision types.
+    # Note that if implemented in a kernel, the offsets ('m') would be applied
+    # to each dot-product row. However, since working layerwise, we just
+    # apply them after promoting to the higher precision type. These are
+    # mathematically equivalent but not necessarily performance equivalent.
     x_qs = x_qs.to(accum_dtype)
+    if x_m is not None:
+        x_qs = x_qs - x_m
     weight_qs = weight_qs.to(accum_dtype)
+    if weight_m is not None:
+        weight_qs = weight_qs - weight_m
     y_qs = torch.matmul(x_qs, weight_qs.T)
-    print("Y_QS:", y_qs.shape)
-    print("X_D:", x_d.shape)
-    print("WEIGHT_D:", weight_d.shape)
-    y = (y_qs - weight_m.T) * (x_d * weight_d.T)
+    # Output scale by the product of input and weight scale.
+    y = y_qs.to(dequant_dtype) * (x_d * weight_d.T)
 
-    print("Y:", y.shape)
     # In this variant, the bias is always full precision, not quantized.
     bias = None if bias is None else unbox_tensor(bias)
     if bias is not None:
@@ -84,9 +90,9 @@ def qlinear_dequant_accum_tensor_scaled(
 
 
 # Overrload for both bias and no bias.
-qlinear_dequant_accum.override(QuantizedTensor, QuantizedTensor)(
-    qlinear_dequant_accum_tensor_scaled
+qlinear_dequant.override(QuantizedTensor, QuantizedTensor)(
+    qlinear_dequant_tensor_scaled
 )
-qlinear_dequant_accum.override(QuantizedTensor, QuantizedTensor, AnyTensor)(
-    qlinear_dequant_accum_tensor_scaled
+qlinear_dequant.override(QuantizedTensor, QuantizedTensor, AnyTensor)(
+    qlinear_dequant_tensor_scaled
 )
