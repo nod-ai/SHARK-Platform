@@ -172,9 +172,7 @@ class LinearLayer(ThetaLayer):
         q_output = self.q_output
         if q_input is not None:
             x = q_input.quantize(x)
-
-        # Simulate quantization with per-axis accumulate/offset.
-        y = ops.qlinear_dequant(x, weight, bias, dequant_dtype=dequant_dtype)
+        y = ops.qlinear_dequant(x, weight, bias)
         return y
 
     def _fake_quant(self, x):

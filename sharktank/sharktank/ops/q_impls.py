@@ -42,7 +42,6 @@ def qlinear_dequant_tensor_scaled(
     weight: QuantizedTensor,
     bias: Optional[AnyTensor],
     *,
-    dequant_dtype: torch.dtype,
     accum_dtype: torch.dtype
 ) -> torch.Tensor:
     if not issubclass(x.layout_type, TensorScaledLayout) or not issubclass(
@@ -80,7 +79,8 @@ def qlinear_dequant_tensor_scaled(
         weight_qs = weight_qs - weight_m
     y_qs = torch.matmul(x_qs, weight_qs.T)
     # Output scale by the product of input and weight scale.
-    y = y_qs.to(dequant_dtype) * (x_d * weight_d.T)
+    rescale = x_d * weight_d.T
+    y = y_qs.to(rescale.dtype) * rescale
 
     # In this variant, the bias is always full precision, not quantized.
     bias = None if bias is None else unbox_tensor(bias)

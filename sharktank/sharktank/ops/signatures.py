@@ -231,7 +231,6 @@ def qlinear_dequant(
     weight: AnyTensor,
     bias: Optional[AnyTensor],
     *,
-    dequant_dtype: torch.dtype,
     accum_dtype: torch.dtype = torch.int32,
 ) -> torch.Tensor:
     """Quantized linear operator which dequantizes and accumulates the matmul
@@ -248,14 +247,11 @@ def _qlinear_dequant_accum_trampoline(
     weight: AnyTensor,
     bias: Optional[AnyTensor],
     *,
-    dequant_dtype: torch.dtype,
     accum_dtype: torch.dtype = torch.int32,
 ):
     tensors = (x, weight) if bias is None else (x, weight, bias)
     for override in d.find_overrides(tensors):
-        result = override(
-            x, weight, bias, dequant_dtype=dequant_dtype, accum_dtype=accum_dtype
-        )
+        result = override(x, weight, bias, accum_dtype=accum_dtype)
         if result is not NotImplemented:
             return override, result
     else:
