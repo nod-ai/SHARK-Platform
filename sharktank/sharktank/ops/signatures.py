@@ -21,6 +21,7 @@ __all__ = [
     "layer_norm",
     "matmul",
     "rms_norm",
+    "qlinear_dequant_accum",
     "sharded_cat",
     "sharded_sum",
 ]
@@ -218,6 +219,39 @@ def _rms_norm_trampoline(
     tensors = (x, weight)
     for override in d.find_overrides(tensors):
         result = override(x, weight, epsilon=epsilon)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(tensors)
+
+
+@overridable
+def qlinear_dequant_accum(
+    x: AnyTensor,
+    weight: AnyTensor,
+    bias: Optional[AnyTensor],
+    *,
+    accum_dtype: torch.dtype
+) -> torch.Tensor:
+    """Quantized linear operator which dequantizes and accumulates the matmul
+    in a high precision/floating point type. If a bias is provided, it must
+    be of a cast compatible type to `accum_dtype` and will be added directly.
+    """
+    raise NotImplementedError
+
+
+@qlinear_dequant_accum.trampoline
+def _qlinear_dequant_accum_trampoline(
+    d: SignatureDispatcher,
+    x: AnyTensor,
+    weight: AnyTensor,
+    bias: Optional[AnyTensor],
+    *,
+    accum_dtype: torch.dtype
+):
+    tensors = (x, weight) if bias is None else (x, weight, bias)
+    for override in d.find_overrides(tensors):
+        result = override(x, weight, bias, accum_dtype=accum_dtype)
         if result is not NotImplemented:
             return override, result
     else:

@@ -20,6 +20,9 @@ from . import _registry
 from .signatures import *
 
 # Ensure that implementations are registered.
+# Note that delegation prefers matching ops defined later, so order here
+# can be important.
 from . import default_impls
 from . import custom_impls
 from . import sharded_impls
+from . import q_impls
