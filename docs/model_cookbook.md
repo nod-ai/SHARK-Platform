@@ -6,7 +6,7 @@ into proper docs later.
 ## Useful tools and projects
 
 * https://huggingface.co/docs/huggingface_hub/en/guides/cli
-* https://github.com/ggerganov/llama.cpp (specifically for [`convert.py`](https://github.com/ggerganov/llama.cpp/blob/master/convert.py))
+* https://github.com/ggerganov/llama.cpp (specifically for [`convert-hf-to-gguf.py`](https://github.com/ggerganov/llama.cpp/blob/master/convert-hf-to-gguf.py))
 
 ## Create a non-quantized .gguf file
 
