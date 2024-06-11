@@ -105,6 +105,23 @@ def layer_norm_default(input, weight, bias, *, eps):
     )
 
 
+# Linear
+def linear_default(input, weight, bias, *, accum_dtype) -> Tensor:
+    input = unbox_tensor(input)
+    weight = unbox_tensor(weight)
+    bias = None if bias is None else unbox_tensor(bias)
+    if weight.dtype != input.dtype:
+        weight = weight.to(dtype=input.dtype)
+    result = torch.matmul(input, weight.T)
+    if bias is not None:
+        result = result + bias
+    return result
+
+
+linear.override(Tensor, Tensor, auto_dequant=True)(linear_default)
+linear.override(Tensor, Tensor, Tensor, auto_dequant=True)(linear_default)
+
+
 # Matmul
 @matmul.override(Tensor, Tensor, auto_dequant=True)
 def matmul_default(lhs, rhs, *, transpose_rhs: bool) -> Tensor:

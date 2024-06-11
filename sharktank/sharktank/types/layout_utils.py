@@ -148,15 +148,23 @@ def _view_uint8_tensor(data: torch.Tensor) -> torch.Tensor:
 
 
 def saturate_cast(
-    t: torch.Tensor, dtype: torch.dtype, round_int: bool = True
+    t: torch.Tensor,
+    dtype: torch.dtype,
+    round_int: bool = True,
+    disable_saturate: bool = False,
 ) -> torch.Tensor:
     """Does a saturating cast to the given dtype. For floating point
     values, this is a simple cast. For integer types, it will saturate to the
-    min/max range.
+    min/max range. An argument disable_saturate= is provided to allow
+    saturation to be disabled by flag without changing caller code. This is
+    needed if (for example, trying to saturate a high precision integer
+    type like int32) with a low precision tensor.
     """
     if dtype.is_floating_point:
         return t.to(dtype=dtype)
     iinfo = torch.iinfo(dtype)
     if round_int:
         t = torch.round(t)
-    return t.clamp(iinfo.min, iinfo.max).to(dtype=dtype)
+    if not disable_saturate:
+        t = t.clamp(iinfo.min, iinfo.max)
+    return t.to(dtype=dtype)

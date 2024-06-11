@@ -4,28 +4,18 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-"""Implementations for the q* family of ops.
-
-Note that unlike the normal FP ops, these ops are only parameterized on
-distinct types that have a direct implementation in the system. They are
-non general (and do not fall back to generic unboxing/dequant). It is
-expected that layers which use them know specifically that they wish to
-perform some flavor of fully quantized arithmetic.
-
-This module does not contain op overrides that are merely *optimizations*
-of a more general algorithm. Practically, this means that auto-dequantizing
-ops (which includes weight-only quantizations) happen in custom_impls and
-fully quantized op implementations are defined here.
+"""Implementations for op variants that are fully quantized.
 """
 
 from typing import Optional
 
+import warnings
+
 import torch
 
 from ..types import (
-    InferenceTensor,
-    PrimitiveTensor,
     QuantizedTensor,
+    PlanarQuantizedTensor,
     TensorScaledLayout,
 )
 
@@ -37,13 +27,14 @@ from .signatures import *
 ################################################################################
 
 
-def qlinear_dequant_tensor_scaled(
+def qlinear_tensor_scaled_integer(
     x: QuantizedTensor,
     weight: QuantizedTensor,
-    bias: Optional[AnyTensor],
+    bias: Optional[QuantizedTensor],
     *,
     accum_dtype: torch.dtype
 ) -> torch.Tensor:
+    # Only handle tensor scaled layouts.
     if not issubclass(x.layout_type, TensorScaledLayout) or not issubclass(
         weight.layout_type, TensorScaledLayout
     ):
@@ -55,6 +46,20 @@ def qlinear_dequant_tensor_scaled(
     #  * Either/both can have offsets of not (m is not None).
     x_layout: TensorScaledLayout = x.unpack()
     weight_layout: TensorScaledLayout = weight.unpack()
+
+    # Only handle integer quantizations.
+    if x_layout.qs.dtype.is_floating_point or weight_layout.qs.dtype.is_floating_point:
+        return NotImplemented
+
+    # Bias.
+    if bias is not None and not issubclass(bias.layout_type, TensorScaledLayout):
+        warnings.warn(
+            "qlinear_tensor_scaled_integer falling back to generic because bias is not properly quantized"
+        )
+        return NotImplemented
+    bias_layout: Optional[TensorScaledLayout] = (
+        bias.unpack() if bias is not None else None
+    )
 
     # Alias components (d=scale, qs=quantized samples, m=offset)
     x_d = x_layout.d
@@ -78,21 +83,31 @@ def qlinear_dequant_tensor_scaled(
     if weight_m is not None:
         weight_qs = weight_qs - weight_m
     y_qs = torch.matmul(x_qs, weight_qs.T)
-    # Output scale by the product of input and weight scale.
-    rescale = x_d * weight_d.T
-    y = y_qs.to(rescale.dtype) * rescale
 
-    # In this variant, the bias is always full precision, not quantized.
-    bias = None if bias is None else unbox_tensor(bias)
-    if bias is not None:
-        y = y + bias
-    return y
+    # We don't have a great way to verify that the bias has been scaled
+    # properly, and this is just an invariant that it is compatible with
+    # the arithmetic that produces the output scale. If we don't have a bias,
+    # we compute the output scale explicitly.
+    if bias_layout is not None:
+        y_qs = y_qs + bias_layout.qs
+        rescale_d = bias_layout.d
+    else:
+        # Output scale by the product of input and weight scale.
+        rescale_d = x_d * weight_d.T
+
+    output_shape = list(y_qs)
+    return PlanarQuantizedTensor(
+        shape=output_shape,
+        layout=TensorScaledLayout(
+            shape=output_shape,
+            d=rescale_d,
+            qs=y_qs,
+        ),
+    )
 
 
 # Overrload for both bias and no bias.
-qlinear_dequant.override(QuantizedTensor, QuantizedTensor)(
-    qlinear_dequant_tensor_scaled
-)
-qlinear_dequant.override(QuantizedTensor, QuantizedTensor, AnyTensor)(
-    qlinear_dequant_tensor_scaled
+linear.override(QuantizedTensor, QuantizedTensor)(qlinear_tensor_scaled_integer)
+linear.override(QuantizedTensor, QuantizedTensor, QuantizedTensor)(
+    qlinear_tensor_scaled_integer
 )

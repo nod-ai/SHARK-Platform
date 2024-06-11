@@ -108,6 +108,7 @@ class StaticScaledQuantizer(QuantizerTensor):
         axis: Optional[int] = None,
         reciprocal_scale: Optional[torch.Tensor] = None,
         offset: Optional[torch.Tensor] = None,
+        disable_saturate: bool = False,
         name: str = UnnamedTensorName,
     ):
         super().__init__(shape=scale.shape, name=name)
@@ -119,6 +120,7 @@ class StaticScaledQuantizer(QuantizerTensor):
         self._offset = offset
         self._dtype = dtype
         self._axis = axis
+        self._disable_saturate = disable_saturate
         assert self._scale.shape == self._reciprocal_scale.shape
         assert self._scale.dtype == self._reciprocal_scale.dtype
         if self._offset is not None:
@@ -137,9 +139,17 @@ class StaticScaledQuantizer(QuantizerTensor):
         if axis is None:
             # Per tensor.
             if offset is None:
-                qs = saturate_cast(t * self._scale, dtype=self.dtype)
+                qs = saturate_cast(
+                    t * self._scale,
+                    dtype=self.dtype,
+                    disable_saturate=self._disable_saturate,
+                )
             else:
-                qs = saturate_cast(t * self._scale + offset, dtype=self.dtype)
+                qs = saturate_cast(
+                    t * self._scale + offset,
+                    dtype=self.dtype,
+                    disable_saturate=self._disable_saturate,
+                )
             return PlanarQuantizedTensor(
                 shape=shape,
                 name=name,
@@ -164,11 +174,17 @@ class StaticScaledQuantizer(QuantizerTensor):
             broadcast_reciprocal_scale = reciprocal_scale.reshape(scale_shape)
             if offset is None:
                 broadcast_offset = None
-                qs = saturate_cast(t * broadcast_scale, dtype=self.dtype)
+                qs = saturate_cast(
+                    t * broadcast_scale,
+                    dtype=self.dtype,
+                    disable_saturate=self._disable_saturate,
+                )
             else:
                 broadcast_offset = offset.reshape(scale_shape)
                 qs = saturate_cast(
-                    t * broadcast_scale + broadcast_offset, dtype=self.dtype
+                    t * broadcast_scale + broadcast_offset,
+                    dtype=self.dtype,
+                    disable_saturate=self._disable_saturate,
                 )
             return PlanarQuantizedTensor(
                 shape=shape,
@@ -226,6 +242,7 @@ class StaticScaledQuantizer(QuantizerTensor):
         except KeyError as e:
             raise IOError("Missing property") from e
         axis = int(extra_properties["axis"]) if "axis" in extra_properties else None
+        disable_saturate = bool(extra_properties.get("disable_saturate"))
         dtype = _serialized_name_to_dtype(dtype_name)
         return cls(
             name=name,
@@ -234,6 +251,7 @@ class StaticScaledQuantizer(QuantizerTensor):
             reciprocal_scale=reciprocal_scale,
             dtype=dtype,
             axis=axis,
+            disable_saturate=disable_saturate,
         )
 
     @property
@@ -254,6 +272,8 @@ class StaticScaledQuantizer(QuantizerTensor):
         extra_properties = {"dtype": _dtype_to_serialized_name(self._dtype)}
         if self._axis is not None:
             extra_properties["axis"] = self._axis
+        if self._disable_saturate:
+            extra_properties["disable_saturate"] = True
         raw_tensors = {
             "scale": scale_name,
             "rscale": rscale_name,
@@ -278,6 +298,7 @@ class StaticScaledQuantizer(QuantizerTensor):
             name=self.name,
             dtype=self.dtype,
             axis=self.axis,
+            disable_saturate=self._disable_saturate,
             scale=new_globals[f"{self.name}:scale"],
             reciprocal_scale=new_globals[f"{self.name}:rscale"],
             offset=new_globals.get(offset_name),

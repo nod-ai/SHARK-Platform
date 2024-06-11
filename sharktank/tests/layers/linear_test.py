@@ -56,6 +56,7 @@ class LinearQuantTest(unittest.TestCase):
 
         lhs_scale = _scale_per_tensor_i8(lhs)
         rhs_scale, rhs_offset = _scale_offset_per_axis_ui8(rhs, 1)
+        bias_scale = lhs_scale * rhs_scale
 
         lhs_quantizer = StaticScaledQuantizer(
             name="q_input", scale=lhs_scale, dtype=torch.int8
@@ -64,6 +65,10 @@ class LinearQuantTest(unittest.TestCase):
             scale=rhs_scale, offset=rhs_offset, dtype=torch.uint8, axis=0
         )
         rhs_quant = rhs_quantizer.quantize(rhs, name="weight")
+        bias_quantizer = StaticScaledQuantizer(
+            scale=bias_scale, dtype=torch.int32, axis=0
+        )
+        bias_quant = bias_quantizer.quantize(bias, name="bias")
 
         # Sanity check that dequant'ing the RHS is roughly the same.
         # rhs_dequant = rhs_quant.unpack().dequant()
@@ -76,7 +81,7 @@ class LinearQuantTest(unittest.TestCase):
             [
                 lhs_quantizer,
                 rhs_quant,
-                DefaultPrimitiveTensor(name="bias", data=bias),
+                bias_quant,
             ]
         )
         linear = LinearLayer(theta)
@@ -85,59 +90,6 @@ class LinearQuantTest(unittest.TestCase):
         output_ref = torch.matmul(lhs, rhs.T) + bias
         print(torch.abs(output - output_ref))
         torch.testing.assert_close(output, output_ref, atol=1e-1, rtol=1e-1)
-
-    def testFakeQuantPerTensorDynamic(self):
-        # TODO: Testing matmuls on unscaled random data like this produces
-        # mis-behaving numerics due to outliers. Makes it hard to have a
-        # sanity check.
-        weight_raw = torch.randn(10, 20, dtype=torch.float32)
-        weight = DynamicScaledQuantizer(dtype=torch.int8).quantize(
-            weight_raw, name="weight"
-        )
-        theta = Theta(
-            [
-                DynamicScaledQuantizer(dtype=torch.int8, name="fq_input"),
-                weight,
-            ]
-        )
-        linear = LinearLayer(theta)
-
-        self.assertEqual(linear.mode, "fq")
-        x = torch.randn(5, 20, dtype=torch.float32)
-        y = linear(x)
-        y_ref = torch.matmul(x, weight_raw.t())
-        print("Y:", y)
-        print("Y_REF:", y_ref)
-
-    def testFakeQuantPerTensorStatic(self):
-        # TODO: Testing matmuls on unscaled random data like this produces
-        # mis-behaving numerics due to outliers. Makes it hard to have a
-        # sanity check.
-        weight_raw = torch.randn(10, 20, dtype=torch.float32)
-        weight = DynamicScaledQuantizer(dtype=torch.int8).quantize(
-            weight_raw, name="weight"
-        )
-        theta = Theta(
-            [
-                StaticScaledQuantizer(
-                    dtype=torch.int8, name="fq_input", scale=torch.tensor(25.6)
-                ),
-                StaticScaledQuantizer(
-                    dtype=torch.int8, name="fq_output", scale=torch.tensor(20.6)
-                ),
-                weight,
-            ]
-        )
-        linear = LinearLayer(theta)
-
-        self.assertEqual(linear.mode, "fq")
-        x = torch.randn(5, 20, dtype=torch.float32)
-        y = linear(x)
-        y_ref = torch.matmul(x, weight_raw.t())
-        print("Y:", y)
-        print("Y_REF:", y_ref)
-
-    # TODO: Test bias.
 
 
 if __name__ == "__main__":

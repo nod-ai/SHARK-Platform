@@ -19,9 +19,9 @@ __all__ = [
     "embedding_lookup",
     "group_norm_affine",
     "layer_norm",
+    "linear",
     "matmul",
     "rms_norm",
-    "qlinear_dequant",
     "sharded_cat",
     "sharded_sum",
 ]
@@ -177,6 +177,50 @@ def _layer_norm_trampoline(
 
 
 @overridable
+def linear(
+    input: AnyTensor,
+    weight: AnyTensor,
+    bias: Optional[AnyTensor],
+    *,
+    accum_dtype: Optional[torch.dtype] = None,
+) -> torch.Tensor:
+    """Applies a linear transformation to the incoming data.
+
+    Equivalent to:
+    ```
+    y = torch.matmul(input, weight.T) + bias
+    ```
+
+    This operator is defined to operate on a limited number of quantized types.
+    In that situation, the result may be a QuantizedTensor. Callers should
+    be prepared to handle this scenario.
+
+    The optional accum_dtype argument is used as a hint to some implementations
+    which may need help in selecting an appropriate high precision type for
+    accumulation.
+    """
+    raise NotImplementedError
+
+
+@linear.trampoline
+def _linear_trampoline(
+    d: SignatureDispatcher,
+    input: AnyTensor,
+    weight: AnyTensor,
+    bias: Optional[AnyTensor],
+    *,
+    accum_dtype: torch.dtype = torch.int32,
+):
+    tensors = (input, weight) if bias is None else (input, weight, bias)
+    for override in d.find_overrides(tensors):
+        result = override(input, weight, bias, accum_dtype=accum_dtype)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(tensors)
+
+
+@overridable
 def matmul(lhs: AnyTensor, rhs: AnyTensor, *, transpose_rhs: bool = True):
     """Performs a matmul where the RHS may be an InferenceTensor.
 
@@ -219,39 +263,6 @@ def _rms_norm_trampoline(
     tensors = (x, weight)
     for override in d.find_overrides(tensors):
         result = override(x, weight, epsilon=epsilon)
-        if result is not NotImplemented:
-            return override, result
-    else:
-        d.fail(tensors)
-
-
-@overridable
-def qlinear_dequant(
-    x: AnyTensor,
-    weight: AnyTensor,
-    bias: Optional[AnyTensor],
-    *,
-    accum_dtype: torch.dtype = torch.int32,
-) -> torch.Tensor:
-    """Quantized linear operator which dequantizes and accumulates the matmul
-    in a high precision/floating point type. If a bias is provided, it must
-    be of a cast compatible type to `dequant_dtype` and will be added directly.
-    """
-    raise NotImplementedError
-
-
-@qlinear_dequant.trampoline
-def _qlinear_dequant_accum_trampoline(
-    d: SignatureDispatcher,
-    x: AnyTensor,
-    weight: AnyTensor,
-    bias: Optional[AnyTensor],
-    *,
-    accum_dtype: torch.dtype = torch.int32,
-):
-    tensors = (x, weight) if bias is None else (x, weight, bias)
-    for override in d.find_overrides(tensors):
-        result = override(x, weight, bias, accum_dtype=accum_dtype)
         if result is not NotImplemented:
             return override, result
     else:

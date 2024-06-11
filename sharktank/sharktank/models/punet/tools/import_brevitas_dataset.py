@@ -98,6 +98,23 @@ def apply_per_layer_quant(
     )
     weight_quant = weight_quantizer.quantize(weight, name=weight.name)
     updated_tensors[weight_quant.name] = weight_quant
+
+    # Bias/output scaling.
+    bias = layer_theta.optional_tensor("bias")
+    if bias is not None:
+        # If the bias is present, it dictates the overall output quantization
+        # and will not be checked for correct parameters at runtime. It must
+        # be quantized to match properly.
+        bias_scale = input_scale * weight_scale
+        bias_quantizer = StaticScaledQuantizer(
+            scale=bias_scale,
+            axis=0 if len(bias_scale.shape) > 0 else None,
+            dtype=torch.int32,
+            disable_saturate=True,
+        )
+        bias_quant = bias_quantizer.quantize(bias, name=bias.name)
+        updated_tensors[bias_quant.name] = bias_quant
+
     # Spot check that things look sane.
     # weight_dequant = weight_quant.unpack().dequant()
     # print(f"ORIG:\n{weight.as_torch()[0]}")
@@ -114,14 +131,6 @@ def apply_per_layer_quant(
         dtype=torch.int8,
     )
     updated_tensors[input_quantizer.name] = input_quantizer
-
-    # Output dequant back to high precision.
-    # TODO: We are still working out output quantizer and how it interplays.
-    output_quantizer = DynamicScaledQuantizer(
-        name=f"{layer_name}.dq_output",
-        dtype=weight_dtype,
-    )
-    updated_tensors[output_quantizer.name] = output_quantizer
 
     # Optional activation pre-multiplier.
     smoothquant_mul = _get_json_tensor("smoothquant_mul", dtype=weight_dtype)
