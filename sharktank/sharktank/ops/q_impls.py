@@ -91,12 +91,18 @@ def qlinear_tensor_scaled_integer(
     # activation manipulation. Whereas if applied before, it either blocks
     # matmul fusion or fuses additional arithmetic into the O(n^3) operation.
     if x_m is not None:
+        # Apply offset correction for asymmetric x.
+        # At the time of writing this was not a common case.
         x_offset_fix = torch.sum(weight_qs, axis=0, keepdim=True) * x_m
         y_qs = y_qs - x_offset_fix
     if weight_m is not None:
+        # Apply offset correction for asymmetric weight.
+        # At the time of writing this was the common case.
         weight_offset_fix = torch.sum(x_qs, axis=-1, keepdim=True) * weight_m.T
         y_qs = y_qs - weight_offset_fix
     if x_m is not None and weight_m is not None:
+        # Apply joint offset correction if both x and weight are asymmetric.
+        # At the time of writing this was not a common case.
         xweight_offset_fix = x_m * weight_m.T * x_qs.shape[-1]
         y_qs = y_qs + xweight_offset_fix
 
