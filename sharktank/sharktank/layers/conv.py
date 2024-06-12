@@ -40,10 +40,14 @@ class Conv2DLayer(ThetaLayer):
         # Input premultiplier.
         self.premul_input = theta.optional_tensor("premul_input")
         self.q_input: Optional[QuantizerTensor] = theta.optional_tensor("q_input")
+        self.qdq_input: Optional[QuantizedTensor] = theta.optional_tensor("qdq_input")
+        if self.q_input is not None and self.qdq_input is not None:
+            raise AssertionError(f"LinearLayer cannot have both q_input and qdq_input")
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         x = input
         q_input = self.q_input
+        qdq_input = self.qdq_input
         weight = self.weight
         bias = self.bias
 
@@ -52,6 +56,8 @@ class Conv2DLayer(ThetaLayer):
 
         if q_input is not None:
             x = q_input.quantize(x)
+        elif qdq_input is not None:
+            x = qdq_input.quantize(x).unpack().dequant()
 
         # Primary computation.
         y = ops.conv2d(

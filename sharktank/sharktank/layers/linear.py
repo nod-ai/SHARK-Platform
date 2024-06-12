@@ -51,17 +51,24 @@ class LinearLayer(ThetaLayer):
         # Input premultiplier.
         self.premul_input = theta.optional_tensor("premul_input")
         self.q_input: Optional[QuantizerTensor] = theta.optional_tensor("q_input")
+        self.qdq_input: Optional[QuantizedTensor] = theta.optional_tensor("qdq_input")
+        if self.q_input is not None and self.qdq_input is not None:
+            raise AssertionError(f"LinearLayer cannot have both q_input and qdq_input")
 
     def forward(self, x):
         weight = self.weight
         bias = self.bias
         q_input = self.q_input
+        qdq_input = self.qdq_input
 
         if self.premul_input is not None:
             x = ops.elementwise(torch.mul, x, self.premul_input)
 
         if q_input is not None:
             x = q_input.quantize(x)
+        elif qdq_input is not None:
+            x = qdq_input.quantize(x).unpack().dequant()
+
         y = ops.linear(x, weight, bias)
 
         # Unconditionally dequantize.

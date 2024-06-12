@@ -32,9 +32,9 @@ _CUDA_HACK = True
 def qlinear_tensor_scaled_integer(
     x: QuantizedTensor,
     weight: QuantizedTensor,
-    bias: Optional[QuantizedTensor],
+    bias: Optional[AnyTensor],
     *,
-    accum_dtype: torch.dtype
+    accum_dtype: torch.dtype,
 ) -> torch.Tensor:
     # Only handle tensor scaled layouts.
     if not issubclass(x.layout_type, TensorScaledLayout) or not issubclass(
@@ -54,14 +54,14 @@ def qlinear_tensor_scaled_integer(
         return NotImplemented
 
     # Bias.
-    if bias is not None and not issubclass(bias.layout_type, TensorScaledLayout):
-        warnings.warn(
-            "qlinear_tensor_scaled_integer falling back to generic because bias is not properly quantized"
-        )
-        return NotImplemented
-    bias_layout: Optional[TensorScaledLayout] = (
-        bias.unpack() if bias is not None else None
-    )
+    quantized_bias_accum = False
+    if bias is not None:
+        if isinstance(bias, QuantizedTensor):
+            bias_layout: TensorScaledLayout = bias.unpack()
+            if isinstance(bias_layout, TensorScaledLayout):
+                quantized_bias_accum = True
+            else:
+                warnings.warn(f"unsupported qlinear bias quantization: {bias_layout}")
 
     # Alias components (d=scale, qs=quantized samples, m=offset)
     x_d = x_layout.d
@@ -119,7 +119,7 @@ def qlinear_tensor_scaled_integer(
     # properly, and this is just an invariant that it is compatible with
     # the arithmetic that produces the output scale. If we don't have a bias,
     # we compute the output scale explicitly.
-    if bias_layout is not None:
+    if quantized_bias_accum:
         y_qs = y_qs + bias_layout.qs
         rescale_d = bias_layout.d
     else:
@@ -127,7 +127,7 @@ def qlinear_tensor_scaled_integer(
         rescale_d = x_d * weight_d.T
 
     output_shape = list(y_qs)
-    return PlanarQuantizedTensor(
+    y = PlanarQuantizedTensor(
         shape=output_shape,
         layout=TensorScaledLayout(
             shape=output_shape,
@@ -136,9 +136,16 @@ def qlinear_tensor_scaled_integer(
         ),
     )
 
+    # If we have a bias that we couldn't add while quantized, add it here.
+    if bias is not None and not quantized_bias_accum:
+        y = y.unpack().dequant()
+        y = elementwise(torch.add, y, bias)
+
+    return y
+
 
 # Overrload for both bias and no bias.
 linear.override(QuantizedTensor, QuantizedTensor)(qlinear_tensor_scaled_integer)
-linear.override(QuantizedTensor, QuantizedTensor, QuantizedTensor)(
+linear.override(QuantizedTensor, QuantizedTensor, AnyTensor)(
     qlinear_tensor_scaled_integer
 )

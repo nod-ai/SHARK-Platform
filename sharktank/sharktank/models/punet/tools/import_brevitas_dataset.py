@@ -28,6 +28,15 @@ import torch
 
 from ....types import *
 
+# It is possible to import quant params from stock unet weights for testing.
+# Quality won't be great but needs SMOOTHQUANT prescaling disabled to work
+# at all.
+IMPORT_SMOOTHQUANT_PRESCALE = True
+
+# Optimized kernels can use a quantized bias, but this is an advanced case
+# that isn't working flawlessly yet.
+QUANTIZE_BIAS = False
+
 
 def _load_json(p: Path):
     print(f"Loading {p}")
@@ -54,9 +63,11 @@ def _load_theta(st_source) -> Theta:
 
 
 def apply_per_layer_quant(
-    ds: Dataset, layer_name: str, qp, updated_tensors: dict[str, InferenceTensor]
+    root_theta: Theta, layer_name: str, qp, updated_tensors: dict[str, InferenceTensor]
 ):
-    layer_theta = ds.root_theta(layer_name)
+    layer_theta = root_theta(layer_name)
+    weight = layer_theta.tensor("weight")
+    weight_dtype = weight.as_torch().dtype
 
     # The config file has tensors as 1d and a _shape suffixed array with the
     # concrete shape.
@@ -66,6 +77,16 @@ def apply_per_layer_quant(
             return None
         shape = qp[f"{name}_shape"]
         return torch.tensor(data_1d, dtype=dtype).reshape(shape)
+
+    # Optional activation pre-multiplier.
+    if IMPORT_SMOOTHQUANT_PRESCALE:
+        smoothquant_mul = _get_json_tensor("smoothquant_mul", dtype=weight_dtype)
+        if smoothquant_mul is not None:
+            premul_input = DefaultPrimitiveTensor(
+                name=f"{layer_name}.premul_input",
+                data=smoothquant_mul,
+            )
+            updated_tensors[premul_input.name] = premul_input
 
     input_scale = _get_json_tensor("input_scale", torch.float16)
     input_zp = _get_json_tensor("input_zp", torch.uint8)
@@ -77,14 +98,6 @@ def apply_per_layer_quant(
     assert input_scale is not None, f"Could not find input scale (in {qp.keys()})"
 
     # Weight scaling.
-    weight = layer_theta.tensor("weight")
-    weight_dtype = weight.as_torch().dtype
-    # TODO: There is ambiguity with respect to the axis of quantization and the
-    # shape of the scale. I think the intent was that the scale should have a
-    # broadcast ready shape, but they are all 1d. This model only does axis-0
-    # quantization, so we just assert that matches for now.
-    assert weight.shape[0] == weight_scale.shape[0], "Mismatched quantization axis"
-
     # There is an implicit assumption that the weight is asym (uint8) quantized.
     # Our quantizer uses scale/offset nomenclature. The offset maps to
     # zero-point, and the scale maps to the *dequant* scale (so terms differ
@@ -97,14 +110,18 @@ def apply_per_layer_quant(
     )
     weight_quant = weight_quantizer.quantize(weight, name=weight.name)
     updated_tensors[weight_quant.name] = weight_quant
+    # Spot check that things look sane.
+    weight_dequant = weight_quant.unpack().dequant()
+    weight_diff = weight.as_torch() - weight_dequant
+    print("WEIGHT_DIFF:", weight_diff)
 
     # Bias/output scaling.
     bias = layer_theta.optional_tensor("bias")
-    if bias is not None:
+    if QUANTIZE_BIAS and bias is not None:
         # If the bias is present, it dictates the overall output quantization
         # and will not be checked for correct parameters at runtime. It must
         # be quantized to match properly.
-        bias_scale = input_scale * weight_scale
+        bias_scale = 1.0 / (input_scale * weight_scale)
         bias_quantizer = StaticScaledQuantizer(
             scale=bias_scale,
             dtype=torch.int32,
@@ -112,11 +129,10 @@ def apply_per_layer_quant(
         )
         bias_quant = bias_quantizer.quantize(bias, name=bias.name)
         updated_tensors[bias_quant.name] = bias_quant
-
-    # Spot check that things look sane.
-    # weight_dequant = weight_quant.unpack().dequant()
-    # print(f"ORIG:\n{weight.as_torch()[0]}")
-    # print(f"DEQUANT:\n{weight_dequant[0]}")
+        # Spot check that things look sane.
+        bias_dequant = bias_quant.unpack().dequant()
+        bias_diff = bias.as_torch() - bias_dequant
+        print("BIAS_DIFF:", bias_diff)
 
     # Input scaling.
     # Assume per tensor scaling of input.
@@ -129,15 +145,6 @@ def apply_per_layer_quant(
         dtype=torch.int8,
     )
     updated_tensors[input_quantizer.name] = input_quantizer
-
-    # Optional activation pre-multiplier.
-    smoothquant_mul = _get_json_tensor("smoothquant_mul", dtype=weight_dtype)
-    if smoothquant_mul is not None:
-        premul_input = DefaultPrimitiveTensor(
-            name=f"{layer_name}.premul_input",
-            data=smoothquant_mul,
-        )
-        updated_tensors[premul_input.name] = premul_input
 
 
 def main():
@@ -160,6 +167,11 @@ def main():
         default=Path("quant_param.json"),
         help="Quantization parameters",
     )
+    parser.add_argument(
+        "--base-params",
+        type=Path,
+        help="Base parameters to initialize from (will be augmented with quantized)",
+    )
     args = cli.parse(parser)
 
     config_json_path: Path = args.config_json
@@ -174,8 +186,16 @@ def main():
     dataset_props = _get_dataset_props(_load_json(config_json_path))
     quant_params_struct = _load_json(quant_params_path)
     with safetensors.safe_open(params_path, framework="pt", device="cpu") as st:
-        theta = _load_theta(st)
-    ds = Dataset(dataset_props, theta)
+        quant_theta = _load_theta(st)
+    base_theta = None
+    if args.base_params is not None:
+        print("Initializing from base parameters:", args.base_params)
+        with safetensors.safe_open(
+            args.base_params, framework="pt", device="cpu"
+        ) as st:
+            base_theta = _load_theta(st)
+
+    ds = Dataset(dataset_props, quant_theta if base_theta is None else base_theta)
 
     # The quant_params_struct has quantization parameter structs keyed by full
     # layer name. We process each of these in turn to produce a per-layer
@@ -183,9 +203,10 @@ def main():
     updated_tensors: dict[str, InferenceTensor] = {}
     for layer_name, qp in quant_params_struct.items():
         print(f"Applying per-layer quants: {layer_name}")
-        apply_per_layer_quant(ds, layer_name, qp, updated_tensors)
+        apply_per_layer_quant(quant_theta, layer_name, qp, updated_tensors)
 
     # Apply updates into a new Theta.
+    theta = base_theta if base_theta is not None else quant_theta
     flat_tensors = theta.flatten()
     flat_tensors.update(updated_tensors)
     ds.root_theta = Theta(flat_tensors)
