@@ -431,26 +431,27 @@ def _norm_per_axis_param(
     If axis is None, then the case is inferred from the parameters.
     The normalized axis and parameters are returned.
     """
-    required_rank = None
-    results = []
-    for p in params:
-        if p is None:
-            continue
-        rank = len(p.shape)
-        if required_rank is None:
-            if rank == 0:
-                axis = None
-                required_rank = 0
+    # Infer based on shapes.
+    if axis is None:
+        required_rank = None
+        for p in params:
+            if p is None:
+                continue
+            rank = len(p.shape)
+            if required_rank is None:
+                if rank == 0:
+                    axis = None
+                    required_rank = 0
+                else:
+                    axis = _find_non_unit_axis(p)
+                    required_rank = rank
             else:
-                axis = _find_non_unit_axis(p)
-                required_rank = rank
-        else:
-            # Enforce.
-            if rank != required_rank:
-                raise AssertionError(
-                    f"Expected rank {required_rank} quant parameter but "
-                    f"got {rank}: {p}"
-                )
+                # Enforce.
+                if rank != required_rank:
+                    raise AssertionError(
+                        f"Expected rank {required_rank} quant parameter but "
+                        f"got {rank}: {p}"
+                    )
 
     if axis is None:
         return axis, params
