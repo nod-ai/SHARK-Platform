@@ -1,0 +1,113 @@
+# Copyright 2024 Advanced Micro Devices, Inc
+#
+# Licensed under the Apache License v2.0 with LLVM Exceptions.
+# See https://llvm.org/LICENSE.txt for license information.
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+
+import logging
+
+logging.basicConfig(level=logging.DEBUG)
+
+import unittest
+from parameterized import parameterized
+
+import torch
+
+from shark_turbine import aot
+from sharktank import kernels
+
+
+class mmt_scaled_q8_test(unittest.TestCase):
+    def setUp(self):
+        torch.manual_seed(42)
+
+    @parameterized.expand(
+        [
+            (1e-3, 1e-5),
+            (1e-3, 1e-5),
+            (1e-3, 1e-5),
+        ]
+    )
+    def testBS32(self, atol, rtol):
+        a_type = torch.float32
+        lowp_type = torch.int8
+        b_type = torch.bool
+        query = (torch.rand([16, 32] , dtype=a_type) * 16).to(torch.int8)
+        key = (torch.rand([100, 32], dtype=a_type) * 16).to(torch.int8)
+        value = (torch.rand([8, 100], dtype=a_type) * 16).to(torch.int8)
+        query_s = (torch.rand([16], dtype=a_type) * 16).to(torch.int8)
+        key_s = (torch.rand([100], dtype=a_type) * 16).to(torch.int8)
+        value_s = (torch.rand([8], dtype=a_type) * 16).to(torch.int8)
+        query_zp = (torch.rand([16], dtype=a_type) * 16).to(torch.int8)
+        key_zp = (torch.rand([100], dtype=a_type) * 16).to(torch.int8)
+        value_zp = (torch.rand([8], dtype=a_type) * 16).to(torch.int8)
+        attn_mask = torch.rand([16,100], dtype=torch.float32) > .5
+        randoms = torch.rand([16,100], dtype=a_type)
+        dropout_p = torch.tensor(0, dtype=a_type) # for testing
+        is_causal = torch.tensor(True) # true
+        scale = torch.tensor(True) # true # todo, allow values
+        
+        assert query is not None
+        assert key is not None
+        assert value is not None
+        assert query_s is not None
+        assert key_s is not None
+        assert value_s is not None
+        assert query_zp is not None
+        assert key_zp is not None
+        assert value_zp is not None
+        assert attn_mask is not None
+        assert randoms is not None
+        assert dropout_p is not None
+        assert is_causal is not None
+        assert scale is not None
+        result = kernels.attn_q8(query, key, value, query_s, key_s, value_s, query_zp, key_zp, value_zp, attn_mask, randoms, dropout_p, is_causal, scale)
+
+        # Dequantize and test with normal matmul.
+        # Tolerances are empirical and results are not expected to match exactly.
+        scaled_lhs = lhs
+        scaled_rhs = rhs
+        for i in range(lhs.shape[0]):
+            scaled_lhs[i] = (lhs[i].to(a_type) - zp0[i]) * scale0[i].to(a_type)
+        for i in range(rhs.shape[0]):
+            scaled_rhs[i] = (rhs[i].to(a_type) - zp1[i]) * scale1[i].to(a_type)
+        ref = torch.matmul(scaled_lhs.to(a_type), scaled_rhs.T.to(a_type))
+        torch.testing.assert_close(result, ref, atol=atol, rtol=rtol)
+
+    def testExportStaticDims(self):
+        class MyModule(torch.nn.Module):
+            def forward(self, query, key, value, query_s, key_s, value_s, query_zp, key_zp, value_zp, attn_mask, randoms, dropout_p, is_causal, scale):
+                return kernels.attn_q8(query, key, value, query_s, key_s, value_s, query_zp, key_zp, value_zp, attn_mask, randoms, dropout_p, is_causal, scale)
+
+        mod = MyModule()
+        a_type = torch.float32
+        lowp_type = torch.int8
+        b_type = torch.bool
+        ep = torch.export.export(
+            mod,
+            args=(
+                (torch.rand([16, 32], dtype=a_type) * 16).to(torch.int8),
+                (torch.rand([100, 32], dtype=a_type) * 16).to(torch.int8),
+                (torch.rand([8, 100], dtype=a_type) * 16).to(torch.int8),
+                (torch.rand([16], dtype=a_type) * 16).to(torch.int8),
+                (torch.rand([100], dtype=a_type) * 16).to(torch.int8),
+                (torch.rand([8], dtype=a_type) * 16).to(torch.int8),
+                (torch.rand([16], dtype=a_type) * 16).to(torch.int8),
+                (torch.rand([100], dtype=a_type) * 16).to(torch.int8),
+                (torch.rand([8], dtype=a_type) * 16).to(torch.int8),
+                torch.rand([16,100], dtype=torch.float32) > .5,
+                torch.rand([16,100], dtype=a_type),
+                torch.tensor(0, dtype=a_type), # for testing
+                torch.tensor(True),
+                torch.tensor(True), # todo, allow values
+
+            ),
+        )
+        output = aot.export(ep)
+        output.verify()
+        asm = str(output.mlir_module)
+        self.assertIn("@attn_q8", asm)
+
+
+if __name__ == "__main__":
+    unittest.main()
