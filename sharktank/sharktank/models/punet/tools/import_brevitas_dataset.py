@@ -92,10 +92,23 @@ def apply_per_layer_quant(
     input_zp = _get_json_tensor("input_zp", torch.uint8)
     weight_scale = _get_json_tensor("weight_scale", torch.float16)
     weight_zp = _get_json_tensor("weight_zp", torch.uint8)
+
+    if (
+        input_scale is None
+        and input_zp is None
+        and weight_scale is None
+        and weight_zp is None
+    ):
+        # Non quantized layer that has had possible adjustments above.
+        return
+
+    # Quantized layer must have all quantization info.
     assert (
         weight_scale is not None and weight_zp is not None
-    ), f"Could not find weight scale (in {qp.keys()})"
-    assert input_scale is not None, f"Could not find input scale (in {qp.keys()})"
+    ), f"Could not find weight scale (in {qp.keys()}) for {layer_name}"
+    assert (
+        input_scale is not None
+    ), f"Could not find input scale (in {qp.keys()}) for {layer_name}"
 
     # Weight scaling.
     # There is an implicit assumption that the weight is asym (uint8) quantized.

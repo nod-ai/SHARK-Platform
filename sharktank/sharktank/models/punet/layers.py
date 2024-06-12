@@ -523,18 +523,14 @@ class TimestepEmbedding(ThetaLayer):
             self.act_fn = ACTIVATION_FUNCTIONS[act_fn]
         except KeyError as e:
             raise AssertionError(f"Unknown activation function '{act_fn}'") from e
+        self.linear_1 = LinearLayer(theta("linear_1"))
+        self.linear_2 = LinearLayer(theta("linear_2"))
 
     def forward(self, sample):
-        theta = self.theta
-        weight_1 = theta.tensor("linear_1", "weight")
-        bias_1 = theta.tensor("linear_1", "bias")
-        weight_2 = theta.tensor("linear_2", "weight")
-        bias_2 = theta.tensor("linear_2", "bias")
-        h = ops.matmul(sample, weight_1)
-        h = ops.elementwise(torch.add, h, bias_1)
+        h = sample
+        h = self.linear_1(h)
         h = ops.elementwise(self.act_fn, h)
-        h = ops.matmul(h, weight_2)
-        h = ops.elementwise(torch.add, h, bias_2)
+        h = self.linear_2(h)
         return h
 
 
