@@ -19,6 +19,7 @@ __all__ = [
     "embedding_lookup",
     "group_norm_affine",
     "layer_norm",
+    "linear",
     "matmul",
     "rms_norm",
     "sharded_cat",
@@ -37,7 +38,7 @@ def conv2d(
     stride: IntOrSequenceInt = 1,
     padding: IntOrSequenceInt = 0,
     dilation: IntOrSequenceInt = 1,
-    groups: IntOrSequenceInt = 1
+    groups: IntOrSequenceInt = 1,
 ):
     """Equivalent to torch.nn.functional.conv2d with enhancements:
 
@@ -56,7 +57,7 @@ def _conv2d_trampoline(
     stride=1,
     padding=0,
     dilation=1,
-    groups=1
+    groups=1,
 ):
     tensors = [input, weight]
     if bias is not None:
@@ -136,7 +137,7 @@ def _group_norm_affine_trampoline(
     bias: AnyTensor,
     *,
     num_groups: int,
-    eps: float
+    eps: float,
 ):
     tensors = (input, weight, bias)
     for override in d.find_overrides(tensors):
@@ -162,13 +163,57 @@ def _layer_norm_trampoline(
     weight: AnyTensor,
     bias: Optional[AnyTensor],
     *,
-    eps: float
+    eps: float,
 ):
     tensors = [input, weight]
     if bias is not None:
         tensors.append(bias)
     for override in d.find_overrides(tensors):
         result = override(input, weight, bias, eps=eps)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(tensors)
+
+
+@overridable
+def linear(
+    input: AnyTensor,
+    weight: AnyTensor,
+    bias: Optional[AnyTensor],
+    *,
+    accum_dtype: Optional[torch.dtype] = None,
+) -> torch.Tensor:
+    """Applies a linear transformation to the incoming data.
+
+    Equivalent to:
+    ```
+    y = torch.matmul(input, weight.T) + bias
+    ```
+
+    This operator is defined to operate on a limited number of quantized types.
+    In that situation, the result may be a QuantizedTensor. Callers should
+    be prepared to handle this scenario.
+
+    The optional accum_dtype argument is used as a hint to some implementations
+    which may need help in selecting an appropriate high precision type for
+    accumulation.
+    """
+    raise NotImplementedError
+
+
+@linear.trampoline
+def _linear_trampoline(
+    d: SignatureDispatcher,
+    input: AnyTensor,
+    weight: AnyTensor,
+    bias: Optional[AnyTensor],
+    *,
+    accum_dtype: torch.dtype = torch.int32,
+):
+    tensors = (input, weight) if bias is None else (input, weight, bias)
+    for override in d.find_overrides(tensors):
+        result = override(input, weight, bias, accum_dtype=accum_dtype)
         if result is not NotImplemented:
             return override, result
     else:

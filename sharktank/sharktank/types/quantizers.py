@@ -14,7 +14,7 @@ Note that there is no need for a "DequantizerTensor" or a "dequantize" method on
 this class, since any `QuantizedTensor` already knows how to dequantize itself.
 """
 
-from typing import Any, Optional
+from typing import Any, List, Optional, Tuple
 
 from abc import abstractmethod
 
@@ -108,17 +108,19 @@ class StaticScaledQuantizer(QuantizerTensor):
         axis: Optional[int] = None,
         reciprocal_scale: Optional[torch.Tensor] = None,
         offset: Optional[torch.Tensor] = None,
+        disable_saturate: bool = False,
         name: str = UnnamedTensorName,
     ):
         super().__init__(shape=scale.shape, name=name)
-        assert axis is None or axis >= 0
-        self._scale = scale
-        if reciprocal_scale is None:
-            reciprocal_scale = 1.0 / scale
-        self._reciprocal_scale = reciprocal_scale
-        self._offset = offset
+        self._axis, (
+            self._scale,
+            self._reciprocal_scale,
+            self._offset,
+        ) = _norm_per_axis_param(axis, scale, reciprocal_scale, offset)
+        if self._reciprocal_scale is None:
+            self._reciprocal_scale = 1.0 / self._scale
         self._dtype = dtype
-        self._axis = axis
+        self._disable_saturate = disable_saturate
         assert self._scale.shape == self._reciprocal_scale.shape
         assert self._scale.dtype == self._reciprocal_scale.dtype
         if self._offset is not None:
@@ -137,9 +139,17 @@ class StaticScaledQuantizer(QuantizerTensor):
         if axis is None:
             # Per tensor.
             if offset is None:
-                qs = saturate_cast(t * self._scale, dtype=self.dtype)
+                qs = saturate_cast(
+                    t * self._scale,
+                    dtype=self.dtype,
+                    disable_saturate=self._disable_saturate,
+                )
             else:
-                qs = saturate_cast(t * self._scale + offset, dtype=self.dtype)
+                qs = saturate_cast(
+                    t * self._scale + offset,
+                    dtype=self.dtype,
+                    disable_saturate=self._disable_saturate,
+                )
             return PlanarQuantizedTensor(
                 shape=shape,
                 name=name,
@@ -164,11 +174,17 @@ class StaticScaledQuantizer(QuantizerTensor):
             broadcast_reciprocal_scale = reciprocal_scale.reshape(scale_shape)
             if offset is None:
                 broadcast_offset = None
-                qs = saturate_cast(t * broadcast_scale, dtype=self.dtype)
+                qs = saturate_cast(
+                    t * broadcast_scale,
+                    dtype=self.dtype,
+                    disable_saturate=self._disable_saturate,
+                )
             else:
                 broadcast_offset = offset.reshape(scale_shape)
                 qs = saturate_cast(
-                    t * broadcast_scale + broadcast_offset, dtype=self.dtype
+                    t * broadcast_scale + broadcast_offset,
+                    dtype=self.dtype,
+                    disable_saturate=self._disable_saturate,
                 )
             return PlanarQuantizedTensor(
                 shape=shape,
@@ -226,6 +242,7 @@ class StaticScaledQuantizer(QuantizerTensor):
         except KeyError as e:
             raise IOError("Missing property") from e
         axis = int(extra_properties["axis"]) if "axis" in extra_properties else None
+        disable_saturate = bool(extra_properties.get("disable_saturate"))
         dtype = _serialized_name_to_dtype(dtype_name)
         return cls(
             name=name,
@@ -234,6 +251,7 @@ class StaticScaledQuantizer(QuantizerTensor):
             reciprocal_scale=reciprocal_scale,
             dtype=dtype,
             axis=axis,
+            disable_saturate=disable_saturate,
         )
 
     @property
@@ -254,6 +272,8 @@ class StaticScaledQuantizer(QuantizerTensor):
         extra_properties = {"dtype": _dtype_to_serialized_name(self._dtype)}
         if self._axis is not None:
             extra_properties["axis"] = self._axis
+        if self._disable_saturate:
+            extra_properties["disable_saturate"] = True
         raw_tensors = {
             "scale": scale_name,
             "rscale": rscale_name,
@@ -278,6 +298,7 @@ class StaticScaledQuantizer(QuantizerTensor):
             name=self.name,
             dtype=self.dtype,
             axis=self.axis,
+            disable_saturate=self._disable_saturate,
             scale=new_globals[f"{self.name}:scale"],
             reciprocal_scale=new_globals[f"{self.name}:rscale"],
             offset=new_globals.get(offset_name),
@@ -396,3 +417,57 @@ class DynamicScaledQuantizer(QuantizerTensor):
 
     def __repr__(self):
         return f"DynamicScaledQuantizer({self.name}) " f"-> dtype={self._dtype})"
+
+
+def _norm_per_axis_param(
+    axis: Optional[int], *params: torch.Tensor
+) -> Tuple[Optional[int], List[torch.Tensor]]:
+    """Per-axis params can be one of:
+
+    * Scalar, indicating that they apply to all axes (axis = None).
+    * 1D tensor of values and an axis != None.
+    * Broadcasted tensor of values that has one non-unit dim corresponding to axis.
+
+    If axis is None, then the case is inferred from the parameters.
+    The normalized axis and parameters are returned.
+    """
+    # Infer based on shapes.
+    if axis is None:
+        required_rank = None
+        for p in params:
+            if p is None:
+                continue
+            rank = len(p.shape)
+            if required_rank is None:
+                if rank == 0:
+                    axis = None
+                    required_rank = 0
+                else:
+                    axis = _find_non_unit_axis(p)
+                    required_rank = rank
+            else:
+                # Enforce.
+                if rank != required_rank:
+                    raise AssertionError(
+                        f"Expected rank {required_rank} quant parameter but "
+                        f"got {rank}: {p}"
+                    )
+
+    if axis is None:
+        return axis, params
+    else:
+        return axis, [t.squeeze() if t is not None else None for t in params]
+
+
+def _find_non_unit_axis(p: torch.Tensor) -> int:
+    axis = None
+    for i, dim in enumerate(p.shape):
+        if dim == 1:
+            continue
+        else:
+            if axis is not None:
+                raise AssertionError(
+                    f"Expected a single non-unit dim for parameter: {p.shape}"
+                )
+            axis = i
+    return 0 if axis is None else axis
