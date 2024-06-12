@@ -480,9 +480,12 @@ class PlanarQuantizedTensor(QuantizedTensor):
         )
 
     def __repr__(self):
-        return (
-            f"PlanarQuantized({self.name}, {self.shape}, planes={self.globals.keys()})"
-        )
+        def _shape_dtype_repr(t: torch.Tensor):
+            shape_repr = ", ".join(str(d) for d in t.shape)
+            return f"{shape_repr}, dtype={t.dtype}"
+
+        planes_repr = [f"{k}[{_shape_dtype_repr(t)}]" for k, t in self.globals.items()]
+        return f"PlanarQuantized({self.name}, {self.shape}, planes={planes_repr})"
 
 
 ########################################################################################

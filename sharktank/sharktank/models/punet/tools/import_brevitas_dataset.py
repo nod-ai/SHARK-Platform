@@ -92,7 +92,6 @@ def apply_per_layer_quant(
     weight_quantizer = StaticScaledQuantizer(
         scale=1.0 / weight_scale,
         reciprocal_scale=weight_scale,
-        axis=0,
         offset=None if torch.count_nonzero(weight_zp) == 0 else weight_zp,
         dtype=torch.uint8,
     )
@@ -108,7 +107,6 @@ def apply_per_layer_quant(
         bias_scale = input_scale * weight_scale
         bias_quantizer = StaticScaledQuantizer(
             scale=bias_scale,
-            axis=0 if len(bias_scale.shape) > 0 else None,
             dtype=torch.int32,
             disable_saturate=True,
         )

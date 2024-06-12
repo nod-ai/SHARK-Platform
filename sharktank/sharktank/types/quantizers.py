@@ -14,7 +14,7 @@ Note that there is no need for a "DequantizerTensor" or a "dequantize" method on
 this class, since any `QuantizedTensor` already knows how to dequantize itself.
 """
 
-from typing import Any, Optional
+from typing import Any, List, Optional, Tuple
 
 from abc import abstractmethod
 
@@ -112,14 +112,14 @@ class StaticScaledQuantizer(QuantizerTensor):
         name: str = UnnamedTensorName,
     ):
         super().__init__(shape=scale.shape, name=name)
-        assert axis is None or axis >= 0
-        self._scale = scale
-        if reciprocal_scale is None:
-            reciprocal_scale = 1.0 / scale
-        self._reciprocal_scale = reciprocal_scale
-        self._offset = offset
+        self._axis, (
+            self._scale,
+            self._reciprocal_scale,
+            self._offset,
+        ) = _norm_per_axis_param(axis, scale, reciprocal_scale, offset)
+        if self._reciprocal_scale is None:
+            self._reciprocal_scale = 1.0 / self._scale
         self._dtype = dtype
-        self._axis = axis
         self._disable_saturate = disable_saturate
         assert self._scale.shape == self._reciprocal_scale.shape
         assert self._scale.dtype == self._reciprocal_scale.dtype
@@ -417,3 +417,56 @@ class DynamicScaledQuantizer(QuantizerTensor):
 
     def __repr__(self):
         return f"DynamicScaledQuantizer({self.name}) " f"-> dtype={self._dtype})"
+
+
+def _norm_per_axis_param(
+    axis: Optional[int], *params: torch.Tensor
+) -> Tuple[Optional[int], List[torch.Tensor]]:
+    """Per-axis params can be one of:
+
+    * Scalar, indicating that they apply to all axes (axis = None).
+    * 1D tensor of values and an axis != None.
+    * Broadcasted tensor of values that has one non-unit dim corresponding to axis.
+
+    If axis is None, then the case is inferred from the parameters.
+    The normalized axis and parameters are returned.
+    """
+    required_rank = None
+    results = []
+    for p in params:
+        if p is None:
+            continue
+        rank = len(p.shape)
+        if required_rank is None:
+            if rank == 0:
+                axis = None
+                required_rank = 0
+            else:
+                axis = _find_non_unit_axis(p)
+                required_rank = rank
+        else:
+            # Enforce.
+            if rank != required_rank:
+                raise AssertionError(
+                    f"Expected rank {required_rank} quant parameter but "
+                    f"got {rank}: {p}"
+                )
+
+    if axis is None:
+        return axis, params
+    else:
+        return axis, [t.squeeze() if t is not None else None for t in params]
+
+
+def _find_non_unit_axis(p: torch.Tensor) -> int:
+    axis = None
+    for i, dim in enumerate(p.shape):
+        if dim == 1:
+            continue
+        else:
+            if axis is not None:
+                raise AssertionError(
+                    f"Expected a single non-unit dim for parameter: {p.shape}"
+                )
+            axis = i
+    return 0 if axis is None else axis
