@@ -27,28 +27,22 @@ class FFNMOE(ThetaLayer):
         super().__init__(theta)
 
         try:
-            print("theta tensor1", theta("ffn_gate_exps").flatten())
-            print("theta tensor2", theta("ffn_gate_exps").flatten()["weight"])
-            print("theta attr", dir(theta("ffn_gate_exps").flatten()["weight"]))
-            print(
-                "theta tensor3",
-                theta.tensor("ffn_gate_exps.weight").as_torch()[expert_idx],
-            )
-
             self.add_module(
                 "ffn_gate",
                 LinearLayer(
-                    theta.tensor("ffn_gate_exps.weight").as_torch()[expert_idx]
+                    theta.tensor("ffn_gate_exps", "weight").as_torch()[expert_idx]
                 ),
             )
             self.add_module(
                 "ffn_up",
-                LinearLayer(theta.tensor("ffn_up_exps.weight").as_torch()[expert_idx]),
+                LinearLayer(
+                    theta.tensor("ffn_up_exps", "weight").as_torch()[expert_idx]
+                ),
             )
             self.add_module(
                 "ffn_down",
                 LinearLayer(
-                    theta.tensor("ffn_down_exps.weight").as_torch()[expert_idx]
+                    theta.tensor("ffn_down_exps", "weight").as_torch()[expert_idx]
                 ),
             )
         except:
