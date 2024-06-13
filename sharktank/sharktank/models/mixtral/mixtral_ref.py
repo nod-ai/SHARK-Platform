@@ -5,11 +5,9 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 from dataclasses import dataclass
-import math
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from ...layers import *
 from ...types import Theta
@@ -70,7 +68,7 @@ class DirectCacheMixtralModelV1(ThetaLayer):
 
         for n in range(hp.block_count):
             self.attn_blocks.append(
-                AttentionBlock(
+                LlamaAttentionBlock(
                     theta("blk", n),
                     embedding=self.attention_embedding,
                     head_count=hp.attention_head_count,
@@ -108,7 +106,6 @@ class DirectCacheMixtralModelV1(ThetaLayer):
         start_index: int,
         *,
         return_logits: bool = False,
-        return_router_logits: bool = False,
         local_kv_cache: list[torch.Tensor],
     ):
         bs, sl = tokens.shape
@@ -128,21 +125,32 @@ class DirectCacheMixtralModelV1(ThetaLayer):
                 attention_mask, diagonal=start_index + 1
             ).type_as(h)
 
+        # block_count = (total no. of blocks)/2, excluding MoE blocks
+        block_count = len(self.attn_blocks) // 2
+        # print('local_kv_cache, #attn_blocks', len(local_kv_cache), block_count)
         # Iterate over attention + MoE blocks.
-        block_count = len(self.attn_blocks)
         for block_idx, block in enumerate(self.attn_blocks):
-            block_cache_k = local_kv_cache[block_idx]
-            block_cache_v = local_kv_cache[block_count + block_idx]
+            # print("block_idx, block", block_idx, block)
             if block_idx == 0:
                 self.trace_tensor(f"mixtral.attn_block.{block_idx}.input", h)
-            h, router_logits = block(
-                h,
-                cache_k=block_cache_k,
-                cache_v=block_cache_v,
-                start_index=start_index,
-                attention_mask=attention_mask,
-            )
-            self.trace_tensor(f"mixtral.attn_block.{block_idx}.output", h)
+
+            if block.__class__.__name__ == "LlamaAttentionBlock":
+                attn_block_idx = block_idx // 2
+                block_cache_k = local_kv_cache[attn_block_idx]
+                block_cache_v = local_kv_cache[block_count + attn_block_idx]
+                h = block(
+                    h,
+                    cache_k=block_cache_k,
+                    cache_v=block_cache_v,
+                    start_index=start_index,
+                    attention_mask=attention_mask,
+                )
+                self.trace_tensor(f"mixtral.attn_block.{block_idx}.output", h)
+            elif block.__class__.__name__ == "SparseMoeBlock":
+                h = block(
+                    h,
+                )
+                self.trace_tensor(f"mixtral.moe_block.{block_idx}.output", h)
 
         h = self.output_norm(h)
         logits = self.output_lm_head(h)
@@ -152,9 +160,4 @@ class DirectCacheMixtralModelV1(ThetaLayer):
         else:
             last_step = logits[:, -1, :]
             token = torch.argmax(last_step, keepdim=True, dim=1)
-            final_token = token.to(tokens.dtype)
-
-        if return_router_logits:
-            return final_token, router_logits
-        else:
-            return final_token
+            return token.to(tokens.dtype)

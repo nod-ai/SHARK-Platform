@@ -17,6 +17,7 @@ from ..layers import *
 from ..types import *
 
 # TODO: Should be using a base class with the protocol supported.
+from ..models.mixtral.mixtral import *
 from ..models.llama.llama import *
 from ..utils.debugging import trace_tensor
 from ..utils.tokenizer import InferenceTokenizer, load_tokenizer
@@ -232,7 +233,7 @@ def main():
         activation_dtype=activation_dtype,
         attention_dtype=activation_dtype,
     )
-    model = PagedLlamaModelV1(dataset.root_theta, config)
+    model = PagedMixtralModelV1(dataset.root_theta, config)
     generator = TorchGenerator(model, tokenizer)
 
     print(f":: Prompting:")
@@ -248,6 +249,8 @@ def main():
         batch.decode()
         print(f":: Result tokens: {batch.results}")
         batch.print_current_results()
+        # if len(batch.results[0]) == 10:
+        #     break
 
 
 if __name__ == "__main__":
