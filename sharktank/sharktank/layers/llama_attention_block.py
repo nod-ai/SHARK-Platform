@@ -17,11 +17,11 @@ from .norm import RMSNormLayer
 from .rotary_embedding import RotaryEmbeddingLayer
 
 __all__ = [
-    "AttentionBlock",
+    "LlamaAttentionBlock",
 ]
 
 
-class AttentionBlock(ThetaLayer):
+class LlamaAttentionBlock(ThetaLayer):
     """Implements a self attention layer in the style of Llama."""
 
     def __init__(
@@ -73,9 +73,21 @@ class AttentionBlock(ThetaLayer):
 
         xq, xk = self.embedding(xq=xq, xk=xk, start_index=start_index)
 
-        # TODO: Some model variants do some form of kv repetition to expand the
-        # count of kv heads to the count of attention heads used by the q.
-        assert self.head_count == self.head_count_kv, "NYI: KV expansion"
+        # Expand kv heads for GQA.
+        gqa_n_rep = self.head_count // self.head_count_kv
+        assert gqa_n_rep > 0
+        if gqa_n_rep > 1:
+
+            def repeat_kv(x: torch.Tensor) -> torch.Tensor:
+                bs, slen, n_kv_heads, head_dim = x.shape
+                return (
+                    x.unsqueeze(-2)
+                    .expand(bs, slen, n_kv_heads, gqa_n_rep, head_dim)
+                    .reshape(bs, slen, n_kv_heads * gqa_n_rep, head_dim)
+                )
+
+            xk = repeat_kv(xk)
+            xv = repeat_kv(xv)
 
         # Update our positions in the cache.
         cache_k[:bs, start_index:kv_seq_len] = xk
