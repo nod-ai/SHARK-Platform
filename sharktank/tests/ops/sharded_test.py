@@ -12,6 +12,118 @@ from sharktank import ops
 from sharktank.types import *
 
 
+class ConvTest(unittest.TestCase):
+    def testCov2dShardedOutputChannelsOneGroup(self):
+        batches = 2
+        in_channels = 6
+        out_channels = 12
+        groups = 1
+        height = 17
+        width = 19
+        stride = 2
+        padding = 3
+        dilation = 2
+        kernel_height = 3
+        kernel_width = 4
+        x = torch.rand(batches, in_channels, height, width, dtype=torch.float32)
+        weight = torch.rand(
+            out_channels,
+            in_channels // groups,
+            kernel_height,
+            kernel_width,
+            dtype=torch.float32,
+        )
+        bias = torch.rand(out_channels, dtype=torch.float32)
+
+        expected_result = ops.conv2d(
+            x,
+            weight=weight,
+            bias=bias,
+            stride=stride,
+            padding=padding,
+            dilation=dilation,
+            groups=groups,
+        )
+
+        shard_count = 2
+        weight_sharded = ShardedPrimitiveTensor(
+            shard_dim=0, ts=weight, shard_count=shard_count
+        )
+        bias_sharded = ShardedPrimitiveTensor(
+            shard_dim=0, ts=bias, shard_count=shard_count
+        )
+        sharded_result = ops.conv2d(
+            x,
+            weight=weight_sharded,
+            bias=bias_sharded,
+            stride=stride,
+            padding=padding,
+            dilation=dilation,
+            groups=groups,
+        )
+        actual_result = ops.sharded_cat(sharded_result)
+
+        torch.testing.assert_close(actual_result, expected_result)
+
+    def testGroupNormShardedGroups(self):
+        """Shard the channel dimension such that the group count is multiple of the
+        shard count."""
+        batches = 3
+        groups = 6
+        height = 17
+        width = 19
+        channels = 12
+        eps = 0.01
+        x = torch.rand(batches, channels, height, width, dtype=torch.float32)
+        weight = torch.rand(channels, dtype=torch.float32)
+        bias = torch.rand(channels, dtype=torch.float32)
+
+        expected_result = ops.group_norm_affine(
+            x, weight=weight, bias=bias, num_groups=groups, eps=eps
+        )
+
+        shard_count = 3
+        x_sharded = ShardedPrimitiveTensor(shard_dim=1, ts=x, shard_count=shard_count)
+        weight_sharded = ShardedPrimitiveTensor(
+            shard_dim=0, ts=weight, shard_count=shard_count
+        )
+        bias_sharded = ShardedPrimitiveTensor(
+            shard_dim=0, ts=bias, shard_count=shard_count
+        )
+        sharded_result = ops.group_norm_affine(
+            x_sharded,
+            weight=weight_sharded,
+            bias=bias_sharded,
+            num_groups=groups,
+            eps=eps,
+        )
+        actual_result = ops.sharded_cat(sharded_result)
+
+        torch.testing.assert_close(actual_result, expected_result)
+
+    def testLayerNorm(self):
+        """Shard an input dimension other than the trailing normalization dimensions."""
+        batches = 3
+        eps = 0.01
+        weight = torch.rand(3, 4, dtype=torch.float32)
+        bias = torch.rand_like(weight)
+        input_shape = [batches, 11, 12] + list(weight.shape)
+        x = torch.rand(input_shape, dtype=torch.float32)
+
+        expected_result = ops.layer_norm(x, weight=weight, bias=bias, eps=eps)
+
+        x_sharded = ShardedPrimitiveTensor(shard_dim=2, ts=x, shard_count=3)
+        sharded_result = ops.layer_norm(
+            x_sharded,
+            weight=weight,
+            bias=bias,
+            eps=eps,
+        )
+        actual_result = ops.sharded_cat(sharded_result)
+
+        torch.testing.assert_close(actual_result, expected_result)
+
+
 class MatmulTest(unittest.TestCase):
     def testTorchRHSColumnShardedTransposed(self):
         t1 = torch.rand(4, 32, 16, dtype=torch.float32)

@@ -12,6 +12,51 @@ from ..types import InferenceTensor, ShardedPrimitiveTensor
 from ._registry import unbox_tensor
 from .signatures import *
 
+# conv2d
+
+
+def conv2d_sharded_weight_and_bias(
+    input: Tensor,
+    weight: ShardedPrimitiveTensor,
+    bias: ShardedPrimitiveTensor | None,
+    *,
+    stride,
+    padding,
+    dilation,
+    groups,
+):
+    assert weight.shard_count == bias.shard_count
+
+    # Output channels dimension is sharded.
+    if weight.shard_dim == 0 and groups == 1:
+        assert bias is None or bias.shard_dim == 0
+        shards = [
+            conv2d(
+                input,
+                w,
+                b,
+                stride=stride,
+                padding=padding,
+                dilation=dilation,
+                groups=groups,
+            )
+            for w, b in zip(
+                weight.shards,
+                [None] * weight.shard_count if bias is None else bias.shards,
+            )
+        ]
+        return ShardedPrimitiveTensor(shard_dim=1, ts=shards)
+    else:
+        assert False and "Unsupported, TODO: handle sharded channels in input"
+
+
+conv2d.override(
+    Tensor, ShardedPrimitiveTensor, ShardedPrimitiveTensor, auto_dequant=True
+)(conv2d_sharded_weight_and_bias)
+conv2d.override(Tensor, ShardedPrimitiveTensor, auto_dequant=True)(
+    conv2d_sharded_weight_and_bias
+)
+
 # Sharded elementwise.
 
 
@@ -31,6 +76,35 @@ def sharded_elementwise_binary(
     pt_ys = [unbox_tensor(pt) for pt in y.shards]
     partials = [operator(pt_x, pt_y) for pt_x, pt_y in zip(pt_xs, pt_ys)]
     return ShardedPrimitiveTensor(shard_dim=x.shard_dim, shape=x.shape, ts=partials)
+
+
+@group_norm_affine.override(
+    ShardedPrimitiveTensor, ShardedPrimitiveTensor, ShardedPrimitiveTensor
+)
+def shareded_group_norm_affine(input, weight, bias, *, num_groups, eps):
+    assert (
+        input.shard_count == weight.shard_count
+        and input.shard_count == bias.shard_count
+    )
+    assert input.shard_dim == 1 and "Can shard only the channel dimension"
+    assert num_groups % input.shard_count == 0 and "Can shard only groups"
+    num_groups_per_shard = num_groups // input.shard_count
+
+    result_shards = [
+        group_norm_affine(x, num_groups=num_groups_per_shard, weight=w, bias=b, eps=eps)
+        for x, w, b in zip(input.shards, weight.shards, bias.shards)
+    ]
+
+    return ShardedPrimitiveTensor(shard_dim=1, ts=result_shards)
+
+
+@layer_norm.override(ShardedPrimitiveTensor, Tensor, Tensor)
+def layer_norm_default(input, weight, bias, *, eps):
+    assert input.shard_dim >= 0 and input.shard_dim < len(input.shape) - len(
+        weight.shape
+    )
+    shards = [layer_norm(shard, weight, bias, eps=eps) for shard in input.shards]
+    return ShardedPrimitiveTensor(shard_dim=input.shard_dim, ts=shards)
 
 
 # Sharded matmuls.
