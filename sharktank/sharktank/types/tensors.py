@@ -10,7 +10,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 import torch
-
+import shark_turbine.ops as ops
+from ..utils.math import ceildiv
 from shark_turbine.aot import (
     ExternalTensorTrait,
 )
@@ -529,10 +530,24 @@ class ShardedPrimitiveTensor(ShardedTensor):
         self,
         *,
         shard_dim: int,
-        ts: list[torch.Tensor],
+        ts: list[torch.Tensor] | torch.Tensor,
+        shard_count: None | int = None,
         name: str = UnnamedTensorName,
         shape: Optional[list[int]] = None,
     ):
+        """
+        If `ts` is a list of tensors, it is interpreted as the shards.
+        Then `shard_count` must be None.
+        If `ts` is a tensor then `shard_count` must be provided and it,
+        will be sharded along dimension `shard_dim` into `shard_count`
+        number of pieces.
+        """
+        if isinstance(ts, torch.Tensor):
+            assert shard_count is not None
+            ts = ts.split(ceildiv(ts.shape[shard_dim], shard_count), dim=shard_dim)
+            shard_count = None
+
+        shard_count = None
         assert len(ts) > 0
         first_shape = ts[0].shape
         assert len(first_shape) > shard_dim
