@@ -13,6 +13,8 @@ module {
 
 util.func private @attn_q8(%query : tensor<{{m}}x{{k}}x{{lowp_type}}>, %key : tensor<{{n}}x{{k}}x{{lowp_type}}>, %value : tensor<{{p}}x{{n}}x{{lowp_type}}>, %query_s : tensor<{{m}}x{{lowp_type}}>, %key_s : tensor<{{n}}x{{lowp_type}}>, %value_s : tensor<{{p}}x{{lowp_type}}>, %query_zp: tensor<{{m}}x{{lowp_type}}>, %key_zp: tensor<{{n}}x{{lowp_type}}>, %value_zp : tensor<{{p}}x{{lowp_type}}>, %attn_mask : tensor<{{m}}x{{n}}xi1>, %randoms : tensor<{{m}}x{{n}}x{{a_type}}>, %dropout_p_t : tensor<f32>, %is_causal_t : tensor<i1>, %scale_t : tensor<i1>) -> tensor<{{m}}x{{p}}x{{a_type}}> {
 
+iree_input.tensor.trace "FOOBAR" = [%query : tensor<{{m}}x{{k}}x{{lowp_type}}>, %key : tensor<{{n}}x{{k}}x{{lowp_type}}>, %value : tensor<{{p}}x{{n}}x{{lowp_type}}>, %query_s : tensor<{{m}}x{{lowp_type}}>, %key_s : tensor<{{n}}x{{lowp_type}}>, %value_s : tensor<{{p}}x{{lowp_type}}>, %query_zp: tensor<{{m}}x{{lowp_type}}>, %key_zp: tensor<{{n}}x{{lowp_type}}>, %value_zp : tensor<{{p}}x{{lowp_type}}>, %attn_mask : tensor<{{m}}x{{n}}xi1>, %randoms : tensor<{{m}}x{{n}}x{{a_type}}>, %dropout_p_t : tensor<f32>, %is_causal_t : tensor<i1>, %scale_t : tensor<i1>]
+
 %zerof32 = arith.constant 0.0 : {{a_type}}
 %onef32 = arith.constant 1.0 : {{a_type}}
 %inff32 = arith.constant 0xFF800000 : {{a_type}} // negative infinity
@@ -46,7 +48,7 @@ util.func private @attn_q8(%query : tensor<{{m}}x{{k}}x{{lowp_type}}>, %key : te
 // attn_mask
 
 %mask = linalg.generic {indexing_maps = [#map4, #map4], iterator_types = ["parallel", "parallel"]}
-ins(%attn_mask : tensor<{{m}}x{{n}}xi1>) outs(%mask_partial_init : tensor<{{m}}x{{n}}x{{a_type}}>) {
+ins(%attn_mask : tensor<{{m}}x{{n}}xi1>) outs(%bias_init : tensor<{{m}}x{{n}}x{{a_type}}>) {
 ^bb0(%m : i1, %out : f32):
   %select = arith.select %m, %zerof32, %inff32 : {{a_type}}
   %add = arith.addf %out, %select : {{a_type}}
@@ -57,9 +59,9 @@ ins(%attn_mask : tensor<{{m}}x{{n}}xi1>) outs(%mask_partial_init : tensor<{{m}}x
 %empty_mmt = tensor.empty() : tensor<{{m}}x{{n}}x{{a_type}}>
 %full_mmt = linalg.fill ins (%zerof32 : {{a_type}}) outs (%empty_mmt : tensor<{{m}}x{{n}}x{{a_type}}>)  -> tensor<{{m}}x{{n}}x{{a_type}}>
 
-%mmt_unscaled = linalg.generic {indexing_maps = [#map0, #map1, #map7, #map8, #map2], iterator_types = ["parallel", "parallel", "reduction"]}
-ins(%query, %key, %query_zp, %key_zp : tensor<{{m}}x{{k}}x{{lowp_type}}>, tensor<{{n}}x{{k}}x{{lowp_type}}>, tensor<{{m}}x{{lowp_type}}>, tensor<{{n}}x{{lowp_type}}>) outs(%full_mmt : tensor<{{m}}x{{n}}x{{a_type}}>) {
-^bb0(%lhs: {{lowp_type}}, %rhs: {{lowp_type}}, %zp0: {{lowp_type}}, %zp1: {{lowp_type}}, %out0: {{a_type}}):
+%mmt = linalg.generic {indexing_maps = [#map0, #map1, #map7, #map8, #map7, #map8, #map2], iterator_types = ["parallel", "parallel", "reduction"]}
+ins(%query, %key, %query_s, %key_s, %query_zp, %key_zp : tensor<{{m}}x{{k}}x{{lowp_type}}>, tensor<{{n}}x{{k}}x{{lowp_type}}>, tensor<{{m}}x{{lowp_type}}>, tensor<{{n}}x{{lowp_type}}>, tensor<{{m}}x{{lowp_type}}>, tensor<{{n}}x{{lowp_type}}>) outs(%full_mmt : tensor<{{m}}x{{n}}x{{a_type}}>) {
+^bb0(%lhs: {{lowp_type}}, %rhs: {{lowp_type}}, %scale0: {{lowp_type}}, %scale1: {{lowp_type}}, %zp0: {{lowp_type}}, %zp1: {{lowp_type}}, %out0: {{a_type}}):
   %lhs_i32 = arith.extsi %lhs : {{lowp_type}} to i32
   %lhs_f32 = arith.sitofp %lhs_i32 : i32 to {{a_type}}
   %rhs_i32 = arith.extsi %rhs : {{lowp_type}} to i32
@@ -72,25 +74,16 @@ ins(%query, %key, %query_zp, %key_zp : tensor<{{m}}x{{k}}x{{lowp_type}}>, tensor
   %lhs_offset = arith.subf %lhs_f32, %zp0_f32 : {{a_type}}
   %rhs_offset = arith.subf %rhs_f32, %zp1_f32 : {{a_type}}
 
-  %mul = arith.mulf %lhs_offset, %rhs_offset : {{a_type}}
-  %add = arith.addf %out0, %mul : {{a_type}}
-  linalg.yield %add : {{a_type}}
-} -> tensor<{{m}}x{{n}}x{{a_type}}>
-
-%empty_mmt_2 = tensor.empty() : tensor<{{m}}x{{n}}x{{a_type}}>
-%mmt = linalg.generic {indexing_maps = [#map4, #map5, #map6, #map4], iterator_types = ["parallel", "parallel"]}
-ins(%mmt_unscaled, %query_s, %key_s : tensor<{{m}}x{{n}}x{{a_type}}>, tensor<{{m}}x{{lowp_type}}>, tensor<{{n}}x{{lowp_type}}>) outs(%empty_mmt_2 : tensor<{{m}}x{{n}}x{{a_type}}>) {
-  ^bb0(%in: {{a_type}}, %scale0 : {{lowp_type}}, %scale1 : {{lowp_type}}, %out: {{a_type}}):
   %scale0_i32 = arith.extsi %scale0 : {{lowp_type}} to i32
   %scale0_f32 = arith.sitofp %scale0_i32 : i32 to {{a_type}}
   %scale1_i32 = arith.extsi %scale1 : {{lowp_type}} to i32
   %scale1_f32 = arith.sitofp %scale1_i32 : i32 to {{a_type}}
 
-  %scale_f32 = arith.mulf %scale0_f32, %scale1_f32 : {{a_type}}
-  %scale_full = arith.mulf %scale_f32, %sdpa_scale : {{a_type}}
-  %scaled = arith.mulf %scale_full, %in : {{a_type}}
-
-  linalg.yield %scaled : {{a_type}}
+  %scaled_lhs = arith.mulf %scale0_f32, %lhs_offset : {{a_type}}
+  %scaled_rhs = arith.mulf %scale1_f32, %rhs_offset : {{a_type}}
+  %mul = arith.mulf %scaled_lhs, %scaled_rhs : {{a_type}}
+  %add = arith.addf %out0, %mul : {{a_type}}
+  linalg.yield %add : {{a_type}}
 } -> tensor<{{m}}x{{n}}x{{a_type}}>
 
 // bias
@@ -109,16 +102,18 @@ ins(%mmt_unscaled, %query_s, %key_s : tensor<{{m}}x{{n}}x{{a_type}}>, tensor<{{m
 ins(%softmaxed, %randoms : tensor<{{m}}x{{n}}x{{a_type}}>, tensor<{{m}}x{{n}}x{{a_type}}>) outs(%dropout_empty : tensor<{{m}}x{{n}}x{{a_type}}>) {
 ^bb0(%s : {{a_type}}, %r : {{a_type}}, %out : f32):
   %rand = arith.cmpf olt, %r, %dropout_p : f32
-  %select = arith.select %rand, %s, %zerof32 : {{a_type}}
+  %select = arith.select %rand, %zerof32, %s : {{a_type}}
   linalg.yield %select : {{a_type}}
 } -> tensor<{{m}}x{{n}}x{{a_type}}>
+
+iree_input.tensor.trace  "FOOBAR" = [%dropouted: tensor<{{m}}x{{n}}x{{a_type}}>]
 
 // matmul
 %empty_mmt2 = tensor.empty() : tensor<{{m}}x{{p}}x{{a_type}}>
 %full_mmt2 = linalg.fill ins (%zerof32 : {{a_type}}) outs (%empty_mmt2 : tensor<{{m}}x{{p}}x{{a_type}}>)  -> tensor<{{m}}x{{p}}x{{a_type}}>
-%mmt2_unscaled = linalg.generic {indexing_maps = [#map0, #map1, #map8, #map2], iterator_types = ["parallel", "parallel", "reduction"]}
-ins(%dropouted, %value, %value_zp : tensor<{{m}}x{{n}}x{{a_type}}>, tensor<{{p}}x{{n}}x{{lowp_type}}>, tensor<{{p}}x{{lowp_type}}>) outs(%full_mmt2 : tensor<{{m}}x{{p}}x{{a_type}}>) {
-^bb0(%lhs: {{a_type}}, %rhs: {{lowp_type}}, %zp: {{lowp_type}}, %out0: {{a_type}}):
+%mmt2 = linalg.generic {indexing_maps = [#map0, #map1, #map8, #map8, #map2], iterator_types = ["parallel", "parallel", "reduction"]}
+ins(%dropouted, %value, %value_s, %value_zp : tensor<{{m}}x{{n}}x{{a_type}}>, tensor<{{p}}x{{n}}x{{lowp_type}}>, tensor<{{p}}x{{lowp_type}}>, tensor<{{p}}x{{lowp_type}}>) outs(%full_mmt2 : tensor<{{m}}x{{p}}x{{a_type}}>) {
+^bb0(%lhs: {{a_type}}, %rhs: {{lowp_type}}, %scale1: {{lowp_type}}, %zp: {{lowp_type}}, %out0: {{a_type}}):
   %rhs_i32 = arith.extsi %rhs : {{lowp_type}} to i32
   %rhs_f32 = arith.sitofp %rhs_i32 : i32 to {{a_type}}
   %zp_i32 = arith.extsi %zp : {{lowp_type}} to i32
@@ -126,22 +121,16 @@ ins(%dropouted, %value, %value_zp : tensor<{{m}}x{{n}}x{{a_type}}>, tensor<{{p}}
 
   %rhs_offset = arith.subf %rhs_f32, %zp_f32 : {{a_type}}
 
-  %mul = arith.mulf %lhs, %rhs_offset : {{a_type}}
+  %scale1_i32 = arith.extsi %scale1 : {{lowp_type}} to i32
+  %scale1_f32 = arith.sitofp %scale1_i32 : i32 to {{a_type}}
+
+  %scaled_rhs = arith.mulf %scale1_f32, %rhs_offset : {{a_type}}
+  %mul = arith.mulf %lhs, %scaled_rhs : {{a_type}}
   %add = arith.addf %out0, %mul : {{a_type}}
   linalg.yield %add : {{a_type}}
 } -> tensor<{{m}}x{{p}}x{{a_type}}>
 
-%empty_mmt2_2 = tensor.empty() : tensor<{{m}}x{{p}}x{{a_type}}>
-%mmt2 = linalg.generic {indexing_maps = [#map4, #map6, #map4], iterator_types = ["parallel", "parallel"]}
-ins(%mmt2_unscaled, %value_s : tensor<{{m}}x{{p}}x{{a_type}}>, tensor<{{p}}x{{lowp_type}}>) outs(%empty_mmt2_2 : tensor<{{m}}x{{p}}x{{a_type}}>) {
-  ^bb0(%in: {{a_type}}, %scale0 : {{lowp_type}}, %out: {{a_type}}):
-  %scale0_i32 = arith.extsi %scale0 : {{lowp_type}} to i32
-  %scale0_f32 = arith.sitofp %scale0_i32 : i32 to {{a_type}}
-
-  %scaled = arith.mulf %in, %scale0_f32 : {{a_type}}
-
-  linalg.yield %scaled : {{a_type}}
-} -> tensor<{{m}}x{{p}}x{{a_type}}>
+iree_input.tensor.trace  "FOOBAR" = [%mmt2: tensor<{{m}}x{{p}}x{{a_type}}>]
 
 util.return %mmt2 : tensor<{{m}}x{{p}}x{{a_type}}>
 }

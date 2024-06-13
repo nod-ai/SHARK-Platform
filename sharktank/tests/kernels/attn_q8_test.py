@@ -44,7 +44,7 @@ class mmt_scaled_q8_test(unittest.TestCase):
         attn_mask = torch.rand([16,100], dtype=torch.float32) > .5
         randoms = torch.rand([16,100], dtype=a_type)
         dropout_p = torch.tensor(0, dtype=a_type) # for testing
-        is_causal = torch.tensor(True) # true
+        is_causal = torch.tensor(False) # true
         scale = torch.tensor(True) # true # todo, allow values
         
         assert query is not None
@@ -65,13 +65,16 @@ class mmt_scaled_q8_test(unittest.TestCase):
 
         # Dequantize and test with normal matmul.
         # Tolerances are empirical and results are not expected to match exactly.
-        scaled_lhs = lhs
-        scaled_rhs = rhs
-        for i in range(lhs.shape[0]):
-            scaled_lhs[i] = (lhs[i].to(a_type) - zp0[i]) * scale0[i].to(a_type)
-        for i in range(rhs.shape[0]):
-            scaled_rhs[i] = (rhs[i].to(a_type) - zp1[i]) * scale1[i].to(a_type)
-        ref = torch.matmul(scaled_lhs.to(a_type), scaled_rhs.T.to(a_type))
+        q = query.to(a_type)
+        k = key.to(a_type)
+        v = value.to(a_type)
+        for i in range(query.shape[0]):
+            q[i] = (query[i].to(a_type) - query_zp[i].to(a_type)) * query_s[i].to(a_type)
+        for i in range(key.shape[0]):
+            k[i] = (key[i].to(a_type) - key_zp[i].to(a_type)) * key_s[i].to(a_type)
+        for i in range(value.shape[0]):
+            v[i] = (value[i].to(a_type) - value_zp[i].to(a_type)) * value_s[i].to(a_type)
+        ref = torch.nn.functional.scaled_dot_product_attention(q, k, v.T, attn_mask=attn_mask, dropout_p=dropout_p.item(), is_causal=is_causal.item(), scale=1)
         torch.testing.assert_close(result, ref, atol=atol, rtol=rtol)
 
     def testExportStaticDims(self):
@@ -98,7 +101,7 @@ class mmt_scaled_q8_test(unittest.TestCase):
                 torch.rand([16,100], dtype=torch.float32) > .5,
                 torch.rand([16,100], dtype=a_type),
                 torch.tensor(0, dtype=a_type), # for testing
-                torch.tensor(True),
+                torch.tensor(False),
                 torch.tensor(True), # todo, allow values
 
             ),
