@@ -65,6 +65,7 @@ def qlinear_tensor_scaled_integer(
 
     # Alias components (d=scale, qs=quantized samples, m=offset)
     x_d = x_layout.d
+    x_dtype = x_layout.dtype
     x_qs = x_layout.qs
     x_m = x_layout.m
     weight_d = weight_layout.d
@@ -133,6 +134,7 @@ def qlinear_tensor_scaled_integer(
             shape=output_shape,
             d=rescale_d,
             qs=y_qs,
+            dtype=x_dtype,
         ),
     )
 

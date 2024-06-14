@@ -158,6 +158,7 @@ class StaticScaledQuantizer(QuantizerTensor):
                     d=self._reciprocal_scale,
                     qs=qs,
                     m=self._offset,
+                    dtype=t.dtype,  # Original dtype.
                 ),
             )
         else:
@@ -194,6 +195,7 @@ class StaticScaledQuantizer(QuantizerTensor):
                     d=broadcast_reciprocal_scale,
                     qs=qs,
                     m=broadcast_offset,
+                    dtype=t.dtype,  # Original dtype.
                 ),
             )
 
@@ -352,7 +354,7 @@ class DynamicScaledQuantizer(QuantizerTensor):
             reciprocal_scale = 1 / scale
             qs = saturate_cast(t * scale, self.dtype, round_int=True)
         else:
-            eps = 1e-4
+            eps = 1e-6
             iinfo = torch.iinfo(dtype)
             scale = iinfo.max / amax.clamp(eps)
             reciprocal_scale = 1.0 / scale
@@ -362,9 +364,7 @@ class DynamicScaledQuantizer(QuantizerTensor):
             shape=shape,
             name=name,
             layout=TensorScaledLayout(
-                shape=shape,
-                d=reciprocal_scale,
-                qs=qs,
+                shape=shape, d=reciprocal_scale, qs=qs, dtype=t.dtype  # Original dtype.
             ),
         )
 
