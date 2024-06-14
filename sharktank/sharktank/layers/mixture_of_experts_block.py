@@ -13,7 +13,6 @@ import torch.nn.functional as F
 from .base import Theta, ThetaLayer
 from .linear import LinearLayer
 from .norm import RMSNormLayer
-from .ffn_block import FFN
 from .ffn_moe_block import FFNMOE
 
 __all__ = [

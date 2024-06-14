@@ -9,8 +9,9 @@ from typing import Optional
 import torch
 import torch.nn.functional as F
 
-from .base import Theta, ThetaLayer
+from .base import ThetaLayer
 from .linear import LinearLayer
+from ..types import Theta, DefaultPrimitiveTensor
 
 __all__ = [
     "FFNMOE",
@@ -27,24 +28,36 @@ class FFNMOE(ThetaLayer):
         super().__init__(theta)
 
         try:
-            self.add_module(
-                "ffn_gate",
-                LinearLayer(
-                    theta.tensor("ffn_gate_exps", "weight").as_torch()[expert_idx]
-                ),
+            merged_tensor = theta.tensor("ffn_gate_exps", "weight")
+            expert_layer_name = (
+                f"blk.{merged_tensor.name.split('.')[1]}.ffn_gate.{expert_idx}.weight"
             )
-            self.add_module(
-                "ffn_up",
-                LinearLayer(
-                    theta.tensor("ffn_up_exps", "weight").as_torch()[expert_idx]
-                ),
+            expert_tensor = DefaultPrimitiveTensor(
+                name=expert_layer_name, data=merged_tensor.as_torch()[expert_idx]
             )
-            self.add_module(
-                "ffn_down",
-                LinearLayer(
-                    theta.tensor("ffn_down_exps", "weight").as_torch()[expert_idx]
-                ),
+
+            self.add_module("ffn_gate", LinearLayer(Theta({"weight": expert_tensor})))
+
+            merged_tensor = theta.tensor("ffn_up_exps", "weight")
+            expert_layer_name = (
+                f"blk.{merged_tensor.name.split('.')[1]}.ffn_up.{expert_idx}.weight"
             )
+            expert_tensor = DefaultPrimitiveTensor(
+                name=expert_layer_name, data=merged_tensor.as_torch()[expert_idx]
+            )
+
+            self.add_module("ffn_up", LinearLayer(Theta({"weight": expert_tensor})))
+
+            merged_tensor = theta.tensor("ffn_down_exps", "weight")
+            expert_layer_name = (
+                f"blk.{merged_tensor.name.split('.')[1]}.ffn_down.{expert_idx}.weight"
+            )
+            expert_tensor = DefaultPrimitiveTensor(
+                name=expert_layer_name, data=merged_tensor.as_torch()[expert_idx]
+            )
+
+            self.add_module("ffn_down", LinearLayer(Theta({"weight": expert_tensor})))
+
         except:
             self.add_module("ffn_gate", LinearLayer(theta("ffn_gate", expert_idx)))
             self.add_module("ffn_up", LinearLayer(theta("ffn_up", expert_idx)))
