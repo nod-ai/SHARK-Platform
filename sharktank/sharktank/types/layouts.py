@@ -22,6 +22,8 @@ from .tensors import (
     register_quantized_layout,
     MetaDataValueType,
     QuantizedLayout,
+    _dtype_to_serialized_name,
+    _serialized_name_to_dtype,
 )
 
 from .layout_utils import (
@@ -57,6 +59,12 @@ class TensorScaledLayout(QuantizedLayout):
     If d/m are scalar tensors, then this implements whole tensor quantization.
     Otherwise, they must be broadcast to the axis along which scaling is
     performed.
+
+    If initialized with a dtype, the result of the conversion will be cast
+    to this dtype (unless if otherwise specified in dequant()). If dtype is
+    not specified in the constructor, it will default to the dtype of `d`.
+    For low precision fp activation types, it can be necessary to have a higher
+    precision `d`.
     """
 
     def __init__(
@@ -66,11 +74,13 @@ class TensorScaledLayout(QuantizedLayout):
         d: torch.Tensor,
         qs: torch.Tensor,
         m: Optional[torch.Tensor] = None,
+        dtype: Optional[torch.dtype] = None,
     ):
         self._shape = shape
         self._d = d
         self._qs = qs
         self._m = m
+        self._dtype = dtype if dtype is not None else d.dtype
 
     @classmethod
     def serialized_name(cls) -> str:
@@ -84,7 +94,19 @@ class TensorScaledLayout(QuantizedLayout):
         planes: dict[str, torch.Tensor],
     ):
         m = planes.get("m")
-        return cls(shape=shape, d=planes["d"], qs=planes["qs"], m=m)
+        dtype_str = metadata.get("dtype")
+        if dtype_str is not None:
+            dtype = _serialized_name_to_dtype(dtype_str)
+        else:
+            # Backwards compat with old serialized. Emulate original behavior
+            # before mixed precision.
+            dtype = None
+        return cls(shape=shape, d=planes["d"], qs=planes["qs"], m=m, dtype=dtype)
+
+    @property
+    def metadata(self) -> Optional[dict[str, MetaDataValueType]]:
+        """Additional metadata needed to reconstruct a layout."""
+        return {"dtype": _dtype_to_serialized_name(self._dtype)}
 
     @property
     def planes(self) -> dict[str, torch.Tensor]:
@@ -100,6 +122,10 @@ class TensorScaledLayout(QuantizedLayout):
     def shape(self) -> list[int]:
         """The flattened shape of the logical (unblocked) result."""
         return self._shape
+
+    @property
+    def dtype(self) -> torch.dtype:
+        return self._dtype
 
     @property
     def d(self) -> torch.Tensor:
@@ -123,16 +149,18 @@ class TensorScaledLayout(QuantizedLayout):
         d = self.d
         m = self.m
         qs = self.qs
-        if dtype is not None:
-            d = d.to(dtype)
-        else:
-            dtype = d.dtype
-        qs = qs.to(dtype=dtype)
+        if dtype is None:
+            dtype = self.dtype
+        rescale_dtype = d.dtype
+        qs = qs.to(dtype=rescale_dtype)
         if m is not None:
-            m = m.to(dtype)
-            return (qs - m) * d
+            m = m.to(rescale_dtype)
+            result = (qs - m) * d
         else:
-            return qs * d
+            result = qs * d
+        if result.dtype != dtype:
+            result = result.to(dtype=dtype)
+        return result
 
     def __repr__(self):
         r = (
@@ -141,6 +169,7 @@ class TensorScaledLayout(QuantizedLayout):
         )
         if self.m is not None:
             r += f", m({list(self.m.shape)}, dtype={self.m.dtype})"
+        r += f" -> {self.dtype}"
         return r
 
 

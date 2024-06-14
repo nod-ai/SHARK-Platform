@@ -33,9 +33,9 @@ from ....types import *
 # at all.
 IMPORT_SMOOTHQUANT_PRESCALE = True
 
-# Optimized kernels can use a quantized bias, but this is an advanced case
-# that isn't working flawlessly yet.
-QUANTIZE_BIAS = False
+# Quantizing the bias can produce better fusions but puts more pressure on
+# datatype ranges.
+QUANTIZE_BIAS = True
 
 
 def _load_json(p: Path):
@@ -88,9 +88,9 @@ def apply_per_layer_quant(
             )
             updated_tensors[premul_input.name] = premul_input
 
-    input_scale = _get_json_tensor("input_scale", torch.float16)
+    input_scale = _get_json_tensor("input_scale", torch.float32)
     input_zp = _get_json_tensor("input_zp", torch.uint8)
-    weight_scale = _get_json_tensor("weight_scale", torch.float16)
+    weight_scale = _get_json_tensor("weight_scale", torch.float32)
     weight_zp = _get_json_tensor("weight_zp", torch.uint8)
 
     if (
