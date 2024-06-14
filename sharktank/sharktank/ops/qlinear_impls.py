@@ -24,17 +24,13 @@ from .signatures import *
 
 _CUDA_HACK = True
 
-################################################################################
-# qlinear
-################################################################################
-
 
 def qlinear_tensor_scaled_integer(
     x: QuantizedTensor,
     weight: QuantizedTensor,
     bias: Optional[AnyTensor],
     *,
-    accum_dtype: torch.dtype,
+    accum_dtype: Optional[torch.dtype],
 ) -> torch.Tensor:
     # Only handle tensor scaled layouts.
     if not issubclass(x.layout_type, TensorScaledLayout) or not issubclass(
@@ -64,6 +60,8 @@ def qlinear_tensor_scaled_integer(
                 warnings.warn(f"unsupported qlinear bias quantization: {bias_layout}")
 
     # Alias components (d=scale, qs=quantized samples, m=offset)
+    if accum_dtype is None:
+        accum_dtype = torch.int32
     x_d = x_layout.d
     x_dtype = x_layout.dtype
     x_qs = x_layout.qs
@@ -131,7 +129,7 @@ def qlinear_tensor_scaled_integer(
         # Output scale by the product of input and weight scale.
         rescale_d = x_d * weight_d.T
 
-    output_shape = list(y_qs)
+    output_shape = list(y_qs.shape)
     y = PlanarQuantizedTensor(
         shape=output_shape,
         layout=TensorScaledLayout(

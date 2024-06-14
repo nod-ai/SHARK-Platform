@@ -28,7 +28,8 @@ def conv2d_default(
     stride,
     padding,
     dilation,
-    groups
+    groups,
+    accum_dtype: Optional[torch.dtype],
 ):
     input = unbox_tensor(input)
     weight = unbox_tensor(weight)

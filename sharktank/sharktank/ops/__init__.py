@@ -27,4 +27,5 @@ from . import custom_impls
 from . import sharded_impls
 
 # Comment this out to completely disable optimized quantized implementations.
-from . import q_impls
+from . import qconv_impls
+from . import qlinear_impls
