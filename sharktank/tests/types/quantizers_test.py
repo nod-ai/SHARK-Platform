@@ -41,8 +41,9 @@ class StaticScaledQuantizerTest(TempDirTestBase):
             scale=torch.tensor(2.0, dtype=torch.float32), dtype=torch.uint8
         )
         ssq = self._roundtrip(ssq)
-        orig_value = torch.tensor([1.0, 2.0, 3.0, 4.0], dtype=torch.float32)
+        orig_value = torch.tensor([1.0, 2.0, 3.0, 4.0], dtype=torch.float16)
         qt_value = ssq.quantize(orig_value)
+        qt_value = self._roundtrip(qt_value)
         layout = qt_value.unpack()
         dequant_value = layout.dequant()
         torch.testing.assert_close(orig_value, dequant_value, atol=1e-3, rtol=1e-3)
@@ -54,8 +55,9 @@ class StaticScaledQuantizerTest(TempDirTestBase):
             dtype=torch.int8,
         )
         ssq = self._roundtrip(ssq)
-        orig_value = torch.tensor([9.0, 10.0, 11.0, 12.0], dtype=torch.float32)
+        orig_value = torch.tensor([9.0, 10.0, 11.0, 12.0], dtype=torch.float16)
         qt_value = ssq.quantize(orig_value)
+        qt_value = self._roundtrip(qt_value)
         layout = qt_value.unpack()
         dequant_value = layout.dequant()
         torch.testing.assert_close(orig_value, dequant_value, atol=1e-3, rtol=1e-3)
@@ -84,7 +86,9 @@ class StaticScaledQuantizerTest(TempDirTestBase):
             dtype=torch.int8,
         )
         ssq = self._roundtrip(ssq)
-        orig_value = torch.tensor([[1.0, -2.0, 3.0], [10.0, -20.0, 60.0]])
+        orig_value = torch.tensor(
+            [[1.0, -2.0, 3.0], [10.0, -20.0, 60.0]], dtype=torch.float16
+        )
         qt_value = ssq.quantize(orig_value)
         layout = qt_value.unpack()
         qs = layout.planes["qs"]
@@ -102,7 +106,9 @@ class StaticScaledQuantizerTest(TempDirTestBase):
             dtype=torch.uint8,
         )
         ssq = self._roundtrip(ssq)
-        orig_value = torch.tensor([[9.0, -11.0, 13.0], [18.0, -29.0, 40.0]])
+        orig_value = torch.tensor(
+            [[9.0, -11.0, 13.0], [18.0, -29.0, 40.0]], dtype=torch.float16
+        )
         qt_value = ssq.quantize(orig_value)
         layout = qt_value.unpack()
         qs = layout.planes["qs"]
