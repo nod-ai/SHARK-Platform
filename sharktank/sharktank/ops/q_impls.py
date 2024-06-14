@@ -103,12 +103,16 @@ def qlinear_tensor_scaled_integer(
     if x_m is not None:
         # Apply offset correction for asymmetric x.
         # At the time of writing this was not a common case.
-        x_offset_fix = torch.sum(weight_qs, axis=0, keepdim=True, dtype=accum_dtype) * x_m
+        x_offset_fix = (
+            torch.sum(weight_qs, axis=0, keepdim=True, dtype=accum_dtype) * x_m
+        )
         y_qs = y_qs - x_offset_fix
     if weight_m is not None:
         # Apply offset correction for asymmetric weight.
         # At the time of writing this was the common case.
-        weight_offset_fix = torch.sum(x_qs, axis=-1, keepdim=True, dtype=accum_dtype) * weight_m.T
+        weight_offset_fix = (
+            torch.sum(x_qs, axis=-1, keepdim=True, dtype=accum_dtype) * weight_m.T
+        )
         y_qs = y_qs - weight_offset_fix
     if x_m is not None and weight_m is not None:
         # Apply joint offset correction if both x and weight are asymmetric.
