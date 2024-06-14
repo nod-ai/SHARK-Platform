@@ -5,14 +5,133 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 import torch
-from torch import Tensor, dtype
-import torch.nn.functional as F
+from torch import Tensor
 
-from ..types import InferenceTensor, ShardedPrimitiveTensor
+from ..types import ShardedPrimitiveTensor, ReplicatedTensor
 from ._registry import unbox_tensor
 from .signatures import *
 
+
+@all_gather.override(ShardedPrimitiveTensor)
+def all_gather_sharded(
+    input: ShardedPrimitiveTensor, *, dim: int | None
+) -> ReplicatedTensor:
+    assert (
+        dim is None
+    ), "gather dimension other than `input.shard_dim` is not supported."
+    # TODO: figure out how to avoid common sub-expression elimination to not
+    # merge all these into one.
+    # Even if we place each resulting shard inside of ReplicatedTensor on a
+    # distinct logical device with an explicit operation, CSE should still
+    # collapse them.
+    shards = [sharded_cat(input) for i in range(input.shard_count)]
+    return ReplicatedTensor(ts=shards)
+
+
 # conv2d
+
+
+def conv2d_all_sharded(
+    input: ShardedPrimitiveTensor,
+    weight: ShardedPrimitiveTensor,
+    bias: ShardedPrimitiveTensor | None,
+    *,
+    stride,
+    padding,
+    dilation,
+    groups,
+) -> ShardedPrimitiveTensor:
+    assert input.shard_count == weight.shard_count
+    assert bias is None or weight.shard_count == bias.shard_count
+    assert (
+        input.is_replicated or input.shard_dim == 1
+    ), "Only sharding of input channel dimension is supported"
+    assert (
+        weight.shard_dim == 0 and bias.shard_dim == 0
+    ), "Only sharding of output channel dimension is supported"
+
+    # TODO: allow for implementation where we don't all-gather, but gather
+    # instead and share the input tensor.
+    # This may be useful when having peered memory.
+    #
+    # Another option is to have each device do multiple convolutions without
+    # doing an gather/all-gather.
+    # Then a reduction across the shards.
+    # If groups are divisible by the number of shards we don't need to do a
+    # reduction.
+    # We would be relaying on the compiler to fuse the convs into a single
+    # kernel.
+    # A batched conv where the mini-batches(shards) are scattered across
+    # multiple buffers.
+    #
+    # With tuning allow for selection of the appropriate version.
+
+    input = all_gather(input)
+
+    return conv2d(
+        input,
+        weight,
+        bias,
+        stride=stride,
+        padding=padding,
+        dilation=dilation,
+        groups=groups,
+    )
+
+
+conv2d.override(
+    ShardedPrimitiveTensor,
+    ShardedPrimitiveTensor,
+    ShardedPrimitiveTensor,
+    auto_dequant=True,
+)(conv2d_all_sharded)
+conv2d.override(ShardedPrimitiveTensor, ShardedPrimitiveTensor, auto_dequant=True)(
+    conv2d_all_sharded
+)
+
+
+def conv2d_replicated_input_sharded_weight_and_bias(
+    input: ReplicatedTensor,
+    weight: ShardedPrimitiveTensor,
+    bias: ShardedPrimitiveTensor | None,
+    *,
+    stride,
+    padding,
+    dilation,
+    groups,
+) -> ShardedPrimitiveTensor:
+    assert input.shard_count == weight.shard_count
+    assert bias is None or weight.shard_count == bias.shard_count
+    assert (
+        weight.shard_dim == 0 and bias.shard_dim == 0
+    ), "Only sharding of output channel dimension is supported"
+    assert groups == 1
+
+    shards = [
+        conv2d(
+            x,
+            w,
+            b,
+            stride=stride,
+            padding=padding,
+            dilation=dilation,
+            groups=groups,
+        )
+        for x, w, b in zip(
+            input.shards,
+            weight.shards,
+            [None] * weight.shard_count if bias is None else bias.shards,
+        )
+    ]
+    return ShardedPrimitiveTensor(shard_dim=1, ts=shards)
+
+
+conv2d.override(
+    ReplicatedTensor, ShardedPrimitiveTensor, ShardedPrimitiveTensor, auto_dequant=True
+)(conv2d_all_sharded)
+conv2d.override(ReplicatedTensor, ShardedPrimitiveTensor, auto_dequant=True)(
+    conv2d_all_sharded
+)
 
 
 def conv2d_sharded_weight_and_bias(
@@ -25,7 +144,7 @@ def conv2d_sharded_weight_and_bias(
     dilation,
     groups,
     accum_dtype,
-):
+) -> ShardedPrimitiveTensor:
     assert weight.shard_count == bias.shard_count
 
     # Output channels dimension is sharded.
@@ -48,7 +167,7 @@ def conv2d_sharded_weight_and_bias(
         ]
         return ShardedPrimitiveTensor(shard_dim=1, ts=shards)
     else:
-        assert False and "Unsupported, TODO: handle sharded channels in input"
+        assert False, "Unsupported, TODO: handle sharded channels in input"
 
 
 conv2d.override(
@@ -87,8 +206,8 @@ def shareded_group_norm_affine(input, weight, bias, *, num_groups, eps):
         input.shard_count == weight.shard_count
         and input.shard_count == bias.shard_count
     )
-    assert input.shard_dim == 1 and "Can shard only the channel dimension"
-    assert num_groups % input.shard_count == 0 and "Can shard only groups"
+    assert input.shard_dim == 1, "Can shard only the channel dimension"
+    assert num_groups % input.shard_count == 0, "Can shard only groups"
     num_groups_per_shard = num_groups // input.shard_count
 
     result_shards = [

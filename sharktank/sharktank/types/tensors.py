@@ -27,6 +27,7 @@ __all__ = [
     "PrimitiveTensor",
     "QuantizedTensor",
     "QuantizedLayout",
+    "ReplicatedTensor",
     "ShardedTensor",
     "ShardedPrimitiveTensor",
 ]
@@ -191,6 +192,11 @@ class InferenceTensor(ABC):
         """Adds this tensor to the global archive."""
         ...
 
+    def is_deep_equal(self, other: Any) -> bool:
+        """Deep equality including metadata and exact equality of tensor elements.
+        It is a representational equality."""
+        raise NotImplementedError()
+
     def transform_globals(
         self, *transforms: Callable[[dict[str, torch.Tensor]], dict[str, torch.Tensor]]
     ) -> "InferenceTensor":
@@ -326,6 +332,13 @@ class DefaultPrimitiveTensor(PrimitiveTensor):
 
     def __repr__(self):
         return f"PrimitiveTensor({self.name}, {self.shape}, {self._data.dtype})"
+
+    def is_deep_equal(self, other: Any) -> bool:
+        if not isinstance(other, DefaultPrimitiveTensor):
+            return False
+        if self.shape != other.shape or self.name != other.name:
+            return False
+        return torch.equal(self.as_torch(), other.as_torch())
 
 
 ########################################################################################
@@ -496,7 +509,7 @@ class ShardedTensor(InferenceTensor):
     """
 
     def __init__(
-        self, *, shape: list[int], shard_dim: int, name: str = UnnamedTensorName
+        self, *, shape: list[int], shard_dim: int | None, name: str = UnnamedTensorName
     ):
         super().__init__(name=name, shape=shape)
         self.shard_dim = shard_dim
@@ -510,6 +523,13 @@ class ShardedTensor(InferenceTensor):
     @abstractmethod
     def shards(self) -> tuple[InferenceTensor]:
         """Accesses the underlying shards"""
+        ...
+
+    @property
+    @abstractmethod
+    def is_replicated(self) -> bool:
+        """Returns whether the original tensor is replicated.
+        If replicated, `shard_dim` does not make sense and is None."""
         ...
 
 
@@ -542,7 +562,7 @@ class ShardedPrimitiveTensor(ShardedTensor):
             ts = ts.split(ceildiv(ts.shape[shard_dim], shard_count), dim=shard_dim)
             shard_count = None
 
-        shard_count = None
+        assert shard_count is None
         assert len(ts) > 0
         first_shape = ts[0].shape
         assert len(first_shape) > shard_dim
@@ -574,6 +594,10 @@ class ShardedPrimitiveTensor(ShardedTensor):
     @property
     def shards(self) -> tuple[InferenceTensor]:
         return self._shards
+
+    @property
+    def is_replicated(self) -> bool:
+        return False
 
     @classmethod
     def serialized_name(cls) -> str:
@@ -634,6 +658,127 @@ class ShardedPrimitiveTensor(ShardedTensor):
             f"shard_dim={self.shard_dim}, shard_count={len(self._shards)} "
             f"of {self.shards[0].shape})"
         )
+
+    def is_deep_equal(self, other: Any) -> bool:
+        if not isinstance(other, ShardedPrimitiveTensor):
+            return False
+        if (
+            self.shard_count != other.shard_count
+            or self.name != other.name
+            or self.shape != other.shape
+        ):
+            return False
+        return all(a.is_deep_equal(b) for a, b in zip(self.shards, other.shards))
+
+
+@register_inference_tensor
+class ReplicatedTensor(ShardedTensor):
+    """A tensor that is replicated across all shards."""
+
+    def __init__(
+        self,
+        *,
+        ts: list[torch.Tensor] | torch.Tensor,
+        shard_count: None | int = None,
+        name: str = UnnamedTensorName,
+    ):
+        """
+        If `ts` is a list of tensors, it is interpreted as the shards.
+        Then `shard_count` must be None.
+        If `ts` is a tensor then `shard_count` must be provided and it,
+        will be replicated that many times.
+        """
+
+        if isinstance(ts, torch.Tensor):
+            assert shard_count is not None
+            ts = [ts] * shard_count
+            shard_count = None
+
+        assert shard_count is None
+        assert len(ts) > 0
+        first_shape = ts[0].shape
+        shape = list(first_shape)
+
+        super().__init__(name=name, shape=shape, shard_dim=None)
+        for shard in ts:
+            assert list(shape) == list(shard.shape)
+
+        self._shards: tuple[DefaultPrimitiveTensor] = tuple(
+            DefaultPrimitiveTensor(name=f"{name}.shard.{i}", data=t)
+            for i, t in enumerate(ts)
+        )
+
+    @property
+    def shard_count(self) -> int:
+        return len(self._shards)
+
+    @property
+    def shards(self) -> tuple[InferenceTensor]:
+        return self._shards
+
+    @property
+    def is_replicated(self) -> bool:
+        return True
+
+    @classmethod
+    def serialized_name(cls) -> str:
+        return "ReplicatedTensor"
+
+    @property
+    def globals(self) -> dict[str, torch.Tensor]:
+        return {pt.name: pt._data for pt in self._shards}
+
+    def add_to_archive(self, builder: ShardedArchiveBuilder) -> InferenceTensorMetadata:
+        builder.for_rank(0).add_tensor(self.name, self._shards[0]._data)
+        return InferenceTensorMetadata(
+            self.serialized_name(),
+            {"": self.name},
+            extra_properties={
+                "shard_count": len(self._shards),
+            },
+        )
+
+    def _clone_with_globals(
+        self, new_globals: dict[str, torch.Tensor]
+    ) -> "InferenceTensor":
+        ts = []
+        for k in self.globals.keys():
+            ts.append(new_globals[ts[k]])
+        return ReplicatedTensor(name=self.name, shape=self.shape, ts=ts)
+
+    @classmethod
+    def create(
+        cls,
+        name: str,
+        raw_tensors: dict[str, torch.Tensor],
+        extra_properties: dict[str, Any],
+    ) -> "InferenceTensor":
+        shard_count = int(extra_properties["shard_count"])
+        try:
+            ts = raw_tensors[""]
+        except KeyError as e:
+            raise IOError(f"Missing component tensor '' in {raw_tensors.keys()}") from e
+        return cls(name=name, ts=ts, shard_count=shard_count)
+
+    def __repr__(self):
+        return (
+            f"ReplicatedTensor({self.name}, {self.shape}, "
+            f"shard_count={len(self._shards)} "
+            f"of {self.shards[0].shape})"
+        )
+
+    def is_deep_equal(self, other: Any) -> bool:
+        if not isinstance(other, ReplicatedTensor):
+            return False
+        if (
+            self.shard_count != other.shard_count
+            or self.name != other.name
+            or self.shape != other.shape
+        ):
+            return False
+        if self.shard_count == 0:
+            return True
+        return self.shards[0].is_deep_equal(other.shards[0])
 
 
 ########################################################################################
