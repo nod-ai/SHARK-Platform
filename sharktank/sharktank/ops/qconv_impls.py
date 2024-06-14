@@ -115,9 +115,9 @@ def qconv2d_tensor_scaled_integer(
     if input_m is not None:
         # Apply offset correction for asymmetric input.
         # At the time of this writing, this was not a common case.
-        input_offset_fix = torch.sum(torch.flatten(weight_qs, 1), dim=1).unsqueeze(
-            0
-        ) * flat_input_m.unsqueeze(1)
+        input_offset_fix = torch.sum(
+            torch.flatten(weight_qs, 1), dim=1, dtype=accum_dtype
+        ).unsqueeze(0) * flat_input_m.unsqueeze(1)
         input_offset_fix = input_offset_fix.unsqueeze(2).unsqueeze(3)
         y_qs = y_qs - input_offset_fix
     if flat_weight_m is not None:
@@ -133,7 +133,7 @@ def qconv2d_tensor_scaled_integer(
             padding=padding,
             divisor_override=1,
         ).to(dtype=accum_dtype)
-        weight_offset_fix = weight_offset_fix.sum(1, keepdim=True)
+        weight_offset_fix = weight_offset_fix.sum(1, keepdim=True, dtype=accum_dtype)
         weight_offset_fix = weight_offset_fix * flat_weight_m.unsqueeze(0).unsqueeze(
             2
         ).unsqueeze(3)
@@ -144,7 +144,10 @@ def qconv2d_tensor_scaled_integer(
         joint_fix = (
             flat_input_m.unsqueeze(1)
             * flat_weight_m.unsqueeze(0)
-            * (weight_qs.shape[1] * weight_qs.shape[2] * weight_qs.shape[3])
+            * torch.tensor(
+                weight_qs.shape[1] * weight_qs.shape[2] * weight_qs.shape[3],
+                dtype=accum_dtype,
+            )
         )
         joint_fix = joint_fix.unsqueeze(2).unsqueeze(3)
         y_qs = y_qs + joint_fix
