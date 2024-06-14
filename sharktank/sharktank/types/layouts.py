@@ -63,8 +63,8 @@ class TensorScaledLayout(QuantizedLayout):
     If initialized with a dtype, the result of the conversion will be cast
     to this dtype (unless if otherwise specified in dequant()). If dtype is
     not specified in the constructor, it will default to the dtype of `d`.
-    For low precision fp types, it can be necessary to have a higher precision
-    `d` with high precision
+    For low precision fp activation types, it can be necessary to have a higher
+    precision `d`.
     """
 
     def __init__(
