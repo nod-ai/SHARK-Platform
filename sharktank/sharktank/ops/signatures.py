@@ -39,6 +39,7 @@ def conv2d(
     padding: IntOrSequenceInt = 0,
     dilation: IntOrSequenceInt = 1,
     groups: IntOrSequenceInt = 1,
+    accum_dtype: Optional[torch.dtype] = None,
 ):
     """Equivalent to torch.nn.functional.conv2d with enhancements:
 
@@ -58,6 +59,7 @@ def _conv2d_trampoline(
     padding=0,
     dilation=1,
     groups=1,
+    accum_dtype: Optional[torch.dtype] = None,
 ):
     tensors = [input, weight]
     if bias is not None:
@@ -71,6 +73,7 @@ def _conv2d_trampoline(
             padding=padding,
             dilation=dilation,
             groups=groups,
+            accum_dtype=accum_dtype,
         )
         if result is not NotImplemented:
             return override, result
@@ -209,7 +212,7 @@ def _linear_trampoline(
     weight: AnyTensor,
     bias: Optional[AnyTensor],
     *,
-    accum_dtype: torch.dtype = torch.int32,
+    accum_dtype: Optional[torch.dtype] = None,
 ):
     tensors = (input, weight) if bias is None else (input, weight, bias)
     for override in d.find_overrides(tensors):

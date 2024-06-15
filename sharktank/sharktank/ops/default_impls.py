@@ -28,7 +28,8 @@ def conv2d_default(
     stride,
     padding,
     dilation,
-    groups
+    groups,
+    accum_dtype: Optional[torch.dtype],
 ):
     input = unbox_tensor(input)
     weight = unbox_tensor(weight)
@@ -36,7 +37,7 @@ def conv2d_default(
         bias = unbox_tensor(bias)
     if weight.dtype != input.dtype:
         weight = weight.to(input.dtype)
-    if bias.dtype != input.dtype:
+    if bias is not None and bias.dtype != input.dtype:
         bias = bias.to(input.dtype)
     return F.conv2d(
         input,

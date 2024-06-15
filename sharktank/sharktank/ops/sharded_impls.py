@@ -24,6 +24,7 @@ def conv2d_sharded_weight_and_bias(
     padding,
     dilation,
     groups,
+    accum_dtype,
 ):
     assert weight.shard_count == bias.shard_count
 
