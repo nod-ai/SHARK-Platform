@@ -98,13 +98,13 @@ def qconv2d_tensor_scaled_integer(
     if rescale_d is None:
         # Output scale by the product of input and weight scale and broadcast
         # to the output NCHW shape.
-        rescale_d = (input_d * flat_weight_d).reshape(1, -1, 1, 1)
+        rescale_d = (flat_input_d * flat_weight_d).reshape(1, -1, 1, 1)
 
     # TODO: Use a real mixed precision op.
     y_qs = torch.nn.functional.conv2d(
         input_qs.to(dtype=torch.float32),
         weight_qs.to(dtype=torch.float32),
-        bias=bias_qs.to(dtype=torch.float32),
+        bias=bias_qs.to(dtype=torch.float32) if bias_qs is not None else None,
         stride=stride,
         padding=padding,
         dilation=dilation,
@@ -115,10 +115,12 @@ def qconv2d_tensor_scaled_integer(
     if input_m is not None:
         # Apply offset correction for asymmetric input.
         # At the time of this writing, this was not a common case.
+        # Apply the offset fix to the channel output axis (1).
         input_offset_fix = torch.sum(
             torch.flatten(weight_qs, 1), dim=1, dtype=accum_dtype
-        ).unsqueeze(0) * flat_input_m.unsqueeze(1)
-        input_offset_fix = input_offset_fix.unsqueeze(2).unsqueeze(3)
+        )
+        input_offset_fix = input_offset_fix * flat_input_m
+        input_offset_fix = input_offset_fix.unsqueeze(0).unsqueeze(2).unsqueeze(3)
         y_qs = y_qs - input_offset_fix
     if flat_weight_m is not None:
         # Apply offset correction for asymmetric weight.
@@ -126,14 +128,17 @@ def qconv2d_tensor_scaled_integer(
         # The weight_m shape is the offset relative to weight and needs to
         # be reshaped to broadcast to the NCHW output. Since all but the
         # output channels are zero, just
+        # Note that we sum first to reduce the dimensionality by channel
+        # prior, reducing memory and total computation.
+        weight_offset_fix = torch.sum(input_qs, dim=1, keepdim=True, dtype=accum_dtype)
+        # TODO: Use a custom `sum_pool` direct to linalg kernel.
         weight_offset_fix = torch.nn.functional.avg_pool2d(
-            input_qs.to(dtype=torch.float32),
+            weight_offset_fix.to(dtype=torch.float32),
             (weight_qs.shape[2], weight_qs.shape[3]),
             stride=stride,
             padding=padding,
             divisor_override=1,
         ).to(dtype=accum_dtype)
-        weight_offset_fix = weight_offset_fix.sum(1, keepdim=True, dtype=accum_dtype)
         weight_offset_fix = weight_offset_fix * flat_weight_m.unsqueeze(0).unsqueeze(
             2
         ).unsqueeze(3)
@@ -142,7 +147,7 @@ def qconv2d_tensor_scaled_integer(
         # Apply joint offset correction if both input and weight are asymmetric.
         # At the time of this writing, this was not a common case.
         joint_fix = (
-            flat_input_m.unsqueeze(1)
+            flat_input_m.unsqueeze(0)
             * flat_weight_m.unsqueeze(0)
             * torch.tensor(
                 weight_qs.shape[1] * weight_qs.shape[2] * weight_qs.shape[3],
@@ -166,7 +171,7 @@ def qconv2d_tensor_scaled_integer(
     # If we have an unquantized bias, dequantize the result and add here.
     if bias is not None and bias_qs is None:
         y = y.unpack().dequant()
-        y = elementwise(torch.add, y, bias)
+        y = elementwise(torch.add, y, bias.reshape(-1, 1, 1))
     return y
 
 
