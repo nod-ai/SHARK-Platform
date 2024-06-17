@@ -14,6 +14,7 @@ from torch import Tensor, dtype
 from ._registry import *
 
 __all__ = [
+    "all_gather",
     "conv2d",
     "elementwise",
     "embedding_lookup",
@@ -27,6 +28,24 @@ __all__ = [
 ]
 
 IntOrSequenceInt = Union[int, Sequence[int]]
+
+
+@overridable
+def all_gather(maybe_sharded: AnyTensor, *, dim: int | None = None) -> AnyTensor:
+    ...
+
+
+@all_gather.trampoline
+def _all_gather_trampoline(
+    d: SignatureDispatcher, maybe_sharded: AnyTensor, *, dim: int | None = None
+):
+    tensors = (maybe_sharded,)
+    for override in d.find_overrides(tensors):
+        result = override(maybe_sharded, dim=dim)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(tensors)
 
 
 @overridable

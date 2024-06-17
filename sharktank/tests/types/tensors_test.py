@@ -7,6 +7,8 @@
 import unittest
 
 import torch
+import tempfile
+import os
 
 from sharktank.types import *
 
@@ -55,6 +57,25 @@ class PlanarQuantizedTensorTest(unittest.TestCase):
         self.assertEqual(new_planes["qs"].dtype, torch.int16)
         self.assertEqual(new_planes["m"].dtype, torch.float16)
         self.assertEqual(new_planes["d"].dtype, torch.float16)
+
+
+class ShardedTensorTest(unittest.TestCase):
+    def testReplicatedTensorSaveLoad(self):
+        tensor = torch.rand([2, 3, 4], dtype=torch.float32)
+        replicated_tensor = ReplicatedTensor(
+            ts=tensor, shard_count=3, name="the_tensor"
+        )
+        theta = Theta([replicated_tensor])
+        dataset = Dataset({}, theta)
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            file_path = os.path.join(tmp_dir, "dataset.irpa")
+            dataset.save(file_path)
+            # TODO: figure out why when memory mapping (mmap=True) even when deleting
+            # the Python objects the underlying files are still open causing
+            # TemporaryDirectory cleanup to fail under Windows.
+            loaded_dataset = Dataset.load(file_path, mmap=False)
+            loaded_replicated_tensor = loaded_dataset.root_theta.tensor("the_tensor")
+            assert replicated_tensor.is_deep_equal(loaded_replicated_tensor)
 
 
 if __name__ == "__main__":
