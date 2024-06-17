@@ -70,10 +70,12 @@ class ShardedTensorTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp_dir:
             file_path = os.path.join(tmp_dir, "dataset.irpa")
             dataset.save(file_path)
-            loaded_dataset = Dataset.load(file_path)
-
-        loaded_replicated_tensor = loaded_dataset.root_theta.tensor("the_tensor")
-        assert replicated_tensor.is_deep_equal(loaded_replicated_tensor)
+            # TODO: figure out why when memory mapping (mmap=True) even when deleting
+            # the Python objects the underlying files are still open causing
+            # TemporaryDirectory cleanup to fail under Windows.
+            loaded_dataset = Dataset.load(file_path, mmap=False)
+            loaded_replicated_tensor = loaded_dataset.root_theta.tensor("the_tensor")
+            assert replicated_tensor.is_deep_equal(loaded_replicated_tensor)
 
 
 if __name__ == "__main__":
