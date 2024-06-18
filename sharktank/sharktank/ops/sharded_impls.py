@@ -7,7 +7,12 @@
 import torch
 from torch import Tensor
 
-from ..types import ShardedPrimitiveTensor, ReplicatedTensor
+from ..types import (
+    ShardedPrimitiveTensor,
+    ReplicatedTensor,
+    UnreducedTensor,
+    ShardedTensor,
+)
 from ._registry import unbox_tensor
 from .signatures import *
 
@@ -256,7 +261,13 @@ def matmul_sharded_rhs(lhs, rhs: ShardedPrimitiveTensor, *, transpose_rhs: bool)
 @matmul.override(ShardedPrimitiveTensor, ShardedPrimitiveTensor)
 def matmul_sharded(
     lhs: ShardedPrimitiveTensor, rhs: ShardedPrimitiveTensor, *, transpose_rhs: bool
-):
+) -> UnreducedTensor:
+    lhs_reduction_dim = len(lhs.shape) - 1
+    rhs_reduction_dim = 1 if transpose_rhs else 0
+    assert (
+        lhs_reduction_dim == lhs.shard_dim and rhs_reduction_dim == rhs.shard_dim
+    ), "Only sharding of the reduction dimension is supported"
+
     if lhs.shard_count != rhs.shard_count:
         raise ValueError(
             f"Cannot matmul sharded tensors of different shard_count: "
@@ -266,7 +277,7 @@ def matmul_sharded(
         matmul(partial_lhs, partial_rhs, transpose_rhs=transpose_rhs)
         for partial_lhs, partial_rhs in zip(lhs.shards, rhs.shards)
     ]
-    return ShardedPrimitiveTensor(shard_dim=lhs.shard_dim, ts=partials)
+    return UnreducedTensor(ts=partials)
 
 
 # Sharded sum.
@@ -278,11 +289,19 @@ def sharded_cat_unsharded(maybe_sharded: ShardedPrimitiveTensor):
     return torch.cat(shard_ts, dim=maybe_sharded.shard_dim)
 
 
+def _sharded_sum_sharded(tensor: ShardedTensor) -> Tensor:
+    accum = tensor.shards[0].as_torch()
+    for shard in tensor.shards[1:]:
+        accum = torch.add(accum, shard.as_torch())
+    return accum
+
+
 @sharded_sum.override(ShardedPrimitiveTensor)
 def sharded_sum_sharded(maybe_sharded: ShardedPrimitiveTensor):
     # TODO: Should implement as an all reduce.
-    shards = maybe_sharded.shards
-    accum = shards[0].as_torch()
-    for shard in shards[1:]:
-        accum = torch.add(accum, shard.as_torch())
-    return accum
+    return _sharded_sum_sharded(maybe_sharded)
+
+
+@sharded_sum.override(UnreducedTensor)
+def sharded_sum_sharded(maybe_sharded: UnreducedTensor):
+    return _sharded_sum_sharded(maybe_sharded)
