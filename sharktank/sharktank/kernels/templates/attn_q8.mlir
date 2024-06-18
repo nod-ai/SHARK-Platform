@@ -13,7 +13,7 @@ module {
 
 util.func private @attn_q8(%query : tensor<{{m}}x{{k}}x{{lowp_type}}>, %key : tensor<{{n}}x{{k}}x{{lowp_type}}>, %value : tensor<{{p}}x{{n}}x{{lowp_type}}>, %query_s : tensor<{{m}}x{{lowp_type}}>, %key_s : tensor<{{n}}x{{lowp_type}}>, %value_s : tensor<{{p}}x{{lowp_type}}>, %query_zp: tensor<{{m}}x{{lowp_type}}>, %key_zp: tensor<{{n}}x{{lowp_type}}>, %value_zp : tensor<{{p}}x{{lowp_type}}>, %attn_mask : tensor<{{m}}x{{n}}xi1>, %randoms : tensor<{{m}}x{{n}}x{{a_type}}>, %dropout_p_t : tensor<f32>, %is_causal_t : tensor<i1>, %scale_t : tensor<i1>) -> tensor<{{m}}x{{p}}x{{a_type}}> {
 
-iree_input.tensor.trace "FOOBAR" = [%query : tensor<{{m}}x{{k}}x{{lowp_type}}>, %key : tensor<{{n}}x{{k}}x{{lowp_type}}>, %value : tensor<{{p}}x{{n}}x{{lowp_type}}>, %query_s : tensor<{{m}}x{{lowp_type}}>, %key_s : tensor<{{n}}x{{lowp_type}}>, %value_s : tensor<{{p}}x{{lowp_type}}>, %query_zp: tensor<{{m}}x{{lowp_type}}>, %key_zp: tensor<{{n}}x{{lowp_type}}>, %value_zp : tensor<{{p}}x{{lowp_type}}>, %attn_mask : tensor<{{m}}x{{n}}xi1>, %randoms : tensor<{{m}}x{{n}}x{{a_type}}>, %dropout_p_t : tensor<f32>, %is_causal_t : tensor<i1>, %scale_t : tensor<i1>]
+//iree_input.tensor.trace "FOOBAR" = [%query : tensor<{{m}}x{{k}}x{{lowp_type}}>, %key : tensor<{{n}}x{{k}}x{{lowp_type}}>, %value : tensor<{{p}}x{{n}}x{{lowp_type}}>, %query_s : tensor<{{m}}x{{lowp_type}}>, %key_s : tensor<{{n}}x{{lowp_type}}>, %value_s : tensor<{{p}}x{{lowp_type}}>, %query_zp: tensor<{{m}}x{{lowp_type}}>, %key_zp: tensor<{{n}}x{{lowp_type}}>, %value_zp : tensor<{{p}}x{{lowp_type}}>, %attn_mask : tensor<{{m}}x{{n}}xi1>, %randoms : tensor<{{m}}x{{n}}x{{a_type}}>, %dropout_p_t : tensor<f32>, %is_causal_t : tensor<i1>, %scale_t : tensor<i1>]
 
 %zerof32 = arith.constant 0.0 : {{a_type}}
 %onef32 = arith.constant 1.0 : {{a_type}}
@@ -106,7 +106,7 @@ ins(%softmaxed, %randoms : tensor<{{m}}x{{n}}x{{a_type}}>, tensor<{{m}}x{{n}}x{{
   linalg.yield %select : {{a_type}}
 } -> tensor<{{m}}x{{n}}x{{a_type}}>
 
-iree_input.tensor.trace  "FOOBAR" = [%dropouted: tensor<{{m}}x{{n}}x{{a_type}}>]
+//iree_input.tensor.trace  "FOOBAR" = [%dropouted: tensor<{{m}}x{{n}}x{{a_type}}>]
 
 // matmul
 %empty_mmt2 = tensor.empty() : tensor<{{m}}x{{p}}x{{a_type}}>
@@ -130,7 +130,7 @@ ins(%dropouted, %value, %value_s, %value_zp : tensor<{{m}}x{{n}}x{{a_type}}>, te
   linalg.yield %add : {{a_type}}
 } -> tensor<{{m}}x{{p}}x{{a_type}}>
 
-iree_input.tensor.trace  "FOOBAR" = [%mmt2: tensor<{{m}}x{{p}}x{{a_type}}>]
+//iree_input.tensor.trace  "FOOBAR" = [%mmt2: tensor<{{m}}x{{p}}x{{a_type}}>]
 
 util.return %mmt2 : tensor<{{m}}x{{p}}x{{a_type}}>
 }

@@ -9,12 +9,12 @@ from sharktank.kernels.base import *
 import torch
 
 __all__ = [
-    "mmt_block_scaled_q8",
+    "mmt_scaled_q8",
 ]
 
 
 @CustomOp.register(library=LIBRARY)
-class mmt_block_scaled_q8(CustomOp):
+class mmt_scaled_q8(CustomOp):
     """Generic block scaled matmul with transposed RHS.
 
     This corresponds to the BlockScaledLayout and operates on planar `d`
@@ -27,64 +27,59 @@ class mmt_block_scaled_q8(CustomOp):
     will be specialized for all values of N, K and LHS dtype.
     """
 
-    signature = "mmt_block_scaled_q8(Tensor a, Tensor d, Tensor qs) -> (Tensor)"
+    signature = "mmt_scaled_q8(Tensor lhs, Tensor rhs, Tensor scale0, Tensor scale1, Tensor zp0, Tensor zp1) -> (Tensor)"
 
     def select(self, ksel: KernelSelection):
-        a_desc = ksel.arg_tensor(0)  # Shape [b, ] m, k
-        qs_desc = ksel.arg_tensor(2)  # Shape [N, K // BLOCK_SIZE, BLOCK_SIZE]
-        d_desc = ksel.arg_tensor(1)  # Shape [N, K // BLOCK_SIZE, 1]
+        lhs_desc = ksel.arg_tensor(0)  # Shape [b, ] m, k
+        scale0_desc = ksel.arg_tensor(2)  # Shape [N, K // BLOCK_SIZE, BLOCK_SIZE]
+        scale1_desc = ksel.arg_tensor(3)  # Shape [N, K // BLOCK_SIZE, BLOCK_SIZE]
+        rhs_desc = ksel.arg_tensor(1)  # Shape [N, K // BLOCK_SIZE, 1]
+        zp0_desc = ksel.arg_tensor(4)
+        zp1_desc = ksel.arg_tensor(5)
 
         # a arg
-        *batch_dims, a_m, a_k = a_desc.t.shape
-        torch._check(
-            a_desc.t.dtype.is_floating_point,
-            lambda: f"mmt_block_scaled_q8 arg 'a': Expected floating point (got {a_desc.t.dtype})",
-        )
-        torch._check(
-            len(batch_dims) == 1,
-            lambda: f"mmt_block_scaled_q8 arg 'a': Expected 3d tensor (got {a_desc.t.shape})",
-        )
-
-        # qs arg
-        qs_n, qs_group0, qs_bs, *rest = qs_desc.t.shape
-        torch._check(
-            len(rest) == 0 and (qs_group0 * qs_bs) == a_k,
-            lambda: f"mmt_block_scaled_q8 arg 'qs': Incorrect shape (got {qs_desc.t.shape})",
-        )
+        lhs_m, lhs_k = lhs_desc.t.shape
 
         # d arg
-        d_n, d_group0, d_one, *rest = d_desc.t.shape
+        rhs_n, rhs_k, *rest = rhs_desc.t.shape
         torch._check(
-            len(rest) == 0 and (d_group0 * qs_bs) == a_k and d_one == 1 and d_n == qs_n,
-            lambda: f"mmt_block_scaled_q8 arg 'd': Incorrect shape (got {d_desc.t.shape})",
+            len(rest) == 0 and rhs_k == lhs_k,
+            lambda: f"scaled_mmt_q8 arg 'rhs': Incorrect shape (got {rhs_desc.t.shape})",
         )
 
         # Specialize on K, N, BS
-        a_desc.specialize_dims(-1)
-        qs_desc.specialize_all_dims()
-        d_desc.specialize_all_dims()
+        lhs_desc.specialize_all_dims()
+        scale0_desc.specialize_all_dims()
+        scale1_desc.specialize_all_dims()
+        rhs_desc.specialize_all_dims()
+        zp0_desc.specialize_all_dims()
+        zp1_desc.specialize_all_dims()
 
         # Shape batch..., m, n
-        c_desc = ksel.return_new_tensor(batch_dims + [a_m, d_n], dtype=a_desc.t.dtype)
-        c_desc.specialize_dims(-1)
+        c_desc = ksel.return_new_tensor([lhs_m, rhs_n], dtype=torch.float32)
+        c_desc.specialize_all_dims()
 
     def generate(self, ksel: KernelSelection, kb: KernelBuilder):
-        a = kb.arg_value(0)
-        a_tensor_type = RankedTensorType(a.type)
-        d = kb.arg_value(1)
-        d_tensor_type = RankedTensorType(d.type)
-        qs = kb.arg_value(2)
-        qs_tensor_type = RankedTensorType(qs.type)
+        lhs = kb.arg_value(0)
+        lhs_tensor_type = RankedTensorType(lhs.type)
+        rhs = kb.arg_value(1)
+        rhs_tensor_type = RankedTensorType(rhs.type)
+        scale0 = kb.arg_value(2)
+        scale0_tensor_type = RankedTensorType(scale0.type)
+        scale1 = kb.arg_value(3)
+        scale1_tensor_type = RankedTensorType(scale1.type)
+        zp0 = kb.arg_value(4)
+        zp0_tensor_type = RankedTensorType(zp0.type)
+        zp1 = kb.arg_value(5)
+        zp1_tensor_type = RankedTensorType(zp1.type)
 
-        rank = a_tensor_type.rank
-        k = a_tensor_type.get_dim_size(rank - 1)
-        n, group0, bs = qs_tensor_type.shape
-        a_type_str = str(a_tensor_type.element_type)
-        scale_type_str = str(d_tensor_type.element_type)
+        m, k = lhs_tensor_type.shape
+        n, k = rhs_tensor_type.shape
+        lhs_type_str = str(lhs_tensor_type.element_type)
 
-        template_file = "mmt_block_scaled_q8_3d.mlir"
+        template_file = "mmt_scaled_q8.mlir"
         target_function_name = (
-            f"sharktank_mmt_block_scaled_q8_3d_{n}_{k}_{bs}_{a_type_str}"
+            f"mmt_scaled_q8"
         )
 
         target_function = inline_template_function(
@@ -93,9 +88,8 @@ class mmt_block_scaled_q8(CustomOp):
             target_function_name,
             n=n,
             k=k,
-            bs=bs,
-            group0=group0,
-            a_type=a_type_str,
-            scale_type=scale_type_str,
+            m=m,
+            lowp_type="i8",
+            a_type="f32",
         )
         kb.yield_results(*call_function(target_function, *kb.arg_bindings))
