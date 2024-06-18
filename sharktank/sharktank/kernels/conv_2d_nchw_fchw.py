@@ -29,53 +29,44 @@ class conv_2d_nchw_fchw(CustomOp):
     will be specialized for all values of N, K and LHS dtype.
     """
 
-    signature = "conv_2d_nchw_fchw(Tensor inputs, Tensor weights, str c, str d, str e) -> (Tensor)"
+    signature = "conv_2d_nchw_fchw(Tensor inputs, Tensor weights, int[] strides, int[] padding, int[] dilations) -> (Tensor)"
 
     def select(self, ksel: KernelSelection):
         lhs_desc = ksel.arg_tensor(0)
         rhs_desc = ksel.arg_tensor(1)
-        strides_desc = ksel.attr_str(2)  # Shape [2]
-        padding_desc = ksel.attr_str(3)
-        dilations_desc = ksel.attr_str(4)  # Shape [2]
+        strides_desc = ksel.attr_list_int(2)  # Shape [2]
+        padding_desc = ksel.attr_list_int(3) # Shape [2]
+        dilations_desc = ksel.attr_list_int(4)  # Shape [2]
 
-        # a arg
+        # unpack
         n, c, h, w = lhs_desc.t.shape
-        _, _, k0, k1 = rhs_desc.t.shape
-        #lhs_batch, lhs_m, lhs_k = lhs_desc.t.shape
+        f, g, k0, k1 = rhs_desc.t.shape
 
-        # d arg
-        #rhs_batch, rhs_n, rhs_k = rhs_desc.t.shape
-        #torch._check(
-        #    rhs_k == lhs_k,
-        #    lambda: f"batch_matmul_transpose_b arg 'rhs': Incorrect shape (got {rhs_desc.t.shape})",
-        #)
+        strides = strides_desc.v
+        dilations = dilations_desc.v
+        padding = padding_desc.v
 
-        #strides_count, = strides_desc.t.shape
-        #dilations_count, = dilations_desc.t.shape
-        strides = strides_desc.v.split(", ")
-        strides = [int(i) for i in strides]
-        dilations = dilations_desc.v.split(", ")
-        dilations = [int(i) for i in dilations]
-        padding = padding_desc.v.split(", ")
-        padding= [int(i) for i in padding]
-        print(strides, padding, dilations)
-
-        h_out = math.floor((h + 2 * padding[0] - dilations[0] * (k0 - 1) - 1) / strides[0] + 1)
-        w_out = math.floor((w + 2 * padding[1] - dilations[1] * (k1 - 1) - 1) / strides[1] + 1)
-        print(h_out, w_out)
-
-        """torch._check(
-            strides_count == 2,
-            lambda: f"too many strides"
+        # check
+        torch._check(
+            c == f and f == g,
+            lambda: f"conf_2d_nchw_fchw arg 'weights': Incorrect shape (got {weights_desc.t.shape})",
         )
         torch._check(
-            dilations_count == 2,
-            lambda: f"too many dilations"
-        )"""
-        #torch._check(
-        #    padding_count == 2,
-        #    lambda: f"wrong dimensions of padding"
-        #)
+            len(strides) == 2,
+            lambda: f"conv_2d_nchw_fchw requires exactly 2 strides; strides: {strides}"
+        )
+        torch._check(
+            len(dilations) == 2,
+            lambda: f"conv_2d_nchw_fchw requires exactly 2 dilations; dilations: {dilations}"
+        )
+        torch._check(
+            len(padding) == 2,
+            lambda: f"conv_2d_nchw_fchw requires exactly 2 padding; padding: {padding}"
+        )
+
+        # convolution shape math
+        h_out = math.floor((h + 2 * padding[0] - dilations[0] * (k0 - 1) - 1) / strides[0] + 1)
+        w_out = math.floor((w + 2 * padding[1] - dilations[1] * (k1 - 1) - 1) / strides[1] + 1)
 
         c_desc = ksel.return_new_tensor([n, c, h_out, w_out], dtype=lhs_desc.t.dtype)
 
@@ -84,13 +75,18 @@ class conv_2d_nchw_fchw(CustomOp):
         lhs_tensor_type = RankedTensorType(lhs.type)
         rhs = kb.arg_value(1)
         rhs_tensor_type = RankedTensorType(rhs.type)
-        print(kb.symbol_table)
         strides = ksel.arg_descs[2].v
         padding = ksel.arg_descs[3].v
         dilations = ksel.arg_descs[4].v
-        strides_str = strides.replace(", ", "x")
-        padding_str = padding.replace(", ", "x")
-        dilations_str = dilations.replace(", ", "x")
+        strides = [str(i) for i in strides]
+        padding = [str(i) for i in padding]
+        dilations = [str(i) for i in dilations]
+        strides_list_str = ", ".join(strides)
+        strides_str = "x".join(strides)
+        padding_list_str = ", ".join(padding)
+        padding_str = "x".join(padding)
+        dilations_list_str = ", ".join(dilations)
+        dilations_str = "x".join(dilations)
 
         dtype_str = str(lhs_tensor_type.element_type)
 
@@ -103,9 +99,9 @@ class conv_2d_nchw_fchw(CustomOp):
             kb,
             template_file,
             target_function_name,
-            strides=strides,
-            padding=padding,
-            dilations=dilations,
+            strides=strides_list_str,
+            padding=padding_list_str,
+            dilations=dilations_list_str,
             strides_str=strides_str,
             padding_str=padding_str,
             dilations_str=dilations_str,
