@@ -29,18 +29,20 @@ class conv_2d_nchw_fchw(CustomOp):
     will be specialized for all values of N, K and LHS dtype.
     """
 
-    signature = "conv_2d_nchw_fchw(Tensor inputs, Tensor weights, int[] strides, int[] padding, int[] dilations) -> (Tensor)"
+    signature = "conv_2d_nchw_fchw(Tensor inputs, Tensor weights, Tensor bias, int[] strides, int[] padding, int[] dilations) -> (Tensor)"
 
     def select(self, ksel: KernelSelection):
-        lhs_desc = ksel.arg_tensor(0)
-        rhs_desc = ksel.arg_tensor(1)
-        strides_desc = ksel.attr_list_int(2)  # Shape [2]
-        padding_desc = ksel.attr_list_int(3) # Shape [2]
-        dilations_desc = ksel.attr_list_int(4)  # Shape [2]
+        inputs_desc = ksel.arg_tensor(0)
+        weights_desc = ksel.arg_tensor(1)
+        bias_desc = ksel.arg_tensor(2)
+        strides_desc = ksel.attr_list_int(3)  # Shape [2]
+        padding_desc = ksel.attr_list_int(4) # Shape [2]
+        dilations_desc = ksel.attr_list_int(5)  # Shape [2]
 
         # unpack
-        n, c, h, w = lhs_desc.t.shape
-        f, g, k0, k1 = rhs_desc.t.shape
+        n, c, h, w = inputs_desc.t.shape
+        f, g, k0, k1 = weights_desc.t.shape
+        b, = bias_desc.t.shape
 
         strides = strides_desc.v
         dilations = dilations_desc.v
@@ -48,8 +50,8 @@ class conv_2d_nchw_fchw(CustomOp):
 
         # check
         torch._check(
-            c == f and f == g,
-            lambda: f"conf_2d_nchw_fchw arg 'weights': Incorrect shape (got {weights_desc.t.shape})",
+            b == f,
+            lambda: f"conv_2d_nchw_fchw bias shape should match out_channels shape but got {b} instead of {f}"
         )
         torch._check(
             len(strides) == 2,
@@ -68,16 +70,14 @@ class conv_2d_nchw_fchw(CustomOp):
         h_out = math.floor((h + 2 * padding[0] - dilations[0] * (k0 - 1) - 1) / strides[0] + 1)
         w_out = math.floor((w + 2 * padding[1] - dilations[1] * (k1 - 1) - 1) / strides[1] + 1)
 
-        c_desc = ksel.return_new_tensor([n, c, h_out, w_out], dtype=lhs_desc.t.dtype)
+        c_desc = ksel.return_new_tensor([n, c, h_out, w_out], dtype=inputs_desc.t.dtype)
 
     def generate(self, ksel: KernelSelection, kb: KernelBuilder):
-        lhs = kb.arg_value(0)
-        lhs_tensor_type = RankedTensorType(lhs.type)
-        rhs = kb.arg_value(1)
-        rhs_tensor_type = RankedTensorType(rhs.type)
-        strides = ksel.arg_descs[2].v
-        padding = ksel.arg_descs[3].v
-        dilations = ksel.arg_descs[4].v
+        inputs = kb.arg_value(0)
+        inputs_tensor_type = RankedTensorType(inputs.type)
+        strides = ksel.arg_descs[3].v
+        padding = ksel.arg_descs[4].v
+        dilations = ksel.arg_descs[5].v
         strides = [str(i) for i in strides]
         padding = [str(i) for i in padding]
         dilations = [str(i) for i in dilations]
@@ -88,7 +88,7 @@ class conv_2d_nchw_fchw(CustomOp):
         dilations_list_str = ", ".join(dilations)
         dilations_str = "x".join(dilations)
 
-        dtype_str = str(lhs_tensor_type.element_type)
+        dtype_str = str(inputs_tensor_type.element_type)
 
         template_file = "conv_2d_nchw_fchw.mlir"
         target_function_name = (

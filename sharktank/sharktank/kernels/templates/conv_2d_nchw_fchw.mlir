@@ -4,6 +4,9 @@
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
+#map0 = affine_map<(d0, d1, d2, d3) -> (d0, d1, d2, d3)>
+#map1 = affine_map<(d0, d1, d2, d3) -> (d1)>
+
 !dtype = {{dtype}}
 !dynamic_tensor_type = tensor<?x?x?x?x!dtype>
 !out_tensor_type = !dynamic_tensor_type
@@ -11,7 +14,7 @@
 module {
 
 util.func private @sharktank_conv_2d_nchw_fchw_{{strides_str}}_{{padding_str}}_{{dilations_str}}_{{dtype}} (
-    %input: !dynamic_tensor_type, %weights: !dynamic_tensor_type)
+    %input: !dynamic_tensor_type, %weights: !dynamic_tensor_type, %bias: tensor<?x!dtype>)
     -> !out_tensor_type {
   %zero = arith.constant 0: !dtype
   %c0 = arith.constant 0: index
@@ -32,7 +35,13 @@ util.func private @sharktank_conv_2d_nchw_fchw_{{strides_str}}_{{padding_str}}_{
   %result_empty = tensor.empty(%pn, %pc, %ph, %pw) : !out_tensor_type
   %result_fill = linalg.fill ins(%zero: !dtype) outs(%result_empty: !out_tensor_type) -> !out_tensor_type
   %result = linalg.conv_2d_nchw_fchw {dilations = dense<[{{dilations}}]> : tensor<2xi64>, strides = dense<[{{strides}}]> : tensor<2xi64>} ins(%input_pad, %weights: !dynamic_tensor_type, !dynamic_tensor_type) outs(%result_fill: !out_tensor_type) -> !out_tensor_type
-  util.return %result : !out_tensor_type
+  %biased_empty = tensor.empty(%pn, %pc, %ph, %pw) : !out_tensor_type
+  %result_biased = linalg.generic {indexing_maps = [#map0, #map1, #map0], iterator_types = ["parallel", "parallel", "parallel", "parallel"]} ins(%result, %bias : !dynamic_tensor_type, tensor<?x!dtype>) outs(%biased_empty : !dynamic_tensor_type) {
+    ^bb0(%in: !dtype, %in_1: !dtype, %out: !dtype):
+      %add = arith.addi %in, %in_1 : !dtype
+      linalg.yield %add : !dtype
+    } -> !dynamic_tensor_type
+  util.return %result_biased : !out_tensor_type
 }
 
 }
