@@ -77,6 +77,34 @@ class ShardedTensorTest(unittest.TestCase):
             loaded_replicated_tensor = loaded_dataset.root_theta.tensor("the_tensor")
             assert replicated_tensor.is_deep_equal(loaded_replicated_tensor)
 
+    def testShardedPrimitiveTensorSaveLoad(self):
+        tensor = torch.rand([2, 6, 4], dtype=torch.float32)
+        sharded_tensor = ShardedPrimitiveTensor(
+            ts=tensor, shard_count=3, name="the_tensor", shard_dim=1
+        )
+        theta = Theta([sharded_tensor])
+        dataset = Dataset({}, theta)
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            file_path = os.path.join(tmp_dir, "dataset.irpa")
+            dataset.save(file_path)
+            loaded_dataset = Dataset.load(file_path, mmap=False)
+            loaded_sharded_tensor = loaded_dataset.root_theta.tensor("the_tensor")
+            assert sharded_tensor.is_deep_equal(loaded_sharded_tensor)
+
+    def testUnreducedTensorSaveLoad(self):
+        tensor = torch.rand([2, 6, 4], dtype=torch.float32)
+        sharded_tensor = UnreducedTensor(
+            ts=torch.split(tensor, 1, dim=1), name="the_tensor"
+        )
+        theta = Theta([sharded_tensor])
+        dataset = Dataset({}, theta)
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            file_path = os.path.join(tmp_dir, "dataset.irpa")
+            dataset.save(file_path)
+            loaded_dataset = Dataset.load(file_path, mmap=False)
+            loaded_sharded_tensor = loaded_dataset.root_theta.tensor("the_tensor")
+            assert sharded_tensor.is_deep_equal(loaded_sharded_tensor)
+
 
 if __name__ == "__main__":
     unittest.main()

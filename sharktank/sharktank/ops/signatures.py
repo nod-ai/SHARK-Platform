@@ -264,6 +264,7 @@ def matmul(lhs: AnyTensor, rhs: AnyTensor, *, transpose_rhs: bool = True):
 @matmul.trampoline
 def _matmul_trampoline(d: SignatureDispatcher, lhs, rhs, *, transpose_rhs: bool = True):
     tensors = (lhs, rhs)
+    assert len(rhs.shape) == 2
     for override in d.find_overrides(tensors):
         result = override(lhs, rhs, transpose_rhs=transpose_rhs)
         if result is not NotImplemented:
