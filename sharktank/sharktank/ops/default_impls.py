@@ -7,7 +7,7 @@
 # This file contains overrides of the standard ops for normal torch and
 # generic primitive/quantized types.
 
-from typing import Optional
+from typing import Optional, List
 
 import torch
 from torch import Tensor, dtype
@@ -107,7 +107,7 @@ def linear_default(input, weight, bias, *, accum_dtype) -> Tensor:
     bias = None if bias is None else unbox_tensor(bias)
     if weight.dtype != input.dtype:
         weight = weight.to(dtype=input.dtype)
-    result = torch.matmul(input, weight.T)
+    result = matmul(input, weight.T)
     if bias is not None:
         result = result + bias
     return result
@@ -145,6 +145,12 @@ def rms_norm_Tensor_QuantizedTensor(
     x = unbox_tensor(x)
     weight = weight.unpack().dequant(x.dtype)
     return rms_norm_default(x, weight, epsilon=epsilon)
+
+
+@permute.override(Tensor)
+def permute(tensor: Tensor, dims: List[int]):
+    torch_tensor = unbox_tensor(tensor)
+    return torch.permute(torch_tensor, dims)
 
 
 # Sharded default impls (do nothing).

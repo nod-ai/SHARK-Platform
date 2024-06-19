@@ -51,10 +51,10 @@ class ShardedFFN(ThetaLayer):
         ffn_up_weight = self.theta.tensor("ffn_up", "weight")
         ffn_down_weight = self.theta.tensor("ffn_down", "weight")
         ffn_gate = ops.elementwise(
-            torch.nn.functional.silu, ops.matmul(x, ffn_gate_weight)
+            torch.nn.functional.silu, ops.linear(x, ffn_gate_weight)
         )
-        ffn_up = ops.matmul(x, ffn_up_weight)
-        ffn_down = ops.matmul(
+        ffn_up = ops.linear(x, ffn_up_weight)
+        ffn_down = ops.linear(
             ops.elementwise(torch.mul, ffn_gate, ffn_up), ffn_down_weight
         )
         summed = ops.sharded_sum(ffn_down)

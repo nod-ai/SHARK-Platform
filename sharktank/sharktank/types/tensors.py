@@ -10,7 +10,6 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 import torch
-import shark_turbine.ops as ops
 from ..utils.math import ceildiv
 from shark_turbine.aot import (
     ExternalTensorTrait,
@@ -238,6 +237,14 @@ class InferenceTensor(ABC):
     ) -> "InferenceTensor":
         raise NotImplementedError(
             f"InferenceTensor {type(self)} does not implement _clone_with_globals"
+        )
+
+    @property
+    def T(self) -> "InferenceTensor":
+        from ..ops import permute
+
+        return permute(
+            self, dims=torch.flip(torch.arange(len(self.shape)), dims=[0]).tolist()
         )
 
 

@@ -6,6 +6,7 @@
 
 import torch
 from torch import Tensor
+from typing import List
 
 from ..types import (
     ShardedPrimitiveTensor,
@@ -232,6 +233,37 @@ def layer_norm_default(input, weight, bias, *, eps):
     return ShardedPrimitiveTensor(shard_dim=input.shard_dim, ts=shards)
 
 
+# Linear
+def linear_sharded(
+    input: Tensor | ShardedPrimitiveTensor,
+    weight: ShardedPrimitiveTensor,
+    bias: ShardedPrimitiveTensor | None,
+    *,
+    accum_dtype,
+) -> Tensor | ShardedPrimitiveTensor:
+    # TODO: handle different dtypes
+    result = matmul(input, weight.T)
+    if bias is not None:
+        # TODO: handle "+"
+        result = result + bias
+    return result
+
+
+linear.override(Tensor, ShardedPrimitiveTensor, auto_dequant=True)(linear_sharded)
+linear.override(
+    Tensor, ShardedPrimitiveTensor, ShardedPrimitiveTensor, auto_dequant=True
+)(linear_sharded)
+linear.override(ShardedPrimitiveTensor, ShardedPrimitiveTensor, auto_dequant=True)(
+    linear_sharded
+)
+linear.override(
+    ShardedPrimitiveTensor,
+    ShardedPrimitiveTensor,
+    ShardedPrimitiveTensor,
+    auto_dequant=True,
+)(linear_sharded)
+
+
 # Sharded matmuls.
 
 
@@ -278,6 +310,13 @@ def matmul_sharded(
         for partial_lhs, partial_rhs in zip(lhs.shards, rhs.shards)
     ]
     return UnreducedTensor(ts=partials)
+
+
+@permute.override(ShardedPrimitiveTensor)
+def permute_sharded(tensor: ShardedPrimitiveTensor, dims: List[int]):
+    permuted_shards = [permute(shard, dims) for shard in tensor.shards]
+    permuted_shard_dim = dims[tensor.shard_dim]
+    return ShardedPrimitiveTensor(ts=permuted_shards, shard_dim=permuted_shard_dim)
 
 
 # Sharded sum.

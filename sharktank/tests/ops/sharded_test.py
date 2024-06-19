@@ -133,6 +133,8 @@ class ConvTest(unittest.TestCase):
 
         torch.testing.assert_close(actual_result, expected_result)
 
+
+class NormalizationTest(unittest.TestCase):
     def testGroupNormShardedGroups(self):
         """Shard the channel dimension such that the group count is multiple of the
         shard count."""
@@ -192,14 +194,29 @@ class ConvTest(unittest.TestCase):
         torch.testing.assert_close(actual_result, expected_result)
 
 
+class PermuteTest(unittest.TestCase):
+    def testShardedPrimitiveTensorPermute(self):
+        torch_tensor = torch.rand(3, 8, 5, dtype=torch.float32)
+        permutation = [1, 0, 2]
+        sharded_tensor = ShardedPrimitiveTensor(
+            ts=torch_tensor, shard_dim=1, shard_count=4
+        )
+        expected_result = torch.permute(torch_tensor, permutation)
+
+        permuted_sharded_tensor = ops.permute(sharded_tensor, permutation)
+        result = ops.sharded_cat(permuted_sharded_tensor)
+
+        assert torch.equal(expected_result, result)
+
+
 class MatmulTest(unittest.TestCase):
     def testTorchRHSColumnShardedTransposed(self):
         t1 = torch.rand(4, 32, 16, dtype=torch.float32)
         t2 = torch.rand(48, 16, dtype=torch.float16)
         # RHS is transposed, so dim0 is the "column". Shard into 12.
         t2_sharded = ShardedPrimitiveTensor(shard_dim=0, ts=t2.split(4, dim=0))
-        sharded_result = ops.matmul(t1, t2_sharded)
-        expected_result = ops.matmul(t1, t2)
+        sharded_result = ops.matmul(t1, t2_sharded.T)
+        expected_result = ops.matmul(t1, t2.T)
         unsharded_result = ops.sharded_cat(sharded_result)
         torch.testing.assert_close(unsharded_result, expected_result)
 
@@ -207,8 +224,8 @@ class MatmulTest(unittest.TestCase):
         t1 = torch.rand(4, 32, 16, dtype=torch.float32)
         t2 = torch.rand(16, 48, dtype=torch.float16)
         t2_sharded = ShardedPrimitiveTensor(shard_dim=1, ts=t2.split(4, dim=1))
-        sharded_result = ops.matmul(t1, t2_sharded, transpose_rhs=False)
-        expected_result = ops.matmul(t1, t2, transpose_rhs=False)
+        sharded_result = ops.matmul(t1, t2_sharded)
+        expected_result = ops.matmul(t1, t2)
         unsharded_result = ops.sharded_cat(sharded_result)
         torch.testing.assert_close(unsharded_result, expected_result)
 
@@ -217,8 +234,8 @@ class MatmulTest(unittest.TestCase):
         X = torch.rand(4, 32, 16, dtype=torch.float32)
         A = torch.rand(48, 16, dtype=torch.float16)
         B = torch.rand(16, 48, dtype=torch.float16)
-        XA = ops.matmul(X, A)
-        Z = ops.matmul(XA, B)
+        XA = ops.matmul(X, A.T)
+        Z = ops.matmul(XA, B.T)
 
         # Columnwise sharding of A matrix (transposed).
         A_sharded = ShardedPrimitiveTensor(shard_dim=0, ts=A.split(6, dim=0))
@@ -227,8 +244,8 @@ class MatmulTest(unittest.TestCase):
         B_sharded = ShardedPrimitiveTensor(shard_dim=1, ts=B.split(6, dim=1))
         assert B_sharded.shard_count == 8
 
-        XA_sharded = ops.matmul(X, A_sharded)
-        Z_sharded = ops.matmul(XA_sharded, B_sharded)
+        XA_sharded = ops.matmul(X, A_sharded.T)
+        Z_sharded = ops.matmul(XA_sharded, B_sharded.T)
         Z_unsharded = ops.sharded_sum(Z_sharded)
         torch.testing.assert_close(Z_unsharded, Z)
 
@@ -240,10 +257,10 @@ class MatmulTest(unittest.TestCase):
 
         def compute(input, ffn_gate_weight, ffn_down_weight, ffn_up_weight):
             ffn_gate = ops.elementwise(
-                torch.nn.functional.silu, ops.matmul(input, ffn_gate_weight)
+                torch.nn.functional.silu, ops.linear(input, ffn_gate_weight)
             )
-            ffn_up = ops.matmul(input, ffn_up_weight)
-            ffn_down = ops.matmul(
+            ffn_up = ops.linear(input, ffn_up_weight)
+            ffn_down = ops.linear(
                 ops.elementwise(torch.mul, ffn_gate, ffn_up), ffn_down_weight
             )
             summed = ops.sharded_sum(ffn_down)
