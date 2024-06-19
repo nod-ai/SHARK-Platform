@@ -13,7 +13,7 @@
 
 module {
 
-util.func private @sharktank_conv_2d_nchw_fchw_{{strides_str}}_{{padding_str}}_{{dilations_str}}_{{dtype}} (
+util.func private @sharktank_conv_2d_nchw_fchw_{{strides_H}}_{{strides_W}}_{{padding_H}}_{{padding_W}}_{{dilations_H}}_{{dilations_W}}_{{dtype}} (
     %input: !dynamic_tensor_type, %weights: !dynamic_tensor_type, %bias: tensor<?x!dtype>)
     -> !out_tensor_type {
   %zero = arith.constant 0: !dtype
@@ -22,21 +22,52 @@ util.func private @sharktank_conv_2d_nchw_fchw_{{strides_str}}_{{padding_str}}_{
   %c2 = arith.constant 2: index
   %c3 = arith.constant 3: index
   
-  %input_pad = tensor.pad %input low[0, 0, {{padding}}] high[0, 0, {{padding}}] {
+  %input_pad = tensor.pad %input low[0, 0, {{padding_H}}, {{padding_W}}] high[0, 0, {{padding_H}}, {{padding_W}}] {
   ^bb0(%arg0 : index, %arg1 : index, %arg2: index, %arg3: index):
     tensor.yield %zero : !dtype
   } : !dynamic_tensor_type to !dynamic_tensor_type
+
+
+  // Convolution size math, equivalent to:
+  // h_out = math.floor((h + 2 * padding[0] - dilations[0] * (k0 - 1) - 1) / strides[0] + 1)
+  // w_out = math.floor((w + 2 * padding[1] - dilations[1] * (k1 - 1) - 1) / strides[1] + 1)
+  %iH = tensor.dim %input, %c2 : !dynamic_tensor_type
+  %kH = tensor.dim %weights, %c2 : !dynamic_tensor_type
+  %sH = arith.constant {{strides_H}} : index
+  %dH = arith.constant {{dilations_H}} : index
+  %pH = arith.constant {{padding_H}} : index
+
+  %rH_0 = arith.subi %kH, %c1 : index
+  %rH_1 = arith.muli %dH, %rH_0 : index
+  %rH_2 = arith.muli %pH, %c2 : index
+  %rH_3 = arith.addi %iH, %rH_2 : index
+  %rH_4 = arith.subi %rH_3, %rH_1 : index
+  %rH_5 = arith.subi %rH_4, %c1 : index
+  %rH_6 = arith.addi %rH_5, %sH : index
+  %rH   = arith.divsi %rH_6, %sH : index
   
-  %pn = tensor.dim %input_pad,  %c0 : !dynamic_tensor_type
-  %pc = tensor.dim %input_pad,  %c1 : !dynamic_tensor_type
-  %ph = tensor.dim %input_pad,  %c2 : !dynamic_tensor_type
-  %pw = tensor.dim %input_pad,  %c3 : !dynamic_tensor_type
+  %iW = tensor.dim %input, %c3 : !dynamic_tensor_type
+  %kW = tensor.dim %weights, %c3 : !dynamic_tensor_type
+  %sW = arith.constant {{strides_W}} : index
+  %dW = arith.constant {{dilations_W}} : index
+  %pW = arith.constant {{padding_W}} : index
+
+  %rW_0 = arith.subi %kW, %c1 : index
+  %rW_1 = arith.muli %dW, %rW_0 : index
+  %rW_2 = arith.muli %pW, %c2 : index
+  %rW_3 = arith.addi %iW, %rW_2 : index
+  %rW_4 = arith.subi %rW_3, %rW_1 : index
+  %rW_5 = arith.subi %rW_4, %c1 : index
+  %rW_6 = arith.addi %rW_5, %sW : index
+  %rW   = arith.divsi %rW_6, %sW : index
   
-  %result_empty = tensor.empty(%pn, %pc, %ph, %pw) : !out_tensor_type
+ 
+  %rN = tensor.dim %input, %c0 : !dynamic_tensor_type
+  %rC = tensor.dim %weights, %c0 : !dynamic_tensor_type
+  %result_empty = tensor.empty(%rN, %rC, %rH, %rW) : !out_tensor_type
   %result_fill = linalg.fill ins(%zero: !dtype) outs(%result_empty: !out_tensor_type) -> !out_tensor_type
-  %result = linalg.conv_2d_nchw_fchw {dilations = dense<[{{dilations}}]> : tensor<2xi64>, strides = dense<[{{strides}}]> : tensor<2xi64>} ins(%input_pad, %weights: !dynamic_tensor_type, !dynamic_tensor_type) outs(%result_fill: !out_tensor_type) -> !out_tensor_type
-  %biased_empty = tensor.empty(%pn, %pc, %ph, %pw) : !out_tensor_type
-  %result_biased = linalg.generic {indexing_maps = [#map0, #map1, #map0], iterator_types = ["parallel", "parallel", "parallel", "parallel"]} ins(%result, %bias : !dynamic_tensor_type, tensor<?x!dtype>) outs(%biased_empty : !dynamic_tensor_type) {
+  %result = linalg.conv_2d_nchw_fchw {dilations = dense<[{{dilations_H}}, {{dilations_W}}]> : tensor<2xi64>, strides = dense<[{{strides_H}}, {{strides_W}}]> : tensor<2xi64>} ins(%input_pad, %weights: !dynamic_tensor_type, !dynamic_tensor_type) outs(%result_fill: !out_tensor_type) -> !out_tensor_type
+  %result_biased = linalg.generic {indexing_maps = [#map0, #map1, #map0], iterator_types = ["parallel", "parallel", "parallel", "parallel"]} ins(%result, %bias : !dynamic_tensor_type, tensor<?x!dtype>) outs(%result : !dynamic_tensor_type) {
     ^bb0(%in: !dtype, %in_1: !dtype, %out: !dtype):
       %add = arith.addi %in, %in_1 : !dtype
       linalg.yield %add : !dtype

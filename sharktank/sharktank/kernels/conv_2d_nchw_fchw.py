@@ -70,7 +70,7 @@ class conv_2d_nchw_fchw(CustomOp):
         h_out = math.floor((h + 2 * padding[0] - dilations[0] * (k0 - 1) - 1) / strides[0] + 1)
         w_out = math.floor((w + 2 * padding[1] - dilations[1] * (k1 - 1) - 1) / strides[1] + 1)
 
-        c_desc = ksel.return_new_tensor([n, c, h_out, w_out], dtype=inputs_desc.t.dtype)
+        c_desc = ksel.return_new_tensor([n, f, h_out, w_out], dtype=inputs_desc.t.dtype)
 
     def generate(self, ksel: KernelSelection, kb: KernelBuilder):
         inputs = kb.arg_value(0)
@@ -78,33 +78,28 @@ class conv_2d_nchw_fchw(CustomOp):
         strides = ksel.arg_descs[3].v
         padding = ksel.arg_descs[4].v
         dilations = ksel.arg_descs[5].v
+        
         strides = [str(i) for i in strides]
         padding = [str(i) for i in padding]
         dilations = [str(i) for i in dilations]
-        strides_list_str = ", ".join(strides)
-        strides_str = "x".join(strides)
-        padding_list_str = ", ".join(padding)
-        padding_str = "x".join(padding)
-        dilations_list_str = ", ".join(dilations)
-        dilations_str = "x".join(dilations)
 
         dtype_str = str(inputs_tensor_type.element_type)
 
         template_file = "conv_2d_nchw_fchw.mlir"
         target_function_name = (
-            f"sharktank_conv_2d_nchw_fchw_{strides_str}_{padding_str}_{dilations_str}_{dtype_str}"
+            f"sharktank_conv_2d_nchw_fchw_{strides[0]}_{strides[1]}_{padding[0]}_{padding[1]}_{dilations[0]}_{dilations[1]}_{dtype_str}"
         )
 
         target_function = inline_template_function(
             kb,
             template_file,
             target_function_name,
-            strides=strides_list_str,
-            padding=padding_list_str,
-            dilations=dilations_list_str,
-            strides_str=strides_str,
-            padding_str=padding_str,
-            dilations_str=dilations_str,
+            strides_H=strides[0],
+            strides_W=strides[1],
+            padding_H=padding[0],
+            padding_W=padding[1],
+            dilations_H=dilations[0],
+            dilations_W=dilations[1],
             dtype=dtype_str,
         )
         kb.yield_results(*call_function(target_function, *kb.arg_bindings))
