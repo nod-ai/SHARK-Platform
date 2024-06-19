@@ -89,9 +89,21 @@ def apply_per_layer_quant(
             updated_tensors[premul_input.name] = premul_input
 
     input_scale = _get_json_tensor("input_scale", torch.float32)
-    input_zp = _get_json_tensor("input_zp", torch.uint8)
     weight_scale = _get_json_tensor("weight_scale", torch.float32)
+    # In the JSON file, zero points are purely positive numbers representing
+    # the zero point assuming a uint8 datatype. Since we prefer to use
+    # signed arithmetic, since that is better accelerated, we offset these by
+    # -128. By decoding them as uint8, it validates our range assumption.
+    # Then we widen/cast to offset.
     weight_zp = _get_json_tensor("weight_zp", torch.uint8)
+    if weight_zp is not None:
+        weight_zp = (weight_zp.to(dtype=torch.int32) - 128).to(torch.int8)
+
+    # In the current version, we assume that the input is not offset and is
+    # per-tensor quantized for signed arithmetic.
+    input_zp = _get_json_tensor("input_zp", torch.int8)
+    if input_zp is not None:
+        assert torch.count_nonzero(input_zp) == 0
 
     if (
         input_scale is None
@@ -119,7 +131,7 @@ def apply_per_layer_quant(
         scale=1.0 / weight_scale,
         reciprocal_scale=weight_scale,
         offset=None if torch.count_nonzero(weight_zp) == 0 else weight_zp,
-        dtype=torch.uint8,
+        dtype=torch.int8,
     )
     weight_quant = weight_quantizer.quantize(weight, name=weight.name)
     updated_tensors[weight_quant.name] = weight_quant
@@ -149,7 +161,6 @@ def apply_per_layer_quant(
 
     # Input scaling.
     # Assume per tensor scaling of input.
-    assert torch.count_nonzero(input_zp) == 0
     assert len(input_scale.shape) == 0
     input_quantizer = StaticScaledQuantizer(
         name=f"{layer_name}.q_input",
