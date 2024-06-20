@@ -243,9 +243,12 @@ class InferenceTensor(ABC):
     def T(self) -> "InferenceTensor":
         from ..ops import permute
 
-        return permute(
-            self, dims=torch.flip(torch.arange(len(self.shape)), dims=[0]).tolist()
-        )
+        # Reverse the dimension range.
+        rank = len(self.shape)
+        assert rank == 2, "T will be deprecated in torch for non-2D tensors"
+        dims = [rank - 1 - i for i in range(rank)]
+
+        return permute(self, dims=dims)
 
 
 REGISTERED_INFERENCE_TENSOR_CLASSES: dict[str, Type[InferenceTensor]] = {}

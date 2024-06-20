@@ -286,7 +286,7 @@ def permute(tensor: AnyTensor, dims: List[int]) -> AnyTensor:
 
 
 @permute.trampoline
-def _sharded_sum_trampoline(d: SignatureDispatcher, tensor: AnyTensor, dims: List[int]):
+def _permute_trampoline(d: SignatureDispatcher, tensor: AnyTensor, dims: List[int]):
     tensors = (tensor,)
     for override in d.find_overrides(tensors):
         result = override(tensor, dims)
