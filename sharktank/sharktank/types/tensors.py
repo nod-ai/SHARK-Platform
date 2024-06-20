@@ -10,7 +10,6 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 import torch
-import shark_turbine.ops as ops
 from ..utils.math import ceildiv
 from shark_turbine.aot import (
     ExternalTensorTrait,
@@ -239,6 +238,17 @@ class InferenceTensor(ABC):
         raise NotImplementedError(
             f"InferenceTensor {type(self)} does not implement _clone_with_globals"
         )
+
+    @property
+    def T(self) -> "InferenceTensor":
+        from ..ops import permute
+
+        # Reverse the dimension range.
+        rank = len(self.shape)
+        assert rank == 2, "T will be deprecated in torch for non-2D tensors"
+        dims = [rank - 1 - i for i in range(rank)]
+
+        return permute(self, dims=dims)
 
 
 REGISTERED_INFERENCE_TENSOR_CLASSES: dict[str, Type[InferenceTensor]] = {}

@@ -6,7 +6,7 @@
 
 """Signatures for dynamic dispatch of ops covering our fundamental tensor types."""
 
-from typing import Optional, Sequence, Union
+from typing import Optional, Sequence, Union, List
 
 import torch
 import numbers
@@ -23,6 +23,7 @@ __all__ = [
     "layer_norm",
     "linear",
     "matmul",
+    "permute",
     "rms_norm",
     "sharded_cat",
     "sharded_sum",
@@ -203,7 +204,7 @@ def _layer_norm_trampoline(
 def linear(
     input: AnyTensor,
     weight: AnyTensor,
-    bias: Optional[AnyTensor],
+    bias: Optional[AnyTensor] = None,
     *,
     accum_dtype: Optional[torch.dtype] = None,
 ) -> torch.Tensor:
@@ -230,7 +231,7 @@ def _linear_trampoline(
     d: SignatureDispatcher,
     input: AnyTensor,
     weight: AnyTensor,
-    bias: Optional[AnyTensor],
+    bias: Optional[AnyTensor] = None,
     *,
     accum_dtype: Optional[torch.dtype] = None,
 ):
@@ -244,7 +245,7 @@ def _linear_trampoline(
 
 
 @overridable
-def matmul(lhs: AnyTensor, rhs: AnyTensor, *, transpose_rhs: bool = True):
+def matmul(lhs: AnyTensor, rhs: AnyTensor, *, transpose_rhs: bool = False):
     """Performs a matmul where the RHS may be an InferenceTensor.
 
     Unlike torch.matmul, this variant is optimized for emission of a fused
@@ -263,11 +264,32 @@ def matmul(lhs: AnyTensor, rhs: AnyTensor, *, transpose_rhs: bool = True):
 
 
 @matmul.trampoline
-def _matmul_trampoline(d: SignatureDispatcher, lhs, rhs, *, transpose_rhs: bool = True):
+def _matmul_trampoline(
+    d: SignatureDispatcher, lhs, rhs, *, transpose_rhs: bool = False
+):
     tensors = (lhs, rhs)
     assert isinstance(rhs, numbers.Number) or len(rhs.shape) == 2
     for override in d.find_overrides(tensors):
         result = override(lhs, rhs, transpose_rhs=transpose_rhs)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(tensors)
+
+
+@overridable
+def permute(tensor: AnyTensor, dims: List[int]) -> AnyTensor:
+    """Permute the tensor dimensions according to the permutation `dims` in line
+    notation.
+    The semantics are the same as torch.permute."""
+    ...
+
+
+@permute.trampoline
+def _permute_trampoline(d: SignatureDispatcher, tensor: AnyTensor, dims: List[int]):
+    tensors = (tensor,)
+    for override in d.find_overrides(tensors):
+        result = override(tensor, dims)
         if result is not NotImplemented:
             return override, result
     else:
