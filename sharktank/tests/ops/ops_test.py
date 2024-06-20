@@ -141,7 +141,7 @@ class PermuteTest(unittest.TestCase):
         assert torch.equal(expected_result, permuted_primitive_tensor)
 
     def testTensorPropertyT(self):
-        torch_tensor = torch.rand(3, 4, 5, dtype=torch.float32)
+        torch_tensor = torch.rand(3, 5, dtype=torch.float32)
         primitive_tensor = DefaultPrimitiveTensor(data=torch_tensor)
         assert torch.equal(torch_tensor.T, primitive_tensor.T)
 

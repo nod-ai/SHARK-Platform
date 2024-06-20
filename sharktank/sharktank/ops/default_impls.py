@@ -107,7 +107,7 @@ def linear_default(input, weight, bias, *, accum_dtype) -> Tensor:
     bias = None if bias is None else unbox_tensor(bias)
     if weight.dtype != input.dtype:
         weight = weight.to(dtype=input.dtype)
-    result = matmul(input, weight.T)
+    result = matmul(input, weight, transpose_rhs=True)
     if bias is not None:
         result = result + bias
     return result
