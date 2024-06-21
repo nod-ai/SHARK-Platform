@@ -691,6 +691,7 @@ class ShardedPrimitiveTensor(ShardedTensorBase):
         if isinstance(ts, torch.Tensor):
             assert shard_count is not None
             ts = ts.split(ceildiv(ts.shape[shard_dim], shard_count), dim=shard_dim)
+            assert len(ts) == shard_count
             shard_count = None
 
         assert shard_count is None

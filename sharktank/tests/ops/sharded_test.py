@@ -305,7 +305,7 @@ class MatmulTest(unittest.TestCase):
         torch.testing.assert_close(actual_result, expected_result)
 
     def testShardedLhsReplcatedRhs(self):
-        a = torch.rand(12, 2, 5, dtype=torch.float32)
+        a = torch.rand(12, 3, 5, dtype=torch.float32)
         b = torch.rand(5, 9, dtype=torch.float32)
         expected_result = torch.matmul(a, b)
         shard_count = 3
