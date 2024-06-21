@@ -17,27 +17,28 @@ from shark_turbine import aot
 from sharktank import kernels
 
 
-class mmt_scaled_q8_test(unittest.TestCase):
+class mmt_axis_scaled_q8_test(unittest.TestCase):
     def setUp(self):
         torch.manual_seed(42)
 
     @parameterized.expand(
         [
-            (1e-3, 1e-5),
-            (1e-3, 1e-5),
-            (1e-3, 1e-5),
+            (16, 100, 3200, 1e-3, 1e-5),
+            (8, 8, 8, 1e-3, 1e-5),
+            (3, 17, 5, 1e-3, 1e-5),
         ]
     )
-    def testBS32(self, atol, rtol):
+    def testBS32(self, m, n, k, atol, rtol):
         ref_dtype = torch.float32
         lhs_dtype = torch.int8
         rhs_dype = torch.int8
-        lhs = (torch.rand([16, 3200], dtype=ref_dtype) * 16).to(torch.int8)
-        rhs = (torch.rand([100, 3200], dtype=ref_dtype) * 16).to(torch.int8)
-        scale0 = (torch.rand([16], dtype=ref_dtype) * 16).to(torch.int8)
-        scale1 = (torch.rand([100], dtype=ref_dtype) * 16).to(torch.int8)
-        zp0 = (torch.rand([16], dtype=ref_dtype) * 16).to(torch.int8)
-        zp1 = (torch.rand([100], dtype=ref_dtype) * 16).to(torch.int8)
+
+        lhs = (torch.rand([m, k], dtype=ref_dtype) * 16).to(torch.int8)
+        rhs = (torch.rand([n, k], dtype=ref_dtype) * 16).to(torch.int8)
+        scale0 = (torch.rand([m], dtype=ref_dtype) * 16).to(torch.int8)
+        scale1 = (torch.rand([n], dtype=ref_dtype) * 16).to(torch.int8)
+        zp0 = (torch.rand([m], dtype=ref_dtype) * 16).to(torch.int8)
+        zp1 = (torch.rand([n], dtype=ref_dtype) * 16).to(torch.int8)
         result = kernels.mmt_scaled_q8(lhs, rhs, scale0, scale1, zp0, zp1)
 
         # Dequantize and test with normal matmul.
@@ -80,7 +81,7 @@ class mmt_scaled_q8_test(unittest.TestCase):
         output = aot.export(ep)
         output.verify()
         asm = str(output.mlir_module)
-        self.assertIn("@mmt_scaled_q8", asm)
+        self.assertIn("@sharktank_mmt_axis_scaled_q8", asm)
 
 
 if __name__ == "__main__":

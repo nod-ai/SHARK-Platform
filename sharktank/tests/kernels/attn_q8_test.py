@@ -23,44 +23,30 @@ class mmt_scaled_q8_test(unittest.TestCase):
 
     @parameterized.expand(
         [
-            (1e-3, 1e-5),
-            (1e-3, 1e-5),
-            (1e-3, 1e-5),
+            (16, 100, 32, 8, 1e-3, 1e-5),
+            (8, 8, 8, 8, 1e-3, 1e-5),
+            (3, 17, 5, 7, 1e-3, 1e-5),
         ]
     )
-    def testBS32(self, atol, rtol):
+    def testBS32(m, n, k, p, self, atol, rtol):
         a_type = torch.float32
         lowp_type = torch.int8
         b_type = torch.bool
-        query = (torch.rand([16, 32] , dtype=a_type) * 16).to(torch.int8)
-        key = (torch.rand([100, 32], dtype=a_type) * 16).to(torch.int8)
-        value = (torch.rand([8, 100], dtype=a_type) * 16).to(torch.int8)
-        query_s = (torch.rand([16], dtype=a_type) * 16).to(torch.int8)
-        key_s = (torch.rand([100], dtype=a_type) * 16).to(torch.int8)
-        value_s = (torch.rand([8], dtype=a_type) * 16).to(torch.int8)
-        query_zp = (torch.rand([16], dtype=a_type) * 16).to(torch.int8)
-        key_zp = (torch.rand([100], dtype=a_type) * 16).to(torch.int8)
-        value_zp = (torch.rand([8], dtype=a_type) * 16).to(torch.int8)
-        attn_mask = torch.rand([16,100], dtype=torch.float32) > .5
-        randoms = torch.rand([16,100], dtype=a_type)
+        query = (torch.rand([m, k] , dtype=a_type) * 16).to(torch.int8)
+        key = (torch.rand([n, k], dtype=a_type) * 16).to(torch.int8)
+        value = (torch.rand([p, n], dtype=a_type) * 16).to(torch.int8)
+        query_s = (torch.rand([m], dtype=a_type) * 16).to(torch.int8)
+        key_s = (torch.rand([n], dtype=a_type) * 16).to(torch.int8)
+        value_s = (torch.rand([p], dtype=a_type) * 16).to(torch.int8)
+        query_zp = (torch.rand([m], dtype=a_type) * 16).to(torch.int8)
+        key_zp = (torch.rand([m], dtype=a_type) * 16).to(torch.int8)
+        value_zp = (torch.rand([p], dtype=a_type) * 16).to(torch.int8)
+        attn_mask = torch.rand([m,n], dtype=torch.float32) > .5
+        randoms = torch.rand([m,n], dtype=a_type)
         dropout_p = torch.tensor(0, dtype=a_type) # for testing
         is_causal = torch.tensor(False) # true
         scale = torch.tensor(True) # true # todo, allow values
         
-        assert query is not None
-        assert key is not None
-        assert value is not None
-        assert query_s is not None
-        assert key_s is not None
-        assert value_s is not None
-        assert query_zp is not None
-        assert key_zp is not None
-        assert value_zp is not None
-        assert attn_mask is not None
-        assert randoms is not None
-        assert dropout_p is not None
-        assert is_causal is not None
-        assert scale is not None
         result = kernels.attn_q8(query, key, value, query_s, key_s, value_s, query_zp, key_zp, value_zp, attn_mask, randoms, dropout_p, is_causal, scale)
 
         # Dequantize and test with normal matmul.

@@ -15,16 +15,25 @@ __all__ = [
 
 @CustomOp.register(library=LIBRARY)
 class attn_q8(CustomOp):
-    """Generic block scaled matmul with transposed RHS.
+    """Generic axis scaled attention
 
-    This corresponds to the BlockScaledLayout and operates on planar `d`
-    and `qs` tensors as specified there:
+    * `q`: `[M, K]
+    * `k`: `[N, K]`
+    * `v`: `[P, N]`
+    * `scale_q`: `[M]
+    * `scale_k`: `[N]`
+    * `scale_v`: `[P]`
+    * `offset_q`: `[M]
+    * `offset_k`: `[N]`
+    * `offset_v`: `[P]`
+    * `attn_mask`: `[M, N]
+    * `randoms`: `[M, N]
+    * `p`: `[1]
+    * `is_causal`: `[1]
+    * `scale`: `[1]
 
-    * `d`: `[N, K // 32, 1]`
-    * `qs`: `[N, K // 32, 32]`
 
-    The LHS is expected to be a 3d tensor of shape [B, M, K]. The kernel
-    will be specialized for all values of N, K and LHS dtype.
+    Will be specialized for all values of N, K and LHS dtype.
     """
 
     signature = "attn_q8(Tensor m0, Tensor m1, Tensor m2, Tensor scale0, Tensor scale1, Tensor scale2, Tensor zp0, Tensor zp1, Tensor zp2, Tensor attn_mask, Tensor randoms, Tensor p, Tensor is_causal, Tensor scale) -> (Tensor)"
@@ -92,7 +101,7 @@ class attn_q8(CustomOp):
 
         template_file = "attn_q8.mlir"
         target_function_name = (
-            f"attn_q8"
+            f"sharktank_attn_q8"
         )
 
         target_function = inline_template_function(

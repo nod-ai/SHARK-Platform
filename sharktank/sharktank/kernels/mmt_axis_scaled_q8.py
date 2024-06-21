@@ -9,25 +9,21 @@ from sharktank.kernels.base import *
 import torch
 
 __all__ = [
-    "mmt_scaled_q8",
+    "mmt_axis_scaled_q8",
 ]
 
 
 @CustomOp.register(library=LIBRARY)
-class mmt_scaled_q8(CustomOp):
-    """Generic block scaled matmul with transposed RHS.
+class mmt_axis_scaled_q8(CustomOp):
+    """Generic axis scaled matmul with transposed RHS.
 
-    This corresponds to the BlockScaledLayout and operates on planar `d`
-    and `qs` tensors as specified there:
+    * `lhs`: `[M, K]`
+    * `rhs`: `[N, K]`
 
-    * `d`: `[N, K // 32, 1]`
-    * `qs`: `[N, K // 32, 32]`
-
-    The LHS is expected to be a 3d tensor of shape [B, M, K]. The kernel
-    will be specialized for all values of N, K and LHS dtype.
+    Will be specialized for all values of M, N, K and LHS dtype.
     """
 
-    signature = "mmt_scaled_q8(Tensor lhs, Tensor rhs, Tensor scale0, Tensor scale1, Tensor zp0, Tensor zp1) -> (Tensor)"
+    signature = "mmt_axis_scaled_q8(Tensor lhs, Tensor rhs, Tensor scale0, Tensor scale1, Tensor zp0, Tensor zp1) -> (Tensor)"
 
     def select(self, ksel: KernelSelection):
         lhs_desc = ksel.arg_tensor(0)  # Shape [b, ] m, k
@@ -41,10 +37,10 @@ class mmt_scaled_q8(CustomOp):
         lhs_m, lhs_k = lhs_desc.t.shape
 
         # d arg
-        rhs_n, rhs_k, *rest = rhs_desc.t.shape
+        rhs_n, rhs_k = rhs_desc.t.shape
         torch._check(
-            len(rest) == 0 and rhs_k == lhs_k,
-            lambda: f"scaled_mmt_q8 arg 'rhs': Incorrect shape (got {rhs_desc.t.shape})",
+            rhs_k == lhs_k,
+            lambda: f"mmt_axis_scaled_q8 arg 'rhs': Incorrect shape (got {rhs_desc.t.shape})",
         )
 
         # Specialize on K, N, BS
@@ -77,9 +73,9 @@ class mmt_scaled_q8(CustomOp):
         n, k = rhs_tensor_type.shape
         lhs_type_str = str(lhs_tensor_type.element_type)
 
-        template_file = "mmt_scaled_q8.mlir"
+        template_file = "mmt_axis_scaled_q8.mlir"
         target_function_name = (
-            f"mmt_scaled_q8"
+            f"sharktank_mmt_axis_scaled_q8"
         )
 
         target_function = inline_template_function(

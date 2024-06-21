@@ -15,31 +15,28 @@ __all__ = [
 
 @CustomOp.register(library=LIBRARY)
 class batch_matmul_transpose_b(CustomOp):
-    """Generic block scaled matmul with transposed RHS.
+    """Generic batch matmul.
 
-    This corresponds to the BlockScaledLayout and operates on planar `d`
-    and `qs` tensors as specified there:
-
-    * `d`: `[N, K // 32, 1]`
-    * `qs`: `[N, K // 32, 32]`
+    * `lhs`: `[B, M, K]`
+    * `rhs`: `[B, N, K]`
 
     The LHS is expected to be a 3d tensor of shape [B, M, K]. The kernel
-    will be specialized for all values of N, K and LHS dtype.
+    will be specialized for all values of M, N, K and LHS dtype.
     """
 
     signature = "batch_matmul_transpose_b(Tensor lhs, Tensor rhs) -> (Tensor)"
 
     def select(self, ksel: KernelSelection):
-        lhs_desc = ksel.arg_tensor(0)  # Shape [b, ] m, k
-        rhs_desc = ksel.arg_tensor(1)  # Shape [N, K // BLOCK_SIZE, 1]
+        lhs_desc = ksel.arg_tensor(0)  # Shape [b, m, k]
+        rhs_desc = ksel.arg_tensor(1)  # Shape [b, n, k]
 
-        # a arg
+        # lhs arg
         lhs_batch, lhs_m, lhs_k = lhs_desc.t.shape
 
-        # d arg
+        # rhs arg
         rhs_batch, rhs_n, rhs_k = rhs_desc.t.shape
         torch._check(
-            rhs_k == lhs_k,
+            rhs_k == lhs_k and rhs_batch == lhs_batch,
             lambda: f"batch_matmul_transpose_b arg 'rhs': Incorrect shape (got {rhs_desc.t.shape})",
         )
 

@@ -39,7 +39,7 @@ class conv_2d_nchw_fchw_test(unittest.TestCase):
         ref = torch.nn.functional.conv2d(inputs, weights, bias=bias, stride=(1,1), padding=1, dilation=(1,1))
         torch.testing.assert_close(result, ref, atol=atol, rtol=rtol)
 
-"""    def testExportStaticDims(self):
+    def testExportStaticDims(self):
         class MyModule(torch.nn.Module):
             def forward(self, a, b, c):
                 return kernels.conv_2d_nchw_fchw(a, b, c, [1, 1], [0, 0], [1, 1])
@@ -58,7 +58,7 @@ class conv_2d_nchw_fchw_test(unittest.TestCase):
         output.verify()
         asm = str(output.mlir_module)
         self.assertIn("@sharktank_conv_2d_nchw_fchw", asm)
-"""
+
 
 if __name__ == "__main__":
     unittest.main()

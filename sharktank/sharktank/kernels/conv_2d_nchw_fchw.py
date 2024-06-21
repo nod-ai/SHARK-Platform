@@ -17,16 +17,10 @@ __all__ = [
 
 @CustomOp.register(library=LIBRARY)
 class conv_2d_nchw_fchw(CustomOp):
-    """Generic block scaled matmul with transposed RHS.
+    """Generic convolution
 
-    This corresponds to the BlockScaledLayout and operates on planar `d`
-    and `qs` tensors as specified there:
 
-    * `d`: `[N, K // 32, 1]`
-    * `qs`: `[N, K // 32, 32]`
-
-    The LHS is expected to be a 3d tensor of shape [B, M, K]. The kernel
-    will be specialized for all values of N, K and LHS dtype.
+    Will be specialized for all values of strides, padding, dilations, and LHS dtype.
     """
 
     signature = "conv_2d_nchw_fchw(Tensor inputs, Tensor weights, Tensor bias, int[] strides, int[] padding, int[] dilations) -> (Tensor)"

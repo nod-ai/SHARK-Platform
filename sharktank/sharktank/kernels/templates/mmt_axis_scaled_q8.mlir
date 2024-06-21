@@ -7,7 +7,7 @@
 
 module {
 
-util.func private @mmt_scaled_q8(%arg0 : tensor<{{m}}x{{k}}x{{lowp_type}}>, %arg1 : tensor<{{n}}x{{k}}x{{lowp_type}}>, %arg2 : tensor<{{m}}x{{lowp_type}}>, %arg3 : tensor<{{n}}x{{lowp_type}}>, %arg4: tensor<{{m}}x{{lowp_type}}>, %arg5: tensor<{{n}}x{{lowp_type}}>) -> tensor<{{m}}x{{n}}x{{a_type}}> {
+util.func private @sharktank_mmt_axis_scaled_q8(%arg0 : tensor<{{m}}x{{k}}x{{lowp_type}}>, %arg1 : tensor<{{n}}x{{k}}x{{lowp_type}}>, %arg2 : tensor<{{m}}x{{lowp_type}}>, %arg3 : tensor<{{n}}x{{lowp_type}}>, %arg4: tensor<{{m}}x{{lowp_type}}>, %arg5: tensor<{{n}}x{{lowp_type}}>) -> tensor<{{m}}x{{n}}x{{a_type}}> {
     %zerof32 = arith.constant 0.0 : {{a_type}}
     %emptyf32 = tensor.empty() : tensor<{{m}}x{{n}}x{{a_type}}>
     %fullf32 = linalg.fill ins (%zerof32 : {{a_type}}) outs (%emptyf32 : tensor<{{m}}x{{n}}x{{a_type}}>)  -> tensor<{{m}}x{{n}}x{{a_type}}>
