@@ -267,8 +267,22 @@ linear.override(
 # Sharded matmuls.
 
 
+@matmul.override(ShardedPrimitiveTensor, Tensor)
+def matmul_sharded_lhs(
+    lhs: ShardedPrimitiveTensor, rhs, *, transpose_rhs: bool
+) -> ShardedPrimitiveTensor:
+    lhs_reduction_dim = len(lhs.shape) - 1
+    assert lhs_reduction_dim != lhs.shard_dim
+    shards = [
+        matmul(lhs_shard, rhs, transpose_rhs=transpose_rhs) for lhs_shard in lhs.shards
+    ]
+    return ShardedPrimitiveTensor(shard_dim=lhs.shard_dim, ts=shards)
+
+
 @matmul.override(Tensor, ShardedPrimitiveTensor)
-def matmul_sharded_rhs(lhs, rhs: ShardedPrimitiveTensor, *, transpose_rhs: bool):
+def matmul_sharded_rhs(
+    lhs, rhs: ShardedPrimitiveTensor, *, transpose_rhs: bool
+) -> ShardedPrimitiveTensor:
     # When multiplying (unsharded, sharded), the rhs must be sharded by column.
     # In a transposed configuration, this is axis 0, otherwise 1.
     # This will result in a ShardedTensor, sharded by column.
@@ -290,26 +304,52 @@ def matmul_sharded_rhs(lhs, rhs: ShardedPrimitiveTensor, *, transpose_rhs: bool)
     return ShardedPrimitiveTensor(shard_dim=len(lhs.shape) - 1, ts=partials)
 
 
+@matmul.override(ShardedPrimitiveTensor, ReplicatedTensor)
+def matmul_sharded_lhs_replicated_rhs(
+    lhs: ShardedPrimitiveTensor, rhs: ReplicatedTensor, *, transpose_rhs: bool
+) -> ShardedPrimitiveTensor:
+    lhs_reduction_dim = len(lhs.shape) - 1
+    assert lhs_reduction_dim != lhs.shard_dim
+    if transpose_rhs:
+        rhs = rhs.T
+    shards = [
+        matmul(lhs_shard, rhs_shard)
+        for (lhs_shard, rhs_shard) in zip(lhs.shards, rhs.shards)
+    ]
+    return ShardedPrimitiveTensor(ts=shards, shard_dim=lhs.shard_dim)
+
+
 @matmul.override(ShardedPrimitiveTensor, ShardedPrimitiveTensor)
 def matmul_sharded(
     lhs: ShardedPrimitiveTensor, rhs: ShardedPrimitiveTensor, *, transpose_rhs: bool
-) -> UnreducedTensor:
-    lhs_reduction_dim = len(lhs.shape) - 1
-    rhs_reduction_dim = 1 if transpose_rhs else 0
-    assert (
-        lhs_reduction_dim == lhs.shard_dim and rhs_reduction_dim == rhs.shard_dim
-    ), "Only sharding of the reduction dimension is supported"
-
+) -> UnreducedTensor | ShardedPrimitiveTensor:
     if lhs.shard_count != rhs.shard_count:
         raise ValueError(
             f"Cannot matmul sharded tensors of different shard_count: "
             f"({lhs.shard_count} vs {rhs.shard_count})"
         )
-    partials = [
-        matmul(partial_lhs, partial_rhs, transpose_rhs=transpose_rhs)
-        for partial_lhs, partial_rhs in zip(lhs.shards, rhs.shards)
-    ]
-    return UnreducedTensor(ts=partials)
+
+    lhs_reduction_dim = len(lhs.shape) - 1
+    rhs_reduction_dim = 1 if transpose_rhs else 0
+
+    # The reduction dimension is sharded on both tensors.
+    if lhs_reduction_dim == lhs.shard_dim and rhs_reduction_dim == rhs.shard_dim:
+        partials = [
+            matmul(partial_lhs, partial_rhs, transpose_rhs=transpose_rhs)
+            for partial_lhs, partial_rhs in zip(lhs.shards, rhs.shards)
+        ]
+        return UnreducedTensor(ts=partials)
+
+    # One parallel dimension is sharded for each tensor.
+    if lhs_reduction_dim != lhs.shard_dim and rhs_reduction_dim != rhs.shard_dim:
+        if transpose_rhs:
+            rhs = rhs.T
+        # We gather along the rhs shard dim.
+        # It is more natural to preserve the sharding axis of the input.
+        shards = [sharded_cat(matmul(lhs_shard, rhs)) for lhs_shard in lhs.shards]
+        return ShardedPrimitiveTensor(ts=shards, shard_dim=lhs.shard_dim)
+
+    assert False, "Sharding configuration not supported"
 
 
 @permute.override(ShardedPrimitiveTensor)

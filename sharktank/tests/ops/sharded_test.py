@@ -249,6 +249,75 @@ class MatmulTest(unittest.TestCase):
         Z_unsharded = ops.sharded_sum(Z_sharded)
         torch.testing.assert_close(Z_unsharded, Z)
 
+    def testShardedParallelAxisInLhs(self):
+        a = torch.rand(2, 12, 5, dtype=torch.float32)
+        b = torch.rand(5, 9, dtype=torch.float32)
+        expected_result = torch.matmul(a, b)
+        shard_count = 3
+        a_sharded = ShardedPrimitiveTensor(ts=a, shard_dim=1, shard_count=shard_count)
+        res_sharded = ops.matmul(a_sharded, b)
+        assert isinstance(res_sharded, ShardedPrimitiveTensor)
+        assert res_sharded.shard_dim == 1
+        assert res_sharded.shard_count == shard_count
+        actual_result = ops.sharded_cat(res_sharded)
+        torch.testing.assert_close(actual_result, expected_result)
+
+    def testShardedParallelAxesInLhsAndRhs(self):
+        a = torch.rand(2, 12, 5, dtype=torch.float32)
+        b = torch.rand(5, 9, dtype=torch.float32)
+        expected_result = torch.matmul(a, b)
+        shard_count = 3
+        a_sharded = ShardedPrimitiveTensor(ts=a, shard_dim=1, shard_count=shard_count)
+        b_sharded = ShardedPrimitiveTensor(ts=b, shard_dim=1, shard_count=shard_count)
+        res_sharded = ops.matmul(a_sharded, b_sharded)
+        assert isinstance(res_sharded, ShardedPrimitiveTensor)
+        assert res_sharded.shard_dim == 1
+        assert res_sharded.shard_count == shard_count
+        actual_result = ops.sharded_cat(res_sharded)
+        torch.testing.assert_close(actual_result, expected_result)
+
+    def testShardedParallelAxesInLhsAndTransposedRhs(self):
+        a = torch.rand(2, 12, 5, dtype=torch.float32)
+        b = torch.rand(9, 5, dtype=torch.float32)
+        expected_result = torch.matmul(a, b.T)
+        shard_count = 3
+        a_sharded = ShardedPrimitiveTensor(ts=a, shard_dim=1, shard_count=shard_count)
+        b_sharded = ShardedPrimitiveTensor(ts=b, shard_dim=0, shard_count=shard_count)
+        res_sharded = ops.matmul(a_sharded, b_sharded, transpose_rhs=True)
+        assert isinstance(res_sharded, ShardedPrimitiveTensor)
+        assert res_sharded.shard_dim == 1
+        assert res_sharded.shard_count == shard_count
+        actual_result = ops.sharded_cat(res_sharded)
+        torch.testing.assert_close(actual_result, expected_result)
+
+    def testShardedLhsBatchDimAndRhsParallelDim(self):
+        a = torch.rand(12, 2, 5, dtype=torch.float32)
+        b = torch.rand(5, 9, dtype=torch.float32)
+        expected_result = torch.matmul(a, b)
+        shard_count = 3
+        a_sharded = ShardedPrimitiveTensor(ts=a, shard_dim=0, shard_count=shard_count)
+        b_sharded = ShardedPrimitiveTensor(ts=b, shard_dim=1, shard_count=shard_count)
+        res_sharded = ops.matmul(a_sharded, b_sharded)
+        assert isinstance(res_sharded, ShardedPrimitiveTensor)
+        assert res_sharded.shard_dim == 0
+        assert res_sharded.shard_count == shard_count
+        actual_result = ops.sharded_cat(res_sharded)
+        torch.testing.assert_close(actual_result, expected_result)
+
+    def testShardedLhsReplcatedRhs(self):
+        a = torch.rand(12, 3, 5, dtype=torch.float32)
+        b = torch.rand(5, 9, dtype=torch.float32)
+        expected_result = torch.matmul(a, b)
+        shard_count = 3
+        a_sharded = ShardedPrimitiveTensor(ts=a, shard_dim=1, shard_count=shard_count)
+        b_sharded = ReplicatedTensor(ts=b, shard_count=shard_count)
+        res_sharded = ops.matmul(a_sharded, b_sharded)
+        assert isinstance(res_sharded, ShardedPrimitiveTensor)
+        assert res_sharded.shard_dim == 1
+        assert res_sharded.shard_count == shard_count
+        actual_result = ops.sharded_cat(res_sharded)
+        torch.testing.assert_close(actual_result, expected_result)
+
     def testShardedFFNTransposed(self):
         input = torch.rand(4, 32, 64, dtype=torch.float32)
         unsharded_ffn_gate_weight = torch.rand(128, 64, dtype=torch.float16)
