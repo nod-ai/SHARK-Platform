@@ -250,6 +250,13 @@ class InferenceTensor(ABC):
 
         return permute(self, dims=dims)
 
+    def __add__(
+        self, rhs: "sharktank.ops._registry.AnyTensor"
+    ) -> "sharktank.ops._registry.AnyTensor":
+        from ..ops import elementwise
+
+        return elementwise(torch.add, self, rhs)
+
 
 REGISTERED_INFERENCE_TENSOR_CLASSES: dict[str, Type[InferenceTensor]] = {}
 

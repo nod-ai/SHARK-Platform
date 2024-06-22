@@ -134,6 +134,66 @@ class ConvTest(unittest.TestCase):
         torch.testing.assert_close(actual_result, expected_result)
 
 
+class ElementwiseTest(unittest.TestCase):
+    def testRhsAndLhsShardedAdd(self):
+        a = torch.rand(4, 5, 6, dtype=torch.float32)
+        b = torch.rand(4, 5, 6, dtype=torch.float32)
+
+        expected_result = a + b
+
+        shard_dim = 2
+        shard_count = 3
+        sharded_a = ops.shard(a, dim=shard_dim, count=shard_count)
+        sharded_b = ops.shard(b, dim=shard_dim, count=shard_count)
+        sharded_result = sharded_a + sharded_b
+        actual_result = ops.shard_like(sharded_result, expected_result)
+
+        torch.testing.assert_close(actual_result, expected_result)
+
+    def testBinaryOperators(self):
+        operators = [torch.add, torch.div, torch.fmin, torch.fmax, torch.sub]
+
+        for operator in operators:
+            a = torch.rand(4, 5, 6, dtype=torch.float32)
+            b = torch.rand(4, 5, 6, dtype=torch.float32)
+            shard_dim = 2
+            shard_count = 3
+            expected_result = operator(a, b)
+
+            # Sharded LHS and RHS
+            sharded_a = ops.shard(a, dim=shard_dim, count=shard_count)
+            sharded_b = ops.shard(b, dim=shard_dim, count=shard_count)
+            sharded_result = ops.elementwise(operator, sharded_a, sharded_b)
+            assert isinstance(sharded_result, ShardedTensor)
+            assert not sharded_result.is_replicated
+            assert sharded_result.shard_count == sharded_a.shard_count
+            assert sharded_result.shard_dim == sharded_a.shard_dim
+            actual_result = ops.shard_like(sharded_result, expected_result)
+            torch.testing.assert_close(actual_result, expected_result)
+
+            # Replicated LHS and Sharded RHS
+            sharded_a = ops.replicate(a, count=shard_count)
+            sharded_b = ops.shard(b, dim=shard_dim, count=shard_count)
+            sharded_result = ops.elementwise(operator, sharded_a, sharded_b)
+            assert isinstance(sharded_result, ShardedTensor)
+            assert not sharded_result.is_replicated
+            assert sharded_result.shard_count == sharded_b.shard_count
+            assert sharded_result.shard_dim == sharded_b.shard_dim
+            actual_result = ops.shard_like(sharded_result, expected_result)
+            torch.testing.assert_close(actual_result, expected_result)
+
+            # Sharded LHS and Replicated RHS
+            sharded_a = ops.shard(a, dim=shard_dim, count=shard_count)
+            sharded_b = ops.replicate(b, count=shard_count)
+            sharded_result = ops.elementwise(operator, sharded_a, sharded_b)
+            assert isinstance(sharded_result, ShardedTensor)
+            assert not sharded_result.is_replicated
+            assert sharded_result.shard_count == sharded_a.shard_count
+            assert sharded_result.shard_dim == sharded_a.shard_dim
+            actual_result = ops.shard_like(sharded_result, expected_result)
+            torch.testing.assert_close(actual_result, expected_result)
+
+
 class NormalizationTest(unittest.TestCase):
     def testGroupNormShardedGroups(self):
         """Shard the channel dimension such that the group count is multiple of the
@@ -364,6 +424,19 @@ class MatmulTest(unittest.TestCase):
             sharded_ffn_up_weight,
         )
         torch.testing.assert_close(Z_sharded, Z_ref)
+
+
+class ShardTest(unittest.TestCase):
+    def testShardReplicated(self):
+        tensor = torch.rand(4, 5, 6, dtype=torch.float32)
+        shard_dim = 2
+        shard_count = 3
+        replicated_tensor = ops.replicate(tensor, count=shard_count)
+        actual_result = ops.shard(replicated_tensor, dim=shard_dim, count=shard_count)
+
+        expected_result = ops.shard(tensor, dim=shard_dim, count=shard_count)
+
+        assert expected_result.is_deep_equal(actual_result)
 
 
 if __name__ == "__main__":
