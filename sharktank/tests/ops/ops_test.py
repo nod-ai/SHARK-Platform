@@ -13,6 +13,34 @@ from sharktank import ops
 from sharktank.types import *
 
 
+class EqualTest(unittest.TestCase):
+    def testEqualTorchTensors(self):
+        a = torch.rand(2, 3, dtype=torch.float32)
+        b = torch.clone(a)
+        assert ops.equal(a, b)
+        assert ops.equal(b, a)
+
+    def testNotEqualTorchTensors(self):
+        a = torch.rand(2, 3, dtype=torch.float32)
+        b = torch.clone(a)
+        b[0, 0] += 1
+        assert not ops.equal(a, b)
+        assert not ops.equal(b, a)
+
+    def testEqualTorchTensorAndPrimitiveTensor(self):
+        a = torch.rand(2, 3, dtype=torch.float32)
+        b = DefaultPrimitiveTensor(data=torch.clone(a))
+        assert ops.equal(a, b)
+        assert ops.equal(b, a)
+
+    def testEqualTorchTensorAndPrimitiveTensor(self):
+        a = torch.rand(2, 3, dtype=torch.float32)
+        b = DefaultPrimitiveTensor(data=torch.clone(a))
+        b.as_torch()[0, 0] += 1
+        assert not ops.equal(a, b)
+        assert not ops.equal(b, a)
+
+
 class EmbeddingLookupTest(unittest.TestCase):
     def testTorchImplNoCast(self):
         t1 = torch.tensor([[1, 2, 4, 5], [4, 3, 2, 9]])
