@@ -309,7 +309,7 @@ class PermuteTest(unittest.TestCase):
         permuted_sharded_tensor = ops.permute(sharded_tensor, permutation)
         result = ops.sharded_cat(permuted_sharded_tensor)
 
-        assert torch.equal(expected_result, result)
+        assert ops.equal(expected_result, result)
 
 
 class MatmulTest(unittest.TestCase):
