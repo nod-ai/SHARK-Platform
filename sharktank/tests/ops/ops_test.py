@@ -55,7 +55,7 @@ class MatmulTest(unittest.TestCase):
     def testTorchImplTransposedRHS(self):
         t1 = torch.rand(32, 16, dtype=torch.float32)
         t2 = torch.rand(48, 16, dtype=torch.float16)
-        result = ops.matmul(t1, t2)
+        result = ops.matmul(t1, t2.T)
         expected = torch.matmul(t1, t2.T.to(torch.float32))
         torch.testing.assert_close(result, expected)
         self.assertIs(
@@ -67,7 +67,7 @@ class MatmulTest(unittest.TestCase):
     def testTorchImplNonTransposedRHS(self):
         t1 = torch.rand(32, 16, dtype=torch.float32)
         t2 = torch.rand(16, 48, dtype=torch.float16)
-        result = ops.matmul(t1, t2, transpose_rhs=False)
+        result = ops.matmul(t1, t2)
         expected = torch.matmul(t1, t2.to(torch.float32))
         torch.testing.assert_close(result, expected)
         self.assertIsNot(
@@ -80,7 +80,7 @@ class MatmulTest(unittest.TestCase):
         t1 = torch.rand(32, 16, dtype=torch.float32)
         t2 = torch.rand(48, 16, dtype=torch.float16)
         t2_pt = DefaultPrimitiveTensor(data=t2)
-        result = ops.matmul(t1, t2_pt)
+        result = ops.matmul(t1, t2_pt.T)
         expected = torch.matmul(t1, t2.T.to(torch.float32))
         torch.testing.assert_close(result, expected)
         self.assertIs(
@@ -98,7 +98,7 @@ class MatmulTest(unittest.TestCase):
         rhs_pqt = PlanarQuantizedTensor(
             shape=[3200, 3200], layout=BlockScaledLayout([3200, 3200], d, qs)
         )
-        result = ops.matmul(a, rhs_pqt)
+        result = ops.matmul(a, rhs_pqt, transpose_rhs=True)
         # Just verifying dispatch. Numerics are tested at the kernel level.
         self.assertIs(
             ops._registry._TEST_LAST_OP_DISPATCH,
@@ -117,7 +117,7 @@ class MatmulTest(unittest.TestCase):
             shape=[3200, 3200],
             layout=BlockScaledI4Layout([3200, 3200], d, qs, m=m, signed=False),
         )
-        result = ops.matmul(a, rhs_pqt)
+        result = ops.matmul(a, rhs_pqt, transpose_rhs=True)
         # Just verifying dispatch. Numerics are tested at the kernel level.
         self.assertIs(
             ops._registry._TEST_LAST_OP_DISPATCH,
@@ -125,6 +125,25 @@ class MatmulTest(unittest.TestCase):
         )
 
     # TODO: mmt_super_block_scaled_offset_q4_unsigned
+
+
+class PermuteTest(unittest.TestCase):
+    def testPermute(self):
+        torch_tensor = torch.rand(3, 4, 5, dtype=torch.float32)
+        permutation = [1, 0, 2]
+        primitive_tensor = DefaultPrimitiveTensor(data=torch_tensor)
+        expected_result = torch.permute(torch_tensor, permutation)
+
+        permuted_torch_tensor = ops.permute(torch_tensor, permutation)
+        permuted_primitive_tensor = ops.permute(primitive_tensor, permutation)
+
+        assert torch.equal(expected_result, permuted_torch_tensor)
+        assert torch.equal(expected_result, permuted_primitive_tensor)
+
+    def testTensorPropertyT(self):
+        torch_tensor = torch.rand(3, 5, dtype=torch.float32)
+        primitive_tensor = DefaultPrimitiveTensor(data=torch_tensor)
+        assert torch.equal(torch_tensor.T, primitive_tensor.T)
 
 
 class RmsNormTest(unittest.TestCase):
@@ -173,7 +192,7 @@ class TestOpExport(unittest.TestCase):
                     shape=[3200, 3200],
                     layout=BlockScaledI4Layout([3200, 3200], d, qs, m=m, signed=False),
                 )
-                result = ops.matmul(a, rhs_pqt)
+                result = ops.linear(a, rhs_pqt)
                 return result
 
         my_module = MyModule()

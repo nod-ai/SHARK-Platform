@@ -6,26 +6,48 @@
 
 """Signatures for dynamic dispatch of ops covering our fundamental tensor types."""
 
-from typing import Optional, Sequence, Union
+from typing import Optional, Sequence, Union, List
 
 import torch
+import numbers
 from torch import Tensor, dtype
 
 from ._registry import *
 
 __all__ = [
+    "all_gather",
     "conv2d",
     "elementwise",
     "embedding_lookup",
     "group_norm_affine",
     "layer_norm",
+    "linear",
     "matmul",
+    "permute",
     "rms_norm",
     "sharded_cat",
     "sharded_sum",
 ]
 
 IntOrSequenceInt = Union[int, Sequence[int]]
+
+
+@overridable
+def all_gather(maybe_sharded: AnyTensor, *, dim: int | None = None) -> AnyTensor:
+    ...
+
+
+@all_gather.trampoline
+def _all_gather_trampoline(
+    d: SignatureDispatcher, maybe_sharded: AnyTensor, *, dim: int | None = None
+):
+    tensors = (maybe_sharded,)
+    for override in d.find_overrides(tensors):
+        result = override(maybe_sharded, dim=dim)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(tensors)
 
 
 @overridable
@@ -37,7 +59,8 @@ def conv2d(
     stride: IntOrSequenceInt = 1,
     padding: IntOrSequenceInt = 0,
     dilation: IntOrSequenceInt = 1,
-    groups: IntOrSequenceInt = 1
+    groups: IntOrSequenceInt = 1,
+    accum_dtype: Optional[torch.dtype] = None,
 ):
     """Equivalent to torch.nn.functional.conv2d with enhancements:
 
@@ -56,7 +79,8 @@ def _conv2d_trampoline(
     stride=1,
     padding=0,
     dilation=1,
-    groups=1
+    groups=1,
+    accum_dtype: Optional[torch.dtype] = None,
 ):
     tensors = [input, weight]
     if bias is not None:
@@ -70,6 +94,7 @@ def _conv2d_trampoline(
             padding=padding,
             dilation=dilation,
             groups=groups,
+            accum_dtype=accum_dtype,
         )
         if result is not NotImplemented:
             return override, result
@@ -136,7 +161,7 @@ def _group_norm_affine_trampoline(
     bias: AnyTensor,
     *,
     num_groups: int,
-    eps: float
+    eps: float,
 ):
     tensors = (input, weight, bias)
     for override in d.find_overrides(tensors):
@@ -162,7 +187,7 @@ def _layer_norm_trampoline(
     weight: AnyTensor,
     bias: Optional[AnyTensor],
     *,
-    eps: float
+    eps: float,
 ):
     tensors = [input, weight]
     if bias is not None:
@@ -176,7 +201,51 @@ def _layer_norm_trampoline(
 
 
 @overridable
-def matmul(lhs: AnyTensor, rhs: AnyTensor, *, transpose_rhs: bool = True):
+def linear(
+    input: AnyTensor,
+    weight: AnyTensor,
+    bias: Optional[AnyTensor] = None,
+    *,
+    accum_dtype: Optional[torch.dtype] = None,
+) -> torch.Tensor:
+    """Applies a linear transformation to the incoming data.
+
+    Equivalent to:
+    ```
+    y = torch.matmul(input, weight.T) + bias
+    ```
+
+    This operator is defined to operate on a limited number of quantized types.
+    In that situation, the result may be a QuantizedTensor. Callers should
+    be prepared to handle this scenario.
+
+    The optional accum_dtype argument is used as a hint to some implementations
+    which may need help in selecting an appropriate high precision type for
+    accumulation.
+    """
+    raise NotImplementedError
+
+
+@linear.trampoline
+def _linear_trampoline(
+    d: SignatureDispatcher,
+    input: AnyTensor,
+    weight: AnyTensor,
+    bias: Optional[AnyTensor] = None,
+    *,
+    accum_dtype: Optional[torch.dtype] = None,
+):
+    tensors = (input, weight) if bias is None else (input, weight, bias)
+    for override in d.find_overrides(tensors):
+        result = override(input, weight, bias, accum_dtype=accum_dtype)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(tensors)
+
+
+@overridable
+def matmul(lhs: AnyTensor, rhs: AnyTensor, *, transpose_rhs: bool = False):
     """Performs a matmul where the RHS may be an InferenceTensor.
 
     Unlike torch.matmul, this variant is optimized for emission of a fused
@@ -187,7 +256,7 @@ def matmul(lhs: AnyTensor, rhs: AnyTensor, *, transpose_rhs: bool = True):
 
     Args:
     lhs: Left hand side tensor. Can have dimensionality > 2 for batch.
-    rhs: Right hand side tensor. Must be 2d.
+    rhs: Right hand side tensor. Must be 2d or a scalar.
     transpose_rhs: Whether the right hand side should be transposed prior
         to matmul.
     """
@@ -195,10 +264,32 @@ def matmul(lhs: AnyTensor, rhs: AnyTensor, *, transpose_rhs: bool = True):
 
 
 @matmul.trampoline
-def _matmul_trampoline(d: SignatureDispatcher, lhs, rhs, *, transpose_rhs: bool = True):
+def _matmul_trampoline(
+    d: SignatureDispatcher, lhs, rhs, *, transpose_rhs: bool = False
+):
     tensors = (lhs, rhs)
+    assert isinstance(rhs, numbers.Number) or len(rhs.shape) == 2
     for override in d.find_overrides(tensors):
         result = override(lhs, rhs, transpose_rhs=transpose_rhs)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(tensors)
+
+
+@overridable
+def permute(tensor: AnyTensor, dims: List[int]) -> AnyTensor:
+    """Permute the tensor dimensions according to the permutation `dims` in line
+    notation.
+    The semantics are the same as torch.permute."""
+    ...
+
+
+@permute.trampoline
+def _permute_trampoline(d: SignatureDispatcher, tensor: AnyTensor, dims: List[int]):
+    tensors = (tensor,)
+    for override in d.find_overrides(tensors):
+        result = override(tensor, dims)
         if result is not NotImplemented:
             return override, result
     else:

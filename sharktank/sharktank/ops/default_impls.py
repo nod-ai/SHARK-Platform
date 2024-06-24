@@ -7,6 +7,8 @@
 # This file contains overrides of the standard ops for normal torch and
 # generic primitive/quantized types.
 
+from typing import Optional, List
+
 import torch
 from torch import Tensor, dtype
 import torch.nn.functional as F
@@ -16,16 +18,26 @@ from ._registry import unbox_tensor
 from .signatures import *
 
 # conv2d
-@conv2d.override(Tensor, Tensor, Tensor)
-def conv2d_with_bias(
-    input: Tensor, weight: Tensor, bias: Tensor, *, stride, padding, dilation, groups
+
+
+def conv2d_default(
+    input: Tensor,
+    weight: Tensor,
+    bias: Optional[Tensor],
+    *,
+    stride,
+    padding,
+    dilation,
+    groups,
+    accum_dtype: Optional[torch.dtype],
 ):
     input = unbox_tensor(input)
     weight = unbox_tensor(weight)
-    bias = unbox_tensor(bias)
+    if bias is not None:
+        bias = unbox_tensor(bias)
     if weight.dtype != input.dtype:
         weight = weight.to(input.dtype)
-    if bias.dtype != input.dtype:
+    if bias is not None and bias.dtype != input.dtype:
         bias = bias.to(input.dtype)
     return F.conv2d(
         input,
@@ -38,25 +50,8 @@ def conv2d_with_bias(
     )
 
 
-@conv2d.override(Tensor, Tensor)
-def conv2d_no_bias(
-    input: Tensor, weight: Tensor, bias, *, stride, padding, dilation, groups
-):
-    assert bias is None
-    input = unbox_tensor(input)
-    weight = unbox_tensor(weight)
-    if weight.dtype != input.dtype:
-        weight = weight.to(input.dtype)
-    return F.conv2d(
-        input,
-        weight,
-        bias,
-        stride=stride,
-        padding=padding,
-        dilation=dilation,
-        groups=groups,
-    )
-
+conv2d.override(Tensor, Tensor, Tensor, auto_dequant=True)(conv2d_default)
+conv2d.override(Tensor, Tensor, auto_dequant=True)(conv2d_default)
 
 # Elementwise
 @elementwise.override(Tensor)
@@ -105,23 +100,31 @@ def layer_norm_default(input, weight, bias, *, eps):
     )
 
 
+# Linear
+def linear_default(input, weight, bias, *, accum_dtype) -> Tensor:
+    input = unbox_tensor(input)
+    weight = unbox_tensor(weight)
+    bias = None if bias is None else unbox_tensor(bias)
+    if weight.dtype != input.dtype:
+        weight = weight.to(dtype=input.dtype)
+    result = matmul(input, weight, transpose_rhs=True)
+    if bias is not None:
+        result = result + bias
+    return result
+
+
+linear.override(Tensor, Tensor, auto_dequant=True)(linear_default)
+linear.override(Tensor, Tensor, Tensor, auto_dequant=True)(linear_default)
+
+
 # Matmul
-@matmul.override(Tensor, Tensor)
+@matmul.override(Tensor, Tensor, auto_dequant=True)
 def matmul_default(lhs, rhs, *, transpose_rhs: bool) -> Tensor:
     lhs = unbox_tensor(lhs)
     rhs = unbox_tensor(rhs)
     if transpose_rhs:
         rhs = rhs.T
     return torch.matmul(lhs, rhs.to(lhs.dtype))
-
-
-@matmul.override(Tensor, QuantizedTensor)
-def matmul_Tensor_QuantizedTensor(
-    lhs, rhs: QuantizedTensor, *, transpose_rhs: bool
-) -> Tensor:
-    lhs = unbox_tensor(lhs)
-    rhs_torch = rhs.unpack().dequant(lhs.dtype)
-    return matmul_default(lhs, rhs_torch, transpose_rhs=transpose_rhs)
 
 
 # RMS norm
@@ -142,6 +145,12 @@ def rms_norm_Tensor_QuantizedTensor(
     x = unbox_tensor(x)
     weight = weight.unpack().dequant(x.dtype)
     return rms_norm_default(x, weight, epsilon=epsilon)
+
+
+@permute.override(Tensor)
+def permute(tensor: Tensor, dims: List[int]):
+    torch_tensor = unbox_tensor(tensor)
+    return torch.permute(torch_tensor, dims)
 
 
 # Sharded default impls (do nothing).
