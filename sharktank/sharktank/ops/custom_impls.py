@@ -24,7 +24,7 @@ from ..types import (
     SuperBlockOffsetScaled_4_6_Layout,
 )
 
-from ._registry import unbox_tensor, AnyTensor
+from ._registry import unbox_tensor
 from .signatures import *
 
 
@@ -45,16 +45,6 @@ from .signatures import *
 
 
 # Quantized Matmul
-
-
-@equal.override(Tensor, QuantizedTensor)
-def equal_tensor_quantized_tensor(a, b: QuantizedTensor) -> bool:
-    assert "TODO: implement"
-
-
-@equal.override(QuantizedTensor)
-def equal_tensor_quantized_tensor(a: QuantizedTensor, b: AnyTensor) -> bool:
-    assert "TODO: implement"
 
 
 @matmul.override(Tensor, QuantizedTensor)

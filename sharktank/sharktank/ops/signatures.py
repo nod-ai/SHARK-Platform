@@ -160,10 +160,6 @@ def equal(a: AnyTensor, b: AnyTensor) -> bool:
     raise NotImplementedError
 
 
-def _not_equal(a: AnyTensor, b: AnyTensor) -> bool:
-    return False
-
-
 @equal.trampoline
 def _equal_trampoline(d: SignatureDispatcher, a: AnyTensor, b: AnyTensor):
     # Try first more specific matching the 2 operands.
@@ -176,15 +172,14 @@ def _equal_trampoline(d: SignatureDispatcher, a: AnyTensor, b: AnyTensor):
         if result is not NotImplemented:
             return override, result
 
-    # Try less specific matching the first operand.
+    # Less specific. Try matching only the first operand.
     tensors = (a,)
     for override in d.find_overrides(tensors):
         result = override(a, b)
         if result is not NotImplemented:
             return override, result
-
-    # If we don't match anything we assume not equal.
-    return _not_equal, _not_equal(a, b)
+    else:
+        d.fail(tensors)
 
 
 @overridable
