@@ -20,6 +20,7 @@ __all__ = [
     "conv2d",
     "elementwise",
     "embedding_lookup",
+    "equal",
     "group_norm_affine",
     "layer_norm",
     "linear",
@@ -147,6 +148,43 @@ def _embedding_lookup_trampoline(
             return override, result
     else:
         d.fail(tensors)
+
+
+@overridable
+def equal(a: AnyTensor, b: AnyTensor) -> bool:
+    """Compares 2 tensors for equality, such that if one is substituted with the other
+    in sharktank polymorphic calls, the results will be essentially the same.
+    Meaning, they would also compare equal.
+
+    torch.Tensor and DefaultPrimitiveTensor with the same contents would compare equal."""
+    raise NotImplementedError
+
+
+def _not_equal(a: AnyTensor, b: AnyTensor) -> bool:
+    return False
+
+
+@equal.trampoline
+def _equal_trampoline(d: SignatureDispatcher, a: AnyTensor, b: AnyTensor):
+    # Try first more specific matching the 2 operands.
+    tensors = (
+        a,
+        b,
+    )
+    for override in d.find_overrides(tensors):
+        result = override(a, b)
+        if result is not NotImplemented:
+            return override, result
+
+    # Try less specific matching the first operand.
+    tensors = (a,)
+    for override in d.find_overrides(tensors):
+        result = override(a, b)
+        if result is not NotImplemented:
+            return override, result
+
+    # If we don't match anything we assume not equal.
+    return _not_equal, _not_equal(a, b)
 
 
 @overridable

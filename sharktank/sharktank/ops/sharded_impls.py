@@ -14,7 +14,7 @@ from ..types import (
     UnreducedTensor,
     ShardedTensor,
 )
-from ._registry import unbox_tensor
+from ._registry import unbox_tensor, AnyTensor
 from .signatures import *
 
 
@@ -224,6 +224,16 @@ def elementwise_binary_sharded_lhs_replicated_rhs(
     return elementwise(operator, x, y_sharded)
 
 
+@equal.override(ReplicatedTensor)
+def equal_replicated(a: ReplicatedTensor, b: AnyTensor) -> bool:
+    return a.is_deep_equal(b)
+
+
+@equal.override(ShardedPrimitiveTensor)
+def equal_sharded(a: ShardedPrimitiveTensor, b: AnyTensor) -> bool:
+    return a.is_deep_equal(b)
+
+
 @group_norm_affine.override(
     ShardedPrimitiveTensor, ShardedPrimitiveTensor, ShardedPrimitiveTensor
 )
@@ -379,20 +389,20 @@ def permute_sharded(tensor: ShardedPrimitiveTensor, dims: List[int]):
     return ShardedPrimitiveTensor(ts=permuted_shards, shard_dim=permuted_shard_dim)
 
 
-@replicate.override(Tensor)
-def replicate_tensor(input, *, count: int) -> ReplicatedTensor:
-    torch_input = unbox_tensor(input)
-    return ReplicatedTensor(ts=torch_input, shard_count=count)
-
-
 @replicate.override(ReplicatedTensor)
-def replicate_tensor(input: ReplicatedTensor, *, count: int) -> ReplicatedTensor:
+def replicate_replicated(input: ReplicatedTensor, *, count: int) -> ReplicatedTensor:
     assert input.shard_count == count
     return input
 
 
+@replicate.override(Tensor)
+def replicate_unsharded(input, *, count: int) -> ReplicatedTensor:
+    torch_input = unbox_tensor(input)
+    return ReplicatedTensor(ts=torch_input, shard_count=count)
+
+
 @shard.override(Tensor)
-def shard_tensor(input, *, dim: int, count: int) -> ShardedPrimitiveTensor:
+def shard_unsharded(input, *, dim: int, count: int) -> ShardedPrimitiveTensor:
     torch_input = unbox_tensor(input)
     return ShardedPrimitiveTensor(ts=torch_input, shard_dim=dim, shard_count=count)
 
@@ -436,17 +446,17 @@ def shard_like_unsharded_to_sharded(
     input, like: ShardedPrimitiveTensor
 ) -> ShardedPrimitiveTensor:
     torch_input = unbox_tensor(input)
-    return ShardedPrimitiveTensor(ts=torch_input, shard_dim=like.shard_dim)
+    return shard(torch_input, dim=like.shard_dim, count=like.shard_count)
 
 
-def shard_like_to_unsharded(
-    input: ShardedPrimitiveTensor | ReplicatedTensor, like
-) -> ShardedPrimitiveTensor | ReplicatedTensor:
+@shard_like.override(ReplicatedTensor, Tensor)
+def shard_like_replicated_to_unsharded(input: ReplicatedTensor, like):
+    return input.shards[0]
+
+
+@shard_like.override(ShardedPrimitiveTensor, Tensor)
+def shard_like_sharded_to_unsharded(input: ShardedPrimitiveTensor, like):
     return sharded_cat(input)
-
-
-shard_like.override(ShardedPrimitiveTensor, Tensor)(shard_like_to_unsharded)
-shard_like.override(ReplicatedTensor, Tensor)(shard_like_to_unsharded)
 
 
 @shard_like.override(Tensor, ReplicatedTensor)
@@ -454,7 +464,7 @@ def shard_like_unsharded_to_replicated(
     tensor, like: ReplicatedTensor
 ) -> ReplicatedTensor:
     torch_tensor = unbox_tensor(tensor)
-    return ReplicatedTensor(ts=torch_tensor, shard_count=like.shard_count)
+    return replicate(torch_tensor, count=like.shard_count)
 
 
 @shard_like.override(ReplicatedTensor, ReplicatedTensor)

@@ -10,6 +10,7 @@ import torch
 
 from sharktank import ops
 from sharktank.types import *
+from copy import deepcopy
 
 
 class ConvTest(unittest.TestCase):
@@ -192,6 +193,48 @@ class ElementwiseTest(unittest.TestCase):
             assert sharded_result.shard_dim == sharded_a.shard_dim
             actual_result = ops.shard_like(sharded_result, expected_result)
             torch.testing.assert_close(actual_result, expected_result)
+
+
+class EqualTest(unittest.TestCase):
+    def testNotEqualReplicated(self):
+        a = torch.rand(3, 4, 5, dtype=torch.float32)
+        b = deepcopy(a)
+        shard_count = 2
+        a_sharded = ops.replicate(a, count=shard_count)
+        b_sharded = ops.shard_like(b, a_sharded)
+        assert ops.equal(a_sharded, b_sharded)
+        assert ops.equal(b_sharded, a_sharded)
+
+    def testNotEqualReplicated(self):
+        a = torch.rand(3, 4, 5, dtype=torch.float32)
+        b = deepcopy(a)
+        b[0, 0, 0] += 1
+        shard_count = 2
+        a_sharded = ops.replicate(a, count=shard_count)
+        b_sharded = ops.shard_like(b, a_sharded)
+        assert not ops.equal(a_sharded, b_sharded)
+        assert not ops.equal(b_sharded, a_sharded)
+
+    def testEqualSharded(self):
+        a = torch.rand(3, 4, 5, dtype=torch.float32)
+        b = deepcopy(a)
+        shard_dim = 1
+        shard_count = 2
+        a_sharded = ops.shard(a, dim=shard_dim, count=shard_count)
+        b_sharded = ops.shard_like(b, a_sharded)
+        assert ops.equal(a_sharded, b_sharded)
+        assert ops.equal(b_sharded, a_sharded)
+
+    def testNotEqualSharded(self):
+        a = torch.rand(3, 4, 5, dtype=torch.float32)
+        b = deepcopy(a)
+        b[0, 0, 0] += 1
+        shard_dim = 1
+        shard_count = 2
+        a_sharded = ops.shard(a, dim=shard_dim, count=shard_count)
+        b_sharded = ops.shard_like(b, a_sharded)
+        assert not ops.equal(a_sharded, b_sharded)
+        assert not ops.equal(b_sharded, a_sharded)
 
 
 class NormalizationTest(unittest.TestCase):
@@ -426,6 +469,22 @@ class MatmulTest(unittest.TestCase):
         torch.testing.assert_close(Z_sharded, Z_ref)
 
 
+class ReplicateTest(unittest.TestCase):
+    def testReplicateReplicated(self):
+        tensor = torch.rand(4, 5, dtype=torch.float32)
+        shard_count = 3
+        expected_result = ops.replicate(tensor, count=shard_count)
+        actual_result = ops.replicate(expected_result, count=shard_count)
+        assert expected_result.is_deep_equal(actual_result)
+
+    def testReplicateUnsharded(self):
+        tensor = torch.rand(4, 5, dtype=torch.float32)
+        shard_count = 3
+        actual_result = ops.replicate(tensor, count=shard_count)
+        expected_result = ReplicatedTensor(ts=tensor, shard_count=shard_count)
+        assert expected_result.is_deep_equal(actual_result)
+
+
 class ShardTest(unittest.TestCase):
     def testShardReplicated(self):
         tensor = torch.rand(4, 5, 6, dtype=torch.float32)
@@ -434,6 +493,35 @@ class ShardTest(unittest.TestCase):
         replicated_tensor = ops.replicate(tensor, count=shard_count)
         actual_result = ops.shard(replicated_tensor, dim=shard_dim, count=shard_count)
         expected_result = ops.shard(tensor, dim=shard_dim, count=shard_count)
+        assert expected_result.is_deep_equal(actual_result)
+
+    def testShardUnsharded(self):
+        tensor = torch.rand(4, 5, 6, dtype=torch.float32)
+        shard_dim = 2
+        shard_count = 3
+        actual_result = ops.shard(tensor, dim=shard_dim, count=shard_count)
+        expected_result = ShardedPrimitiveTensor(
+            ts=tensor, shard_count=shard_count, shard_dim=shard_dim
+        )
+        assert expected_result.is_deep_equal(actual_result)
+
+    def testShardSharded(self):
+        tensor = torch.rand(4, 5, 6, dtype=torch.float32)
+        shard_dim = 2
+        shard_count = 3
+        expected_result = ShardedPrimitiveTensor(
+            ts=tensor, shard_count=shard_count, shard_dim=shard_dim
+        )
+        actual_result = ops.shard(expected_result, dim=shard_dim, count=shard_count)
+        assert expected_result.is_deep_equal(actual_result)
+
+
+class ShardLikeTest(unittest.TestCase):
+    def testShardLikeReplicatedToReplicated(self):
+        tensor = torch.rand(4, 5, 6, dtype=torch.float32)
+        shard_count = 2
+        expected_result = ops.replicate(tensor, count=shard_count)
+        actual_result = ops.shard_like(expected_result, expected_result)
         assert expected_result.is_deep_equal(actual_result)
 
     def testShardLikeReplicatedToSharded(self):
@@ -445,12 +533,44 @@ class ShardTest(unittest.TestCase):
         actual_result = ops.shard_like(replicated_tensor, expected_result)
         assert expected_result.is_deep_equal(actual_result)
 
+    def testShardLikeReplicatedToUnsharded(self):
+        tensor = torch.rand(4, 5, 6, dtype=torch.float32)
+        shard_count = 2
+        replicated = ops.replicate(tensor, count=shard_count)
+        actual_result = ops.shard_like(replicated, tensor)
+        expected_result = tensor
+        assert ops.equal(expected_result, actual_result)
+
+    def testShardLikeShardedToUnsharded(self):
+        tensor = torch.rand(4, 5, 6, dtype=torch.float32)
+        shard_dim = 0
+        shard_count = 2
+        sharded = ops.shard(tensor, dim=shard_dim, count=shard_count)
+        actual_result = ops.shard_like(sharded, tensor)
+        expected_result = tensor
+        assert ops.equal(expected_result, actual_result)
+
+    def testShardLikeUnshardedToReplicated(self):
+        tensor = torch.rand(4, 5, dtype=torch.float32)
+        shard_count = 3
+        expected_result = ops.replicate(tensor, count=shard_count)
+        actual_result = ops.shard_like(tensor, expected_result)
+        assert expected_result.is_deep_equal(actual_result)
+
     def testShardLikeUnshardedToSharded(self):
         tensor = torch.rand(4, 5, 6, dtype=torch.float32)
         shard_dim = 2
         shard_count = 3
         expected_result = ops.shard(tensor, dim=shard_dim, count=shard_count)
         actual_result = ops.shard_like(tensor, expected_result)
+        assert expected_result.is_deep_equal(actual_result)
+
+    def testShardLikeShardedToShared(self):
+        tensor = torch.rand(5, 6, dtype=torch.float32)
+        shard_dim = 1
+        shard_count = 3
+        expected_result = ops.shard(tensor, dim=shard_dim, count=shard_count)
+        actual_result = ops.shard_like(expected_result, expected_result)
         assert expected_result.is_deep_equal(actual_result)
 
 

@@ -11,6 +11,35 @@ import torch.nn.functional as F
 
 from sharktank import ops
 from sharktank.types import *
+from copy import deepcopy
+
+
+class EqualTest(unittest.TestCase):
+    def testEqualTorchTensors(self):
+        a = torch.rand(2, 3, dtype=torch.float32)
+        b = deepcopy(a)
+        assert ops.equal(a, b)
+        assert ops.equal(b, a)
+
+    def testNotEqualTorchTensors(self):
+        a = torch.rand(2, 3, dtype=torch.float32)
+        b = deepcopy(a)
+        b[0, 0] += 1
+        assert not ops.equal(a, b)
+        assert not ops.equal(b, a)
+
+    def testEqualTorchTensorAndPrimitiveTensor(self):
+        a = torch.rand(2, 3, dtype=torch.float32)
+        b = DefaultPrimitiveTensor(data=deepcopy(a))
+        assert ops.equal(a, b)
+        assert ops.equal(b, a)
+
+    def testEqualTorchTensorAndPrimitiveTensor(self):
+        a = torch.rand(2, 3, dtype=torch.float32)
+        b = DefaultPrimitiveTensor(data=deepcopy(a))
+        b.as_torch()[0, 0] += 1
+        assert not ops.equal(a, b)
+        assert not ops.equal(b, a)
 
 
 class EmbeddingLookupTest(unittest.TestCase):
