@@ -28,8 +28,8 @@ __all__ = [
     "permute",
     "rms_norm",
     "replicate",
-    "shard",
-    "shard_like",
+    "reshard",
+    "reshard_like",
     "sharded_cat",
     "sharded_sum",
 ]
@@ -156,8 +156,13 @@ def equal(a: AnyTensor, b: AnyTensor) -> bool:
     in sharktank polymorphic calls, the results will be essentially the same.
     Meaning, they would also compare equal.
 
+    Overrides are matched first against both tensor types and failing that,
+    then on just the first.
+    Therefore, each first-only argument override must internally decide whether
+    it can handle an equality check with an arbitrary b tensor.
+
     torch.Tensor and DefaultPrimitiveTensor with the same contents would compare equal."""
-    raise NotImplementedError
+    ...
 
 
 @equal.trampoline
@@ -374,17 +379,15 @@ def _replicate_trampoline(
 
 
 @overridable
-def shard(input: AnyTensor, *, dim: int, count: int) -> ShardedTensor:
+def reshard(input: AnyTensor, *, dim: int, count: int) -> ShardedTensor:
     """Shard `input` along `dim`.
     This does not mean that a sharded tensor is further sharded.
     It is not composition of sharding operations.
-    TODO: Maybe we can rename to `reshard` if it turns out to be confusing.
-
-    Possibly reshards if required."""
+    """
     ...
 
 
-@shard.trampoline
+@reshard.trampoline
 def _shard_trampoline(
     d: SignatureDispatcher, input: AnyTensor, dim: int, count: int
 ) -> ShardedTensor:
@@ -398,15 +401,15 @@ def _shard_trampoline(
 
 
 @overridable
-def shard_like(input: AnyTensor, like: AnyTensor) -> AnyTensor:
+def reshard_like(input: AnyTensor, like: AnyTensor) -> AnyTensor:
     """Shard `input` the same way as `like`.
 
     This may require expensive resharding."""
     ...
 
 
-@shard_like.trampoline
-def _shard_like_trampoline(
+@reshard_like.trampoline
+def _reshard_like_trampoline(
     d: SignatureDispatcher, input: AnyTensor, like: AnyTensor
 ) -> AnyTensor:
     tensors = (

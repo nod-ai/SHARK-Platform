@@ -208,10 +208,13 @@ def sharded_elementwise_binary(
 def elementwise_binary_replicated_lhs_sharder_rhs(
     operator, x: ReplicatedTensor, y: ShardedPrimitiveTensor
 ):
-    assert x.shard_count == y.shard_count
+    if x.shard_count != y.shard_count:
+        raise ValueError(
+            f"Operands' number of shards not equal ({x.shard_count} != {y.shard_count})"
+        )
     # A replicated tensor can be split with no cost.
     # It is natural to propagate the split instead of the replication.
-    x_sharded = shard_like(x, like=y)
+    x_sharded = reshard_like(x, like=y)
     return elementwise(operator, x_sharded, y)
 
 
@@ -219,8 +222,11 @@ def elementwise_binary_replicated_lhs_sharder_rhs(
 def elementwise_binary_sharded_lhs_replicated_rhs(
     operator, x: ReplicatedTensor, y: ShardedPrimitiveTensor
 ):
-    assert x.shard_count == y.shard_count
-    y_sharded = shard_like(y, like=x)
+    if x.shard_count != y.shard_count:
+        raise ValueError(
+            f"Operands' number of shards not equal ({x.shard_count} != {y.shard_count})"
+        )
+    y_sharded = reshard_like(y, like=x)
     return elementwise(operator, x, y_sharded)
 
 
@@ -274,7 +280,6 @@ def linear_sharded(
     # TODO: handle different dtypes
     result = matmul(input, weight.T)
     if bias is not None:
-        # TODO: handle "+"
         result = result + bias
     return result
 
@@ -391,6 +396,8 @@ def permute_sharded(tensor: ShardedPrimitiveTensor, dims: List[int]):
 
 @replicate.override(ReplicatedTensor)
 def replicate_replicated(input: ReplicatedTensor, *, count: int) -> ReplicatedTensor:
+    if input.shard_count != count:
+        raise ValueError(f"Number of shards not equal ({input.shard_count} != {count})")
     assert input.shard_count == count
     return input
 
@@ -401,26 +408,29 @@ def replicate_unsharded(input, *, count: int) -> ReplicatedTensor:
     return ReplicatedTensor(ts=torch_input, shard_count=count)
 
 
-@shard.override(Tensor)
+@reshard.override(Tensor)
 def shard_unsharded(input, *, dim: int, count: int) -> ShardedPrimitiveTensor:
     torch_input = unbox_tensor(input)
     return ShardedPrimitiveTensor(ts=torch_input, shard_dim=dim, shard_count=count)
 
 
-@shard.override(ShardedPrimitiveTensor)
+@reshard.override(ShardedPrimitiveTensor)
 def shard_sharded(
     input: ShardedPrimitiveTensor, *, dim: int, count: int
 ) -> ShardedPrimitiveTensor:
-    assert input.shard_count == count
-    assert input.shard_dim == dim, "Resharding is not supported"
+    if input.shard_count != count:
+        raise ValueError(f"Number of shards not equal ({input.shard_count} != {count})")
+    if input.shard_dim != dim:
+        raise ValueError(f"Resharding is not supported")
     return input
 
 
-@shard.override(ReplicatedTensor)
+@reshard.override(ReplicatedTensor)
 def shard_replicated(
     input: ReplicatedTensor, *, dim: int, count: int
 ) -> ShardedPrimitiveTensor:
-    assert input.shard_count == count
+    if input.shard_count != count:
+        raise ValueError(f"Number of shards not equal ({input.shard_count} != {count})")
 
     def slice_range_along_dim(dim: int, start: int, end: int):
         res = [slice(None)] * len(input.shape)
@@ -441,49 +451,52 @@ def shard_replicated(
     return ShardedPrimitiveTensor(ts=shards, shard_dim=dim)
 
 
-@shard_like.override(Tensor, ShardedPrimitiveTensor)
-def shard_like_unsharded_to_sharded(
+@reshard_like.override(Tensor, ShardedPrimitiveTensor)
+def reshard_like_unsharded_to_sharded(
     input, like: ShardedPrimitiveTensor
 ) -> ShardedPrimitiveTensor:
     torch_input = unbox_tensor(input)
-    return shard(torch_input, dim=like.shard_dim, count=like.shard_count)
+    return reshard(torch_input, dim=like.shard_dim, count=like.shard_count)
 
 
-@shard_like.override(ReplicatedTensor, Tensor)
-def shard_like_replicated_to_unsharded(input: ReplicatedTensor, like):
+@reshard_like.override(ReplicatedTensor, Tensor)
+def reshard_like_replicated_to_unsharded(input: ReplicatedTensor, like):
     return input.shards[0]
 
 
-@shard_like.override(ShardedPrimitiveTensor, Tensor)
-def shard_like_sharded_to_unsharded(input: ShardedPrimitiveTensor, like):
+@reshard_like.override(ShardedPrimitiveTensor, Tensor)
+def reshard_like_sharded_to_unsharded(input: ShardedPrimitiveTensor, like):
     return sharded_cat(input)
 
 
-@shard_like.override(Tensor, ReplicatedTensor)
-def shard_like_unsharded_to_replicated(
+@reshard_like.override(Tensor, ReplicatedTensor)
+def reshard_like_unsharded_to_replicated(
     tensor, like: ReplicatedTensor
 ) -> ReplicatedTensor:
     torch_tensor = unbox_tensor(tensor)
     return replicate(torch_tensor, count=like.shard_count)
 
 
-@shard_like.override(ReplicatedTensor, ReplicatedTensor)
-def shard_like_replicated_to_replicated(
+@reshard_like.override(ReplicatedTensor, ReplicatedTensor)
+def reshard_like_replicated_to_replicated(
     tensor: ReplicatedTensor, like: ReplicatedTensor
 ) -> ReplicatedTensor:
-    assert tensor.shard_count == like.shard_count
+    if tensor.shard_count != like.shard_count:
+        raise ValueError(
+            f"Operands' number of shards not equal ({input.shard_count} != {like.shard_count})"
+        )
     return tensor
 
 
-@shard_like.override(ReplicatedTensor, ShardedPrimitiveTensor)
-def shard_like_replicated_to_sharded(
+@reshard_like.override(ReplicatedTensor, ShardedPrimitiveTensor)
+def reshard_like_replicated_to_sharded(
     tensor: ReplicatedTensor, like: ShardedPrimitiveTensor
 ) -> ShardedPrimitiveTensor:
-    return shard(tensor, dim=like.shard_dim, count=like.shard_count)
+    return reshard(tensor, dim=like.shard_dim, count=like.shard_count)
 
 
-@shard_like.override(ShardedPrimitiveTensor, ShardedPrimitiveTensor)
-def shard_like_sharded_to_sharded(
+@reshard_like.override(ShardedPrimitiveTensor, ShardedPrimitiveTensor)
+def reshard_like_sharded_to_sharded(
     tensor: ShardedPrimitiveTensor, like: ShardedPrimitiveTensor
 ) -> ShardedPrimitiveTensor:
     assert (
