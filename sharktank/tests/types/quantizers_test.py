@@ -17,8 +17,8 @@ class StaticScaledQuantizerTest(TempDirTestBase):
         super().setUp()
         torch.manual_seed(0)
 
-    def _roundtrip(self, it):
-        dataset_path = self._temp_dir / "poodoo.irpa"
+    def _roundtrip(self, it, suffix=""):
+        dataset_path = self._temp_dir / f"poodoo{suffix}.irpa"
         theta = Theta([it])
         Dataset({}, theta).save(dataset_path)
         ds = Dataset.load(dataset_path)
@@ -30,7 +30,7 @@ class StaticScaledQuantizerTest(TempDirTestBase):
             scale=torch.tensor(0.2, dtype=torch.float32),
             dtype=torch.float16,
         )
-        ssq = self._roundtrip(ssq)
+        ssq = self._roundtrip(ssq, "_ssq")
         self.assertIs(ssq.axis, None)
         self.assertEqual(ssq.scale, 0.2)
         self.assertEqual(ssq.reciprocal_scale, 5.0)
@@ -40,10 +40,10 @@ class StaticScaledQuantizerTest(TempDirTestBase):
         ssq = StaticScaledQuantizer(
             scale=torch.tensor(2.0, dtype=torch.float32), dtype=torch.uint8
         )
-        ssq = self._roundtrip(ssq)
+        ssq = self._roundtrip(ssq, "_ssq")
         orig_value = torch.tensor([1.0, 2.0, 3.0, 4.0], dtype=torch.float16)
         qt_value = ssq.quantize(orig_value)
-        qt_value = self._roundtrip(qt_value)
+        qt_value = self._roundtrip(qt_value, "_qt_value")
         layout = qt_value.unpack()
         dequant_value = layout.dequant()
         torch.testing.assert_close(orig_value, dequant_value, atol=1e-3, rtol=1e-3)
@@ -54,10 +54,10 @@ class StaticScaledQuantizerTest(TempDirTestBase):
             offset=torch.tensor(8, dtype=torch.int8),
             dtype=torch.int8,
         )
-        ssq = self._roundtrip(ssq)
+        ssq = self._roundtrip(ssq, "_ssq")
         orig_value = torch.tensor([9.0, 10.0, 11.0, 12.0], dtype=torch.float16)
         qt_value = ssq.quantize(orig_value)
-        qt_value = self._roundtrip(qt_value)
+        qt_value = self._roundtrip(qt_value, "_qt_value")
         layout = qt_value.unpack()
         dequant_value = layout.dequant()
         torch.testing.assert_close(orig_value, dequant_value, atol=1e-3, rtol=1e-3)
@@ -69,7 +69,7 @@ class StaticScaledQuantizerTest(TempDirTestBase):
             scale=torch.tensor([0.2, 0.4, 0.8], dtype=torch.float32),
             dtype=torch.float16,
         )
-        ssq = self._roundtrip(ssq)
+        ssq = self._roundtrip(ssq, "_ssq")
         self.assertEqual(ssq.axis, 1)
         torch.testing.assert_close(ssq.scale, torch.tensor([0.2, 0.4, 0.8]))
         torch.testing.assert_close(ssq.reciprocal_scale, torch.tensor([5.0, 2.5, 1.25]))
@@ -85,7 +85,7 @@ class StaticScaledQuantizerTest(TempDirTestBase):
             scale=torch.tensor([8.0, 4.0, 2.0], dtype=torch.float32),
             dtype=torch.int8,
         )
-        ssq = self._roundtrip(ssq)
+        ssq = self._roundtrip(ssq, "_ssq")
         orig_value = torch.tensor(
             [[1.0, -2.0, 3.0], [10.0, -20.0, 60.0]], dtype=torch.float16
         )
@@ -105,7 +105,7 @@ class StaticScaledQuantizerTest(TempDirTestBase):
             offset=torch.tensor([16, 127, 136], dtype=torch.uint8),
             dtype=torch.uint8,
         )
-        ssq = self._roundtrip(ssq)
+        ssq = self._roundtrip(ssq, "_ssq")
         orig_value = torch.tensor(
             [[9.0, -11.0, 13.0], [18.0, -29.0, 40.0]], dtype=torch.float16
         )
@@ -117,8 +117,8 @@ class StaticScaledQuantizerTest(TempDirTestBase):
 
 
 class DynamicScaledQuantizerTest(TempDirTestBase):
-    def _roundtrip(self, it):
-        dataset_path = self._temp_dir / "poodoo.irpa"
+    def _roundtrip(self, it, suffix=""):
+        dataset_path = self._temp_dir / f"poodoo{suffix}.irpa"
         theta = Theta([it])
         Dataset({}, theta).save(dataset_path)
         ds = Dataset.load(dataset_path)
@@ -126,7 +126,7 @@ class DynamicScaledQuantizerTest(TempDirTestBase):
 
     def testQuantDequantInt(self):
         qr = DynamicScaledQuantizer(dtype=torch.int8)
-        qr = self._roundtrip(qr)
+        qr = self._roundtrip(qr, "_qr")
         orig_value = torch.tensor([-5.0, -2.0, 3.0, 4.5], dtype=torch.float32)
         qt_value = qr.quantize(orig_value)
         layout = qt_value.unpack()
@@ -136,7 +136,7 @@ class DynamicScaledQuantizerTest(TempDirTestBase):
 
     def testQuantDequantf16(self):
         qr = DynamicScaledQuantizer(dtype=torch.float16)
-        qr = self._roundtrip(qr)
+        qr = self._roundtrip(qr, "_qr")
         orig_value = torch.tensor([-5.0, -2.0, 3.0, 4.5], dtype=torch.float32)
         qt_value = qr.quantize(orig_value)
         layout = qt_value.unpack()
@@ -146,7 +146,7 @@ class DynamicScaledQuantizerTest(TempDirTestBase):
 
     def testQuantDequantf8fn(self):
         qr = DynamicScaledQuantizer(dtype=torch.float8_e4m3fn)
-        qr = self._roundtrip(qr)
+        qr = self._roundtrip(qr, "_qr")
         orig_value = torch.tensor([-5.0, -2.0, 3.0, 4.5], dtype=torch.float32)
         qt_value = qr.quantize(orig_value)
         layout = qt_value.unpack()
@@ -156,7 +156,7 @@ class DynamicScaledQuantizerTest(TempDirTestBase):
 
     def testQuantDequantf8fnuz(self):
         qr = DynamicScaledQuantizer(dtype=torch.float8_e4m3fnuz)
-        qr = self._roundtrip(qr)
+        qr = self._roundtrip(qr, "_qr")
         orig_value = torch.tensor([-5.0, -2.0, 3.0, 4.5], dtype=torch.float32)
         qt_value = qr.quantize(orig_value)
         layout = qt_value.unpack()
