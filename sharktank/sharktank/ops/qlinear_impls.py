@@ -12,6 +12,7 @@ from typing import Optional
 import warnings
 
 import torch
+from torch import Tensor
 
 from ..types import (
     QuantizedTensor,
@@ -161,3 +162,20 @@ linear.override(QuantizedTensor, QuantizedTensor)(qlinear_tensor_scaled_integer)
 linear.override(QuantizedTensor, QuantizedTensor, AnyTensor)(
     qlinear_tensor_scaled_integer
 )
+
+
+def linear_quantized_weight(
+    x: Tensor,
+    weight: QuantizedTensor,
+    bias: Optional[AnyTensor],
+    *,
+    accum_dtype: Optional[torch.dtype],
+) -> AnyTensor:
+    res = matmul(x, weight, transpose_rhs=True)
+    if bias is not None:
+        res = res + bias
+    return res
+
+
+linear.override(Tensor, QuantizedTensor)(linear_quantized_weight)
+linear.override(Tensor, QuantizedTensor, AnyTensor)(linear_quantized_weight)
