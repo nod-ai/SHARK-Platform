@@ -4,7 +4,7 @@ Author: Jakub Kuderski @kuhar
 
 Date: 2024-06-24
 
-Last Update: 2024-06-24
+Last Update: 2024-06-25
 
 ## Introduction
 
@@ -38,6 +38,7 @@ For third party documentation, see:
 * [CDNA3 Compute Architecture
   Overview](https://chipsandcheese.com/2023/12/17/amds-cdna-3-compute-architecture/)
   from Chips and Cheese
+* [MI300X Benchmarks](https://chipsandcheese.com/2024/06/25/testing-amds-giant-mi300x/) (bandwidth, latency, speed-of-light numbers) from Chips and Cheese
 
 ## Glossary
 
