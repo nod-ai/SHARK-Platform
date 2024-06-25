@@ -28,7 +28,7 @@ __all__ = [
     "permute",
     "rms_norm",
     "replicate",
-    "reshard",
+    "reshard_split",
     "reshard_like",
     "sharded_cat",
     "sharded_sum",
@@ -379,15 +379,15 @@ def _replicate_trampoline(
 
 
 @overridable
-def reshard(input: AnyTensor, *, dim: int, count: int) -> ShardedTensor:
-    """Shard `input` along `dim`.
+def reshard_split(input: AnyTensor, *, dim: int, count: int) -> ShardedTensor:
+    """Split `input` along `dim`.
     This does not mean that a sharded tensor is further sharded.
     It is not composition of sharding operations.
     """
     ...
 
 
-@reshard.trampoline
+@reshard_split.trampoline
 def _shard_trampoline(
     d: SignatureDispatcher, input: AnyTensor, dim: int, count: int
 ) -> ShardedTensor:
