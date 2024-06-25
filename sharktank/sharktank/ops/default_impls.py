@@ -14,7 +14,7 @@ from torch import Tensor, dtype
 import torch.nn.functional as F
 
 from ..types import InferenceTensor, PrimitiveTensor, QuantizedTensor
-from ._registry import unbox_tensor
+from ._registry import unbox_tensor, AnyTensor
 from .signatures import *
 
 # conv2d
@@ -79,6 +79,11 @@ def embedding_lookup_Tensor_QuantizedTensor(
 ):
     dequant = embedding_matrix.unpack().dequant(dtype=dtype)
     return F.embedding(unbox_tensor(input), dequant)
+
+
+@equal.override(Tensor, Tensor)
+def equal_default(a, b) -> bool:
+    return torch.equal(unbox_tensor(a), unbox_tensor(b))
 
 
 # Group norm.

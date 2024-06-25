@@ -79,7 +79,7 @@ class ShardedTensorTest(unittest.TestCase):
 
     def testShardedPrimitiveTensorSaveLoad(self):
         tensor = torch.rand([2, 6, 4], dtype=torch.float32)
-        sharded_tensor = ShardedPrimitiveTensor(
+        sharded_tensor = SplitPrimitiveTensor(
             ts=tensor, shard_count=3, name="the_tensor", shard_dim=1
         )
         theta = Theta([sharded_tensor])

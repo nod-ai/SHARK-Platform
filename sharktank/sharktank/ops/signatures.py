@@ -11,6 +11,7 @@ from typing import Optional, Sequence, Union, List
 import torch
 import numbers
 from torch import Tensor, dtype
+from ..types import ShardedTensor
 
 from ._registry import *
 
@@ -19,12 +20,16 @@ __all__ = [
     "conv2d",
     "elementwise",
     "embedding_lookup",
+    "equal",
     "group_norm_affine",
     "layer_norm",
     "linear",
     "matmul",
     "permute",
     "rms_norm",
+    "replicate",
+    "reshard_split",
+    "reshard_like",
     "sharded_cat",
     "sharded_sum",
 ]
@@ -139,6 +144,43 @@ def _embedding_lookup_trampoline(
     tensors = (input, embedding_matrix)
     for override in d.find_overrides(tensors):
         result = override(input, embedding_matrix, dtype)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(tensors)
+
+
+@overridable
+def equal(a: AnyTensor, b: AnyTensor) -> bool:
+    """Compares 2 tensors for equality, such that if one is substituted with the other
+    in sharktank polymorphic calls, the results will be essentially the same.
+    Meaning, they would also compare equal.
+
+    Overrides are matched first against both tensor types and failing that,
+    then on just the first.
+    Therefore, each first-only argument override must internally decide whether
+    it can handle an equality check with an arbitrary b tensor.
+
+    torch.Tensor and DefaultPrimitiveTensor with the same contents would compare equal."""
+    ...
+
+
+@equal.trampoline
+def _equal_trampoline(d: SignatureDispatcher, a: AnyTensor, b: AnyTensor):
+    # Try first more specific matching the 2 operands.
+    tensors = (
+        a,
+        b,
+    )
+    for override in d.find_overrides(tensors):
+        result = override(a, b)
+        if result is not NotImplemented:
+            return override, result
+
+    # Less specific. Try matching only the first operand.
+    tensors = (a,)
+    for override in d.find_overrides(tensors):
+        result = override(a, b)
         if result is not NotImplemented:
             return override, result
     else:
@@ -309,6 +351,73 @@ def _rms_norm_trampoline(
     tensors = (x, weight)
     for override in d.find_overrides(tensors):
         result = override(x, weight, epsilon=epsilon)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(tensors)
+
+
+@overridable
+def replicate(input: AnyTensor, count: int) -> ShardedTensor:
+    """Replicate across devices.
+
+    Possibly reshards if required."""
+    ...
+
+
+@replicate.trampoline
+def _replicate_trampoline(
+    d: SignatureDispatcher, input: AnyTensor, count: int
+) -> ShardedTensor:
+    tensors = (input,)
+    for override in d.find_overrides(tensors):
+        result = override(input, count=count)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(tensors)
+
+
+@overridable
+def reshard_split(input: AnyTensor, *, dim: int, count: int) -> ShardedTensor:
+    """Split `input` along `dim`.
+    This does not mean that a sharded tensor is further sharded.
+    It is not composition of sharding operations.
+    """
+    ...
+
+
+@reshard_split.trampoline
+def _shard_trampoline(
+    d: SignatureDispatcher, input: AnyTensor, dim: int, count: int
+) -> ShardedTensor:
+    tensors = (input,)
+    for override in d.find_overrides(tensors):
+        result = override(input, dim=dim, count=count)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(tensors)
+
+
+@overridable
+def reshard_like(input: AnyTensor, like: AnyTensor) -> AnyTensor:
+    """Shard `input` the same way as `like`.
+
+    This may require expensive resharding."""
+    ...
+
+
+@reshard_like.trampoline
+def _reshard_like_trampoline(
+    d: SignatureDispatcher, input: AnyTensor, like: AnyTensor
+) -> AnyTensor:
+    tensors = (
+        input,
+        like,
+    )
+    for override in d.find_overrides(tensors):
+        result = override(input, like)
         if result is not NotImplemented:
             return override, result
     else:

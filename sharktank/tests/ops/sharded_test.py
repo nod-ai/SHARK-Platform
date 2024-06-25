@@ -5,6 +5,7 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 import unittest
+from parameterized import parameterized
 
 import torch
 
@@ -22,7 +23,7 @@ class ConvTest(unittest.TestCase):
         ]
         expected_result = torch.cat(shards, dim=shard_dim)
 
-        sharded = ShardedPrimitiveTensor(shard_dim=shard_dim, ts=shards)
+        sharded = SplitPrimitiveTensor(shard_dim=shard_dim, ts=shards)
         actual_result = ops.all_gather(sharded)
 
         for shard in actual_result.shards:
@@ -61,11 +62,11 @@ class ConvTest(unittest.TestCase):
         )
 
         shard_count = 2
-        x_sharded = ShardedPrimitiveTensor(shard_dim=1, ts=x, shard_count=shard_count)
-        weight_sharded = ShardedPrimitiveTensor(
+        x_sharded = SplitPrimitiveTensor(shard_dim=1, ts=x, shard_count=shard_count)
+        weight_sharded = SplitPrimitiveTensor(
             shard_dim=0, ts=weight, shard_count=shard_count
         )
-        bias_sharded = ShardedPrimitiveTensor(
+        bias_sharded = SplitPrimitiveTensor(
             shard_dim=0, ts=bias, shard_count=shard_count
         )
         sharded_result = ops.conv2d(
@@ -114,10 +115,10 @@ class ConvTest(unittest.TestCase):
         )
 
         shard_count = 2
-        weight_sharded = ShardedPrimitiveTensor(
+        weight_sharded = SplitPrimitiveTensor(
             shard_dim=0, ts=weight, shard_count=shard_count
         )
-        bias_sharded = ShardedPrimitiveTensor(
+        bias_sharded = SplitPrimitiveTensor(
             shard_dim=0, ts=bias, shard_count=shard_count
         )
         sharded_result = ops.conv2d(
@@ -132,6 +133,114 @@ class ConvTest(unittest.TestCase):
         actual_result = ops.sharded_cat(sharded_result)
 
         torch.testing.assert_close(actual_result, expected_result)
+
+
+class ElementwiseTest(unittest.TestCase):
+    def testRhsAndLhsShardedAdd(self):
+        a = torch.rand(4, 5, 6, dtype=torch.float32)
+        b = torch.rand(4, 5, 6, dtype=torch.float32)
+
+        expected_result = a + b
+
+        shard_dim = 2
+        shard_count = 3
+        sharded_a = ops.reshard_split(a, dim=shard_dim, count=shard_count)
+        sharded_b = ops.reshard_split(b, dim=shard_dim, count=shard_count)
+        sharded_result = sharded_a + sharded_b
+        actual_result = ops.reshard_like(sharded_result, expected_result)
+
+        torch.testing.assert_close(actual_result, expected_result)
+
+    @parameterized.expand(
+        [
+            (torch.add,),
+            (torch.div,),
+            (torch.fmin,),
+            (torch.fmax,),
+            (torch.sub),
+        ]
+    )
+    def testBinaryOperators(self, operator):
+        a = torch.rand(4, 5, 6, dtype=torch.float32)
+        b = torch.rand(4, 5, 6, dtype=torch.float32)
+        shard_dim = 2
+        shard_count = 3
+        expected_result = operator(a, b)
+
+        # Sharded LHS and RHS
+        sharded_a = ops.reshard_split(a, dim=shard_dim, count=shard_count)
+        sharded_b = ops.reshard_split(b, dim=shard_dim, count=shard_count)
+        sharded_result = ops.elementwise(operator, sharded_a, sharded_b)
+        assert isinstance(sharded_result, ShardedTensor)
+        assert not sharded_result.is_replicated
+        assert sharded_result.shard_count == sharded_a.shard_count
+        assert sharded_result.shard_dim == sharded_a.shard_dim
+        actual_result = ops.reshard_like(sharded_result, expected_result)
+        torch.testing.assert_close(actual_result, expected_result)
+
+        # Replicated LHS and Sharded RHS
+        sharded_a = ops.replicate(a, count=shard_count)
+        sharded_b = ops.reshard_split(b, dim=shard_dim, count=shard_count)
+        sharded_result = ops.elementwise(operator, sharded_a, sharded_b)
+        assert isinstance(sharded_result, ShardedTensor)
+        assert not sharded_result.is_replicated
+        assert sharded_result.shard_count == sharded_b.shard_count
+        assert sharded_result.shard_dim == sharded_b.shard_dim
+        actual_result = ops.reshard_like(sharded_result, expected_result)
+        torch.testing.assert_close(actual_result, expected_result)
+
+        # Sharded LHS and Replicated RHS
+        sharded_a = ops.reshard_split(a, dim=shard_dim, count=shard_count)
+        sharded_b = ops.replicate(b, count=shard_count)
+        sharded_result = ops.elementwise(operator, sharded_a, sharded_b)
+        assert isinstance(sharded_result, ShardedTensor)
+        assert not sharded_result.is_replicated
+        assert sharded_result.shard_count == sharded_a.shard_count
+        assert sharded_result.shard_dim == sharded_a.shard_dim
+        actual_result = ops.reshard_like(sharded_result, expected_result)
+        torch.testing.assert_close(actual_result, expected_result)
+
+
+class EqualTest(unittest.TestCase):
+    def testNotEqualReplicated(self):
+        a = torch.rand(3, 4, 5, dtype=torch.float32)
+        b = torch.clone(a)
+        shard_count = 2
+        a_sharded = ops.replicate(a, count=shard_count)
+        b_sharded = ops.reshard_like(b, a_sharded)
+        assert ops.equal(a_sharded, b_sharded)
+        assert ops.equal(b_sharded, a_sharded)
+
+    def testNotEqualReplicated(self):
+        a = torch.rand(3, 4, 5, dtype=torch.float32)
+        b = torch.clone(a)
+        b[0, 0, 0] += 1
+        shard_count = 2
+        a_sharded = ops.replicate(a, count=shard_count)
+        b_sharded = ops.reshard_like(b, a_sharded)
+        assert not ops.equal(a_sharded, b_sharded)
+        assert not ops.equal(b_sharded, a_sharded)
+
+    def testEqualSharded(self):
+        a = torch.rand(3, 4, 5, dtype=torch.float32)
+        b = torch.clone(a)
+        shard_dim = 1
+        shard_count = 2
+        a_sharded = ops.reshard_split(a, dim=shard_dim, count=shard_count)
+        b_sharded = ops.reshard_like(b, a_sharded)
+        assert ops.equal(a_sharded, b_sharded)
+        assert ops.equal(b_sharded, a_sharded)
+
+    def testNotEqualSharded(self):
+        a = torch.rand(3, 4, 5, dtype=torch.float32)
+        b = torch.clone(a)
+        b[0, 0, 0] += 1
+        shard_dim = 1
+        shard_count = 2
+        a_sharded = ops.reshard_split(a, dim=shard_dim, count=shard_count)
+        b_sharded = ops.reshard_like(b, a_sharded)
+        assert not ops.equal(a_sharded, b_sharded)
+        assert not ops.equal(b_sharded, a_sharded)
 
 
 class NormalizationTest(unittest.TestCase):
@@ -153,11 +262,11 @@ class NormalizationTest(unittest.TestCase):
         )
 
         shard_count = 3
-        x_sharded = ShardedPrimitiveTensor(shard_dim=1, ts=x, shard_count=shard_count)
-        weight_sharded = ShardedPrimitiveTensor(
+        x_sharded = SplitPrimitiveTensor(shard_dim=1, ts=x, shard_count=shard_count)
+        weight_sharded = SplitPrimitiveTensor(
             shard_dim=0, ts=weight, shard_count=shard_count
         )
-        bias_sharded = ShardedPrimitiveTensor(
+        bias_sharded = SplitPrimitiveTensor(
             shard_dim=0, ts=bias, shard_count=shard_count
         )
         sharded_result = ops.group_norm_affine(
@@ -182,7 +291,7 @@ class NormalizationTest(unittest.TestCase):
 
         expected_result = ops.layer_norm(x, weight=weight, bias=bias, eps=eps)
 
-        x_sharded = ShardedPrimitiveTensor(shard_dim=2, ts=x, shard_count=3)
+        x_sharded = SplitPrimitiveTensor(shard_dim=2, ts=x, shard_count=3)
         sharded_result = ops.layer_norm(
             x_sharded,
             weight=weight,
@@ -198,7 +307,7 @@ class PermuteTest(unittest.TestCase):
     def testShardedPrimitiveTensorPermute(self):
         torch_tensor = torch.rand(3, 8, 5, dtype=torch.float32)
         permutation = [1, 0, 2]
-        sharded_tensor = ShardedPrimitiveTensor(
+        sharded_tensor = SplitPrimitiveTensor(
             ts=torch_tensor, shard_dim=1, shard_count=4
         )
         expected_result = torch.permute(torch_tensor, permutation)
@@ -206,7 +315,7 @@ class PermuteTest(unittest.TestCase):
         permuted_sharded_tensor = ops.permute(sharded_tensor, permutation)
         result = ops.sharded_cat(permuted_sharded_tensor)
 
-        assert torch.equal(expected_result, result)
+        assert ops.equal(expected_result, result)
 
 
 class MatmulTest(unittest.TestCase):
@@ -214,7 +323,7 @@ class MatmulTest(unittest.TestCase):
         t1 = torch.rand(4, 32, 16, dtype=torch.float32)
         t2 = torch.rand(48, 16, dtype=torch.float16)
         # RHS is transposed, so dim0 is the "column". Shard into 12.
-        t2_sharded = ShardedPrimitiveTensor(shard_dim=0, ts=t2.split(4, dim=0))
+        t2_sharded = SplitPrimitiveTensor(shard_dim=0, ts=t2.split(4, dim=0))
         sharded_result = ops.matmul(t1, t2_sharded.T)
         expected_result = ops.matmul(t1, t2.T)
         unsharded_result = ops.sharded_cat(sharded_result)
@@ -223,7 +332,7 @@ class MatmulTest(unittest.TestCase):
     def testTorchRHSColumnSharded(self):
         t1 = torch.rand(4, 32, 16, dtype=torch.float32)
         t2 = torch.rand(16, 48, dtype=torch.float16)
-        t2_sharded = ShardedPrimitiveTensor(shard_dim=1, ts=t2.split(4, dim=1))
+        t2_sharded = SplitPrimitiveTensor(shard_dim=1, ts=t2.split(4, dim=1))
         sharded_result = ops.matmul(t1, t2_sharded)
         expected_result = ops.matmul(t1, t2)
         unsharded_result = ops.sharded_cat(sharded_result)
@@ -238,10 +347,10 @@ class MatmulTest(unittest.TestCase):
         Z = ops.matmul(XA, B.T)
 
         # Columnwise sharding of A matrix (transposed).
-        A_sharded = ShardedPrimitiveTensor(shard_dim=0, ts=A.split(6, dim=0))
+        A_sharded = SplitPrimitiveTensor(shard_dim=0, ts=A.split(6, dim=0))
         assert A_sharded.shard_count == 8
         # Rowwise sharding of B matrix (transposed).
-        B_sharded = ShardedPrimitiveTensor(shard_dim=1, ts=B.split(6, dim=1))
+        B_sharded = SplitPrimitiveTensor(shard_dim=1, ts=B.split(6, dim=1))
         assert B_sharded.shard_count == 8
 
         XA_sharded = ops.matmul(X, A_sharded.T)
@@ -254,9 +363,9 @@ class MatmulTest(unittest.TestCase):
         b = torch.rand(5, 9, dtype=torch.float32)
         expected_result = torch.matmul(a, b)
         shard_count = 3
-        a_sharded = ShardedPrimitiveTensor(ts=a, shard_dim=1, shard_count=shard_count)
+        a_sharded = SplitPrimitiveTensor(ts=a, shard_dim=1, shard_count=shard_count)
         res_sharded = ops.matmul(a_sharded, b)
-        assert isinstance(res_sharded, ShardedPrimitiveTensor)
+        assert isinstance(res_sharded, SplitPrimitiveTensor)
         assert res_sharded.shard_dim == 1
         assert res_sharded.shard_count == shard_count
         actual_result = ops.sharded_cat(res_sharded)
@@ -267,10 +376,10 @@ class MatmulTest(unittest.TestCase):
         b = torch.rand(5, 9, dtype=torch.float32)
         expected_result = torch.matmul(a, b)
         shard_count = 3
-        a_sharded = ShardedPrimitiveTensor(ts=a, shard_dim=1, shard_count=shard_count)
-        b_sharded = ShardedPrimitiveTensor(ts=b, shard_dim=1, shard_count=shard_count)
+        a_sharded = SplitPrimitiveTensor(ts=a, shard_dim=1, shard_count=shard_count)
+        b_sharded = SplitPrimitiveTensor(ts=b, shard_dim=1, shard_count=shard_count)
         res_sharded = ops.matmul(a_sharded, b_sharded)
-        assert isinstance(res_sharded, ShardedPrimitiveTensor)
+        assert isinstance(res_sharded, SplitPrimitiveTensor)
         assert res_sharded.shard_dim == 1
         assert res_sharded.shard_count == shard_count
         actual_result = ops.sharded_cat(res_sharded)
@@ -281,10 +390,10 @@ class MatmulTest(unittest.TestCase):
         b = torch.rand(9, 5, dtype=torch.float32)
         expected_result = torch.matmul(a, b.T)
         shard_count = 3
-        a_sharded = ShardedPrimitiveTensor(ts=a, shard_dim=1, shard_count=shard_count)
-        b_sharded = ShardedPrimitiveTensor(ts=b, shard_dim=0, shard_count=shard_count)
+        a_sharded = SplitPrimitiveTensor(ts=a, shard_dim=1, shard_count=shard_count)
+        b_sharded = SplitPrimitiveTensor(ts=b, shard_dim=0, shard_count=shard_count)
         res_sharded = ops.matmul(a_sharded, b_sharded, transpose_rhs=True)
-        assert isinstance(res_sharded, ShardedPrimitiveTensor)
+        assert isinstance(res_sharded, SplitPrimitiveTensor)
         assert res_sharded.shard_dim == 1
         assert res_sharded.shard_count == shard_count
         actual_result = ops.sharded_cat(res_sharded)
@@ -295,10 +404,10 @@ class MatmulTest(unittest.TestCase):
         b = torch.rand(5, 9, dtype=torch.float32)
         expected_result = torch.matmul(a, b)
         shard_count = 3
-        a_sharded = ShardedPrimitiveTensor(ts=a, shard_dim=0, shard_count=shard_count)
-        b_sharded = ShardedPrimitiveTensor(ts=b, shard_dim=1, shard_count=shard_count)
+        a_sharded = SplitPrimitiveTensor(ts=a, shard_dim=0, shard_count=shard_count)
+        b_sharded = SplitPrimitiveTensor(ts=b, shard_dim=1, shard_count=shard_count)
         res_sharded = ops.matmul(a_sharded, b_sharded)
-        assert isinstance(res_sharded, ShardedPrimitiveTensor)
+        assert isinstance(res_sharded, SplitPrimitiveTensor)
         assert res_sharded.shard_dim == 0
         assert res_sharded.shard_count == shard_count
         actual_result = ops.sharded_cat(res_sharded)
@@ -309,10 +418,10 @@ class MatmulTest(unittest.TestCase):
         b = torch.rand(5, 9, dtype=torch.float32)
         expected_result = torch.matmul(a, b)
         shard_count = 3
-        a_sharded = ShardedPrimitiveTensor(ts=a, shard_dim=1, shard_count=shard_count)
+        a_sharded = SplitPrimitiveTensor(ts=a, shard_dim=1, shard_count=shard_count)
         b_sharded = ReplicatedTensor(ts=b, shard_count=shard_count)
         res_sharded = ops.matmul(a_sharded, b_sharded)
-        assert isinstance(res_sharded, ShardedPrimitiveTensor)
+        assert isinstance(res_sharded, SplitPrimitiveTensor)
         assert res_sharded.shard_dim == 1
         assert res_sharded.shard_count == shard_count
         actual_result = ops.sharded_cat(res_sharded)
@@ -343,17 +452,17 @@ class MatmulTest(unittest.TestCase):
         )
 
         # Columnwise sharding of gate and up weight (transposed).
-        sharded_ffn_gate_weight = ShardedPrimitiveTensor(
+        sharded_ffn_gate_weight = SplitPrimitiveTensor(
             shard_dim=0, ts=unsharded_ffn_gate_weight.split(16, dim=0)
         )
-        sharded_ffn_up_weight = ShardedPrimitiveTensor(
+        sharded_ffn_up_weight = SplitPrimitiveTensor(
             shard_dim=0, ts=unsharded_ffn_up_weight.split(16, dim=0)
         )
         assert sharded_ffn_gate_weight.shard_count == 8
         assert sharded_ffn_up_weight.shard_count == 8
 
         # Rowwise sharding of down weight (transposed).
-        sharded_ffn_down_weight = ShardedPrimitiveTensor(
+        sharded_ffn_down_weight = SplitPrimitiveTensor(
             shard_dim=1, ts=unsharded_ffn_down_weight.split(16, dim=1)
         )
         assert sharded_ffn_down_weight.shard_count == 8
@@ -364,6 +473,115 @@ class MatmulTest(unittest.TestCase):
             sharded_ffn_up_weight,
         )
         torch.testing.assert_close(Z_sharded, Z_ref)
+
+
+class ReplicateTest(unittest.TestCase):
+    def testReplicateReplicated(self):
+        tensor = torch.rand(4, 5, dtype=torch.float32)
+        shard_count = 3
+        expected_result = ops.replicate(tensor, count=shard_count)
+        actual_result = ops.replicate(expected_result, count=shard_count)
+        assert expected_result.is_deep_equal(actual_result)
+
+    def testReplicateUnsharded(self):
+        tensor = torch.rand(4, 5, dtype=torch.float32)
+        shard_count = 3
+        actual_result = ops.replicate(tensor, count=shard_count)
+        expected_result = ReplicatedTensor(ts=tensor, shard_count=shard_count)
+        assert expected_result.is_deep_equal(actual_result)
+
+
+class ReshardTest(unittest.TestCase):
+    def testReshardReplicated(self):
+        tensor = torch.rand(4, 5, 6, dtype=torch.float32)
+        shard_dim = 2
+        shard_count = 3
+        replicated_tensor = ops.replicate(tensor, count=shard_count)
+        actual_result = ops.reshard_split(
+            replicated_tensor, dim=shard_dim, count=shard_count
+        )
+        expected_result = ops.reshard_split(tensor, dim=shard_dim, count=shard_count)
+        assert expected_result.is_deep_equal(actual_result)
+
+    def testReshardUnsharded(self):
+        tensor = torch.rand(4, 5, 6, dtype=torch.float32)
+        shard_dim = 2
+        shard_count = 3
+        actual_result = ops.reshard_split(tensor, dim=shard_dim, count=shard_count)
+        expected_result = SplitPrimitiveTensor(
+            ts=tensor, shard_count=shard_count, shard_dim=shard_dim
+        )
+        assert expected_result.is_deep_equal(actual_result)
+
+    def testReshardSharded(self):
+        tensor = torch.rand(4, 5, 6, dtype=torch.float32)
+        shard_dim = 2
+        shard_count = 3
+        expected_result = SplitPrimitiveTensor(
+            ts=tensor, shard_count=shard_count, shard_dim=shard_dim
+        )
+        actual_result = ops.reshard_split(
+            expected_result, dim=shard_dim, count=shard_count
+        )
+        assert expected_result.is_deep_equal(actual_result)
+
+
+class ShardLikeTest(unittest.TestCase):
+    def testReshardLikeReplicatedToReplicated(self):
+        tensor = torch.rand(4, 5, 6, dtype=torch.float32)
+        shard_count = 2
+        expected_result = ops.replicate(tensor, count=shard_count)
+        actual_result = ops.reshard_like(expected_result, expected_result)
+        assert expected_result.is_deep_equal(actual_result)
+
+    def testReshardLikeReplicatedToSharded(self):
+        tensor = torch.rand(4, 5, 6, dtype=torch.float32)
+        shard_dim = 2
+        shard_count = 3
+        expected_result = ops.reshard_split(tensor, dim=shard_dim, count=shard_count)
+        replicated_tensor = ops.replicate(tensor, count=shard_count)
+        actual_result = ops.reshard_like(replicated_tensor, expected_result)
+        assert expected_result.is_deep_equal(actual_result)
+
+    def testReshardLikeReplicatedToUnsharded(self):
+        tensor = torch.rand(4, 5, 6, dtype=torch.float32)
+        shard_count = 2
+        replicated = ops.replicate(tensor, count=shard_count)
+        actual_result = ops.reshard_like(replicated, tensor)
+        expected_result = tensor
+        assert ops.equal(expected_result, actual_result)
+
+    def testReshardLikeShardedToUnsharded(self):
+        tensor = torch.rand(4, 5, 6, dtype=torch.float32)
+        shard_dim = 0
+        shard_count = 2
+        sharded = ops.reshard_split(tensor, dim=shard_dim, count=shard_count)
+        actual_result = ops.reshard_like(sharded, tensor)
+        expected_result = tensor
+        assert ops.equal(expected_result, actual_result)
+
+    def testReshardLikeUnshardedToReplicated(self):
+        tensor = torch.rand(4, 5, dtype=torch.float32)
+        shard_count = 3
+        expected_result = ops.replicate(tensor, count=shard_count)
+        actual_result = ops.reshard_like(tensor, expected_result)
+        assert expected_result.is_deep_equal(actual_result)
+
+    def testReshardLikeUnshardedToSharded(self):
+        tensor = torch.rand(4, 5, 6, dtype=torch.float32)
+        shard_dim = 2
+        shard_count = 3
+        expected_result = ops.reshard_split(tensor, dim=shard_dim, count=shard_count)
+        actual_result = ops.reshard_like(tensor, expected_result)
+        assert expected_result.is_deep_equal(actual_result)
+
+    def testReshardLikeShardedToShared(self):
+        tensor = torch.rand(5, 6, dtype=torch.float32)
+        shard_dim = 1
+        shard_count = 3
+        expected_result = ops.reshard_split(tensor, dim=shard_dim, count=shard_count)
+        actual_result = ops.reshard_like(expected_result, expected_result)
+        assert expected_result.is_deep_equal(actual_result)
 
 
 if __name__ == "__main__":

@@ -52,8 +52,8 @@ class MmtRHSShardingTransformTest(MainRunnerTestBase):
         st_1 = flat_sts["blk.1.attn_k.weight"]
         st_2 = flat_sts["blk.2.attn_q.weight"]
         pt_3 = flat_sts["other"]
-        self.assertIsInstance(st_1, ShardedPrimitiveTensor)
-        self.assertIsInstance(st_2, ShardedPrimitiveTensor)
+        self.assertIsInstance(st_1, SplitPrimitiveTensor)
+        self.assertIsInstance(st_2, SplitPrimitiveTensor)
         self.assertIsInstance(pt_3, DefaultPrimitiveTensor)
         self.assertListEqual(st_1.shape, [32, 128])
         self.assertListEqual(st_2.shape, [48, 64])
