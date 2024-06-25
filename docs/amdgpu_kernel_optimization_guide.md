@@ -8,14 +8,14 @@ Last Update: 2024-06-24
 
 ## Introduction
 
-We present a summary of the AMDGPU (micro-)architecture that we found neccessary
+We present a summary of the AMDGPU (micro-)architecture that we found necessary
 to understand and account for in [IREE](https://iree.dev) and [Turbine
 Kernels](https://github.com/iree-org/iree-turbine) in order to produce
 performant kernel code. The information presented strives to be sufficiently
 close to reality to be useful in kernel code generation, but **is not**
 guaranteed to be 100% correct and accurate.
 
-In addition, this document interleaves actionable optimizations tips that we
+In addition, this document interleaves actionable optimization tips that we
 derived from our understanding of the architecture.
 
 > [!NOTE]
@@ -104,14 +104,14 @@ coalesced and go to the data fabric.
 ### Execution Model
 
 When a kernel is launched, its workgroups get distributed across the GPU.
-A workgroup executes on a signle CU and never gets migrated to another CU.
+A workgroup executes on a single CU and never gets migrated to another CU.
 
 Each subgroup / wave within the workgroup gets assigned to a single SIMD unit.
 One SIMD has 10 waveslots used to 'context-switch' between the assigned subgroups
 (up to 10). However, only up to 16 subgroups are allowed within a single
 workgroup.
 
-On GFX9, the subgroup size is 64, which, for most instructions, neccessiates
+On GFX9, the subgroup size is 64, which, for most instructions, necessitates
 multiple clock cycles on 16-lane SIMD. For example, something like an `add`
 would execute in 4 cycles, for each set of 16 threads within the subgroup.
 
