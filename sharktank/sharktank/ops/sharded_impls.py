@@ -9,7 +9,7 @@ from torch import Tensor
 from typing import List
 
 from ..types import (
-    ShardedPrimitiveTensor,
+    SplitPrimitiveTensor,
     ReplicatedTensor,
     UnreducedTensor,
     ShardedTensor,
@@ -18,9 +18,9 @@ from ._registry import unbox_tensor, AnyTensor
 from .signatures import *
 
 
-@all_gather.override(ShardedPrimitiveTensor)
-def all_gather_sharded(
-    input: ShardedPrimitiveTensor, *, dim: int | None
+@all_gather.override(SplitPrimitiveTensor)
+def all_gather_split(
+    input: SplitPrimitiveTensor, *, dim: int | None
 ) -> ReplicatedTensor:
     assert (
         dim is None
@@ -37,16 +37,16 @@ def all_gather_sharded(
 # conv2d
 
 
-def conv2d_all_sharded(
-    input: ShardedPrimitiveTensor,
-    weight: ShardedPrimitiveTensor,
-    bias: ShardedPrimitiveTensor | None,
+def conv2d_all_split(
+    input: SplitPrimitiveTensor,
+    weight: SplitPrimitiveTensor,
+    bias: SplitPrimitiveTensor | None,
     *,
     stride,
     padding,
     dilation,
     groups,
-) -> ShardedPrimitiveTensor:
+) -> SplitPrimitiveTensor:
     assert input.shard_count == weight.shard_count
     assert bias is None or weight.shard_count == bias.shard_count
     assert (
@@ -86,26 +86,26 @@ def conv2d_all_sharded(
 
 
 conv2d.override(
-    ShardedPrimitiveTensor,
-    ShardedPrimitiveTensor,
-    ShardedPrimitiveTensor,
+    SplitPrimitiveTensor,
+    SplitPrimitiveTensor,
+    SplitPrimitiveTensor,
     auto_dequant=True,
-)(conv2d_all_sharded)
-conv2d.override(ShardedPrimitiveTensor, ShardedPrimitiveTensor, auto_dequant=True)(
-    conv2d_all_sharded
+)(conv2d_all_split)
+conv2d.override(SplitPrimitiveTensor, SplitPrimitiveTensor, auto_dequant=True)(
+    conv2d_all_split
 )
 
 
-def conv2d_replicated_input_sharded_weight_and_bias(
+def conv2d_replicated_input_split_weight_and_bias(
     input: ReplicatedTensor,
-    weight: ShardedPrimitiveTensor,
-    bias: ShardedPrimitiveTensor | None,
+    weight: SplitPrimitiveTensor,
+    bias: SplitPrimitiveTensor | None,
     *,
     stride,
     padding,
     dilation,
     groups,
-) -> ShardedPrimitiveTensor:
+) -> SplitPrimitiveTensor:
     assert input.shard_count == weight.shard_count
     assert bias is None or weight.shard_count == bias.shard_count
     assert (
@@ -129,31 +129,31 @@ def conv2d_replicated_input_sharded_weight_and_bias(
             [None] * weight.shard_count if bias is None else bias.shards,
         )
     ]
-    return ShardedPrimitiveTensor(shard_dim=1, ts=shards)
+    return SplitPrimitiveTensor(shard_dim=1, ts=shards)
 
 
 conv2d.override(
-    ReplicatedTensor, ShardedPrimitiveTensor, ShardedPrimitiveTensor, auto_dequant=True
-)(conv2d_all_sharded)
-conv2d.override(ReplicatedTensor, ShardedPrimitiveTensor, auto_dequant=True)(
-    conv2d_all_sharded
+    ReplicatedTensor, SplitPrimitiveTensor, SplitPrimitiveTensor, auto_dequant=True
+)(conv2d_replicated_input_split_weight_and_bias)
+conv2d.override(ReplicatedTensor, SplitPrimitiveTensor, auto_dequant=True)(
+    conv2d_replicated_input_split_weight_and_bias
 )
 
 
-def conv2d_sharded_weight_and_bias(
+def conv2d_split_weight_and_bias(
     input: Tensor,
-    weight: ShardedPrimitiveTensor,
-    bias: ShardedPrimitiveTensor | None,
+    weight: SplitPrimitiveTensor,
+    bias: SplitPrimitiveTensor | None,
     *,
     stride,
     padding,
     dilation,
     groups,
     accum_dtype,
-) -> ShardedPrimitiveTensor:
+) -> SplitPrimitiveTensor:
     assert weight.shard_count == bias.shard_count
 
-    # Output channels dimension is sharded.
+    # Output channels dimension is split.
     if weight.shard_dim == 0 and groups == 1:
         assert bias is None or bias.shard_dim == 0
         shards = [
@@ -171,42 +171,42 @@ def conv2d_sharded_weight_and_bias(
                 [None] * weight.shard_count if bias is None else bias.shards,
             )
         ]
-        return ShardedPrimitiveTensor(shard_dim=1, ts=shards)
+        return SplitPrimitiveTensor(shard_dim=1, ts=shards)
     else:
-        assert False, "Unsupported, TODO: handle sharded channels in input"
+        assert False, "Unsupported, TODO: handle split channels in input"
 
 
-conv2d.override(
-    Tensor, ShardedPrimitiveTensor, ShardedPrimitiveTensor, auto_dequant=True
-)(conv2d_sharded_weight_and_bias)
-conv2d.override(Tensor, ShardedPrimitiveTensor, auto_dequant=True)(
-    conv2d_sharded_weight_and_bias
+conv2d.override(Tensor, SplitPrimitiveTensor, SplitPrimitiveTensor, auto_dequant=True)(
+    conv2d_split_weight_and_bias
+)
+conv2d.override(Tensor, SplitPrimitiveTensor, auto_dequant=True)(
+    conv2d_split_weight_and_bias
 )
 
 # Sharded elementwise.
 
 
-@elementwise.override(ShardedPrimitiveTensor)
-def sharded_elementwise_unary(operator, x: ShardedPrimitiveTensor):
+@elementwise.override(SplitPrimitiveTensor)
+def split_elementwise_unary(operator, x: SplitPrimitiveTensor):
     partials = [operator(unbox_tensor(pt)) for pt in x.shards]
-    return ShardedPrimitiveTensor(shard_dim=x.shard_dim, shape=x.shape, ts=partials)
+    return SplitPrimitiveTensor(shard_dim=x.shard_dim, shape=x.shape, ts=partials)
 
 
-@elementwise.override(ShardedPrimitiveTensor, ShardedPrimitiveTensor)
-def sharded_elementwise_binary(
-    operator, x: ShardedPrimitiveTensor, y: ShardedPrimitiveTensor
+@elementwise.override(SplitPrimitiveTensor, SplitPrimitiveTensor)
+def split_elementwise_binary(
+    operator, x: SplitPrimitiveTensor, y: SplitPrimitiveTensor
 ):
     assert x.shard_count == y.shard_count
     assert x.shard_dim == y.shard_dim
     pt_xs = [unbox_tensor(pt) for pt in x.shards]
     pt_ys = [unbox_tensor(pt) for pt in y.shards]
     partials = [operator(pt_x, pt_y) for pt_x, pt_y in zip(pt_xs, pt_ys)]
-    return ShardedPrimitiveTensor(shard_dim=x.shard_dim, shape=x.shape, ts=partials)
+    return SplitPrimitiveTensor(shard_dim=x.shard_dim, shape=x.shape, ts=partials)
 
 
-@elementwise.override(ReplicatedTensor, ShardedPrimitiveTensor)
+@elementwise.override(ReplicatedTensor, SplitPrimitiveTensor)
 def elementwise_binary_replicated_lhs_sharder_rhs(
-    operator, x: ReplicatedTensor, y: ShardedPrimitiveTensor
+    operator, x: ReplicatedTensor, y: SplitPrimitiveTensor
 ):
     if x.shard_count != y.shard_count:
         raise ValueError(
@@ -218,9 +218,9 @@ def elementwise_binary_replicated_lhs_sharder_rhs(
     return elementwise(operator, x_sharded, y)
 
 
-@elementwise.override(ShardedPrimitiveTensor, ReplicatedTensor)
-def elementwise_binary_sharded_lhs_replicated_rhs(
-    operator, x: ReplicatedTensor, y: ShardedPrimitiveTensor
+@elementwise.override(SplitPrimitiveTensor, ReplicatedTensor)
+def elementwise_binary_split_lhs_replicated_rhs(
+    operator, x: ReplicatedTensor, y: SplitPrimitiveTensor
 ):
     if x.shard_count != y.shard_count:
         raise ValueError(
@@ -235,13 +235,13 @@ def equal_replicated(a: ReplicatedTensor, b: AnyTensor) -> bool:
     return a.is_deep_equal(b)
 
 
-@equal.override(ShardedPrimitiveTensor)
-def equal_sharded(a: ShardedPrimitiveTensor, b: AnyTensor) -> bool:
+@equal.override(SplitPrimitiveTensor)
+def equal_split(a: SplitPrimitiveTensor, b: AnyTensor) -> bool:
     return a.is_deep_equal(b)
 
 
 @group_norm_affine.override(
-    ShardedPrimitiveTensor, ShardedPrimitiveTensor, ShardedPrimitiveTensor
+    SplitPrimitiveTensor, SplitPrimitiveTensor, SplitPrimitiveTensor
 )
 def shareded_group_norm_affine(input, weight, bias, *, num_groups, eps):
     assert (
@@ -257,26 +257,26 @@ def shareded_group_norm_affine(input, weight, bias, *, num_groups, eps):
         for x, w, b in zip(input.shards, weight.shards, bias.shards)
     ]
 
-    return ShardedPrimitiveTensor(shard_dim=1, ts=result_shards)
+    return SplitPrimitiveTensor(shard_dim=1, ts=result_shards)
 
 
-@layer_norm.override(ShardedPrimitiveTensor, Tensor, Tensor)
+@layer_norm.override(SplitPrimitiveTensor, Tensor, Tensor)
 def layer_norm_default(input, weight, bias, *, eps):
     assert input.shard_dim >= 0 and input.shard_dim < len(input.shape) - len(
         weight.shape
     )
     shards = [layer_norm(shard, weight, bias, eps=eps) for shard in input.shards]
-    return ShardedPrimitiveTensor(shard_dim=input.shard_dim, ts=shards)
+    return SplitPrimitiveTensor(shard_dim=input.shard_dim, ts=shards)
 
 
 # Linear
 def linear_sharded(
-    input: Tensor | ShardedPrimitiveTensor,
-    weight: ShardedPrimitiveTensor,
-    bias: ShardedPrimitiveTensor | None,
+    input: Tensor | SplitPrimitiveTensor,
+    weight: SplitPrimitiveTensor,
+    bias: SplitPrimitiveTensor | None,
     *,
     accum_dtype,
-) -> Tensor | ShardedPrimitiveTensor:
+) -> Tensor | SplitPrimitiveTensor:
     # TODO: handle different dtypes
     result = matmul(input, weight.T)
     if bias is not None:
@@ -284,17 +284,17 @@ def linear_sharded(
     return result
 
 
-linear.override(Tensor, ShardedPrimitiveTensor, auto_dequant=True)(linear_sharded)
-linear.override(
-    Tensor, ShardedPrimitiveTensor, ShardedPrimitiveTensor, auto_dequant=True
-)(linear_sharded)
-linear.override(ShardedPrimitiveTensor, ShardedPrimitiveTensor, auto_dequant=True)(
+linear.override(Tensor, SplitPrimitiveTensor, auto_dequant=True)(linear_sharded)
+linear.override(Tensor, SplitPrimitiveTensor, SplitPrimitiveTensor, auto_dequant=True)(
+    linear_sharded
+)
+linear.override(SplitPrimitiveTensor, SplitPrimitiveTensor, auto_dequant=True)(
     linear_sharded
 )
 linear.override(
-    ShardedPrimitiveTensor,
-    ShardedPrimitiveTensor,
-    ShardedPrimitiveTensor,
+    SplitPrimitiveTensor,
+    SplitPrimitiveTensor,
+    SplitPrimitiveTensor,
     auto_dequant=True,
 )(linear_sharded)
 
@@ -302,47 +302,47 @@ linear.override(
 # Sharded matmuls.
 
 
-@matmul.override(ShardedPrimitiveTensor, Tensor)
-def matmul_sharded_lhs(
-    lhs: ShardedPrimitiveTensor, rhs, *, transpose_rhs: bool
-) -> ShardedPrimitiveTensor:
+@matmul.override(SplitPrimitiveTensor, Tensor)
+def matmul_split_lhs(
+    lhs: SplitPrimitiveTensor, rhs, *, transpose_rhs: bool
+) -> SplitPrimitiveTensor:
     lhs_reduction_dim = len(lhs.shape) - 1
     assert lhs_reduction_dim != lhs.shard_dim
     shards = [
         matmul(lhs_shard, rhs, transpose_rhs=transpose_rhs) for lhs_shard in lhs.shards
     ]
-    return ShardedPrimitiveTensor(shard_dim=lhs.shard_dim, ts=shards)
+    return SplitPrimitiveTensor(shard_dim=lhs.shard_dim, ts=shards)
 
 
-@matmul.override(Tensor, ShardedPrimitiveTensor)
-def matmul_sharded_rhs(
-    lhs, rhs: ShardedPrimitiveTensor, *, transpose_rhs: bool
-) -> ShardedPrimitiveTensor:
-    # When multiplying (unsharded, sharded), the rhs must be sharded by column.
+@matmul.override(Tensor, SplitPrimitiveTensor)
+def matmul_split_rhs(
+    lhs, rhs: SplitPrimitiveTensor, *, transpose_rhs: bool
+) -> SplitPrimitiveTensor:
+    # When multiplying (unsharded, split), the rhs must be split by column.
     # In a transposed configuration, this is axis 0, otherwise 1.
-    # This will result in a ShardedTensor, sharded by column.
+    # This will result in a ShardedTensor, split by column.
     lhs = unbox_tensor(lhs)
     rhs_shard_dim = rhs.shard_dim
     if transpose_rhs:
         assert (
             rhs_shard_dim == 0
-        ), f"matmul[sharded, transposed rhs] must be sharded on dim 0 but is {rhs_shard_dim}"
+        ), f"matmul[split, transposed rhs] must be split on dim 0 but is {rhs_shard_dim}"
     else:
         assert (
             rhs_shard_dim == 1
-        ), f"matmul[sharded rhs] must be sharded on dim 1 but is {rhs_shard_dim}"
+        ), f"matmul[split rhs] must be split on dim 1 but is {rhs_shard_dim}"
     partials = [
         matmul(lhs, partial_rhs, transpose_rhs=transpose_rhs)
         for partial_rhs in rhs.shards
     ]
-    # The partial is sharded columnwise (last dim).
-    return ShardedPrimitiveTensor(shard_dim=len(lhs.shape) - 1, ts=partials)
+    # The partial is split columnwise (last dim).
+    return SplitPrimitiveTensor(shard_dim=len(lhs.shape) - 1, ts=partials)
 
 
-@matmul.override(ShardedPrimitiveTensor, ReplicatedTensor)
-def matmul_sharded_lhs_replicated_rhs(
-    lhs: ShardedPrimitiveTensor, rhs: ReplicatedTensor, *, transpose_rhs: bool
-) -> ShardedPrimitiveTensor:
+@matmul.override(SplitPrimitiveTensor, ReplicatedTensor)
+def matmul_split_lhs_replicated_rhs(
+    lhs: SplitPrimitiveTensor, rhs: ReplicatedTensor, *, transpose_rhs: bool
+) -> SplitPrimitiveTensor:
     lhs_reduction_dim = len(lhs.shape) - 1
     assert lhs_reduction_dim != lhs.shard_dim
     if transpose_rhs:
@@ -351,23 +351,23 @@ def matmul_sharded_lhs_replicated_rhs(
         matmul(lhs_shard, rhs_shard)
         for (lhs_shard, rhs_shard) in zip(lhs.shards, rhs.shards)
     ]
-    return ShardedPrimitiveTensor(ts=shards, shard_dim=lhs.shard_dim)
+    return SplitPrimitiveTensor(ts=shards, shard_dim=lhs.shard_dim)
 
 
-@matmul.override(ShardedPrimitiveTensor, ShardedPrimitiveTensor)
-def matmul_sharded(
-    lhs: ShardedPrimitiveTensor, rhs: ShardedPrimitiveTensor, *, transpose_rhs: bool
-) -> UnreducedTensor | ShardedPrimitiveTensor:
+@matmul.override(SplitPrimitiveTensor, SplitPrimitiveTensor)
+def matmul_split(
+    lhs: SplitPrimitiveTensor, rhs: SplitPrimitiveTensor, *, transpose_rhs: bool
+) -> UnreducedTensor | SplitPrimitiveTensor:
     if lhs.shard_count != rhs.shard_count:
         raise ValueError(
-            f"Cannot matmul sharded tensors of different shard_count: "
+            f"Cannot matmul split tensors of different shard_count: "
             f"({lhs.shard_count} vs {rhs.shard_count})"
         )
 
     lhs_reduction_dim = len(lhs.shape) - 1
     rhs_reduction_dim = 1 if transpose_rhs else 0
 
-    # The reduction dimension is sharded on both tensors.
+    # The reduction dimension is split on both tensors.
     if lhs_reduction_dim == lhs.shard_dim and rhs_reduction_dim == rhs.shard_dim:
         partials = [
             matmul(partial_lhs, partial_rhs, transpose_rhs=transpose_rhs)
@@ -375,23 +375,23 @@ def matmul_sharded(
         ]
         return UnreducedTensor(ts=partials)
 
-    # One parallel dimension is sharded for each tensor.
+    # One parallel dimension is split for each tensor.
     if lhs_reduction_dim != lhs.shard_dim and rhs_reduction_dim != rhs.shard_dim:
         if transpose_rhs:
             rhs = rhs.T
         # We gather along the rhs shard dim.
         # It is more natural to preserve the sharding axis of the input.
         shards = [sharded_cat(matmul(lhs_shard, rhs)) for lhs_shard in lhs.shards]
-        return ShardedPrimitiveTensor(ts=shards, shard_dim=lhs.shard_dim)
+        return SplitPrimitiveTensor(ts=shards, shard_dim=lhs.shard_dim)
 
     assert False, "Sharding configuration not supported"
 
 
-@permute.override(ShardedPrimitiveTensor)
-def permute_sharded(tensor: ShardedPrimitiveTensor, dims: List[int]):
+@permute.override(SplitPrimitiveTensor)
+def permute_split(tensor: SplitPrimitiveTensor, dims: List[int]):
     permuted_shards = [permute(shard, dims) for shard in tensor.shards]
     permuted_shard_dim = dims[tensor.shard_dim]
-    return ShardedPrimitiveTensor(ts=permuted_shards, shard_dim=permuted_shard_dim)
+    return SplitPrimitiveTensor(ts=permuted_shards, shard_dim=permuted_shard_dim)
 
 
 @replicate.override(ReplicatedTensor)
@@ -408,16 +408,16 @@ def replicate_unsharded(input, *, count: int) -> ReplicatedTensor:
     return ReplicatedTensor(ts=torch_input, shard_count=count)
 
 
-@reshard.override(Tensor)
-def shard_unsharded(input, *, dim: int, count: int) -> ShardedPrimitiveTensor:
+@reshard_split.override(Tensor)
+def reshard_split_unsharded(input, *, dim: int, count: int) -> SplitPrimitiveTensor:
     torch_input = unbox_tensor(input)
-    return ShardedPrimitiveTensor(ts=torch_input, shard_dim=dim, shard_count=count)
+    return SplitPrimitiveTensor(ts=torch_input, shard_dim=dim, shard_count=count)
 
 
-@reshard.override(ShardedPrimitiveTensor)
-def shard_sharded(
-    input: ShardedPrimitiveTensor, *, dim: int, count: int
-) -> ShardedPrimitiveTensor:
+@reshard_split.override(SplitPrimitiveTensor)
+def reshard_split_split(
+    input: SplitPrimitiveTensor, *, dim: int, count: int
+) -> SplitPrimitiveTensor:
     if input.shard_count != count:
         raise ValueError(f"Number of shards not equal ({input.shard_count} != {count})")
     if input.shard_dim != dim:
@@ -425,10 +425,10 @@ def shard_sharded(
     return input
 
 
-@reshard.override(ReplicatedTensor)
-def shard_replicated(
+@reshard_split.override(ReplicatedTensor)
+def reshard_split_replicated(
     input: ReplicatedTensor, *, dim: int, count: int
-) -> ShardedPrimitiveTensor:
+) -> SplitPrimitiveTensor:
     if input.shard_count != count:
         raise ValueError(f"Number of shards not equal ({input.shard_count} != {count})")
 
@@ -448,15 +448,15 @@ def shard_replicated(
         ]
         for shard_idx, shard in enumerate(input.shards)
     ]
-    return ShardedPrimitiveTensor(ts=shards, shard_dim=dim)
+    return SplitPrimitiveTensor(ts=shards, shard_dim=dim)
 
 
-@reshard_like.override(Tensor, ShardedPrimitiveTensor)
-def reshard_like_unsharded_to_sharded(
-    input, like: ShardedPrimitiveTensor
-) -> ShardedPrimitiveTensor:
+@reshard_like.override(Tensor, SplitPrimitiveTensor)
+def reshard_like_unsharded_to_split(
+    input, like: SplitPrimitiveTensor
+) -> SplitPrimitiveTensor:
     torch_input = unbox_tensor(input)
-    return reshard(torch_input, dim=like.shard_dim, count=like.shard_count)
+    return reshard_split(torch_input, dim=like.shard_dim, count=like.shard_count)
 
 
 @reshard_like.override(ReplicatedTensor, Tensor)
@@ -464,8 +464,8 @@ def reshard_like_replicated_to_unsharded(input: ReplicatedTensor, like):
     return input.shards[0]
 
 
-@reshard_like.override(ShardedPrimitiveTensor, Tensor)
-def reshard_like_sharded_to_unsharded(input: ShardedPrimitiveTensor, like):
+@reshard_like.override(SplitPrimitiveTensor, Tensor)
+def reshard_like_split_to_unsharded(input: SplitPrimitiveTensor, like):
     return sharded_cat(input)
 
 
@@ -488,17 +488,17 @@ def reshard_like_replicated_to_replicated(
     return tensor
 
 
-@reshard_like.override(ReplicatedTensor, ShardedPrimitiveTensor)
-def reshard_like_replicated_to_sharded(
-    tensor: ReplicatedTensor, like: ShardedPrimitiveTensor
-) -> ShardedPrimitiveTensor:
-    return reshard(tensor, dim=like.shard_dim, count=like.shard_count)
+@reshard_like.override(ReplicatedTensor, SplitPrimitiveTensor)
+def reshard_like_replicated_to_split(
+    tensor: ReplicatedTensor, like: SplitPrimitiveTensor
+) -> SplitPrimitiveTensor:
+    return reshard_split(tensor, dim=like.shard_dim, count=like.shard_count)
 
 
-@reshard_like.override(ShardedPrimitiveTensor, ShardedPrimitiveTensor)
-def reshard_like_sharded_to_sharded(
-    tensor: ShardedPrimitiveTensor, like: ShardedPrimitiveTensor
-) -> ShardedPrimitiveTensor:
+@reshard_like.override(SplitPrimitiveTensor, SplitPrimitiveTensor)
+def reshard_like_split_to_split(
+    tensor: SplitPrimitiveTensor, like: SplitPrimitiveTensor
+) -> SplitPrimitiveTensor:
     assert (
         tensor.shard_count == like.shard_count and tensor.shard_dim == like.shard_dim
     ), "Resharding is not supported"
@@ -508,8 +508,8 @@ def reshard_like_sharded_to_sharded(
 # Sharded sum.
 
 
-@sharded_cat.override(ShardedPrimitiveTensor)
-def sharded_cat_unsharded(maybe_sharded: ShardedPrimitiveTensor):
+@sharded_cat.override(SplitPrimitiveTensor)
+def sharded_cat_unsharded(maybe_sharded: SplitPrimitiveTensor):
     shard_ts = [t.as_torch() for t in maybe_sharded.shards]
     return torch.cat(shard_ts, dim=maybe_sharded.shard_dim)
 
@@ -521,12 +521,12 @@ def _sharded_sum_sharded(tensor: ShardedTensor) -> Tensor:
     return accum
 
 
-@sharded_sum.override(ShardedPrimitiveTensor)
-def sharded_sum_sharded(maybe_sharded: ShardedPrimitiveTensor):
+@sharded_sum.override(SplitPrimitiveTensor)
+def sharded_sum_split(maybe_sharded: SplitPrimitiveTensor):
     # TODO: Should implement as an all reduce.
     return _sharded_sum_sharded(maybe_sharded)
 
 
 @sharded_sum.override(UnreducedTensor)
-def sharded_sum_sharded(maybe_sharded: UnreducedTensor):
+def sharded_sum_unreduced(maybe_sharded: UnreducedTensor):
     return _sharded_sum_sharded(maybe_sharded)

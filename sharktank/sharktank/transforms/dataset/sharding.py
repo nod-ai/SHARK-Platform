@@ -19,7 +19,7 @@ __all__ = [
 class MmtRHSShardingTransform:
     """Shards tensors used as the RHS of a transposed matmul.
 
-    Tensors matching any of the patterns will be sharded, if supported, into
+    Tensors matching any of the patterns will be split, if supported, into
     `num_shards`.
     """
 
@@ -61,7 +61,7 @@ class MmtRHSShardingTransform:
             return None
         shard_split_size = shard_dim_size // self.num_shards
         shard_ts = t.split(shard_split_size, dim=shard_dim)
-        st = ShardedPrimitiveTensor(
+        st = SplitPrimitiveTensor(
             name=pt.name, shape=pt.shape, shard_dim=shard_dim, ts=shard_ts
         )
         logger.debug("Sharding tensor %r -> %r", pt, st)
