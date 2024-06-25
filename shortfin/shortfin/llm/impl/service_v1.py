@@ -421,7 +421,10 @@ class GenerateState(BatchGenerateState):
         cb = HalCommandBuffer(hc.session.device)
 
         # decode_tokens: array([bs, 1], np.int32)
-        (decode_tokens_host, decode_tokens_device,) = resources.acquire_transfer_buffer(
+        (
+            decode_tokens_host,
+            decode_tokens_device,
+        ) = resources.acquire_transfer_buffer(
             service.decode_tokens_pool
         ).h2d_array(cb, [bs, 1], HalElementType.SINT_64, fill_value=0)
 
@@ -456,7 +459,7 @@ class GenerateState(BatchGenerateState):
 
             tok = seq.decode_token_ids[0]
             seq_len = len(seq.current_token_ids)
-            print(seq.current_token_ids)
+            print(f"seq.current_token_ids: {seq.current_token_ids}")
             seq.current_token_ids.append(tok)
             seq.decode_token_ids = seq.decode_token_ids[1:]
 

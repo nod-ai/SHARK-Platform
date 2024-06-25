@@ -96,13 +96,19 @@ async def main(argv):
         mapped_logits = map_buffer(logits.value)
         predicted_tokens = numpy.argmax(mapped_logits[0, :seq_len], axis=-1)
         predicted_token = predicted_tokens[-1]
-        print(f"Predicted token: {predicted_token}")
+        decoded_token = tokenizer.decode(predicted_token)
+        print(f"Prefill predicted token: {predicted_token}, decoded: '{decoded_token}'")
 
-        # TODO Determine why decode step crashes
-        # await state.set_decode_step([predicted_token])
-        # logits = await state.decode()
-        # mapped_logits = map_buffer(logits)
-        # print(numpy.argmax(mapped_logits, axis=-1))
+        # TODO(scotttodd): sanity check tokenizer use, document inputs/outputs
+        #   'prefill' is for initialization with multiple steps at once
+        #   'decode' is for hypothesis exploration, one step at a time
+        await state.set_decode_step([predicted_token])
+        logits = await state.decode()
+        mapped_logits = map_buffer(logits.value)
+        predicted_tokens = numpy.argmax(mapped_logits, axis=-1)
+        predicted_token = predicted_tokens[0]
+        decoded_token = tokenizer.decode(predicted_token)
+        print(f"Decode predicted token: {predicted_token}, decoded: '{decoded_token}'")
         await state.recycle()
 
     service.shutdown()
