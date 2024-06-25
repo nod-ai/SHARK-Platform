@@ -31,7 +31,7 @@ For official documentation, see:
 * [ROCm Optimization Guide for LLM
   Inference](https://rocm.docs.amd.com/en/latest/how-to/llm-fine-tuning-optimization/index.html)
 
-For third party documentation, see:
+For third-party documentation, see:
 * [Introduction to
   AMDGPU](https://www.olcf.ornl.gov/wp-content/uploads/2019/10/ORNL_Application_Readiness_Workshop-AMD_GPU_Basics.pdf)
   from the Oak Ridge National Lab
@@ -118,8 +118,8 @@ would execute in 4 cycles, for each set of 16 threads within the subgroup.
 
 > [!TIP]
 > To fully utilize all 4 SIMDs within the CU, use a workgroup size of 256 (or a
-> multiple of 256). To conserve power, you can use workgroup size 128 so that 2
-> SIMDs remain idle.
+> multiple of 256). To conserve power, you can use a workgroup size 128 so that
+> 2 SIMDs remain idle.
 
 ![GFX9 Compute Unit](./assets/gfx9_compute_unit.png)
 
@@ -205,7 +205,7 @@ SIMD size (16), it's not immediately obvious when bank conflicts arise.
 On the hardware level, LDS services request from either pair of neighboring
 SIMDs per cycle. However, because it's very hard to account for what code may
 be executing on the neighboring SIMD, we developed a mental model that analyzes
-execution of a signle subgroup only. We determine the possible rate of bank
+execution of a single subgroup only. We determine the possible rate of bank
 conflicts by looking at banks accessed by each group of 16 adjacent threads
 executing on the same SIMD.
 
