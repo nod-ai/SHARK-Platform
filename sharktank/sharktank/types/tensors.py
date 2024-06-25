@@ -28,7 +28,7 @@ __all__ = [
     "QuantizedLayout",
     "ReplicatedTensor",
     "ShardedTensor",
-    "ShardedPrimitiveTensor",
+    "SplitPrimitiveTensor",
     "UnreducedTensor",
 ]
 
@@ -249,6 +249,11 @@ class InferenceTensor(ABC):
         dims = [rank - 1 - i for i in range(rank)]
 
         return permute(self, dims=dims)
+
+    def __add__(self, rhs):
+        from ..ops import elementwise
+
+        return elementwise(torch.add, self, rhs)
 
 
 REGISTERED_INFERENCE_TENSOR_CLASSES: dict[str, Type[InferenceTensor]] = {}
@@ -665,8 +670,8 @@ class ShardedTensorBase(ShardedTensor):
 
 
 @register_inference_tensor
-class ShardedPrimitiveTensor(ShardedTensorBase):
-    """Sharded tensor which contains primitive tensors.
+class SplitPrimitiveTensor(ShardedTensorBase):
+    """Sharded tensor split along a dimension into primitive tensors.
 
     The sharded tensors have names with this tensor's name as the stem and
     a suffix of f".shard.{i}" where i is from 0..shard_count-1.
@@ -685,7 +690,7 @@ class ShardedPrimitiveTensor(ShardedTensorBase):
         If `ts` is a list of tensors, it is interpreted as the shards.
         Then `shard_count` must be None.
         If `ts` is a tensor then `shard_count` must be provided and it,
-        will be sharded along dimension `shard_dim` into `shard_count`
+        will be split along dimension `shard_dim` into `shard_count`
         number of pieces.
         """
         if isinstance(ts, torch.Tensor):
@@ -708,7 +713,7 @@ class ShardedPrimitiveTensor(ShardedTensorBase):
         for t in ts[1:]:
             assert (
                 t.shape == first_shape
-            ), f"Shape mismatch for sharded tensors: {t.shape} vs {first_shape}"
+            ), f"Shape mismatch for split tensors: {t.shape} vs {first_shape}"
             shard_dim_size += t.shape[shard_dim]
         assert (
             shard_dim_size == shape[shard_dim]
