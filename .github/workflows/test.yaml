@@ -1,0 +1,69 @@
+name: Integration Tests
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Weekdays at 13:00 UTC = 05:00 PST / 06:00 PDT.
+    - cron: "5 4 * * 1-5"
+
+concurrency:
+  # A PR number if a pull request and otherwise the commit hash. This cancels
+  # queued and in-progress runs for the same PR (presubmit) or commit
+  # (postsubmit). The workflow name is prepended to avoid conflicts between
+  # different workflows.
+  group: ${{ github.workflow }}-${{ github.event.number || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: "Integration Tests"
+    strategy:
+      matrix:
+        version: [3.11]
+        os: [ubuntu-latest, windows-latest]
+      fail-fast: false
+    runs-on: ${{matrix.os}}
+    defaults:
+      run:
+        shell: bash
+    env:
+      PIP_CACHE_DIR: "${{ github.workspace }}/.pip-cache"
+    steps:
+      - name: "Setting up Python"
+        id: setup_python
+        uses: actions/setup-python@v3
+        with:
+          python-version: ${{matrix.version}}
+
+      - name: "Checkout Code"
+        uses: actions/checkout@v3
+
+      - name: Cache Pip Packages
+        uses: actions/cache@v4
+        id: cache-pip
+        with:
+          path: ${{ env.PIP_CACHE_DIR }}
+          key: pip-${{ steps.setup_python.outputs.python-version }}-${{ hashFiles('*requirements.txt') }}
+
+      - name: Install pip deps
+        run: |
+          python -m pip install --no-compile --upgrade pip
+          # Note: We install in three steps in order to satisfy requirements
+          # from non default locations first. Installing the PyTorch CPU
+          # wheels saves multiple minutes and a lot of bandwidth on runner setup.
+          pip install --no-compile -r pytorch-cpu-requirements.txt
+          pip install --no-compile -f https://iree.dev/pip-release-links.html --src deps \
+            -e "git+https://github.com/iree-org/iree-turbine.git#egg=shark-turbine"
+          pip install --no-compile -r requirements.txt -e sharktank/ shortfin/
+
+          # Pin to a known working version of IREE.
+          # TODO(scotttodd): use latest nightly? (after https://github.com/iree-org/iree/commit/5fcdddb7c76001de17f475e75c0f1e3ba4ea957b)
+          #     or continue to use the version from iree-turbine/iree-requirements.txt?
+          # This should eventually stabilize. Do the best we can for now.
+          pip install -f https://iree.dev/pip-release-links.html --force \
+            iree-compiler==20240621.931 \
+            iree-runtime==20240621.931 \
+            "numpy<2.0"
+
+      - name: Run llama test
+        run: ./tests/llama_export_compile_serve.sh
