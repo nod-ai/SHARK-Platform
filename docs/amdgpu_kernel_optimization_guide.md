@@ -253,6 +253,9 @@ where `T<n>` denotes thread executing on lane `n`:
    ```
    No bank conflicts ==> good.
 
+Note that the above only shows accesses to the first DWORDs across the first
+group of 16 threads. The remaining threads and DWORDs would follow.
+
 > [!TIP]
 > It's best to use 4 or 8 byte-wide LDS instructions (e.g.,
 > `ds_read_b64`, `ds_read_b128`, or `ds_read2_b64` for two 4 B values at unique
