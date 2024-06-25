@@ -17,25 +17,6 @@ from shark_turbine import aot
 from sharktank import kernels
 
 
-# Copyright 2024 Advanced Micro Devices, Inc
-#
-# Licensed under the Apache License v2.0 with LLVM Exceptions.
-# See https://llvm.org/LICENSE.txt for license information.
-# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-
-import logging
-
-logging.basicConfig(level=logging.DEBUG)
-
-import unittest
-from parameterized import parameterized
-
-import torch
-
-from shark_turbine import aot
-from sharktank import kernels
-
-
 class pooling_nchw_sum_test(unittest.TestCase):
     def setUp(self):
         torch.manual_seed(42)
