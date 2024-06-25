@@ -18,8 +18,8 @@ guaranteed to be 100% correct and accurate.
 In addition, this document interleaves actionable optimizations tips that we
 derived from our understanding of the architecture.
 
-> [!NOTE] This is not a reference manual or an official AMDGPU architecture
-> guide.
+> [!NOTE]
+> This is not a reference manual or an official AMDGPU architecture guide.
 
 ### Resources
 
