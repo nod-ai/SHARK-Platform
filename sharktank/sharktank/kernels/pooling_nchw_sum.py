@@ -44,54 +44,34 @@ class pooling_nchw_sum(CustomOp):
         padding = padding_desc.v
         dilations = padding_desc.v
 
-        input_desc.specialize_all_dims()
-
         # pooling shape math
         h_out = math.floor((h + 2 * padding[0] - weights_size[0]) / strides[0] + 1)
         w_out = math.floor((w + 2 * padding[1] - weights_size[1]) / strides[1] + 1)
 
         c_desc = ksel.return_new_tensor([n, c, h_out, w_out], dtype=input_desc.t.dtype)
-        c_desc.specialize_all_dims()
 
     def generate(self, ksel: KernelSelection, kb: KernelBuilder):
         input = kb.arg_value(0)
         input_tensor_type = RankedTensorType(input.type)
-        input_dim_sizes = "x".join(
-            str(input_tensor_type.get_dim_size(i))
-            for i in range(input_tensor_type.rank)
-        )
         weights = ksel.arg_descs[1].v
         strides = ksel.arg_descs[2].v
         padding = ksel.arg_descs[3].v
         dilations = ksel.arg_descs[4].v
-        pooling_nchw_sum = ksel.result_descs[0]
-        pooling_nchw_sum_output_shape = pooling_nchw_sum.mlir_type_asm
-        input_padding = input_tensor_type.shape
-        input_padding[-2] = input_padding[-2] + padding[0] * 2
-        input_padding[-1] = input_padding[-1] + padding[1] * 2
 
         weights = [str(i) for i in weights]
         strides = [str(i) for i in strides]
         padding = [str(i) for i in padding]
         dilations = [str(i) for i in dilations]
-        input_padding = [str(i) for i in input_padding]
 
         dtype_str = str(input_tensor_type.element_type)
 
         template_file = "pooling_nchw_sum.mlir"
-        target_function_name = f"sharktank_pooling_nchw_sum_{input_dim_sizes}_{weights[0]}_{weights[1]}_{strides[0]}_{strides[1]}_{padding[0]}_{padding[1]}_{dilations[0]}_{dilations[1]}_{dtype_str}"
+        target_function_name = f"sharktank_pooling_nchw_sum_{weights[0]}_{weights[1]}_{strides[0]}_{strides[1]}_{padding[0]}_{padding[1]}_{dilations[0]}_{dilations[1]}_{dtype_str}"
 
         target_function = inline_template_function(
             kb,
             template_file,
             target_function_name,
-            input_dim_sizes=input_dim_sizes,
-            input_tensor_type=input_tensor_type,
-            input_padding_N=input_padding[0],
-            input_padding_C=input_padding[1],
-            input_padding_H=input_padding[2],
-            input_padding_W=input_padding[3],
-            pooling_nchw_sum_output_shape=pooling_nchw_sum_output_shape,
             weights_H=weights[0],
             weights_W=weights[1],
             strides_H=strides[0],

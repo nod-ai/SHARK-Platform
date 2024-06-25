@@ -17,22 +17,21 @@ __all__ = [
 
 @CustomOp.register(library=LIBRARY)
 class conv_2d_nchw_fchw(CustomOp):
-    """Generic convolution that lowers directly to linalg ops.
+    """Generic convolution
 
 
     Will be specialized for all values of strides, padding, dilations, and LHS dtype.
     """
 
-    signature = "conv_2d_nchw_fchw(Tensor inputs, Tensor inputs_pad, Tensor weights, Tensor bias, int[] strides, int[] padding, int[] dilations) -> (Tensor)"
+    signature = "conv_2d_nchw_fchw(Tensor inputs, Tensor weights, Tensor bias, int[] strides, int[] padding, int[] dilations) -> (Tensor)"
 
     def select(self, ksel: KernelSelection):
         inputs_desc = ksel.arg_tensor(0)
-        inputs_pad_desc = ksel.arg_tensor(1)
-        weights_desc = ksel.arg_tensor(2)
-        bias_desc = ksel.arg_tensor(3)
-        strides_desc = ksel.attr_list_int(4)  # Shape [2]
-        padding_desc = ksel.attr_list_int(5)  # Shape [2]
-        dilations_desc = ksel.attr_list_int(6)  # Shape [2]
+        weights_desc = ksel.arg_tensor(1)
+        bias_desc = ksel.arg_tensor(2)
+        strides_desc = ksel.attr_list_int(3)  # Shape [2]
+        padding_desc = ksel.attr_list_int(4)  # Shape [2]
+        dilations_desc = ksel.attr_list_int(5)  # Shape [2]
 
         # unpack
         n, c, h, w = inputs_desc.t.shape
@@ -74,12 +73,9 @@ class conv_2d_nchw_fchw(CustomOp):
     def generate(self, ksel: KernelSelection, kb: KernelBuilder):
         inputs = kb.arg_value(0)
         inputs_tensor_type = RankedTensorType(inputs.type)
-        inputs_pad = kb.arg_value(1)
-        inputs_pad_tensor_type = RankedTensorType(inputs_pad.type)
-        strides = ksel.arg_descs[4].v
-        padding = ksel.arg_descs[5].v
-        dilations = ksel.arg_descs[6].v
-        # import pdb; pdb.set_trace()
+        strides = ksel.arg_descs[3].v
+        padding = ksel.arg_descs[4].v
+        dilations = ksel.arg_descs[5].v
 
         strides = [str(i) for i in strides]
         padding = [str(i) for i in padding]

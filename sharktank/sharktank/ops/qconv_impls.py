@@ -123,11 +123,8 @@ def qconv2d_tensor_scaled_integer(
     stride = create_conv_attrs(stride)
     padding = create_conv_attrs(padding)
     dilation = create_conv_attrs(dilation)
-    extended_padding_attr = padding * 2
-    padded_input = torch.nn.functional.pad(input_qs, extended_padding_attr)
     y_qs = kernels.conv_2d_nchw_fchw(
         input_qs.to(torch.int32),
-        padded_input.to(torch.int32),
         weight_qs.to(torch.int32),
         bias_qs.to(torch.int32),
         stride,
@@ -155,15 +152,13 @@ def qconv2d_tensor_scaled_integer(
         # Note that we sum first to reduce the dimensionality by channel
         # prior, reducing memory and total computation.
         weight_offset_fix = torch.sum(input_qs, dim=1, keepdim=True, dtype=accum_dtype)
-        # TODO: Use a custom `sum_pool` direct to linalg kernel.
-        weight_offset_fix = torch.nn.functional.avg_pool2d(
-            weight_offset_fix.to(dtype=torch.float32),
-            (weight_qs.shape[2], weight_qs.shape[3]),
-            stride=stride,
-            padding=padding,
-            divisor_override=1,
-        ).to(dtype=accum_dtype)
-        # weight_offset_fix = kernels.pooling_nchw_sum(weight_offset_fix, [weight_qs.shape[2], weight_qs.shape[3]], stride, padding, dilation)
+        weight_offset_fix = kernels.pooling_nchw_sum(
+            weight_offset_fix,
+            [weight_qs.shape[2], weight_qs.shape[3]],
+            stride,
+            padding,
+            dilation,
+        )
         weight_offset_fix = weight_offset_fix * flat_weight_m.unsqueeze(0).unsqueeze(
             2
         ).unsqueeze(3)
