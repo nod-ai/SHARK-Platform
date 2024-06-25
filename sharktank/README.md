@@ -31,8 +31,8 @@ python -m sharktank.examples.paged_llm_v1 \
 ```shell
 python -m sharktank.examples.export_paged_llm_v1 \
   --hf-dataset=open_llama_3b_v2_f16_gguf \
-  --output_mlir=/tmp/open_llama_3b_v2_f16.mlir \
-  --output_config=/tmp/open_llama_3b_v2_f16.json
+  --output-mlir=/tmp/open_llama_3b_v2_f16.mlir \
+  --output-config=/tmp/open_llama_3b_v2_f16.json
 ```
 
 ### Dump parsed information about a model from a gguf file:

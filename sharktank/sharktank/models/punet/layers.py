@@ -18,7 +18,6 @@ from .config import *
 
 __all__ = [
     "ACTIVATION_FUNCTIONS",
-    "Conv2DLayer",
     "CrossAttnUpDownBlock2D",
     "GroupNormLayer",
     "TimestepEmbedding",
@@ -524,18 +523,14 @@ class TimestepEmbedding(ThetaLayer):
             self.act_fn = ACTIVATION_FUNCTIONS[act_fn]
         except KeyError as e:
             raise AssertionError(f"Unknown activation function '{act_fn}'") from e
+        self.linear_1 = LinearLayer(theta("linear_1"))
+        self.linear_2 = LinearLayer(theta("linear_2"))
 
     def forward(self, sample):
-        theta = self.theta
-        weight_1 = theta.tensor("linear_1", "weight")
-        bias_1 = theta.tensor("linear_1", "bias")
-        weight_2 = theta.tensor("linear_2", "weight")
-        bias_2 = theta.tensor("linear_2", "bias")
-        h = ops.matmul(sample, weight_1)
-        h = ops.elementwise(torch.add, h, bias_1)
+        h = sample
+        h = self.linear_1(h)
         h = ops.elementwise(self.act_fn, h)
-        h = ops.matmul(h, weight_2)
-        h = ops.elementwise(torch.add, h, bias_2)
+        h = self.linear_2(h)
         return h
 
 
@@ -606,39 +601,6 @@ class TimestepProjection(nn.Module):
 ################################################################################
 # Layers that need to be made common once stable.
 ################################################################################
-
-
-class Conv2DLayer(ThetaLayer):
-    """Theta based conv2d layer. This assumes weight/bias naming as per the nn.Conv2D
-    module ("weight", "bias").
-
-    """
-
-    def __init__(
-        self, theta: Theta, padding: Optional[Tuple[int, int]] = None, stride: int = 1
-    ):
-        super().__init__(theta)
-        assert padding is None or len(padding) == 2
-        self.padding = padding
-        self.stride = stride
-        self.dilation = 1
-        self.groups = 1
-
-    def forward(self, input: torch.Tensor) -> torch.Tensor:
-        weight = self.theta.tensor("weight")
-        if "bias" in self.theta.keys:
-            bias = self.theta.tensor("bias")
-        else:
-            bias = None
-        return ops.conv2d(
-            input,
-            weight=weight,
-            bias=bias,
-            stride=self.stride,
-            padding=self.padding,
-            dilation=self.dilation,
-            groups=self.groups,
-        )
 
 
 class GroupNormLayer(ThetaLayer):

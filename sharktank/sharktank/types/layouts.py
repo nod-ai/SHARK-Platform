@@ -22,6 +22,8 @@ from .tensors import (
     register_quantized_layout,
     MetaDataValueType,
     QuantizedLayout,
+    _dtype_to_serialized_name,
+    _serialized_name_to_dtype,
 )
 
 from .layout_utils import (
@@ -33,7 +35,142 @@ __all__ = [
     "BlockScaledI4Layout",
     "BlockScaledLayout",
     "SuperBlockOffsetScaled_4_6_Layout",
+    "TensorScaledLayout",
 ]
+
+
+@register_quantized_layout
+class TensorScaledLayout(QuantizedLayout):
+    """Quantized layout which combines some scalar scale (`d`) tensor with a
+    quantized sample (`qs`) tensor. An optional offset (`m`) tensor
+    can be provided.
+
+    The dequantization formula:
+
+    ```
+    dtype = d.dtype
+    result = d.to(dtype) * (qs - m)
+    ```
+
+    If provided, `m` must be of the same dtype as `d`. `qs` must be cast
+    compatible to `d.dtype`. Generally, `qs` will be a lower precision
+    floating point format or an integer dtype.
+
+    If d/m are scalar tensors, then this implements whole tensor quantization.
+    Otherwise, they must be broadcast to the axis along which scaling is
+    performed.
+
+    If initialized with a dtype, the result of the conversion will be cast
+    to this dtype (unless if otherwise specified in dequant()). If dtype is
+    not specified in the constructor, it will default to the dtype of `d`.
+    For low precision fp activation types, it can be necessary to have a higher
+    precision `d`.
+    """
+
+    def __init__(
+        self,
+        *,
+        shape: list[int],
+        d: torch.Tensor,
+        qs: torch.Tensor,
+        m: Optional[torch.Tensor] = None,
+        dtype: Optional[torch.dtype] = None,
+    ):
+        self._shape = shape
+        self._d = d
+        self._qs = qs
+        self._m = m
+        self._dtype = dtype if dtype is not None else d.dtype
+
+    @classmethod
+    def serialized_name(cls) -> str:
+        return "TensorScaledLayout"
+
+    @classmethod
+    def create(
+        cls,
+        shape: list[int],
+        metadata: dict[str, MetaDataValueType],
+        planes: dict[str, torch.Tensor],
+    ):
+        m = planes.get("m")
+        dtype_str = metadata.get("dtype")
+        if dtype_str is not None:
+            dtype = _serialized_name_to_dtype(dtype_str)
+        else:
+            # Backwards compat with old serialized. Emulate original behavior
+            # before mixed precision.
+            dtype = None
+        return cls(shape=shape, d=planes["d"], qs=planes["qs"], m=m, dtype=dtype)
+
+    @property
+    def metadata(self) -> Optional[dict[str, MetaDataValueType]]:
+        """Additional metadata needed to reconstruct a layout."""
+        return {"dtype": _dtype_to_serialized_name(self._dtype)}
+
+    @property
+    def planes(self) -> dict[str, torch.Tensor]:
+        p = {
+            "d": self._d,
+            "qs": self._qs,
+        }
+        if self._m is not None:
+            p["m"] = self._m
+        return p
+
+    @property
+    def shape(self) -> list[int]:
+        """The flattened shape of the logical (unblocked) result."""
+        return self._shape
+
+    @property
+    def dtype(self) -> torch.dtype:
+        return self._dtype
+
+    @property
+    def d(self) -> torch.Tensor:
+        """Per tensor scale."""
+        return self._d
+
+    @property
+    def m(self) -> Optional[torch.Tensor]:
+        """Per tensor offset."""
+        return self._m
+
+    @property
+    def qs(self) -> torch.Tensor:
+        """Per sample quantized values."""
+        return self._qs
+
+    def dequant(self, dtype: Optional[torch.dtype] = None) -> torch.Tensor:
+        return self.dequant_blocked(dtype)
+
+    def dequant_blocked(self, dtype: Optional[torch.dtype] = None) -> torch.Tensor:
+        d = self.d
+        m = self.m
+        qs = self.qs
+        if dtype is None:
+            dtype = self.dtype
+        rescale_dtype = d.dtype
+        qs = qs.to(dtype=rescale_dtype)
+        if m is not None:
+            m = m.to(rescale_dtype)
+            result = (qs - m) * d
+        else:
+            result = qs * d
+        if result.dtype != dtype:
+            result = result.to(dtype=dtype)
+        return result
+
+    def __repr__(self):
+        r = (
+            f"{type(self).__name__}(d({list(self.d.shape)}, dtype={self.d.dtype}), "
+            f"qs({list(self.qs.shape)}, dtype={self.qs.dtype}))"
+        )
+        if self.m is not None:
+            r += f", m({list(self.m.shape)}, dtype={self.m.dtype})"
+        r += f" -> {self.dtype}"
+        return r
 
 
 @register_quantized_layout
