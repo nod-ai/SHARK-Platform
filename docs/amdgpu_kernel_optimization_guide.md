@@ -127,8 +127,8 @@ would execute in 4 cycles, for each set of 16 threads within the subgroup.
 
 ### Register Usage
 
-GFX9 features large register files. Registers are DWORD-sized (4B) are split
-into 3 general groups:
+GFX9 features large register files. Registers are DWORD-sized (4 B), and are
+split into 3 general groups:
 * SGPRs: Scalar registers (uniform value within subgroup threads). Up to 104
   SGPRs per workgroup on MI300.
 * VGPRs: General-purpose vector registers (each thread holds a different value).
