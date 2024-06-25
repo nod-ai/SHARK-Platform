@@ -21,7 +21,7 @@ util.func private @sharktank_conv_2d_nchw_fchw_{{strides_H}}_{{strides_W}}_{{pad
   %c1 = arith.constant 1: index
   %c2 = arith.constant 2: index
   %c3 = arith.constant 3: index
-  
+
   %input_pad = tensor.pad %input low[0, 0, {{padding_H}}, {{padding_W}}] high[0, 0, {{padding_H}}, {{padding_W}}] {
   ^bb0(%arg0 : index, %arg1 : index, %arg2: index, %arg3: index):
     tensor.yield %zero : !dtype
@@ -45,7 +45,7 @@ util.func private @sharktank_conv_2d_nchw_fchw_{{strides_H}}_{{strides_W}}_{{pad
   %rH_5 = arith.subi %rH_4, %c1 : index
   %rH_6 = arith.addi %rH_5, %sH : index
   %rH   = arith.divsi %rH_6, %sH : index
-  
+
   %iW = tensor.dim %input, %c3 : !dynamic_tensor_type
   %kW = tensor.dim %weights, %c3 : !dynamic_tensor_type
   %sW = arith.constant {{strides_W}} : index
@@ -60,8 +60,8 @@ util.func private @sharktank_conv_2d_nchw_fchw_{{strides_H}}_{{strides_W}}_{{pad
   %rW_5 = arith.subi %rW_4, %c1 : index
   %rW_6 = arith.addi %rW_5, %sW : index
   %rW   = arith.divsi %rW_6, %sW : index
-  
- 
+
+
   %rN = tensor.dim %input, %c0 : !dynamic_tensor_type
   %rC = tensor.dim %weights, %c0 : !dynamic_tensor_type
   %result_empty = tensor.empty(%rN, %rC, %rH, %rW) : !out_tensor_type

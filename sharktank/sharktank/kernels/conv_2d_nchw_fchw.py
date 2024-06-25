@@ -30,13 +30,13 @@ class conv_2d_nchw_fchw(CustomOp):
         weights_desc = ksel.arg_tensor(1)
         bias_desc = ksel.arg_tensor(2)
         strides_desc = ksel.attr_list_int(3)  # Shape [2]
-        padding_desc = ksel.attr_list_int(4) # Shape [2]
+        padding_desc = ksel.attr_list_int(4)  # Shape [2]
         dilations_desc = ksel.attr_list_int(5)  # Shape [2]
 
         # unpack
         n, c, h, w = inputs_desc.t.shape
         f, g, k0, k1 = weights_desc.t.shape
-        b, = bias_desc.t.shape
+        (b,) = bias_desc.t.shape
 
         strides = strides_desc.v
         dilations = dilations_desc.v
@@ -45,24 +45,28 @@ class conv_2d_nchw_fchw(CustomOp):
         # check
         torch._check(
             b == f,
-            lambda: f"conv_2d_nchw_fchw bias shape should match out_channels shape but got {b} instead of {f}"
+            lambda: f"conv_2d_nchw_fchw bias shape should match out_channels shape but got {b} instead of {f}",
         )
         torch._check(
             len(strides) == 2,
-            lambda: f"conv_2d_nchw_fchw requires exactly 2 strides; strides: {strides}"
+            lambda: f"conv_2d_nchw_fchw requires exactly 2 strides; strides: {strides}",
         )
         torch._check(
             len(dilations) == 2,
-            lambda: f"conv_2d_nchw_fchw requires exactly 2 dilations; dilations: {dilations}"
+            lambda: f"conv_2d_nchw_fchw requires exactly 2 dilations; dilations: {dilations}",
         )
         torch._check(
             len(padding) == 2,
-            lambda: f"conv_2d_nchw_fchw requires exactly 2 padding; padding: {padding}"
+            lambda: f"conv_2d_nchw_fchw requires exactly 2 padding; padding: {padding}",
         )
 
         # convolution shape math
-        h_out = math.floor((h + 2 * padding[0] - dilations[0] * (k0 - 1) - 1) / strides[0] + 1)
-        w_out = math.floor((w + 2 * padding[1] - dilations[1] * (k1 - 1) - 1) / strides[1] + 1)
+        h_out = math.floor(
+            (h + 2 * padding[0] - dilations[0] * (k0 - 1) - 1) / strides[0] + 1
+        )
+        w_out = math.floor(
+            (w + 2 * padding[1] - dilations[1] * (k1 - 1) - 1) / strides[1] + 1
+        )
 
         c_desc = ksel.return_new_tensor([n, f, h_out, w_out], dtype=inputs_desc.t.dtype)
 
@@ -72,7 +76,7 @@ class conv_2d_nchw_fchw(CustomOp):
         strides = ksel.arg_descs[3].v
         padding = ksel.arg_descs[4].v
         dilations = ksel.arg_descs[5].v
-        
+
         strides = [str(i) for i in strides]
         padding = [str(i) for i in padding]
         dilations = [str(i) for i in dilations]
@@ -80,9 +84,7 @@ class conv_2d_nchw_fchw(CustomOp):
         dtype_str = str(inputs_tensor_type.element_type)
 
         template_file = "conv_2d_nchw_fchw.mlir"
-        target_function_name = (
-            f"sharktank_conv_2d_nchw_fchw_{strides[0]}_{strides[1]}_{padding[0]}_{padding[1]}_{dilations[0]}_{dilations[1]}_{dtype_str}"
-        )
+        target_function_name = f"sharktank_conv_2d_nchw_fchw_{strides[0]}_{strides[1]}_{padding[0]}_{padding[1]}_{dilations[0]}_{dilations[1]}_{dtype_str}"
 
         target_function = inline_template_function(
             kb,

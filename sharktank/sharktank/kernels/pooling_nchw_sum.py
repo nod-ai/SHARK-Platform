@@ -48,7 +48,9 @@ class batch_matmul_transpose_b(CustomOp):
         rhs_desc.specialize_dims(-1, -2)
 
         # Shape batch..., m, n
-        c_desc = ksel.return_new_tensor([lhs_batch, lhs_m, rhs_n], dtype=lhs_desc.t.dtype)
+        c_desc = ksel.return_new_tensor(
+            [lhs_batch, lhs_m, rhs_n], dtype=lhs_desc.t.dtype
+        )
         c_desc.specialize_dims(-1, -2)
 
     def generate(self, ksel: KernelSelection, kb: KernelBuilder):

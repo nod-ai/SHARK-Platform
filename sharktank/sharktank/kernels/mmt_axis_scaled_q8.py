@@ -74,9 +74,7 @@ class mmt_axis_scaled_q8(CustomOp):
         lhs_type_str = str(lhs_tensor_type.element_type)
 
         template_file = "mmt_axis_scaled_q8.mlir"
-        target_function_name = (
-            f"sharktank_mmt_axis_scaled_q8"
-        )
+        target_function_name = f"sharktank_mmt_axis_scaled_q8"
 
         target_function = inline_template_function(
             kb,

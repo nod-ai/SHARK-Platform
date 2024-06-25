@@ -46,9 +46,13 @@ class mmt_axis_scaled_q8_test(unittest.TestCase):
         scaled_lhs = lhs.to(ref_dtype)
         scaled_rhs = rhs.to(ref_dtype)
         for i in range(lhs.shape[0]):
-            scaled_lhs[i] = (lhs[i].to(ref_dtype) - zp0[i].to(ref_dtype)) * scale0[i].to(ref_dtype)
+            scaled_lhs[i] = (lhs[i].to(ref_dtype) - zp0[i].to(ref_dtype)) * scale0[
+                i
+            ].to(ref_dtype)
         for i in range(rhs.shape[0]):
-            scaled_rhs[i] = (rhs[i].to(ref_dtype) - zp1[i].to(ref_dtype)) * scale1[i].to(ref_dtype)
+            scaled_rhs[i] = (rhs[i].to(ref_dtype) - zp1[i].to(ref_dtype)) * scale1[
+                i
+            ].to(ref_dtype)
         ref = torch.matmul(scaled_lhs.to(ref_dtype), scaled_rhs.T.to(ref_dtype))
         torch.testing.assert_close(result, ref, atol=atol, rtol=rtol)
 
@@ -63,19 +67,10 @@ class mmt_axis_scaled_q8_test(unittest.TestCase):
             args=(
                 (torch.rand([16, 3200], dtype=torch.float32)).to(torch.int8),
                 (torch.rand([100, 3200], dtype=torch.float32)).to(torch.int8),
-                (torch.rand([16], dtype=torch.float32)).to(
-                    torch.int8
-                ),
-                (torch.rand([100], dtype=torch.float32)).to(
-                    torch.int8
-                ),
-                (torch.rand([16], dtype=torch.float32)).to(
-                    torch.int8
-                ),
-                (torch.rand([100], dtype=torch.float32)).to(
-                    torch.int8
-                ),
-
+                (torch.rand([16], dtype=torch.float32)).to(torch.int8),
+                (torch.rand([100], dtype=torch.float32)).to(torch.int8),
+                (torch.rand([16], dtype=torch.float32)).to(torch.int8),
+                (torch.rand([100], dtype=torch.float32)).to(torch.int8),
             ),
         )
         output = aot.export(ep)

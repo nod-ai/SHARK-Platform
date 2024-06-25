@@ -59,13 +59,12 @@ class attn_q8(CustomOp):
         key_n, key_k = key_desc.t.shape
         value_p, value_n = value_desc.t.shape
 
-
         # d arg
-        #rhs_n, rhs_k, *rest = rhs_desc.t.shape
-        #torch._check(
+        # rhs_n, rhs_k, *rest = rhs_desc.t.shape
+        # torch._check(
         #    len(rest) == 0 and rhs_k == lhs_k,
         #    lambda: f"scaled_mmt_q8 arg 'rhs': Incorrect shape (got {rhs_desc.t.shape})",
-        #)
+        # )
 
         query_desc.specialize_all_dims()
         key_desc.specialize_all_dims()
@@ -81,7 +80,6 @@ class attn_q8(CustomOp):
         p_desc.specialize_all_dims()
         is_causal_desc.specialize_all_dims()
         scale_desc.specialize_all_dims()
-
 
         # Shape batch..., m, n
         out_desc = ksel.return_new_tensor([query_m, value_p], dtype=torch.float32)
@@ -100,9 +98,7 @@ class attn_q8(CustomOp):
         p, n = value_tensor_type.shape
 
         template_file = "attn_q8.mlir"
-        target_function_name = (
-            f"sharktank_attn_q8"
-        )
+        target_function_name = f"sharktank_attn_q8"
 
         target_function = inline_template_function(
             kb,
