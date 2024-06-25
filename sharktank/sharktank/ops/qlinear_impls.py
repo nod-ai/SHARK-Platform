@@ -8,7 +8,6 @@
 """
 
 from typing import Optional
-from torch import Tensor
 
 import warnings
 
@@ -22,6 +21,8 @@ from ..types import (
 
 from ._registry import unbox_tensor, AnyTensor
 from .signatures import *
+
+from sharktank import kernels
 
 _CUDA_HACK = True
 
@@ -89,9 +90,15 @@ def qlinear_tensor_scaled_integer(
     # TODO: CUDA doesn't have an implementation of integer matmul. So promote
     # for now.
     if _CUDA_HACK:
-        y_qs = torch.matmul(
-            x_qs.to(dtype=torch.float32), weight_qs.to(dtype=torch.float32).T
-        ).to(dtype=accum_dtype)
+        # y_qs = torch.matmul(
+        #     x_qs.to(dtype=torch.float32), weight_qs.to(dtype=torch.float32).T
+        # ).to(dtype=accum_dtype)
+
+        if len(x_qs.size()) > 0 and len(weight_qs.size()) > 1:
+            weight_qs_reshaped = weight_qs.reshape(
+                1, weight_qs.size()[0], weight_qs.size()[1]
+            ).expand(x_qs.size()[0], -1, -1)
+            y_qs = kernels.batch_matmul_transpose_b(x_qs, weight_qs_reshaped)
     else:
         y_qs = torch.matmul(x_qs, weight_qs.T)
 
@@ -154,20 +161,3 @@ linear.override(QuantizedTensor, QuantizedTensor)(qlinear_tensor_scaled_integer)
 linear.override(QuantizedTensor, QuantizedTensor, AnyTensor)(
     qlinear_tensor_scaled_integer
 )
-
-
-def linear_quantized_weight(
-    x: Tensor,
-    weight: QuantizedTensor,
-    bias: Optional[AnyTensor],
-    *,
-    accum_dtype: Optional[torch.dtype],
-) -> AnyTensor:
-    res = matmul(x, weight, transpose_rhs=True)
-    if bias is not None:
-        res = res + bias
-    return res
-
-
-linear.override(Tensor, QuantizedTensor)(linear_quantized_weight)
-linear.override(Tensor, QuantizedTensor, AnyTensor)(linear_quantized_weight)

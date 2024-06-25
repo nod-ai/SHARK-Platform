@@ -13,6 +13,8 @@ import warnings
 
 import torch
 
+from sharktank import kernels
+
 from ..types import (
     QuantizedTensor,
     PlanarQuantizedTensor,
@@ -25,6 +27,23 @@ from .signatures import (
     conv2d,
     elementwise,
 )
+
+
+def create_conv_attrs(input_data):
+    if isinstance(input_data, int):
+        return [input_data, input_data]
+    elif isinstance(input_data, tuple):
+        if len(input_data) == 2:
+            return list(input_data)
+        else:
+            raise ValueError("Tuple must be of length 2.")
+    elif isinstance(input_data, list):
+        if len(input_data) == 2:
+            return input_data
+        else:
+            raise ValueError("List must be of length 2.")
+    else:
+        raise TypeError("Input must be of type int, tuple, or list.")
 
 
 def qconv2d_tensor_scaled_integer(
@@ -101,15 +120,20 @@ def qconv2d_tensor_scaled_integer(
         rescale_d = (flat_input_d * flat_weight_d).reshape(1, -1, 1, 1)
 
     # TODO: Use a real mixed precision op.
-    y_qs = torch.nn.functional.conv2d(
-        input_qs.to(dtype=torch.float32),
-        weight_qs.to(dtype=torch.float32),
-        bias=bias_qs.to(dtype=torch.float32) if bias_qs is not None else None,
-        stride=stride,
-        padding=padding,
-        dilation=dilation,
-        groups=groups,
-    ).to(dtype=accum_dtype)
+    stride = create_conv_attrs(stride)
+    padding = create_conv_attrs(padding)
+    dilation = create_conv_attrs(dilation)
+    extended_padding_attr = padding * 2
+    padded_input = torch.nn.functional.pad(input_qs, extended_padding_attr)
+    y_qs = kernels.conv_2d_nchw_fchw(
+        input_qs.to(torch.int32),
+        padded_input.to(torch.int32),
+        weight_qs.to(torch.int32),
+        bias_qs.to(torch.int32),
+        stride,
+        padding,
+        dilation,
+    )
 
     # Apply offset corrections.
     if input_m is not None:
@@ -139,6 +163,7 @@ def qconv2d_tensor_scaled_integer(
             padding=padding,
             divisor_override=1,
         ).to(dtype=accum_dtype)
+        # weight_offset_fix = kernels.pooling_nchw_sum(weight_offset_fix, [weight_qs.shape[2], weight_qs.shape[3]], stride, padding, dilation)
         weight_offset_fix = weight_offset_fix * flat_weight_m.unsqueeze(0).unsqueeze(
             2
         ).unsqueeze(3)
