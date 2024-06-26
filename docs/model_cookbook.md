@@ -1,7 +1,73 @@
 # Model cookbook
 
-Note: These are early commands that the sharktank team is using and will turn
-into proper docs later.
+Note: These are early notes and commands that the sharktank team is using and
+will turn into proper docs later.
+
+## Diagrams
+
+Overview:
+
+```mermaid
+graph LR
+  inputs("Input programs
+  • Hugging Face
+  • GGUF file
+  • Custom")
+  sharktank("SHARK Tank
+  • Operators
+  • Layers
+  • Tools")
+  shortfin("SHARK Shortfin"
+  • Serving APIs)
+
+  inputs -. "import (automatic)<br>port (manual)" .-> sharktank
+  sharktank -. "export" .-> shortfin
+```
+
+Import process:
+
+```mermaid
+graph LR
+  subgraph inputs ["Input programs"]
+    direction LR
+    tokenizer("tokenizer_config.json")
+    safetensors(".safetensors")
+    gguf(".gguf")
+    config("config.json")
+  end
+
+  subgraph sharktank ["SHARK Tank"]
+    subgraph datasets ["Datasets"]
+      parameters("parameters")
+      tokenizers("tokenizers")
+    end
+    subgraph models ["Model recipes"]
+      hyperparameters("hparams")
+      layers("layers")
+      operators("ops")
+    end
+    subgraph tools ["Tools"]
+      test("test")
+      run("run")
+      export("export")
+    end
+  end
+
+  exported("Exported programs
+  • program.mlir
+  • program.vmfb
+  • parameters.irpa")
+
+  gguf --> datasets
+  gguf --> models
+  config --> models
+  safetensors --> datasets
+  tokenizer --> datasets
+
+  datasets --> tools
+  models --> tools
+  export -.-> exported
+```
 
 ## Useful tools and projects
 
