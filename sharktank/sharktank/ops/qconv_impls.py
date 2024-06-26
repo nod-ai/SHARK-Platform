@@ -107,7 +107,7 @@ def qconv2d_tensor_scaled_integer(
         # to the output NCHW shape.
         rescale_d = (flat_input_d * flat_weight_d).reshape(1, -1, 1, 1)
 
-    # TODO: Use a real mixed precision op.
+    # Perform the actual convolution.
     stride = _expand_int_to_2_tuple(stride)
     padding = _expand_int_to_2_tuple(padding)
     dilation = _expand_int_to_2_tuple(dilation)
