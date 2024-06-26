@@ -20,7 +20,7 @@ util.func private @sharktank_pooling_nchw_sum_{{weights_H}}_{{weights_W}}_{{stri
   %c1 = arith.constant 1: index
   %c2 = arith.constant 2: index
   %c3 = arith.constant 3: index
-  
+
   %input_pad = tensor.pad %input low[0, 0, {{padding_H}}, {{padding_W}}] high[0, 0, {{padding_H}}, {{padding_W}}] {
   ^bb0(%arg0 : index, %arg1 : index, %arg2: index, %arg3: index):
     tensor.yield %zero : !dtype
@@ -33,7 +33,7 @@ util.func private @sharktank_pooling_nchw_sum_{{weights_H}}_{{weights_W}}_{{stri
   %sH = arith.constant {{strides_H}} : index // strides[0]
   %dH = arith.constant {{dilations_H}} : index
   %pH = arith.constant {{padding_H}} : index // padding[0]
-  
+
   %rH_0 = arith.muli %pH, %c2 : index
   %rH_1 = arith.addi %iH, %rH_0 : index
   %rH_2 = arith.subi %rH_1, %kH : index
