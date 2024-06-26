@@ -132,16 +132,13 @@ split into 3 general groups:
 * SGPRs: Scalar registers (uniform value within subgroup threads). Up to 104
   SGPRs per workgroup on MI300.
 * VGPRs: General-purpose vector registers (each thread holds a different value).
-  Up to 256 VGPRs per thread on MI300.
+  Up to 256 VGPRs per thread, and 512 VGPRs per SIMD on MI300.
 * AGPRs: Matrix accumulation vector registers (each thread holds a different
   value). Up to 256 AGPRs per thread on MI300.
 
-In total, the VGPRs within a CU hold 64 kB data (64 threads * 256 VGPRs * 4 B).
-
 > [!TIP]
 > Register usage affects occupancy. A kernel utilizing all 256 VGPRs can
-> launch only one subgroup per CU. Utilizing all SIMDs requires 64 VGPRs
-> used or fewer.
+> launch only two subgroups per SIMD.
 
 > [!TIP]
 > You can check the register usage by looking at the very end of the kernel
