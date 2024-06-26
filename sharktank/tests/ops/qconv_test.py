@@ -42,7 +42,11 @@ class QConvTest(unittest.TestCase):
     def setUp(self):
         torch.manual_seed(12345)
 
+    def tearDown(self):
+        ops._registry._test_enable_last_op_dispatch(False)
+
     def testInputSymPerTensor_WeightAsymPerChannel_NoBias(self):
+        ops._registry._test_enable_last_op_dispatch(True)
         input = _randomize_per_axis(
             torch.rand(4, 8, 16, 16, dtype=torch.float32), axis=1
         )
@@ -66,7 +70,7 @@ class QConvTest(unittest.TestCase):
             .dequant()
         )
         self.assertIs(
-            ops._registry._TEST_LAST_OP_DISPATCH,
+            ops._registry._test_get_last_op_dispatch(),
             ops.qconv_impls.qconv2d_tensor_scaled_integer,
         )
         y_ref = torch.nn.functional.conv2d(
@@ -79,6 +83,7 @@ class QConvTest(unittest.TestCase):
         torch.testing.assert_close(y_actual, y_ref)
 
     def testInputSymPerTensor_WeightAsymPerChannel_FloatBias(self):
+        ops._registry._test_enable_last_op_dispatch(True)
         input = _randomize_per_axis(
             torch.rand(4, 8, 16, 16, dtype=torch.float32), axis=1
         )
@@ -99,7 +104,7 @@ class QConvTest(unittest.TestCase):
 
         y_actual = ops.conv2d(input_q, weight_q, bias, stride=1, padding=(1, 1))
         self.assertIs(
-            ops._registry._TEST_LAST_OP_DISPATCH,
+            ops._registry._test_get_last_op_dispatch(),
             ops.qconv_impls.qconv2d_tensor_scaled_integer,
         )
         y_ref = torch.nn.functional.conv2d(
@@ -112,6 +117,7 @@ class QConvTest(unittest.TestCase):
         torch.testing.assert_close(y_actual, y_ref)
 
     def testInputSymPerTensor_WeightAsymPerChannel_QuantizedBias(self):
+        ops._registry._test_enable_last_op_dispatch(True)
         input = _randomize_per_axis(
             torch.rand(4, 8, 16, 16, dtype=torch.float32), axis=1
         )
@@ -140,7 +146,7 @@ class QConvTest(unittest.TestCase):
             .dequant()
         )
         self.assertIs(
-            ops._registry._TEST_LAST_OP_DISPATCH,
+            ops._registry._test_get_last_op_dispatch(),
             ops.qconv_impls.qconv2d_tensor_scaled_integer,
         )
         y_ref = torch.nn.functional.conv2d(
@@ -153,6 +159,7 @@ class QConvTest(unittest.TestCase):
         torch.testing.assert_close(y_actual, y_ref)
 
     def testInputSymPerTensor_WeightSymPerTensor_NoBias(self):
+        ops._registry._test_enable_last_op_dispatch(True)
         input = _randomize_per_axis(
             torch.rand(4, 8, 16, 16, dtype=torch.float32), axis=1
         )
@@ -176,7 +183,7 @@ class QConvTest(unittest.TestCase):
             .dequant()
         )
         self.assertIs(
-            ops._registry._TEST_LAST_OP_DISPATCH,
+            ops._registry._test_get_last_op_dispatch(),
             ops.qconv_impls.qconv2d_tensor_scaled_integer,
         )
         y_ref = torch.nn.functional.conv2d(
@@ -190,6 +197,7 @@ class QConvTest(unittest.TestCase):
 
     @unittest.skip("Bug in joint offset application #55")
     def testInputAsymPerChannel_WeightAsymPerChannel_NoBias(self):
+        ops._registry._test_enable_last_op_dispatch(True)
         input = _randomize_per_axis(
             torch.rand(4, 8, 16, 16, dtype=torch.float32), axis=1, offset_range=-0.2
         )
@@ -215,7 +223,7 @@ class QConvTest(unittest.TestCase):
             .dequant()
         )
         self.assertIs(
-            ops._registry._TEST_LAST_OP_DISPATCH,
+            ops._registry._test_get_last_op_dispatch(),
             ops.qconv_impls.qconv2d_tensor_scaled_integer,
         )
         y_ref = torch.nn.functional.conv2d(
