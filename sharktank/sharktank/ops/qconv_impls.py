@@ -145,8 +145,10 @@ def qconv2d_tensor_scaled_integer(
         # Note that we sum first to reduce the dimensionality by channel
         # prior, reducing memory and total computation.
         weight_offset_fix = torch.sum(input_qs, dim=1, keepdim=True, dtype=accum_dtype)
+        weight_offset_fix_padded = _pad_last_2d(weight_offset_fix, extended_list)
         weight_offset_fix = _invoke_int32_pooling_sum(
             weight_offset_fix,
+            weight_offset_fix_padded,
             [weight_qs.shape[2], weight_qs.shape[3]],
             stride,
             padding,
@@ -237,7 +239,7 @@ def _invoke_int32_conv2d(
 
 
 def _invoke_int32_pooling_sum(
-    input, kernel_size, stride, padding, dilation, *, accum_dtype
+    input, padded_input, kernel_size, stride, padding, dilation, *, accum_dtype
 ):
     """Invokes either a custom integer pooling sum or the built-in fp avg_pool2d
     kernel.
@@ -245,6 +247,7 @@ def _invoke_int32_pooling_sum(
     if debugging.flags.use_custom_int_conv_kernel:
         output = kernels.pooling_nchw_sum(
             input,
+            padded_input,
             kernel_size,
             stride,
             padding,

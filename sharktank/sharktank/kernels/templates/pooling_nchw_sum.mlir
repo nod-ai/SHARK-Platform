@@ -12,7 +12,7 @@
 module {
 
 util.func private @sharktank_pooling_nchw_sum_{{weights_H}}_{{weights_W}}_{{strides_H}}_{{strides_W}}_{{padding_H}}_{{padding_W}}_{{dilations_H}}_{{dilations_W}}_{{dtype}} (
-    %input: !dynamic_tensor_type)
+    %input: !dynamic_tensor_type, %input_pad: !dynamic_tensor_type)
     -> !out_tensor_type {
   %zero = arith.constant 0: !dtype
   %weights = tensor.empty() : !weights_tensor_type
@@ -20,11 +20,6 @@ util.func private @sharktank_pooling_nchw_sum_{{weights_H}}_{{weights_W}}_{{stri
   %c1 = arith.constant 1: index
   %c2 = arith.constant 2: index
   %c3 = arith.constant 3: index
-
-  %input_pad = tensor.pad %input low[0, 0, {{padding_H}}, {{padding_W}}] high[0, 0, {{padding_H}}, {{padding_W}}] {
-  ^bb0(%arg0 : index, %arg1 : index, %arg2: index, %arg3: index):
-    tensor.yield %zero : !dtype
-  } : !dynamic_tensor_type to !dynamic_tensor_type
 
   // Pooling size math, equivalent to:
   // h_out = math.floor((h + 2 * padding[0] - weights_size[0]) / strides[0] + 1)
