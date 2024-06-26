@@ -17,15 +17,7 @@ __all__ = [
 
 @CustomOp.register(library=LIBRARY)
 class pooling_nchw_sum(CustomOp):
-    """Generic block scaled pooling sum.
-
-    This corresponds to the BlockScaledLayout and operates on planar `d`
-    and `qs` tensors as specified there:
-
-    * `d`: `[N, K // 32, 1]`
-    * `qs`: `[N, K // 32, 32]`
-
-    """
+    """Generic pooling sum."""
 
     signature = "pooling_nchw_sum(Tensor a, int[] weights_size, int[] strides, int[] padding, int[] dilations) -> (Tensor)"
 
