@@ -8,22 +8,23 @@
 """
 
 from typing import Optional
-from torch import Tensor
 
 import warnings
 
 import torch
+from torch import Tensor
 
 from ..types import (
     QuantizedTensor,
     PlanarQuantizedTensor,
     TensorScaledLayout,
 )
+from ..utils import debugging
 
 from ._registry import unbox_tensor, AnyTensor
 from .signatures import *
 
-_CUDA_HACK = True
+from sharktank import kernels
 
 
 def qlinear_tensor_scaled_integer(
@@ -86,14 +87,7 @@ def qlinear_tensor_scaled_integer(
     # Fall back to automatic fusion based on integer, high precision matmul.
     x_qs = x_qs.to(accum_dtype)
     weight_qs = weight_qs.to(accum_dtype)
-    # TODO: CUDA doesn't have an implementation of integer matmul. So promote
-    # for now.
-    if _CUDA_HACK:
-        y_qs = torch.matmul(
-            x_qs.to(dtype=torch.float32), weight_qs.to(dtype=torch.float32).T
-        ).to(dtype=accum_dtype)
-    else:
-        y_qs = torch.matmul(x_qs, weight_qs.T)
+    y_qs = _invoke_int32_mmt(x_qs, weight_qs, accum_dtype=accum_dtype)
 
     # Offset correction. By applying the offset correction in post, it is
     # set up to fuse with its consumer, which is already doing additional
@@ -171,3 +165,22 @@ def linear_quantized_weight(
 
 linear.override(Tensor, QuantizedTensor)(linear_quantized_weight)
 linear.override(Tensor, QuantizedTensor, AnyTensor)(linear_quantized_weight)
+
+
+def _invoke_int32_mmt(lhs, rhs, *, accum_dtype):
+    if debugging.flags.use_custom_int_mm_kernel:
+        # The custom kernel requires that the lhs and rhs be the same
+        # rank. Broadcast the rhs to match.
+        lhs_rank = len(lhs.shape)
+        rhs_rank = len(rhs.shape)
+        if rhs_rank < lhs_rank:
+            assert (rhs_rank + 1) == lhs_rank
+            rhs_size = [lhs.shape[0]] + list(rhs.shape)
+            rhs = rhs.unsqueeze(0).expand(rhs_size)
+        y_qs = kernels.batch_matmul_transpose_b(lhs, rhs)
+    else:
+        # FP emulation.
+        y_qs = torch.matmul(
+            lhs.to(dtype=torch.float32), rhs.to(dtype=torch.float32).T
+        ).to(dtype=accum_dtype)
+    return y_qs
