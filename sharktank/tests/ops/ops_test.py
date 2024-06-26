@@ -12,8 +12,6 @@ import torch.nn.functional as F
 from sharktank import ops
 from sharktank.types import *
 
-ops._registry._ENABLE_TEST_LAST_OP_DISPATCH = True
-
 
 class EqualTest(unittest.TestCase):
     def testEqualTorchTensors(self):
