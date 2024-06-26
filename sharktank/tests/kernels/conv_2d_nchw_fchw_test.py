@@ -17,6 +17,25 @@ from shark_turbine import aot
 from sharktank import kernels
 
 
+def _pad_last_2d(input_tensor, pad_width):
+    # pad_width should be in the format [pad_left, pad_right, pad_top, pad_bottom]
+    pad_left, pad_right, pad_top, pad_bottom = pad_width
+    batch_size, channels, height, width = input_tensor.shape
+
+    # Create a new tensor with the desired padded size filled with zeros
+    padded_height = height + pad_top + pad_bottom
+    padded_width = width + pad_left + pad_right
+    padded_tensor = torch.zeros(
+        (batch_size, channels, padded_height, padded_width), dtype=input_tensor.dtype
+    )
+
+    # Copy the values from the input tensor to the appropriate location in the padded tensor
+    padded_tensor[
+        :, :, pad_top : pad_top + height, pad_left : pad_left + width
+    ] = input_tensor
+    return padded_tensor
+
+
 class conv_2d_nchw_fchw_test(unittest.TestCase):
     def setUp(self):
         torch.manual_seed(42)
@@ -31,10 +50,13 @@ class conv_2d_nchw_fchw_test(unittest.TestCase):
     def testBS32(self, atol, rtol):
         dtype = torch.int8
         inputs = (torch.rand([2, 320, 64, 64]) * 64).to(dtype)
+        pad_width = [1, 1]
+        extended_list = [item for item in pad_width for _ in range(2)]
+        inputs_pad = _pad_last_2d(inputs, extended_list)
         weights = (torch.rand([640, 320, 3, 3]) * 64).to(dtype)
         bias = (torch.rand([640]) * 64).to(dtype)
         result = kernels.conv_2d_nchw_fchw(
-            inputs, weights, bias, [1, 1], [1, 1], [1, 1]
+            inputs, inputs_pad, weights, bias, [1, 1], [1, 1], [1, 1]
         )
 
         # Tolerances are empirical and results are not expected to match exactly.
@@ -47,15 +69,20 @@ class conv_2d_nchw_fchw_test(unittest.TestCase):
 
     def testExportStaticDims(self):
         class MyModule(torch.nn.Module):
-            def forward(self, a, b, c):
-                return kernels.conv_2d_nchw_fchw(a, b, c, [1, 1], [1, 1], [1, 1])
+            def forward(self, a, b, c, d):
+                return kernels.conv_2d_nchw_fchw(a, b, c, d, [1, 1], [1, 1], [1, 1])
 
         mod = MyModule()
         dtype = torch.int8
+        inputs = torch.rand([2, 320, 64, 64]) * 64
+        pad_width = [1, 1]
+        extended_list = [item for item in pad_width for _ in range(2)]
+        inputs_pad = _pad_last_2d(inputs, extended_list)
         ep = torch.export.export(
             mod,
             args=(
-                (torch.rand([2, 320, 64, 64]) * 64).to(dtype),
+                (inputs).to(dtype),
+                (inputs_pad).to(dtype),
                 (torch.rand([640, 320, 3, 3]) * 64).to(dtype),
                 (torch.rand([640]) * 64).to(dtype),
             ),

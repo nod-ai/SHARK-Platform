@@ -14,19 +14,13 @@
 module {
 
 util.func private @sharktank_conv_2d_nchw_fchw_{{strides_H}}_{{strides_W}}_{{padding_H}}_{{padding_W}}_{{dilations_H}}_{{dilations_W}}_{{dtype}} (
-    %input: !dynamic_tensor_type, %weights: !dynamic_tensor_type, %bias: tensor<?x!dtype>)
+    %input: !dynamic_tensor_type, %input_pad: !dynamic_tensor_type, %weights: !dynamic_tensor_type, %bias: tensor<?x!dtype>)
     -> !out_tensor_type {
   %zero = arith.constant 0: !dtype
   %c0 = arith.constant 0: index
   %c1 = arith.constant 1: index
   %c2 = arith.constant 2: index
   %c3 = arith.constant 3: index
-
-  %input_pad = tensor.pad %input low[0, 0, {{padding_H}}, {{padding_W}}] high[0, 0, {{padding_H}}, {{padding_W}}] {
-  ^bb0(%arg0 : index, %arg1 : index, %arg2: index, %arg3: index):
-    tensor.yield %zero : !dtype
-  } : !dynamic_tensor_type to !dynamic_tensor_type
-
 
   // Convolution size math, equivalent to:
   // h_out = math.floor((h + 2 * padding[0] - dilations[0] * (k0 - 1) - 1) / strides[0] + 1)
@@ -60,7 +54,6 @@ util.func private @sharktank_conv_2d_nchw_fchw_{{strides_H}}_{{strides_W}}_{{pad
   %rW_5 = arith.subi %rW_4, %c1 : index
   %rW_6 = arith.addi %rW_5, %sW : index
   %rW   = arith.divsi %rW_6, %sW : index
-
 
   %rN = tensor.dim %input, %c0 : !dynamic_tensor_type
   %rC = tensor.dim %weights, %c0 : !dynamic_tensor_type

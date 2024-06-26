@@ -112,8 +112,11 @@ def qconv2d_tensor_scaled_integer(
     stride = _expand_int_to_2_tuple(stride)
     padding = _expand_int_to_2_tuple(padding)
     dilation = _expand_int_to_2_tuple(dilation)
+    extended_list = [item for item in padding for _ in range(2)]
+    padded_input = _pad_last_2d(input_qs, extended_list)
     y_qs = _invoke_int32_conv2d(
         input_qs.to(torch.int32),
+        padded_input.to(torch.int32),
         weight_qs.to(torch.int32),
         bias_qs.to(torch.int32) if bias_qs is not None else None,
         stride,
@@ -193,7 +196,7 @@ conv2d.override(QuantizedTensor, QuantizedTensor, AnyTensor)(
 
 
 def _invoke_int32_conv2d(
-    input, weight, bias, stride, padding, dilation, *, accum_dtype
+    input, padded_input, weight, bias, stride, padding, dilation, *, accum_dtype
 ):
     """Does a low level invocation of a conv2d integer kernel.
 
@@ -212,6 +215,7 @@ def _invoke_int32_conv2d(
             bias = torch.zeros((weight.shape[1],), dtype=input.dtype)
         y_qs = kernels.conv_2d_nchw_fchw(
             input,
+            padded_input,
             weight,
             bias,
             stride,
@@ -255,6 +259,25 @@ def _invoke_int32_pooling_sum(
             divisor_override=1,
         ).to(dtype=accum_dtype)
     return output
+
+
+def _pad_last_2d(input_tensor, pad_width):
+    # pad_width should be in the format [pad_left, pad_right, pad_top, pad_bottom]
+    pad_left, pad_right, pad_top, pad_bottom = pad_width
+    batch_size, channels, height, width = input_tensor.shape
+
+    # Create a new tensor with the desired padded size filled with zeros
+    padded_height = height + pad_top + pad_bottom
+    padded_width = width + pad_left + pad_right
+    padded_tensor = torch.zeros(
+        (batch_size, channels, padded_height, padded_width), dtype=input_tensor.dtype
+    )
+
+    # Copy the values from the input tensor to the appropriate location in the padded tensor
+    padded_tensor[
+        :, :, pad_top : pad_top + height, pad_left : pad_left + width
+    ] = input_tensor
+    return padded_tensor
 
 
 def _flatten_input_scale_offset_channels(d, m):
