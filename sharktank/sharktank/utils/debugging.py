@@ -32,6 +32,10 @@ class DebugFlags:
     save_goldens_path: Optional[Path] = None
     golden_sequence_value: int = 0
 
+    # Feature flags.
+    use_custom_int_conv_kernel: bool = True
+    use_custom_int_mm_kernel: bool = True
+
     def set(self, part: str):
         m = re.match(SETTING_PART_PATTERN, part)
         if not m:
@@ -47,6 +51,10 @@ class DebugFlags:
             self.enable_nan_checks = logical_sense
         elif name == "save_goldens_path":
             self.save_goldens_path = Path(value)
+        elif name == "use_custom_int_conv_kernel":
+            self.use_custom_int_conv_kernel = logical_sense
+        elif name == "use_custom_int_mm_kernel":
+            self.use_custom_int_mm_kernel = logical_sense
         else:
             logger.warn("Unrecognized %s flag: '%s'", FLAGS_ENV_NAME, name)
 
