@@ -8,8 +8,6 @@
 sharded."""
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from . import Theta
 
 
 class Sharding(ABC):
@@ -59,11 +57,11 @@ class ThetaLayerSharding(Sharding):
         layer.
 
         ```python
-        form sharktank.ops import reshard
+        from sharktank.ops import reshard
         theta = ...
         theta_layer_sharding = ...
         theta_sharding = theta_layer_sharding.theta_sharding()
-        sharded_testa = reshard(theta, theta_sharding)
+        sharded_theta = reshard(theta, theta_sharding)
         ```
         """
         ...
