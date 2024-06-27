@@ -11,6 +11,7 @@ import torch
 
 from sharktank import ops
 from sharktank.types import *
+from sharktank.types import sharding
 
 
 class ConvTest(unittest.TestCase):
@@ -491,7 +492,7 @@ class ReplicateTest(unittest.TestCase):
         assert expected_result.is_deep_equal(actual_result)
 
 
-class ReshardTest(unittest.TestCase):
+class ReshardSplitTest(unittest.TestCase):
     def testReshardReplicated(self):
         tensor = torch.rand(4, 5, 6, dtype=torch.float32)
         shard_dim = 2
@@ -524,6 +525,35 @@ class ReshardTest(unittest.TestCase):
             expected_result, dim=shard_dim, count=shard_count
         )
         assert expected_result.is_deep_equal(actual_result)
+
+
+class ReshardTest(unittest.TestCase):
+    def testTensorSplit(self):
+        tensor = torch.rand(5, 6, dtype=torch.float32)
+        shard_count = 3
+        shard_dim = 1
+        expected_result = ops.reshard_split(tensor, count=shard_count, dim=shard_dim)
+        split_sharding = sharding.Split(shard_count=shard_count, shard_dim=shard_dim)
+        actual_result = ops.reshard(tensor, split_sharding)
+        assert ops.equal(expected_result, actual_result)
+
+    def testGroupNormSplitChannelSharding(self):
+        channels = 12
+        weight = torch.rand(channels, dtype=torch.float32)
+        bias = torch.rand(channels, dtype=torch.float32)
+        theta = Theta(
+            {
+                "weight": DefaultPrimitiveTensor(data=weight),
+                "bias": DefaultPrimitiveTensor(data=bias),
+            }
+        )
+        shard_count = 3
+        sharding_spec = sharding.GroupNormSplitChannelSharding(shard_count=shard_count)
+        sharded_theta = ops.reshard(theta, sharding_spec)
+        expected_weight = ops.reshard_split(weight, dim=0, count=shard_count)
+        expected_bias = ops.reshard_split(bias, dim=0, count=shard_count)
+        assert ops.equal(expected_weight, sharded_theta("weight"))
+        assert ops.equal(expected_bias, sharded_theta("bias"))
 
 
 class ShardLikeTest(unittest.TestCase):
