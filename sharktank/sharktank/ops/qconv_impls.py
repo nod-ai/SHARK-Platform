@@ -13,11 +13,14 @@ import warnings
 
 import torch
 
+from sharktank import kernels
+
 from ..types import (
     QuantizedTensor,
     PlanarQuantizedTensor,
     TensorScaledLayout,
 )
+from ..utils import debugging
 
 from ._registry import unbox_tensor, AnyTensor
 from .signatures import (
@@ -38,6 +41,10 @@ def qconv2d_tensor_scaled_integer(
     groups: IntOrSequenceInt = 1,
     accum_dtype: torch.dtype,
 ):
+    # Grouped conv not yet supported.
+    if groups != 1:
+        return NotImplemented
+
     # Only handle tensor scaled layouts.
     if not issubclass(input.layout_type, TensorScaledLayout) or not issubclass(
         weight.layout_type, TensorScaledLayout
@@ -100,16 +107,19 @@ def qconv2d_tensor_scaled_integer(
         # to the output NCHW shape.
         rescale_d = (flat_input_d * flat_weight_d).reshape(1, -1, 1, 1)
 
-    # TODO: Use a real mixed precision op.
-    y_qs = torch.nn.functional.conv2d(
-        input_qs.to(dtype=torch.float32),
-        weight_qs.to(dtype=torch.float32),
-        bias=bias_qs.to(dtype=torch.float32) if bias_qs is not None else None,
-        stride=stride,
-        padding=padding,
-        dilation=dilation,
-        groups=groups,
-    ).to(dtype=accum_dtype)
+    # Perform the actual convolution.
+    stride = _expand_int_to_2_tuple(stride)
+    padding = _expand_int_to_2_tuple(padding)
+    dilation = _expand_int_to_2_tuple(dilation)
+    y_qs = _invoke_int32_conv2d(
+        input_qs.to(torch.int32),
+        weight_qs.to(torch.int32),
+        bias_qs.to(torch.int32) if bias_qs is not None else None,
+        stride,
+        padding,
+        dilation,
+        accum_dtype=accum_dtype,
+    )
 
     # Apply offset corrections.
     if input_m is not None:
@@ -131,14 +141,14 @@ def qconv2d_tensor_scaled_integer(
         # Note that we sum first to reduce the dimensionality by channel
         # prior, reducing memory and total computation.
         weight_offset_fix = torch.sum(input_qs, dim=1, keepdim=True, dtype=accum_dtype)
-        # TODO: Use a custom `sum_pool` direct to linalg kernel.
-        weight_offset_fix = torch.nn.functional.avg_pool2d(
-            weight_offset_fix.to(dtype=torch.float32),
-            (weight_qs.shape[2], weight_qs.shape[3]),
-            stride=stride,
-            padding=padding,
-            divisor_override=1,
-        ).to(dtype=accum_dtype)
+        weight_offset_fix = _invoke_int32_pooling_sum(
+            weight_offset_fix,
+            [weight_qs.shape[2], weight_qs.shape[3]],
+            stride,
+            padding,
+            dilation,
+            accum_dtype=accum_dtype,
+        )
         weight_offset_fix = weight_offset_fix * flat_weight_m.unsqueeze(0).unsqueeze(
             2
         ).unsqueeze(3)
@@ -179,6 +189,71 @@ conv2d.override(QuantizedTensor, QuantizedTensor)(qconv2d_tensor_scaled_integer)
 conv2d.override(QuantizedTensor, QuantizedTensor, AnyTensor)(
     qconv2d_tensor_scaled_integer
 )
+
+
+def _invoke_int32_conv2d(
+    input, weight, bias, stride, padding, dilation, *, accum_dtype
+):
+    """Does a low level invocation of a conv2d integer kernel.
+
+    This presumes that the stride/padding/dilation have already been normalized
+    to 2-tuples.
+
+    It is advantageous in some situations to use fp emulation of an int kernel
+    so we fork here.
+    """
+    if debugging.flags.use_custom_int_conv_kernel:
+        # True int kernel.
+        if bias is None:
+            # We don't have any non-test use of convs without bias, so just
+            # use a zero vector for the None case. If this becomes common, we
+            # may want to support an optional bias through the kernel.
+            bias = torch.zeros((weight.shape[1],), dtype=input.dtype)
+        y_qs = kernels.conv_2d_nchw_fchw(
+            input,
+            weight,
+            bias,
+            stride,
+            padding,
+            dilation,
+        )
+    else:
+        # FP emulation.
+        y_qs = torch.nn.functional.conv2d(
+            input.to(dtype=torch.float32),
+            weight.to(dtype=torch.float32),
+            bias=bias.to(dtype=torch.float32) if bias is not None else None,
+            stride=stride,
+            padding=padding,
+            dilation=dilation,
+        ).to(dtype=accum_dtype)
+
+    return y_qs
+
+
+def _invoke_int32_pooling_sum(
+    input, kernel_size, stride, padding, dilation, *, accum_dtype
+):
+    """Invokes either a custom integer pooling sum or the built-in fp avg_pool2d
+    kernel.
+    """
+    if debugging.flags.use_custom_int_conv_kernel:
+        output = kernels.pooling_nchw_sum(
+            input,
+            kernel_size,
+            stride,
+            padding,
+            dilation,
+        )
+    else:
+        output = torch.nn.functional.avg_pool2d(
+            input.to(dtype=torch.float32),
+            kernel_size,
+            stride=stride,
+            padding=padding,
+            divisor_override=1,
+        ).to(dtype=accum_dtype)
+    return output
 
 
 def _flatten_input_scale_offset_channels(d, m):
@@ -233,3 +308,10 @@ def _flatten_weight_scale_offset_channels(d, m):
             return None, None
         m = m.squeeze()
     return d, m
+
+
+def _expand_int_to_2_tuple(int_or_list) -> tuple[int, int]:
+    if isinstance(int_or_list, int):
+        return (int_or_list, int_or_list)
+    assert len(int_or_list) == 2, "Expected int or (i, i) sequence"
+    return int_or_list

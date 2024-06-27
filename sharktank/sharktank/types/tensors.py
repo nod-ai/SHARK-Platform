@@ -5,6 +5,7 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 from typing import Any, Callable, Optional, Union, TypeVar, Generic, Type
+from copy import deepcopy
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -345,6 +346,9 @@ class DefaultPrimitiveTensor(PrimitiveTensor):
         self, new_globals: dict[str, torch.Tensor]
     ) -> "InferenceTensor":
         return DefaultPrimitiveTensor(name=self.name, data=new_globals[self.name])
+
+    def __getitem__(self, key):
+        return self._data[key]
 
     def __repr__(self):
         return f"PrimitiveTensor({self.name}, {self.shape}, {self._data.dtype})"
@@ -721,6 +725,40 @@ class SplitPrimitiveTensor(ShardedTensorBase):
 
         super().__init__(name=name, ts=ts, shape=shape, shard_dim=shard_dim)
 
+    def _is_slicing_split_dim(self, key):
+        if isinstance(key, tuple):
+            return True
+        return (
+            self.shard_dim < len(key)
+            and key[self.shard_dim] != slice(None)
+            and key[self.shard_dim] != slice(self.shape[self.shard_dim])
+        )
+
+    def _get_shard_slice(self, key):
+        if (
+            isinstance(key, tuple)
+            or self.shard_dim >= len(key)
+            or key[self.shard_dim] == slice(None)
+        ):
+            return key
+        assert key[self.shard_dim] == slice(
+            self.shape[self.shard_dim]
+        ), "TODO: slicing of spit dimension"
+        new_key = deepcopy(key)
+        new_key[self.shard_dim] = self.shards[0].shape[self.shard_dim]
+        return new_key
+
+    def __getitem__(self, key):
+        # TODO: implement all cases.
+        # Only slicing of non-split dimension is supported.
+        if self._is_slicing_split_dim(key):
+            raise NotImplementedError(
+                f"Slicing of the split dimension {self.shard_dim} is not supported."
+            )
+        new_key = self._get_shard_slice(key)
+        shards = [shard[new_key] for shard in self.shards]
+        return SplitPrimitiveTensor(ts=shards, shard_dim=self.shard_dim)
+
 
 @register_inference_tensor
 class ReplicatedTensor(ShardedTensor):
@@ -752,7 +790,7 @@ class ReplicatedTensor(ShardedTensor):
 
         super().__init__(name=name, shape=shape, shard_dim=None)
         for shard in ts:
-            assert list(shape) == list(shard.shape)
+            assert shape == list(shard.shape)
 
         self._shards: tuple[DefaultPrimitiveTensor] = tuple(
             DefaultPrimitiveTensor(name=f"{name}.shard.{i}", data=t)
@@ -810,6 +848,10 @@ class ReplicatedTensor(ShardedTensor):
         except KeyError as e:
             raise IOError(f"Missing component tensor '' in {raw_tensors.keys()}") from e
         return cls(name=name, ts=ts, shard_count=shard_count)
+
+    def __getitem__(self, key):
+        shards = [shard[key] for shard in self.shards]
+        return ReplicatedTensor(ts=shards)
 
     def __repr__(self):
         return (

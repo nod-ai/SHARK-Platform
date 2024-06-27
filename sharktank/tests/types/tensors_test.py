@@ -11,6 +11,7 @@ import tempfile
 import os
 
 from sharktank.types import *
+from sharktank import ops
 
 
 def _createTestLayout():
@@ -104,6 +105,40 @@ class ShardedTensorTest(unittest.TestCase):
             loaded_dataset = Dataset.load(file_path, mmap=False)
             loaded_sharded_tensor = loaded_dataset.root_theta.tensor("the_tensor")
             assert sharded_tensor.is_deep_equal(loaded_sharded_tensor)
+
+    def testReplicatedTensorExtractSlice(self):
+        tensor = torch.rand([2, 3, 4], dtype=torch.float32)
+        replicated_tensor = ReplicatedTensor(ts=tensor, shard_count=3)
+        s = [slice(1, 2), slice(0, 3, 2), None]
+        expected_result = tensor[s]
+        replicated_sliced_tensor = replicated_tensor[s]
+        assert isinstance(replicated_sliced_tensor, ReplicatedTensor)
+        actual_result = ops.reshard_like(replicated_sliced_tensor, expected_result)
+        assert ops.equal(expected_result, actual_result)
+
+    def testReplicatedTensorExtractElement(self):
+        tensor = torch.rand([2, 3, 4], dtype=torch.float32)
+        replicated_tensor = ReplicatedTensor(ts=tensor, shard_count=3)
+        idx = (
+            1,
+            2,
+            3,
+        )
+        expected_result = tensor[idx]
+        replicated_result = replicated_tensor[idx]
+        assert isinstance(replicated_result, ReplicatedTensor)
+        actual_result = ops.reshard_like(replicated_result, expected_result)
+        assert ops.equal(expected_result, actual_result)
+
+    def testSplitTensorExtractSliceOfNonSplitDim(self):
+        tensor = torch.rand([5, 6], dtype=torch.float32)
+        sharded_tensor = SplitPrimitiveTensor(ts=tensor, shard_count=3, shard_dim=1)
+        s = [slice(0, 2), slice(None), None, None]
+        expected_result = tensor[s]
+        sharded_slice = sharded_tensor[s]
+        assert isinstance(sharded_slice, SplitPrimitiveTensor)
+        actual_result = ops.reshard_like(sharded_slice, expected_result)
+        assert ops.equal(expected_result, actual_result)
 
 
 if __name__ == "__main__":

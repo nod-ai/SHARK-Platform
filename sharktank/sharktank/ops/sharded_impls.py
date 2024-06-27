@@ -9,10 +9,14 @@ from torch import Tensor
 from typing import List
 
 from ..types import (
-    SplitPrimitiveTensor,
+    DefaultPrimitiveTensor,
+    InferenceTensor,
     ReplicatedTensor,
-    UnreducedTensor,
     ShardedTensor,
+    sharding,
+    SplitPrimitiveTensor,
+    Theta,
+    UnreducedTensor,
 )
 from ._registry import unbox_tensor, AnyTensor
 from .signatures import *
@@ -46,7 +50,9 @@ def conv2d_all_split(
     padding,
     dilation,
     groups,
+    accum_dtype,
 ) -> SplitPrimitiveTensor:
+    assert accum_dtype is None, "accum_dtype not supported"
     assert input.shard_count == weight.shard_count
     assert bias is None or weight.shard_count == bias.shard_count
     assert (
@@ -105,7 +111,9 @@ def conv2d_replicated_input_split_weight_and_bias(
     padding,
     dilation,
     groups,
+    accum_dtype,
 ) -> SplitPrimitiveTensor:
+    assert accum_dtype is None, "accum_dtype not supported"
     assert input.shard_count == weight.shard_count
     assert bias is None or weight.shard_count == bias.shard_count
     assert (
@@ -151,6 +159,7 @@ def conv2d_split_weight_and_bias(
     groups,
     accum_dtype,
 ) -> SplitPrimitiveTensor:
+    assert accum_dtype is None, "accum_dtype not supported"
     assert weight.shard_count == bias.shard_count
 
     # Output channels dimension is split.
@@ -406,6 +415,41 @@ def replicate_replicated(input: ReplicatedTensor, *, count: int) -> ReplicatedTe
 def replicate_unsharded(input, *, count: int) -> ReplicatedTensor:
     torch_input = unbox_tensor(input)
     return ReplicatedTensor(ts=torch_input, shard_count=count)
+
+
+@reshard.override(Tensor, sharding.Split)
+def reshard_tensor_split(input: Tensor, spec: sharding.Split) -> AnyTensor:
+    return reshard_split(input, dim=spec.shard_dim, count=spec.shard_count)
+
+
+@reshard.override(Theta, sharding.ThetaLayerSharding)
+def reshard_theta_layer_sharding(
+    input: Theta, spec: sharding.ThetaLayerSharding
+) -> Theta:
+    return reshard(input, spec.theta_sharding())
+
+
+@reshard.override(Theta, sharding.ThetaSharding)
+def reshard_theta_sharding(input: Theta, spec: sharding.ThetaSharding) -> Theta:
+    def make_inference_tensor(x: AnyTensor, name: str) -> InferenceTensor:
+        if isinstance(x, torch.Tensor):
+            return DefaultPrimitiveTensor(data=x, name=name)
+        x.name = name
+        return x
+
+    return Theta(
+        {
+            k: make_inference_tensor(reshard(input(k), spec[k]), input(k).name)
+            for k in input.keys
+        }
+    )
+
+
+@reshard.override(Theta, sharding.Split)
+def reshard_theta_layer_sharding(
+    input: Theta, spec: sharding.ThetaLayerSharding
+) -> Theta:
+    return reshard(input, spec.theta_sharding())
 
 
 @reshard_split.override(Tensor)
