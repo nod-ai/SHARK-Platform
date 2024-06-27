@@ -456,7 +456,7 @@ class GenerateState(BatchGenerateState):
 
             tok = seq.decode_token_ids[0]
             seq_len = len(seq.current_token_ids)
-            print(seq.current_token_ids)
+            print(f"seq.current_token_ids: {seq.current_token_ids}")
             seq.current_token_ids.append(tok)
             seq.decode_token_ids = seq.decode_token_ids[1:]
 
