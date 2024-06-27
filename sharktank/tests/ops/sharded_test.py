@@ -12,6 +12,7 @@ import torch
 from sharktank import ops
 from sharktank.types import *
 from sharktank.types import sharding
+from sharktank.layers import Conv2DLayer
 
 
 class ConvTest(unittest.TestCase):
@@ -71,7 +72,7 @@ class ConvTest(unittest.TestCase):
             shard_dim=0, ts=bias, shard_count=shard_count
         )
         sharded_result = ops.conv2d(
-            x,
+            x_sharded,
             weight=weight_sharded,
             bias=bias_sharded,
             stride=stride,
@@ -134,6 +135,49 @@ class ConvTest(unittest.TestCase):
         actual_result = ops.sharded_cat(sharded_result)
 
         torch.testing.assert_close(actual_result, expected_result)
+
+    def testConv2DSplitOutputChannelShardingSpec(self):
+        batches = 2
+        in_channels = 6
+        out_channels = 12
+        groups = 1
+        height = 17
+        width = 19
+        stride = 2
+        padding = [2, 3]
+        kernel_height = 3
+        kernel_width = 4
+        input = torch.rand(batches, in_channels, height, width, dtype=torch.float32)
+        weight = torch.rand(
+            out_channels,
+            in_channels // groups,
+            kernel_height,
+            kernel_width,
+            dtype=torch.float32,
+        )
+        bias = torch.rand(out_channels, dtype=torch.float32)
+        theta = Theta(
+            {
+                "weight": DefaultPrimitiveTensor(data=weight),
+                "bias": DefaultPrimitiveTensor(data=bias),
+            }
+        )
+        conv2d_layer = Conv2DLayer(theta, padding=padding, stride=stride)
+
+        shard_count = 3
+        sharded_input = ops.reshard_split(input, dim=1, count=shard_count)
+        conv2d_sharding = sharding.Conv2DSplitOutputChannelSharding(
+            shard_count=shard_count
+        )
+        sharded_theta = ops.reshard(theta, conv2d_sharding)
+        sharded_conv2d_layer = Conv2DLayer(
+            sharded_theta, padding=padding, stride=stride
+        )
+
+        expected_result = conv2d_layer.forward(input)
+        sharded_result = sharded_conv2d_layer.forward(sharded_input)
+        actual_result = ops.reshard_like(sharded_result, expected_result)
+        assert ops.equal(expected_result, actual_result)
 
 
 class ElementwiseTest(unittest.TestCase):

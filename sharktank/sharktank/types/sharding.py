@@ -67,6 +67,20 @@ class ThetaLayerSharding(Sharding):
         ...
 
 
+class Conv2DSplitOutputChannelSharding(ThetaLayerSharding):
+    def __init__(self, shard_count: int):
+        super(Sharding).__init__()
+        self.shard_count = shard_count
+
+    def theta_sharding(self) -> ThetaSharding:
+        return ThetaSharding(
+            {
+                "weight": Split(shard_count=self.shard_count, shard_dim=0),
+                "bias": Split(shard_count=self.shard_count, shard_dim=0),
+            }
+        )
+
+
 class GroupNormSplitChannelSharding(ThetaLayerSharding):
     def __init__(self, shard_count: int):
         super(Sharding).__init__()
