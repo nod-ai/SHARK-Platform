@@ -196,6 +196,21 @@ class ElementwiseTest(unittest.TestCase):
 
         torch.testing.assert_close(actual_result, expected_result)
 
+    def testRhsAndLhsShardedAddWithBroadcasting(self):
+        a = torch.rand(1, 4, 5, 6, dtype=torch.float32)
+        b = torch.rand(3, 4, 1, 6, dtype=torch.float32)
+
+        expected_result = a + b
+
+        shard_dim = 3
+        shard_count = 3
+        sharded_a = ops.reshard_split(a, dim=shard_dim, count=shard_count)
+        sharded_b = ops.reshard_split(b, dim=shard_dim, count=shard_count)
+        sharded_result = sharded_a + sharded_b
+        actual_result = ops.reshard_like(sharded_result, expected_result)
+
+        torch.testing.assert_close(actual_result, expected_result)
+
     @parameterized.expand(
         [
             (torch.add,),
@@ -382,6 +397,17 @@ class MatmulTest(unittest.TestCase):
         expected_result = ops.matmul(t1, t2)
         unsharded_result = ops.sharded_cat(sharded_result)
         torch.testing.assert_close(unsharded_result, expected_result)
+
+    def testReplicatedLhsShardedParallelDimRhs(self):
+        a = torch.rand(2, 5, 3, dtype=torch.float32)
+        b = torch.rand(3, 6, dtype=torch.float32)
+        shard_count = 3
+        unsharded_result = torch.matmul(a, b)
+        expected_result = ops.reshard_split(unsharded_result, dim=2, count=shard_count)
+        b_sharded = ops.reshard_split(b, dim=1, count=shard_count)
+        a_sharded = ops.replicate(a, count=shard_count)
+        actual_result = ops.matmul(a_sharded, b_sharded)
+        assert ops.equal(expected_result, actual_result)
 
     def testShardedChainMatmulX2Transposed(self):
         # Computes Z = (XA)B (sharded by 8).
@@ -656,6 +682,17 @@ class ShardLikeTest(unittest.TestCase):
         expected_result = ops.reshard_split(tensor, dim=shard_dim, count=shard_count)
         actual_result = ops.reshard_like(expected_result, expected_result)
         assert expected_result.is_deep_equal(actual_result)
+
+
+class UnshardTest(unittest.TestCase):
+    def testUnshardSplitTensor(self):
+        tensor = torch.rand(4, 5, 6, dtype=torch.float32)
+        shard_dim = 0
+        shard_count = 2
+        sharded = ops.reshard_split(tensor, dim=shard_dim, count=shard_count)
+        actual_result = ops.unshard(sharded)
+        expected_result = tensor
+        assert ops.equal(expected_result, actual_result)
 
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-from typing import Any, Callable, Optional, Union, Collection, Sequence
+from typing import Any, Callable, Optional, Union, Collection, Sequence, List
 
 import json
 from pathlib import Path
@@ -76,15 +76,13 @@ class Theta:
 
     def __init__(
         self,
-        tensors: Union[Sequence[InferenceTensor], dict[str, InferenceTensor]],
+        tensors: Union[Sequence[InferenceTensor], dict[str, dict | InferenceTensor]],
     ):
         if not isinstance(tensors, dict):
             tensors = {t.name: t for t in tensors}
-        self._tensors = _flat_to_nested_dict(tensors)
-        assert (
-            isinstance(k, str) and isinstance(v, InferenceTensor)
-            for k, v in tensors.items()
-        )
+        assert all(isinstance(k, str) for k in _all_keys(tensors))
+        assert all(isinstance(v, InferenceTensor) for v in _leaf_values(tensors))
+        self._tree = _flat_to_nested_dict(tensors)
 
     def transform(self, *transforms: InferenceTensorTransform) -> "Theta":
         """Transforms all inference tensors by applying transform functions.
@@ -120,7 +118,7 @@ class Theta:
                 else:
                     results[new_prefix] = value
 
-        accum("", self._tensors)
+        accum("", self._tree)
         return results
 
     def tensor(self, *name_path: str | int) -> InferenceTensor:
@@ -135,7 +133,7 @@ class Theta:
     def optional_tensor(self, *name_path: str | int) -> Optional[InferenceTensor]:
         name_path = _norm_name_path(name_path)
         try:
-            current_ts = self._tensors
+            current_ts = self._tree
             for part in name_path[0:-1]:
                 current_ts = current_ts[str(part)]
             last = name_path[-1]
@@ -149,22 +147,25 @@ class Theta:
 
     @property
     def keys(self) -> Collection[str]:
-        return self._tensors.keys()
+        return self._tree.keys()
 
     @property
     def tensors(self) -> Collection[InferenceTensor]:
-        return [v for v in self._tensors.values() if isinstance(v, InferenceTensor)]
+        return [v for v in self._tree.values() if isinstance(v, InferenceTensor)]
+
+    @property
+    def tree(self) -> dict[str, dict | InferenceTensor]:
+        """The nested structure of named tensors."""
+        return self._tree
 
     def __call__(self, *name_path: str | int) -> Union["Theta", InferenceTensor]:
         name_path = _norm_name_path(name_path)
-        current_ts = self._tensors
+        current_ts = self._tree
         try:
             for part in name_path:
                 current_ts = current_ts[str(part)]
         except KeyError:
-            raise KeyError(
-                f"Sub-theta {name_path} not found (of {self._tensors.keys()})"
-            )
+            raise KeyError(f"Sub-theta {name_path} not found (of {self._tree.keys()})")
         if isinstance(current_ts, InferenceTensor):
             return current_ts
         return Theta(current_ts)
@@ -212,6 +213,25 @@ def _flat_to_nested_dict(flat: dict[str, Any]) -> dict[str, Any]:
     for name, value in flat.items():
         add_to_dict(name, value)
     return nested
+
+
+def _leaf_values(d: dict) -> List[Any]:
+    res = []
+    for v in d.values():
+        if isinstance(v, dict):
+            res.extend(_leaf_values(v))
+        else:
+            res.append(v)
+    return res
+
+
+def _all_keys(d: dict) -> List[Any]:
+    res = []
+    for k, v in d.items():
+        res.append(k)
+        if isinstance(v, dict):
+            res.extend(_all_keys(v))
+    return res
 
 
 def _norm_name_path(name_parts) -> list[str]:

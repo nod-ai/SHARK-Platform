@@ -13,6 +13,27 @@ from sharktank import ops
 from sharktank.types import *
 
 
+class BroadcastDimsTest(unittest.TestCase):
+    def testBroadcastDimForSmallerRankTensor(self):
+        a = torch.empty(2, 5, 1)
+        b = torch.empty(4, 2, 5, 1)
+        assert ops.broadcast_dim(2, [a, b]) == 3
+
+    def testBroadcastDimForLargestRankTensor(self):
+        a = torch.empty(4, 2, 5, 1)
+        b = torch.empty(2, 5, 1)
+        assert ops.broadcast_dim(2, [a, b]) == 2
+
+    def testBroadcastDims(self):
+        a = torch.empty(4, 2, 1, 2)
+        b = torch.empty(2, 3, 2)
+        tensors = [a, b]
+        dims = [0, 1]
+        res = ops.broadcast_dims(dims, tensors)
+        assert res[0] == 0
+        assert res[1] == 2
+
+
 class EqualTest(unittest.TestCase):
     def testEqualTorchTensors(self):
         a = torch.rand(2, 3, dtype=torch.float32)

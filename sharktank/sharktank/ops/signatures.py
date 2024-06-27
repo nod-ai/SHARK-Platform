@@ -11,7 +11,7 @@ from typing import Optional, Sequence, Union, List
 import torch
 import numbers
 from torch import Tensor, dtype
-from ..types import ShardedTensor, Theta, sharding
+from ..types import AnyTensor, ShardedTensor, Theta, sharding
 
 from ._registry import *
 
@@ -33,6 +33,7 @@ __all__ = [
     "reshard_like",
     "sharded_cat",
     "sharded_sum",
+    "unshard",
 ]
 
 IntOrSequenceInt = Union[int, Sequence[int]]
@@ -480,6 +481,23 @@ def _sharded_sum_trampoline(d: SignatureDispatcher, maybe_sharded: AnyTensor):
     tensors = (maybe_sharded,)
     for override in d.find_overrides(tensors):
         result = override(maybe_sharded)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(tensors)
+
+
+@overridable
+def unshard(tensor: AnyTensor) -> AnyTensor:
+    """Return the tensor that has the same elements and shape, but is not sharded."""
+    ...
+
+
+@unshard.trampoline
+def _unshard_trampoline(d: SignatureDispatcher, tensor: AnyTensor):
+    tensors = (tensor,)
+    for override in d.find_overrides(tensors):
+        result = override(tensor)
         if result is not NotImplemented:
             return override, result
     else:
