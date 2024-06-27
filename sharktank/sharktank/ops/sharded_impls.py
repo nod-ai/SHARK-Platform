@@ -50,7 +50,9 @@ def conv2d_all_split(
     padding,
     dilation,
     groups,
+    accum_dtype,
 ) -> SplitPrimitiveTensor:
+    assert accum_dtype is None, "accum_dtype not supported"
     assert input.shard_count == weight.shard_count
     assert bias is None or weight.shard_count == bias.shard_count
     assert (
@@ -109,7 +111,9 @@ def conv2d_replicated_input_split_weight_and_bias(
     padding,
     dilation,
     groups,
+    accum_dtype,
 ) -> SplitPrimitiveTensor:
+    assert accum_dtype is None, "accum_dtype not supported"
     assert input.shard_count == weight.shard_count
     assert bias is None or weight.shard_count == bias.shard_count
     assert (
@@ -155,6 +159,7 @@ def conv2d_split_weight_and_bias(
     groups,
     accum_dtype,
 ) -> SplitPrimitiveTensor:
+    assert accum_dtype is None, "accum_dtype not supported"
     assert weight.shard_count == bias.shard_count
 
     # Output channels dimension is split.
@@ -426,11 +431,6 @@ def reshard_theta_layer_sharding(
 
 @reshard.override(Theta, sharding.ThetaSharding)
 def reshard_theta_sharding(input: Theta, spec: sharding.ThetaSharding) -> Theta:
-    if len(input.keys) != len(spec.keys()) or any(
-        a != b for a, b in zip(input.keys, spec.keys())
-    ):
-        raise ValueError("Theta and theta sharding have different keys")
-
     def make_inference_tensor(x: AnyTensor, name: str) -> InferenceTensor:
         if isinstance(x, torch.Tensor):
             return DefaultPrimitiveTensor(data=x, name=name)
