@@ -15,25 +15,7 @@ import torch
 
 from shark_turbine import aot
 from sharktank import kernels
-
-
-def _pad_last_2d(input_tensor, pad_width):
-    # pad_width should be in the format [pad_left, pad_right, pad_top, pad_bottom]
-    pad_left, pad_right, pad_top, pad_bottom = pad_width
-    batch_size, channels, height, width = input_tensor.shape
-
-    # Create a new tensor with the desired padded size filled with zeros
-    padded_height = height + pad_top + pad_bottom
-    padded_width = width + pad_left + pad_right
-    padded_tensor = torch.zeros(
-        (batch_size, channels, padded_height, padded_width), dtype=input_tensor.dtype
-    )
-
-    # Copy the values from the input tensor to the appropriate location in the padded tensor
-    padded_tensor[
-        :, :, pad_top : pad_top + height, pad_left : pad_left + width
-    ] = input_tensor
-    return padded_tensor
+from sharktank.ops.qconv_impls import _pad_last_2d
 
 
 class conv_2d_nchw_fchw_test(unittest.TestCase):
