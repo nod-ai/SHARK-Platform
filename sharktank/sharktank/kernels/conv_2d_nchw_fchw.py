@@ -61,8 +61,15 @@ class conv_2d_nchw_fchw(CustomOp):
         )
 
         # subtract padding shape
-        h_out = h_pad - padding[0] - padding[0]
-        w_out = w_pad - padding[1] - padding[1]
+        original_h = h_pad - padding[0] * 2
+        original_w = w_pad - padding[1] * 2
+        # convolution shape math
+        h_out = math.floor(
+            (original_h + 2 * padding[0] - dilations[0] * (k0 - 1) - 1) / strides[0] + 1
+        )
+        w_out = math.floor(
+            (original_w + 2 * padding[1] - dilations[1] * (k1 - 1) - 1) / strides[1] + 1
+        )
         c_desc = ksel.return_new_tensor(
             [n, f, h_out, w_out], dtype=inputs_pad_desc.t.dtype
         )
@@ -74,14 +81,14 @@ class conv_2d_nchw_fchw(CustomOp):
         padding = ksel.arg_descs[4].v
         dilations = ksel.arg_descs[5].v
         result_desc = ksel.result_descs[0].t.shape
-        H_input_pad = result_desc[2] + padding[0] * 2
-        W_input_pad = result_desc[3] + padding[1] * 2
+        H_out = result_desc[2]
+        W_out = result_desc[3]
 
         strides = [str(i) for i in strides]
         padding = [str(i) for i in padding]
         dilations = [str(i) for i in dilations]
-        H_input_pad = str(H_input_pad)
-        W_input_pad = str(W_input_pad)
+        H_out = str(H_out)
+        W_out = str(W_out)
 
         dtype_str = str(inputs_pad_tensor_type.element_type)
 
@@ -92,8 +99,8 @@ class conv_2d_nchw_fchw(CustomOp):
             kb,
             template_file,
             target_function_name,
-            H_input_pad=H_input_pad,
-            W_input_pad=W_input_pad,
+            H_out=H_out,
+            W_out=W_out,
             strides_H=strides[0],
             strides_W=strides[1],
             padding_H=padding[0],

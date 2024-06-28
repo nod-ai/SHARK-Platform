@@ -19,46 +19,56 @@ __all__ = [
 class pooling_nchw_sum(CustomOp):
     """Generic pooling sum."""
 
-    signature = "pooling_nchw_sum(Tensor a, Tensor b, int[] weights_size, int[] strides, int[] padding, int[] dilations) -> (Tensor)"
+    signature = "pooling_nchw_sum(Tensor a, int[] weights_size, int[] strides, int[] padding, int[] dilations) -> (Tensor)"
 
     def select(self, ksel: KernelSelection):
-        input_desc = ksel.arg_tensor(0)  # Shape [b, ] m, k
-        inputs_pad_desc = ksel.arg_tensor(1)
-        weights_size_desc = ksel.attr_list_int(2)  # Shape [2]
-        strides_desc = ksel.attr_list_int(3)  # Shape [2]
-        padding_desc = ksel.attr_list_int(4)  # Shape [2]
-        dilations_desc = ksel.attr_list_int(5)  # Shape [2]
+        inputs_pad_desc = ksel.arg_tensor(0)
+        weights_size_desc = ksel.attr_list_int(1)  # Shape [2]
+        strides_desc = ksel.attr_list_int(2)  # Shape [2]
+        padding_desc = ksel.attr_list_int(3)  # Shape [2]
+        dilations_desc = ksel.attr_list_int(4)  # Shape [2]
 
         # unpack
-        n, c, h, w = input_desc.t.shape
+        n, c, h_pad, w_pad = inputs_pad_desc.t.shape
 
         weights_size = weights_size_desc.v
         strides = strides_desc.v
         padding = padding_desc.v
         dilations = padding_desc.v
 
+        # subtract padding shape
+        original_h = h_pad - padding[0] * 2
+        original_w = w_pad - padding[1] * 2
         # pooling shape math
-        h_out = math.floor((h + 2 * padding[0] - weights_size[0]) / strides[0] + 1)
-        w_out = math.floor((w + 2 * padding[1] - weights_size[1]) / strides[1] + 1)
-
-        c_desc = ksel.return_new_tensor([n, c, h_out, w_out], dtype=input_desc.t.dtype)
+        h_out = math.floor(
+            (original_h + 2 * padding[0] - weights_size[0]) / strides[0] + 1
+        )
+        w_out = math.floor(
+            (original_w + 2 * padding[1] - weights_size[1]) / strides[1] + 1
+        )
+        c_desc = ksel.return_new_tensor(
+            [n, c, h_out, w_out], dtype=inputs_pad_desc.t.dtype
+        )
 
     def generate(self, ksel: KernelSelection, kb: KernelBuilder):
-        input = kb.arg_value(0)
-        input_tensor_type = RankedTensorType(input.type)
-        inputs_pad = kb.arg_value(1)
+        inputs_pad = kb.arg_value(0)
         inputs_pad_tensor_type = RankedTensorType(inputs_pad.type)
-        weights = ksel.arg_descs[2].v
-        strides = ksel.arg_descs[3].v
-        padding = ksel.arg_descs[4].v
-        dilations = ksel.arg_descs[5].v
+        weights = ksel.arg_descs[1].v
+        strides = ksel.arg_descs[2].v
+        padding = ksel.arg_descs[3].v
+        dilations = ksel.arg_descs[4].v
+        result_desc = ksel.result_descs[0].t.shape
+        H_out = result_desc[2]
+        W_out = result_desc[3]
 
         weights = [str(i) for i in weights]
         strides = [str(i) for i in strides]
         padding = [str(i) for i in padding]
         dilations = [str(i) for i in dilations]
+        H_out = str(H_out)
+        W_out = str(W_out)
 
-        dtype_str = str(input_tensor_type.element_type)
+        dtype_str = str(inputs_pad_tensor_type.element_type)
 
         template_file = "pooling_nchw_sum.mlir"
         target_function_name = f"sharktank_pooling_nchw_sum_{weights[0]}_{weights[1]}_{strides[0]}_{strides[1]}_{padding[0]}_{padding[1]}_{dilations[0]}_{dilations[1]}_{dtype_str}"
@@ -67,6 +77,8 @@ class pooling_nchw_sum(CustomOp):
             kb,
             template_file,
             target_function_name,
+            H_out=H_out,
+            W_out=W_out,
             weights_H=weights[0],
             weights_W=weights[1],
             strides_H=strides[0],

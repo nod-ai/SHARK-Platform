@@ -22,19 +22,10 @@ util.func private @sharktank_conv_2d_nchw_fchw_{{strides_H}}_{{strides_W}}_{{pad
   %c2 = arith.constant 2: index
   %c3 = arith.constant 3: index
 
-  // remove padding from input_pad
-  %pH = arith.constant {{padding_H}} : index
-  %H_input_pad = arith.constant {{H_input_pad}} : index
-  %pH_0 = arith.muli %pH, %c2 : index
-  %rH = arith.subi %H_input_pad, %pH_0 : index
-
-  %pW = arith.constant {{padding_W}} : index
-  %W_input_pad = arith.constant {{W_input_pad}} : index
-  %pW_0 = arith.muli %pW, %c2 : index
-  %rW = arith.subi %W_input_pad, %pW_0 : index
-
   %rN = tensor.dim %input_pad, %c0 : !dynamic_tensor_type
   %rC = tensor.dim %weights, %c0 : !dynamic_tensor_type
+  %rH = arith.constant {{H_out}} : index
+  %rW = arith.constant {{W_out}} : index
   %result_empty = tensor.empty(%rN, %rC, %rH, %rW) : !out_tensor_type
   %result_fill = linalg.fill ins(%zero: !dtype) outs(%result_empty: !out_tensor_type) -> !out_tensor_type
   %result = linalg.conv_2d_nchw_fchw {dilations = dense<[{{dilations_H}}, {{dilations_W}}]> : tensor<2xi64>, strides = dense<[{{strides_H}}, {{strides_W}}]> : tensor<2xi64>} ins(%input_pad, %weights: !dynamic_tensor_type, !dynamic_tensor_type) outs(%result_fill: !out_tensor_type) -> !out_tensor_type
