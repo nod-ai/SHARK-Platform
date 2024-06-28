@@ -14,16 +14,13 @@ import functools
 
 import torch
 from torch import Tensor
-from ..types import InferenceTensor, PrimitiveTensor, QuantizedTensor
+from ..types import PrimitiveTensor, QuantizedTensor
 
 __all__ = [
-    "AnyTensor",
     "SignatureDispatcher",
     "overridable",
     "unbox_tensor",
 ]
-
-AnyTensor = Union[torch.Tensor, InferenceTensor]
 
 _TargetOverride = collections.namedtuple(
     "_TargetOverride",
@@ -32,7 +29,25 @@ _TargetOverride = collections.namedtuple(
 
 
 # When an op is dispatched, it will be stashed here for testing to verify.
+# Use _test_enable_last_op_dispatch(True) / _test_enable_last_op_dispatch(False)
+# in test cases to enable/disable tracking of the last op dispatched.
+# The last op can be queried with _test_get_last_op_dispatch().
+_ENABLE_TEST_LAST_OP_DISPATCH = False
 _TEST_LAST_OP_DISPATCH = None
+
+
+def _test_enable_last_op_dispatch(en: bool = True):
+    global _TEST_LAST_OP_DISPATCH
+    global _ENABLE_TEST_LAST_OP_DISPATCH
+    _TEST_LAST_OP_DISPATCH = None
+    _ENABLE_TEST_LAST_OP_DISPATCH = en
+
+
+def _test_get_last_op_dispatch():
+    assert (
+        _ENABLE_TEST_LAST_OP_DISPATCH
+    ), "Cannot get last op dispatched without calling _test_enable_last_op_dispatch()"
+    return _TEST_LAST_OP_DISPATCH
 
 
 class SignatureDispatcher:
@@ -61,8 +76,9 @@ class SignatureDispatcher:
         trampoline = self._trampoline
         assert trampoline is not None
         selected_override, *results = trampoline(self, *args, **kwargs)
-        global _TEST_LAST_OP_DISPATCH
-        _TEST_LAST_OP_DISPATCH = selected_override
+        if _ENABLE_TEST_LAST_OP_DISPATCH:
+            global _TEST_LAST_OP_DISPATCH
+            _TEST_LAST_OP_DISPATCH = selected_override
         arity = len(results)
         if arity == 1:
             return results[0]

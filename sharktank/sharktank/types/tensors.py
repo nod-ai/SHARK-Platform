@@ -5,6 +5,9 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 from typing import Any, Callable, Optional, Union, TypeVar, Generic, Type
+from copy import deepcopy
+from collections.abc import Collection
+from numbers import Integral
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -18,6 +21,7 @@ from shark_turbine.aot import (
 from ..utils.io import ShardedArchiveBuilder
 
 __all__ = [
+    "AnyTensor",
     "register_quantized_layout",
     "InferenceTensor",
     "MetaDataValueType",
@@ -346,6 +350,9 @@ class DefaultPrimitiveTensor(PrimitiveTensor):
     ) -> "InferenceTensor":
         return DefaultPrimitiveTensor(name=self.name, data=new_globals[self.name])
 
+    def __getitem__(self, key):
+        return self._data[key]
+
     def __repr__(self):
         return f"PrimitiveTensor({self.name}, {self.shape}, {self._data.dtype})"
 
@@ -669,6 +676,26 @@ class ShardedTensorBase(ShardedTensor):
         return all(a.is_deep_equal(b) for a, b in zip(self.shards, other.shards))
 
 
+def _is_tuple_of_integral_numbers(x) -> bool:
+    if not isinstance(x, tuple):
+        return False
+    return all(isinstance(el, Integral) for el in x)
+
+
+def _is_collection_of_integral_numbers(x) -> bool:
+    if not isinstance(x, Collection):
+        return False
+    return all(isinstance(el, Integral) for el in x)
+
+
+def _is_full_slice(s: slice, dim_size: int) -> bool:
+    return (
+        (s.start is None or s.start == 0)
+        and (s.stop is None or s.stop == dim_size)
+        and (s.step is None or s.step == 1)
+    )
+
+
 @register_inference_tensor
 class SplitPrimitiveTensor(ShardedTensorBase):
     """Sharded tensor split along a dimension into primitive tensors.
@@ -721,6 +748,57 @@ class SplitPrimitiveTensor(ShardedTensorBase):
 
         super().__init__(name=name, ts=ts, shape=shape, shard_dim=shard_dim)
 
+    def _is_slicing_split_dim(self, key):
+        if isinstance(
+            key,
+            (
+                slice,
+                Integral,
+            ),
+        ):
+            return self._is_slicing_split_dim([key])
+        if _is_collection_of_integral_numbers(key):
+            if isinstance(key, tuple):
+                # Index per dimension.
+                return self.shard_dim < len(key)
+            else:
+                # Any other collection is a indexing only dimension 0.
+                return self.shard_dim == 0
+        if len(key) < self.shard_dim:
+            return False
+        if not isinstance(key[self.shard_dim], slice):
+            return True
+        return not _is_full_slice(key[self.shard_dim], self.shape[self.shard_dim])
+
+    def _get_shard_slice(self, key):
+        if isinstance(
+            key,
+            (
+                slice,
+                Integral,
+            ),
+        ):
+            return self._get_shard_slice([key])
+        if _is_collection_of_integral_numbers(key) and not isinstance(key, tuple):
+            # Indexing of dimension 0 only.
+            return key
+        if len(key) <= self.shard_count:
+            return key
+        new_key = list(key)
+        new_key[self.shard_dim] = slice(None)
+        return new_key
+
+    def __getitem__(self, key):
+        # TODO: implement all cases.
+        # Only slicing of non-split dimension is supported.
+        if self._is_slicing_split_dim(key):
+            raise NotImplementedError(
+                f"Slicing of the split dimension {self.shard_dim} is not supported."
+            )
+        new_key = self._get_shard_slice(key)
+        shards = [shard[new_key] for shard in self.shards]
+        return SplitPrimitiveTensor(ts=shards, shard_dim=self.shard_dim)
+
 
 @register_inference_tensor
 class ReplicatedTensor(ShardedTensor):
@@ -752,7 +830,7 @@ class ReplicatedTensor(ShardedTensor):
 
         super().__init__(name=name, shape=shape, shard_dim=None)
         for shard in ts:
-            assert list(shape) == list(shard.shape)
+            assert shape == list(shard.shape)
 
         self._shards: tuple[DefaultPrimitiveTensor] = tuple(
             DefaultPrimitiveTensor(name=f"{name}.shard.{i}", data=t)
@@ -810,6 +888,10 @@ class ReplicatedTensor(ShardedTensor):
         except KeyError as e:
             raise IOError(f"Missing component tensor '' in {raw_tensors.keys()}") from e
         return cls(name=name, ts=ts, shard_count=shard_count)
+
+    def __getitem__(self, key):
+        shards = [shard[key] for shard in self.shards]
+        return ReplicatedTensor(ts=shards)
 
     def __repr__(self):
         return (
@@ -915,3 +997,5 @@ _maybe_dtype(
 )
 
 _DTYPE_TO_NAME: dict[torch.dtype, str] = {v: k for k, v in _NAME_TO_DTYPE.items()}
+
+AnyTensor = Union[torch.Tensor, InferenceTensor]

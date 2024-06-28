@@ -13,6 +13,27 @@ from sharktank import ops
 from sharktank.types import *
 
 
+class BroadcastDimsTest(unittest.TestCase):
+    def testBroadcastDimForSmallerRankTensor(self):
+        a = torch.empty(2, 5, 1)
+        b = torch.empty(4, 2, 5, 1)
+        assert ops.broadcast_dim(2, [a, b]) == 3
+
+    def testBroadcastDimForLargestRankTensor(self):
+        a = torch.empty(4, 2, 5, 1)
+        b = torch.empty(2, 5, 1)
+        assert ops.broadcast_dim(2, [a, b]) == 2
+
+    def testBroadcastDims(self):
+        a = torch.empty(4, 2, 1, 2)
+        b = torch.empty(2, 3, 2)
+        tensors = [a, b]
+        dims = [0, 1]
+        res = ops.broadcast_dims(dims, tensors)
+        assert res[0] == 0
+        assert res[1] == 2
+
+
 class EqualTest(unittest.TestCase):
     def testEqualTorchTensors(self):
         a = torch.rand(2, 3, dtype=torch.float32)
@@ -70,6 +91,9 @@ class EmbeddingLookupTest(unittest.TestCase):
 
 
 class MatmulTest(unittest.TestCase):
+    def tearDown(self):
+        ops._registry._test_enable_last_op_dispatch(False)
+
     def testMatchFail(self):
         # This is just using matmul as a victim to test that failure/exceptions
         # are properly raised when no override is found.
@@ -81,30 +105,33 @@ class MatmulTest(unittest.TestCase):
 
     @unittest.skip("https://github.com/nod-ai/sharktank/issues/44")
     def testTorchImplTransposedRHS(self):
+        ops._registry._test_enable_last_op_dispatch(True)
         t1 = torch.rand(32, 16, dtype=torch.float32)
         t2 = torch.rand(48, 16, dtype=torch.float16)
         result = ops.matmul(t1, t2.T)
         expected = torch.matmul(t1, t2.T.to(torch.float32))
         torch.testing.assert_close(result, expected)
         self.assertIs(
-            ops._registry._TEST_LAST_OP_DISPATCH,
+            ops._registry._test_get_last_op_dispatch(),
             ops.custom_impls.matmul_mmtfp_tensor_tensor,
         )
 
     @unittest.skip("https://github.com/nod-ai/sharktank/issues/44")
     def testTorchImplNonTransposedRHS(self):
+        ops._registry._test_enable_last_op_dispatch(True)
         t1 = torch.rand(32, 16, dtype=torch.float32)
         t2 = torch.rand(16, 48, dtype=torch.float16)
         result = ops.matmul(t1, t2)
         expected = torch.matmul(t1, t2.to(torch.float32))
         torch.testing.assert_close(result, expected)
         self.assertIsNot(
-            ops._registry._TEST_LAST_OP_DISPATCH,
+            ops._registry._test_get_last_op_dispatch(),
             ops.custom_impls.matmul_mmtfp_tensor_tensor,
         )
 
     @unittest.skip("https://github.com/nod-ai/sharktank/issues/44")
     def testTorchImplTransposedPrimitiveRHS(self):
+        ops._registry._test_enable_last_op_dispatch(True)
         t1 = torch.rand(32, 16, dtype=torch.float32)
         t2 = torch.rand(48, 16, dtype=torch.float16)
         t2_pt = DefaultPrimitiveTensor(data=t2)
@@ -112,11 +139,12 @@ class MatmulTest(unittest.TestCase):
         expected = torch.matmul(t1, t2.T.to(torch.float32))
         torch.testing.assert_close(result, expected)
         self.assertIs(
-            ops._registry._TEST_LAST_OP_DISPATCH,
+            ops._registry._test_get_last_op_dispatch(),
             ops.custom_impls.matmul_mmtfp_tensor_tensor,
         )
 
     def testTorchImplTransposedQuantizedRHS_BlockScaledLayout(self):
+        ops._registry._test_enable_last_op_dispatch(True)
         a_dtype = torch.float32
         d_dtype = torch.float32
         ref_dtype = torch.float32
@@ -129,11 +157,12 @@ class MatmulTest(unittest.TestCase):
         result = ops.matmul(a, rhs_pqt, transpose_rhs=True)
         # Just verifying dispatch. Numerics are tested at the kernel level.
         self.assertIs(
-            ops._registry._TEST_LAST_OP_DISPATCH,
+            ops._registry._test_get_last_op_dispatch(),
             ops.custom_impls.matmul_generic_tensor_block_scaled,
         )
 
     def testTorchImplTransposedQuantizedRHS_BlockScaledOffsetI4(self):
+        ops._registry._test_enable_last_op_dispatch(True)
         a_dtype = torch.float32
         d_dtype = torch.float32
         ref_dtype = torch.float32
@@ -148,7 +177,7 @@ class MatmulTest(unittest.TestCase):
         result = ops.matmul(a, rhs_pqt, transpose_rhs=True)
         # Just verifying dispatch. Numerics are tested at the kernel level.
         self.assertIs(
-            ops._registry._TEST_LAST_OP_DISPATCH,
+            ops._registry._test_get_last_op_dispatch(),
             ops.custom_impls.matmul_generic_tensor_block_scaled_i4,
         )
 

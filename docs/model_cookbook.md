@@ -1,12 +1,97 @@
 # Model cookbook
 
-Note: These are early commands that the sharktank team is using and will turn
-into proper docs later.
+Note: These are early notes and commands that the sharktank team is using and
+will turn into proper docs later.
+
+## Diagrams
+
+Overview:
+
+```mermaid
+graph LR
+  inputs("Input programs
+  • Hugging Face
+  • GGUF file
+  • Custom")
+  sharktank("SHARK Tank
+  • Operators
+  • Layers
+  • Tools")
+  shortfin("SHARK Shortfin"
+  • Serving APIs)
+
+  inputs -. "import (automatic)<br>port (manual)" .-> sharktank
+  sharktank -. "export" .-> shortfin
+```
+
+Import process:
+
+```mermaid
+graph LR
+  subgraph inputs ["Input programs"]
+    direction LR
+    tokenizer("tokenizer_config.json")
+    safetensors(".safetensors")
+    gguf(".gguf")
+    config("config.json")
+  end
+
+  subgraph sharktank ["SHARK Tank"]
+    subgraph datasets ["Datasets"]
+      parameters("parameters")
+      tokenizers("tokenizers")
+    end
+    subgraph models ["Model recipes"]
+      hyperparameters("hparams")
+      layers("layers")
+      operators("ops")
+    end
+    subgraph tools ["Tools"]
+      test("test")
+      run("run")
+      export("export")
+    end
+  end
+
+  exported("Exported programs
+  • program.mlir
+  • program.vmfb
+  • parameters.irpa")
+
+  gguf --> datasets
+  gguf --> models
+  config --> models
+  safetensors --> datasets
+  tokenizer --> datasets
+
+  datasets --> tools
+  models --> tools
+  export -.-> exported
+```
 
 ## Useful tools and projects
 
 * https://huggingface.co/docs/huggingface_hub/en/guides/cli
 * https://github.com/ggerganov/llama.cpp (specifically for [`convert-hf-to-gguf.py`](https://github.com/ggerganov/llama.cpp/blob/master/convert-hf-to-gguf.py))
+
+## Create a quantized .irpa file
+
+Some models on Hugging Face have GGUF files with mixed quantized types that
+we do not currently support. For example,
+https://huggingface.co/QuantFactory/Meta-Llama-3-8B-GGUF has a `q4_1` GGUF, however,
+transcoding into IRPA using `sharktank.tools.dump_gguf` shows the output type
+is `q6_k`, which is currently unimplemented.
+
+To transcode a GGUF to IRPA in only `q4_1` we can use use the following commands
+to quantize/transcode from the `f16` GGUF to `q4_1` IRPA:
+
+```bash
+~/llama.cpp/build/bin/quantize --pure /tmp/Meta-Llama-3-8B-f16.gguf /tmp/Meta-Llama-3-8B-q4_1.gguf Q4_1
+
+python -m sharktank.tools.dump_gguf \
+  --gguf-file=/tmp/Meta-Llama-3-8B-q4_1.gguf \
+  --save /tmp/Meta-Llama-3-8B-q4_1.irpa
+```
 
 ## Create a non-quantized .gguf file
 
@@ -76,21 +161,98 @@ tokenizer_config.json: 100%|█████████████████�
 :: Invoke prefill:
 ```
 
-# Create a quantized .irpa file
+## Walkthrough running a llama model
 
-Some models on Hugging Face have GGUF files with mixed quantized types that
-we do not currently support. For example,
-https://huggingface.co/QuantFactory/Meta-Llama-3-8B-GGUF has a `q4_1` GGUF, however,
-transcoding into IRPA using `sharktank.tools.dump_gguf` shows the output type
-is `q6_k`, which is currently unimplemented.
+Setup (from [README.md](../README.md)):
 
-To transcode a GGUF to IRPA in only `q4_1` we can use use the following commands
-to quantize/transcode from the `f16` GGUF to `q4_1` IRPA:
+* TODO: this could be replaced with `pip install iree-turbine` or
+  `pip install sharktank` at some point. For now these are dev packages.
 
 ```bash
-~/llama.cpp/build/bin/quantize --pure /tmp/Meta-Llama-3-8B-f16.gguf /tmp/Meta-Llama-3-8B-q4_1.gguf Q4_1
+# Setup venv.
+python -m venv --prompt sharktank .venv
+source .venv/bin/activate
 
-python -m sharktank.tools.dump_gguf \
-  --gguf-file=/tmp/Meta-Llama-3-8B-q4_1.gguf \
-  --save /tmp/Meta-Llama-3-8B-q4_1.irpa
+# Install requirements.
+pip install -r pytorch-cpu-requirements.txt
+pip install -f https://iree.dev/pip-release-links.html --src deps \
+  -e "git+https://github.com/iree-org/iree-turbine.git#egg=shark-turbine"
+
+# Install local projects.
+pip install -r requirements.txt -e sharktank/ shortfin/
+```
+
+Download an input model:
+
+* Common files are also available via `hf_datasets.py`.
+  We can add other helpers too.
+
+```bash
+huggingface-cli login # if needed
+huggingface-cli download --local-dir /tmp/open_llama_3b_v2 SlyEcho/open_llama_3b_v2_gguf open-llama-3b-v2-f16.gguf
+```
+
+Export to `.mlir` and `.json` files:
+
+* TODO: mention `--bs` (batch size) arg and try through the rest of the pipeline
+* TODO: test with other models (3B/7B/13B/70B, llama3, Mistral, etc.)
+
+```bash
+python -m sharktank.examples.export_paged_llm_v1 \
+  --gguf-file=/tmp/open_llama_3b_v2/open-llama-3b-v2-f16.gguf \
+  --output-mlir=/tmp/open_llama_3b_v2/open-llama-3b-v2-f16.mlir \
+  --output-config=/tmp/open_llama_3b_v2/open-llama-3b-v2-f16.json
+```
+
+Compile using flags of your choosing, e.g. for `llvm-cpu`:
+
+* TODO: test on Vulkan, ROCm, etc.
+
+```bash
+iree-compile /tmp/open_llama_3b_v2/open-llama-3b-v2-f16.mlir \
+  --iree-hal-target-backends=llvm-cpu \
+  --iree-llvmcpu-target-cpu-features=host \
+  -o /tmp/open_llama_3b_v2/open-llama-3b-v2-f16_cpu.vmfb
+```
+
+Run via `service_v1_cli.py` (shortfin serving, with tokenizer):
+
+* TODO: script (via service CLI?) to dump inputs/outputs to .bin/.npy files
+
+```bash
+python -m shortfin.llm.impl.service_v1_cli \
+  --tokenizer=openlm-research/open_llama_3b_v2 \
+  --config=/tmp/open_llama_3b_v2/open-llama-3b-v2-f16.json \
+  --vmfb=/tmp/open_llama_3b_v2/open-llama-3b-v2-f16_cpu.vmfb \
+  --gguf=/tmp/open_llama_3b_v2/open-llama-3b-v2-f16.gguf
+```
+
+Run via `iree-run-module` (low level tool, for debugging/profiling):
+
+* TODO: Use real inputs/outputs dumped from Python here
+
+```bash
+# Prefill
+iree-run-module \
+  --module=/tmp/open_llama_3b_v2/open-llama-3b-v2-f16_cpu.vmfb \
+  --function=prefill_bs4 \
+  --device=local-task \
+  --input=4x1xi64=0 \
+  --input=4xi64=1 \
+  --input=4x1xi64=0,1,2,3 \
+  --input=1x2662400xf16 \
+  --parameters=model=/tmp/open_llama_3b_v2/open-llama-3b-v2-f16.gguf
+
+# Decode
+# TODO(scotttodd): use other inputs here, this crashes x_x (service CLI works though)
+iree-run-module \
+  --module=/tmp/open_llama_3b_v2/open-llama-3b-v2-f16_cpu.vmfb \
+  --function=decode_bs4 \
+  --device=local-task \
+  --input=4x1xi64=0 \
+  --input=4xi64=1 \
+  --input=4xi64=1 \
+  --input=4x1xi64=0,1,2,3 \
+  --input=1x2662400xf16 \
+  --parameters=model=/tmp/open_llama_3b_v2/open-llama-3b-v2-f16.gguf
 ```

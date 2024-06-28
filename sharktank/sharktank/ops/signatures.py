@@ -11,7 +11,7 @@ from typing import Optional, Sequence, Union, List
 import torch
 import numbers
 from torch import Tensor, dtype
-from ..types import ShardedTensor
+from ..types import AnyTensor, ShardedTensor, Theta, sharding
 
 from ._registry import *
 
@@ -28,10 +28,12 @@ __all__ = [
     "permute",
     "rms_norm",
     "replicate",
+    "reshard",
     "reshard_split",
     "reshard_like",
     "sharded_cat",
     "sharded_sum",
+    "unshard",
 ]
 
 IntOrSequenceInt = Union[int, Sequence[int]]
@@ -379,6 +381,31 @@ def _replicate_trampoline(
 
 
 @overridable
+def reshard(
+    input: AnyTensor | Theta,
+    spec: sharding.TensorSharding
+    | sharding.ThetaLayerSharding
+    | sharding.ThetaSharding,
+) -> AnyTensor | Theta:
+    """Reshard to the given specification.
+    If a Theta is given then the tensor nesting is preserved,
+    but the tensors are sharded according to the spec.
+    """
+    ...
+
+
+@reshard.trampoline
+def _reshard_trampoline(d: SignatureDispatcher, input, spec) -> ShardedTensor:
+    dispatch_args = (input, spec)
+    for override in d.find_overrides(dispatch_args):
+        result = override(input, spec)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(dispatch_args)
+
+
+@overridable
 def reshard_split(input: AnyTensor, *, dim: int, count: int) -> ShardedTensor:
     """Split `input` along `dim`.
     This does not mean that a sharded tensor is further sharded.
@@ -388,7 +415,7 @@ def reshard_split(input: AnyTensor, *, dim: int, count: int) -> ShardedTensor:
 
 
 @reshard_split.trampoline
-def _shard_trampoline(
+def _reshard_split_trampoline(
     d: SignatureDispatcher, input: AnyTensor, dim: int, count: int
 ) -> ShardedTensor:
     tensors = (input,)
@@ -454,6 +481,23 @@ def _sharded_sum_trampoline(d: SignatureDispatcher, maybe_sharded: AnyTensor):
     tensors = (maybe_sharded,)
     for override in d.find_overrides(tensors):
         result = override(maybe_sharded)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(tensors)
+
+
+@overridable
+def unshard(tensor: AnyTensor) -> AnyTensor:
+    """Return the tensor that has the same elements and shape, but is not sharded."""
+    ...
+
+
+@unshard.trampoline
+def _unshard_trampoline(d: SignatureDispatcher, tensor: AnyTensor):
+    tensors = (tensor,)
+    for override in d.find_overrides(tensors):
+        result = override(tensor)
         if result is not NotImplemented:
             return override, result
     else:
