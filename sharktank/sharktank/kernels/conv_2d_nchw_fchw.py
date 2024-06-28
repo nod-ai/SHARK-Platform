@@ -17,16 +17,16 @@ __all__ = [
 
 @CustomOp.register(library=LIBRARY)
 class conv_2d_nchw_fchw(CustomOp):
-    """Generic convolution
+    """Generic convolution on explicitly padded inputs.
 
 
     Will be specialized for all values of strides, padding, dilations, and LHS dtype.
     """
 
-    signature = "conv_2d_nchw_fchw(Tensor inputs_pad, Tensor weights, Tensor bias, int[] strides, int[] padding, int[] dilations) -> (Tensor)"
+    signature = "conv_2d_nchw_fchw(Tensor inputs, Tensor weights, Tensor bias, int[] strides, int[] padding, int[] dilations) -> (Tensor)"
 
     def select(self, ksel: KernelSelection):
-        inputs_pad_desc = ksel.arg_tensor(0)
+        inputs_desc = ksel.arg_tensor(0)
         weights_desc = ksel.arg_tensor(1)
         bias_desc = ksel.arg_tensor(2)
         strides_desc = ksel.attr_list_int(3)  # Shape [2]
@@ -34,7 +34,7 @@ class conv_2d_nchw_fchw(CustomOp):
         dilations_desc = ksel.attr_list_int(5)  # Shape [2]
 
         # unpack
-        n, c, h_pad, w_pad = inputs_pad_desc.t.shape
+        n, c, h_pad, w_pad = inputs_desc.t.shape
         f, g, k0, k1 = weights_desc.t.shape
         (b,) = bias_desc.t.shape
 
@@ -70,30 +70,26 @@ class conv_2d_nchw_fchw(CustomOp):
         w_out = math.floor(
             (original_w + 2 * padding[1] - dilations[1] * (k1 - 1) - 1) / strides[1] + 1
         )
-        c_desc = ksel.return_new_tensor(
-            [n, f, h_out, w_out], dtype=inputs_pad_desc.t.dtype
-        )
+        c_desc = ksel.return_new_tensor([n, f, h_out, w_out], dtype=inputs_desc.t.dtype)
 
     def generate(self, ksel: KernelSelection, kb: KernelBuilder):
-        inputs_pad = kb.arg_value(0)
-        inputs_pad_tensor_type = RankedTensorType(inputs_pad.type)
+        inputs = kb.arg_value(0)
+        inputs_tensor_type = RankedTensorType(inputs.type)
         strides = ksel.arg_descs[3].v
-        padding = ksel.arg_descs[4].v
         dilations = ksel.arg_descs[5].v
         result_desc = ksel.result_descs[0].t.shape
         H_out = result_desc[2]
         W_out = result_desc[3]
 
         strides = [str(i) for i in strides]
-        padding = [str(i) for i in padding]
         dilations = [str(i) for i in dilations]
         H_out = str(H_out)
         W_out = str(W_out)
 
-        dtype_str = str(inputs_pad_tensor_type.element_type)
+        dtype_str = str(inputs_tensor_type.element_type)
 
         template_file = "conv_2d_nchw_fchw.mlir"
-        target_function_name = f"sharktank_conv_2d_nchw_fchw_{strides[0]}_{strides[1]}_{padding[0]}_{padding[1]}_{dilations[0]}_{dilations[1]}_{dtype_str}"
+        target_function_name = f"sharktank_conv_2d_nchw_fchw_{strides[0]}_{strides[1]}_{dilations[0]}_{dilations[1]}_{dtype_str}"
 
         target_function = inline_template_function(
             kb,
@@ -103,8 +99,6 @@ class conv_2d_nchw_fchw(CustomOp):
             W_out=W_out,
             strides_H=strides[0],
             strides_W=strides[1],
-            padding_H=padding[0],
-            padding_W=padding[1],
             dilations_H=dilations[0],
             dilations_W=dilations[1],
             dtype=dtype_str,
