@@ -56,13 +56,12 @@ jobs:
             -e "git+https://github.com/iree-org/iree-turbine.git#egg=shark-turbine"
           pip install --no-compile -r requirements.txt -e sharktank/ shortfin/
 
-          # Pin to a known working version of IREE.
-          # TODO(scotttodd): use latest nightly? (after https://github.com/iree-org/iree/commit/5fcdddb7c76001de17f475e75c0f1e3ba4ea957b)
-          #     or continue to use the version from iree-turbine/iree-requirements.txt?
+          # Try with the latest nightly releases, not what iree-turbine pins.
+          # We could also pin to a known working or stable version.
           # This should eventually stabilize. Do the best we can for now.
-          pip install -f https://iree.dev/pip-release-links.html --force \
-            iree-compiler==20240621.931 \
-            iree-runtime==20240621.931 \
+          pip install -f https://iree.dev/pip-release-links.html --upgrade \
+            iree-compiler \
+            iree-runtime \
             "numpy<2.0"
 
       - name: Run llama test
