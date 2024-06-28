@@ -39,6 +39,11 @@ def main():
         type=lambda arg: [int(bs) for bs in arg.split(",")],
         default="4",
     )
+    parser.add_argument(
+        "--verbose",
+        help="Include verbose logging",
+        action="store_true",
+    )
 
     args = cli.parse(parser)
     dataset = cli.get_input_dataset(args)
@@ -194,8 +199,9 @@ def main():
     config = generate_params_json(hp, bsizes, bsizes)
     print("GENERATED!")
 
-    for name, ep in fxb.programs.items():
-        print(f"EXPORT {name}:\n{ep}")
+    if args.verbose:
+        for name, ep in fxb.programs.items():
+            print(f"EXPORT {name}:\n{ep}")
 
     print("Exporting")
     output = export(fxb)
