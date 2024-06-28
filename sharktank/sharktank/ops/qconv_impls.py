@@ -260,7 +260,9 @@ def _pad_last_2d(input_tensor, pad_width):
     padded_height = height + pad_top + pad_bottom
     padded_width = width + pad_left + pad_right
     padded_tensor = torch.zeros(
-        (batch_size, channels, padded_height, padded_width), dtype=input_tensor.dtype
+        (batch_size, channels, padded_height, padded_width),
+        dtype=input_tensor.dtype,
+        device=input_tensor.device,
     )
 
     # Copy the values from the input tensor to the appropriate location in the padded tensor
