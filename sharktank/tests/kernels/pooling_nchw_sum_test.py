@@ -15,6 +15,7 @@ import torch
 
 from shark_turbine import aot
 from sharktank import kernels
+from sharktank.ops.qconv_impls import _pad_last_2d
 
 
 class pooling_nchw_sum_test(unittest.TestCase):
@@ -29,14 +30,16 @@ class pooling_nchw_sum_test(unittest.TestCase):
         ]
     )
     def testBS32(self, atol, rtol):
-        dtype = torch.int32
+        dtype = torch.int8
         a = (torch.randint(0, 100, (2, 1, 128, 128))).to(torch.float32)
+        padding = [1, 1]
+        extended_list = [item for item in padding for _ in range(2)]
+        inputs_pad = _pad_last_2d(a, extended_list)
         weight_shape = [3, 3]
         stride = [1, 1]
-        padding = [1, 1]
         dilations = [1, 1]
         result = kernels.pooling_nchw_sum(
-            a.to(dtype), weight_shape, stride, padding, dilations
+            inputs_pad.to(dtype), weight_shape, stride, dilations
         )
 
         # Tolerances are empirical and results are not expected to match exactly.
@@ -52,13 +55,17 @@ class pooling_nchw_sum_test(unittest.TestCase):
     def testExportStaticDims(self):
         class MyModule(torch.nn.Module):
             def forward(self, a):
-                return kernels.pooling_nchw_sum(a, [3, 3], [1, 1], [1, 1], [1, 1])
+                return kernels.pooling_nchw_sum(a, [3, 3], [1, 1], [1, 1])
 
         mod = MyModule()
-        dtype = torch.int32
+        dtype = torch.int8
+        inputs = torch.rand([2, 1, 128, 128]) * 64
+        padding = [1, 1]
+        extended_list = [item for item in padding for _ in range(2)]
+        inputs_pad = _pad_last_2d(inputs, extended_list)
         ep = torch.export.export(
             mod,
-            args=((torch.rand([2, 1, 128, 128]) * 64).to(dtype),),
+            args=((inputs_pad).to(dtype),),
         )
         output = aot.export(ep)
         output.verify()

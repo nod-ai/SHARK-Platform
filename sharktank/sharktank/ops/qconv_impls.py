@@ -112,12 +112,13 @@ def qconv2d_tensor_scaled_integer(
     stride = _expand_int_to_2_tuple(stride)
     padding = _expand_int_to_2_tuple(padding)
     dilation = _expand_int_to_2_tuple(dilation)
+    extended_padding_list = [item for item in padding for _ in range(2)]
+    padded_input = _pad_last_2d(input_qs, extended_padding_list)
     y_qs = _invoke_int32_conv2d(
-        input_qs.to(torch.int32),
+        padded_input.to(torch.int32),
         weight_qs.to(torch.int32),
         bias_qs.to(torch.int32) if bias_qs is not None else None,
         stride,
-        padding,
         dilation,
         accum_dtype=accum_dtype,
     )
@@ -141,12 +142,13 @@ def qconv2d_tensor_scaled_integer(
         # output channels are zero, just
         # Note that we sum first to reduce the dimensionality by channel
         # prior, reducing memory and total computation.
-        weight_offset_fix = torch.sum(input_qs, dim=1, keepdim=True, dtype=accum_dtype)
+        weight_offset_fix = torch.sum(
+            padded_input, dim=1, keepdim=True, dtype=accum_dtype
+        )
         weight_offset_fix = _invoke_int32_pooling_sum(
             weight_offset_fix,
             [weight_qs.shape[2], weight_qs.shape[3]],
             stride,
-            padding,
             dilation,
             accum_dtype=accum_dtype,
         )
@@ -192,10 +194,8 @@ conv2d.override(QuantizedTensor, QuantizedTensor, AnyTensor)(
 )
 
 
-def _invoke_int32_conv2d(
-    input, weight, bias, stride, padding, dilation, *, accum_dtype
-):
-    """Does a low level invocation of a conv2d integer kernel.
+def _invoke_int32_conv2d(input, weight, bias, stride, dilation, *, accum_dtype):
+    """Does a low level invocation of a conv2d integer kernel on an explicitly padded input.
 
     This presumes that the stride/padding/dilation have already been normalized
     to 2-tuples.
@@ -215,7 +215,6 @@ def _invoke_int32_conv2d(
             weight,
             bias,
             stride,
-            padding,
             dilation,
         )
     else:
@@ -225,25 +224,21 @@ def _invoke_int32_conv2d(
             weight.to(dtype=torch.float32),
             bias=bias.to(dtype=torch.float32) if bias is not None else None,
             stride=stride,
-            padding=padding,
             dilation=dilation,
         ).to(dtype=accum_dtype)
 
     return y_qs
 
 
-def _invoke_int32_pooling_sum(
-    input, kernel_size, stride, padding, dilation, *, accum_dtype
-):
+def _invoke_int32_pooling_sum(input, kernel_size, stride, dilation, *, accum_dtype):
     """Invokes either a custom integer pooling sum or the built-in fp avg_pool2d
-    kernel.
+    kernel on an explicitly padded input.
     """
     if debugging.flags.use_custom_int_conv_kernel:
         output = kernels.pooling_nchw_sum(
             input,
             kernel_size,
             stride,
-            padding,
             dilation,
         )
     else:
@@ -251,10 +246,28 @@ def _invoke_int32_pooling_sum(
             input.to(dtype=torch.float32),
             kernel_size,
             stride=stride,
-            padding=padding,
             divisor_override=1,
         ).to(dtype=accum_dtype)
     return output
+
+
+def _pad_last_2d(input_tensor, pad_width):
+    # pad_width should be in the format [pad_left, pad_right, pad_top, pad_bottom]
+    pad_left, pad_right, pad_top, pad_bottom = pad_width
+    batch_size, channels, height, width = input_tensor.shape
+
+    # Create a new tensor with the desired padded size filled with zeros
+    padded_height = height + pad_top + pad_bottom
+    padded_width = width + pad_left + pad_right
+    padded_tensor = torch.zeros(
+        (batch_size, channels, padded_height, padded_width), dtype=input_tensor.dtype
+    )
+
+    # Copy the values from the input tensor to the appropriate location in the padded tensor
+    padded_tensor[
+        :, :, pad_top : pad_top + height, pad_left : pad_left + width
+    ] = input_tensor
+    return padded_tensor
 
 
 def _flatten_input_scale_offset_channels(d, m):

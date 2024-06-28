@@ -15,6 +15,7 @@ import torch
 
 from shark_turbine import aot
 from sharktank import kernels
+from sharktank.ops.qconv_impls import _pad_last_2d
 
 
 class conv_2d_nchw_fchw_test(unittest.TestCase):
@@ -31,11 +32,12 @@ class conv_2d_nchw_fchw_test(unittest.TestCase):
     def testBS32(self, atol, rtol):
         dtype = torch.int8
         inputs = (torch.rand([2, 320, 64, 64]) * 64).to(dtype)
+        padding = [1, 1]
+        extended_list = [item for item in padding for _ in range(2)]
+        inputs_pad = _pad_last_2d(inputs, extended_list)
         weights = (torch.rand([640, 320, 3, 3]) * 64).to(dtype)
         bias = (torch.rand([640]) * 64).to(dtype)
-        result = kernels.conv_2d_nchw_fchw(
-            inputs, weights, bias, [1, 1], [1, 1], [1, 1]
-        )
+        result = kernels.conv_2d_nchw_fchw(inputs_pad, weights, bias, [1, 1], [1, 1])
 
         # Tolerances are empirical and results are not expected to match exactly.
         ref = torch.nn.functional.conv2d(
@@ -48,14 +50,18 @@ class conv_2d_nchw_fchw_test(unittest.TestCase):
     def testExportStaticDims(self):
         class MyModule(torch.nn.Module):
             def forward(self, a, b, c):
-                return kernels.conv_2d_nchw_fchw(a, b, c, [1, 1], [1, 1], [1, 1])
+                return kernels.conv_2d_nchw_fchw(a, b, c, [1, 1], [1, 1])
 
         mod = MyModule()
         dtype = torch.int8
+        inputs = torch.rand([2, 320, 64, 64]) * 64
+        padding = [1, 1]
+        extended_list = [item for item in padding for _ in range(2)]
+        inputs_pad = _pad_last_2d(inputs, extended_list)
         ep = torch.export.export(
             mod,
             args=(
-                (torch.rand([2, 320, 64, 64]) * 64).to(dtype),
+                (inputs_pad).to(dtype),
                 (torch.rand([640, 320, 3, 3]) * 64).to(dtype),
                 (torch.rand([640]) * 64).to(dtype),
             ),
