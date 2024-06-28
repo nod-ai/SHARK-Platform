@@ -115,36 +115,3 @@ class LinearReplicatedInputSplitWeightAndBiasSharding(ThetaLayerSharding):
                 ),
             }
         )
-
-
-class ResnetBlock2DSplitOutputChannelsSharding(ThetaLayerSharding):
-    """Shards the input channel and output channels of the convolutions."""
-
-    def __init__(self, shard_count: int):
-        super(Sharding).__init__()
-        self.shard_count = shard_count
-
-    def theta_sharding(self) -> ThetaSharding:
-        result = ThetaSharding(
-            {
-                "norm1": GroupNormSplitChannelSharding(
-                    shard_count=self.shard_count
-                ).theta_sharding(),
-                "conv1": Conv2DSplitOutputChannelSharding(
-                    shard_count=self.shard_count
-                ).theta_sharding(),
-                "norm2": GroupNormSplitChannelSharding(
-                    shard_count=self.shard_count
-                ).theta_sharding(),
-                "conv2": Conv2DSplitOutputChannelSharding(
-                    shard_count=self.shard_count
-                ).theta_sharding(),
-                "time_emb_proj": LinearReplicatedInputSplitWeightAndBiasSharding(
-                    shard_count=self.shard_count
-                ).theta_sharding(),
-                "conv_shortcut": Conv2DSplitOutputChannelSharding(
-                    shard_count=self.shard_count
-                ).theta_sharding(),
-            }
-        )
-        return result

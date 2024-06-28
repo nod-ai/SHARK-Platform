@@ -10,7 +10,7 @@ import torch
 
 from sharktank.models.punet.layers import ResnetBlock2D
 from sharktank.types import *
-from sharktank.types import sharding
+from sharktank.models.punet.sharding import ResnetBlock2DSplitOutputChannelsSharding
 from sharktank import ops
 
 
@@ -105,10 +105,9 @@ class ResnetBlockTest(unittest.TestCase):
             height,
         )
         input_time_emb = torch.rand(input_time_emb_shape)
-        unsharded_result = resnet_block(input_image, input_time_emb)
-        expected_result = ops.reshard_split(unsharded_result, dim=1, count=shard_count)
+        expected_result = resnet_block(input_image, input_time_emb)
 
-        sharding_spec = sharding.ResnetBlock2DSplitOutputChannelsSharding(
+        sharding_spec = ResnetBlock2DSplitOutputChannelsSharding(
             shard_count=shard_count
         )
         sharded_theta = ops.reshard(theta, sharding_spec)
@@ -124,10 +123,15 @@ class ResnetBlockTest(unittest.TestCase):
         )
         sharded_input_image = ops.reshard_split(input_image, dim=1, count=shard_count)
         sharded_input_time_emb = ops.replicate(input_time_emb, count=shard_count)
-        actual_result = sharded_resnet_block(
+        sharded_result = sharded_resnet_block(
             sharded_input_image, sharded_input_time_emb
         )
-        assert ops.equal(expected_result, actual_result)
+        assert isinstance(sharded_result, SplitPrimitiveTensor)
+        assert (
+            sharded_result.shard_dim == 1 and sharded_result.shard_count == shard_count
+        )
+        actual_result = ops.unshard(sharded_result)
+        torch.testing.assert_close(expected_result, actual_result)
 
 
 if __name__ == "__main__":

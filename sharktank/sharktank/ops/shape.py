@@ -4,15 +4,15 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-from typing import Collection
+from typing import Sequence
 from ..types.tensors import AnyTensor
 
 
 def broadcast_dim(
-    dim: int, shaped_or_shape: Collection[Collection[int] | AnyTensor]
+    dim: int, shaped_or_shape: Sequence[Sequence[int] | AnyTensor]
 ) -> int:
-    """Returns the dimension corresponding to `args[0]`'s dimension `dim` after
-    broadcasting `args`.
+    """Returns the dimension corresponding to `shaped_or_shape[0]`'s dimension `dim` after
+    broadcasting `shaped_or_shape`.
 
     Parameters
     ----------
@@ -25,19 +25,12 @@ def broadcast_dim(
     assert d == 3
     ```
     """
-    # assert len(args) > 0
-    # if hasattr(args[0], "shape"):
-    #     # Tensors case.
-    #     return broadcast_dim(dim, *[tensor.shape for tensor in args])
-    # ranks = [len(shape) for shape in args]
-    # broadcast_rank = max(ranks)
-    # return dim + max(0, broadcast_rank - len(args[0]))
     return broadcast_dims([dim], shaped_or_shape)[0]
 
 
 def broadcast_dims(
-    dims: Collection[int], shaped_or_shape: Collection[Collection[int] | AnyTensor]
-) -> Collection[int]:
+    dims: Sequence[int], shaped_or_shape: Sequence[Sequence[int] | AnyTensor]
+) -> Sequence[int]:
     """Returns the dimensions corresponding to `shaped_or_shape`s' dimensions after
     broadcasting `shaped_or_shape`.
 
@@ -49,7 +42,7 @@ def broadcast_dims(
     shape1 = [2, 3, 1]
     shape2 = [4, 2, 3, 5]
     dims = [2, 2]
-    res = broadcast_dims(2, [shape1, shape2])
+    res = broadcast_dims(dims, [shape1, shape2])
     print(res) # [3, 2]
     ```
     """
