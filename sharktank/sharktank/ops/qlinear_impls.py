@@ -15,13 +15,14 @@ import torch
 from torch import Tensor
 
 from ..types import (
+    AnyTensor,
     QuantizedTensor,
     PlanarQuantizedTensor,
     TensorScaledLayout,
 )
 from ..utils import debugging
 
-from ._registry import unbox_tensor, AnyTensor
+from ._registry import unbox_tensor
 from .signatures import *
 
 from sharktank import kernels

@@ -13,8 +13,8 @@ import torch
 from torch import Tensor, dtype
 import torch.nn.functional as F
 
-from ..types import InferenceTensor, PrimitiveTensor, QuantizedTensor
-from ._registry import unbox_tensor, AnyTensor
+from ..types import PrimitiveTensor, QuantizedTensor
+from ._registry import unbox_tensor
 from .signatures import *
 
 # conv2d

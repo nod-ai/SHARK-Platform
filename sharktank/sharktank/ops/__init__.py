@@ -18,6 +18,7 @@ and layouts.
 
 from . import _registry
 from .signatures import *
+from .shape import *
 
 # Ensure that implementations are registered.
 # Note that delegation prefers matching ops defined later, so order here

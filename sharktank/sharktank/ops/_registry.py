@@ -14,16 +14,13 @@ import functools
 
 import torch
 from torch import Tensor
-from ..types import InferenceTensor, PrimitiveTensor, QuantizedTensor
+from ..types import PrimitiveTensor, QuantizedTensor
 
 __all__ = [
-    "AnyTensor",
     "SignatureDispatcher",
     "overridable",
     "unbox_tensor",
 ]
-
-AnyTensor = Union[torch.Tensor, InferenceTensor]
 
 _TargetOverride = collections.namedtuple(
     "_TargetOverride",

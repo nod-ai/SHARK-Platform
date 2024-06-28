@@ -93,3 +93,25 @@ class GroupNormSplitChannelSharding(ThetaLayerSharding):
                 "bias": Split(shard_count=self.shard_count, shard_dim=0),
             }
         )
+
+
+class LinearReplicatedInputSplitWeightAndBiasSharding(ThetaLayerSharding):
+    def __init__(self, shard_count: int, weight_and_bias_spit_dim: int = 0):
+        super(Sharding).__init__()
+        self.shard_count = shard_count
+        self.weight_and_bias_spit_dim = weight_and_bias_spit_dim
+
+    def theta_sharding(self) -> ThetaSharding:
+        return ThetaSharding(
+            {
+                "premul_input": Replicated(shard_count=self.shard_count),
+                "weight": Split(
+                    shard_count=self.shard_count,
+                    shard_dim=self.weight_and_bias_spit_dim,
+                ),
+                "bias": Split(
+                    shard_count=self.shard_count,
+                    shard_dim=self.weight_and_bias_spit_dim,
+                ),
+            }
+        )

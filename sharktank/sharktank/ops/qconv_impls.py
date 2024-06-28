@@ -16,13 +16,14 @@ import torch
 from sharktank import kernels
 
 from ..types import (
+    AnyTensor,
     QuantizedTensor,
     PlanarQuantizedTensor,
     TensorScaledLayout,
 )
 from ..utils import debugging
 
-from ._registry import unbox_tensor, AnyTensor
+from ._registry import unbox_tensor
 from .signatures import (
     IntOrSequenceInt,
     conv2d,
