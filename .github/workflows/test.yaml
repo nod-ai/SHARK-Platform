@@ -66,4 +66,4 @@ jobs:
             "numpy<2.0"
 
       - name: Run llama test
-        run: ./tests/llama_export_compile_serve.sh
+        run: ./build_tools/integration_tests/llama_export_compile_serve.sh
