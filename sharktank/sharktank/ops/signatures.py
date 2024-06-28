@@ -23,6 +23,7 @@ __all__ = [
     "equal",
     "group_norm_affine",
     "layer_norm",
+    "interpolate",
     "linear",
     "matmul",
     "permute",
@@ -210,6 +211,48 @@ def _group_norm_affine_trampoline(
     tensors = (input, weight, bias)
     for override in d.find_overrides(tensors):
         result = override(input, weight, bias, num_groups=num_groups, eps=eps)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(tensors)
+
+
+@overridable
+def interpolate(
+    input: AnyTensor,
+    size: Optional[int | List[int]] = None,
+    scale_factor: Optional[float | List[float]] = None,
+    mode: str = "nearest",
+    align_corners: Optional[bool] = None,
+    recompute_scale_factor: Optional[bool] = None,
+    antialias: bool = False,
+) -> AnyTensor:
+    """Equivalent to torch.nn.functional.interpolate"""
+    raise NotImplementedError
+
+
+@interpolate.trampoline
+def _interpolate_trampoline(
+    d: SignatureDispatcher,
+    input: AnyTensor,
+    size: Optional[int | List[int]] = None,
+    scale_factor: Optional[float | List[float]] = None,
+    mode: str = "nearest",
+    align_corners: Optional[bool] = None,
+    recompute_scale_factor: Optional[bool] = None,
+    antialias: bool = False,
+) -> AnyTensor:
+    tensors = [input]
+    for override in d.find_overrides(tensors):
+        result = override(
+            input,
+            size,
+            scale_factor,
+            mode,
+            align_corners,
+            recompute_scale_factor,
+            antialias,
+        )
         if result is not NotImplemented:
             return override, result
     else:

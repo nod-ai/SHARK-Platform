@@ -6,7 +6,7 @@
 
 import torch
 from torch import Tensor
-from typing import List
+from typing import List, Optional
 import itertools
 
 from ..types import (
@@ -277,6 +277,57 @@ def shareded_group_norm_affine(input, weight, bias, *, num_groups, eps):
     ]
 
     return SplitPrimitiveTensor(shard_dim=1, ts=result_shards)
+
+
+@interpolate.override(ReplicatedTensor)
+def interpolate_replicated(
+    input: ReplicatedTensor,
+    size: Optional[int | List[int]],
+    scale_factor: Optional[float | List[float]],
+    mode: str,
+    align_corners: Optional[bool],
+    recompute_scale_factor: Optional[bool],
+    antialias: bool,
+) -> ReplicatedTensor:
+    shards = [
+        torch.nn.functional.interpolate(
+            input=unbox_tensor(shard),
+            size=size,
+            scale_factor=scale_factor,
+            mode=mode,
+            align_corners=align_corners,
+            recompute_scale_factor=recompute_scale_factor,
+            antialias=antialias,
+        )
+        for shard in input.shards
+    ]
+    return ReplicatedTensor(ts=shards)
+
+
+@interpolate.override(SplitPrimitiveTensor)
+def interpolate_split_batch_or_channel(
+    input: SplitPrimitiveTensor,
+    size: Optional[int | List[int]],
+    scale_factor: Optional[float | List[float]],
+    mode: str,
+    align_corners: Optional[bool],
+    recompute_scale_factor: Optional[bool],
+    antialias: bool,
+) -> SplitPrimitiveTensor:
+    assert input.shard_dim == 0 or input.shard_dim == 1
+    shards = [
+        torch.nn.functional.interpolate(
+            input=unbox_tensor(shard),
+            size=size,
+            scale_factor=scale_factor,
+            mode=mode,
+            align_corners=align_corners,
+            recompute_scale_factor=recompute_scale_factor,
+            antialias=antialias,
+        )
+        for shard in input.shards
+    ]
+    return SplitPrimitiveTensor(ts=shards, shard_dim=input.shard_dim)
 
 
 @layer_norm.override(SplitPrimitiveTensor, Tensor, Tensor)

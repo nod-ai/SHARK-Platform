@@ -95,6 +95,27 @@ def group_norm_affine_default(input, weight, bias, *, num_groups, eps):
     return F.group_norm(input, num_groups=num_groups, weight=weight, bias=bias, eps=eps)
 
 
+@interpolate.override(Tensor)
+def interpolate_default(
+    input: Tensor,
+    size: Optional[int | List[int]],
+    scale_factor: Optional[float | List[float]],
+    mode: str,
+    align_corners: Optional[bool],
+    recompute_scale_factor: Optional[bool],
+    antialias: bool,
+) -> Tensor:
+    return torch.nn.functional.interpolate(
+        input=unbox_tensor(input),
+        size=size,
+        scale_factor=scale_factor,
+        mode=mode,
+        align_corners=align_corners,
+        recompute_scale_factor=recompute_scale_factor,
+        antialias=antialias,
+    )
+
+
 @layer_norm.override(Tensor, Tensor, Tensor)
 def layer_norm_default(input, weight, bias, *, eps):
     input = unbox_tensor(input)
