@@ -38,7 +38,7 @@ class conv_2d_nchw_fchw_test(unittest.TestCase):
         weights = (torch.rand([640, 320, 3, 3]) * 64).to(dtype)
         bias = (torch.rand([640]) * 64).to(dtype)
         result = kernels.conv_2d_nchw_fchw(
-            inputs, inputs_pad, weights, bias, [1, 1], [1, 1], [1, 1]
+            inputs_pad, weights, bias, [1, 1], [1, 1], [1, 1]
         )
 
         # Tolerances are empirical and results are not expected to match exactly.
@@ -51,8 +51,8 @@ class conv_2d_nchw_fchw_test(unittest.TestCase):
 
     def testExportStaticDims(self):
         class MyModule(torch.nn.Module):
-            def forward(self, a, b, c, d):
-                return kernels.conv_2d_nchw_fchw(a, b, c, d, [1, 1], [1, 1], [1, 1])
+            def forward(self, a, b, c):
+                return kernels.conv_2d_nchw_fchw(a, b, c, [1, 1], [1, 1], [1, 1])
 
         mod = MyModule()
         dtype = torch.int8
@@ -63,7 +63,6 @@ class conv_2d_nchw_fchw_test(unittest.TestCase):
         ep = torch.export.export(
             mod,
             args=(
-                (inputs).to(dtype),
                 (inputs_pad).to(dtype),
                 (torch.rand([640, 320, 3, 3]) * 64).to(dtype),
                 (torch.rand([640]) * 64).to(dtype),

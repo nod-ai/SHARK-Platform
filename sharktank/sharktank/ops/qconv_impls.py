@@ -114,6 +114,7 @@ def qconv2d_tensor_scaled_integer(
     dilation = _expand_int_to_2_tuple(dilation)
     extended_list = [item for item in padding for _ in range(2)]
     padded_input = _pad_last_2d(input_qs, extended_list)
+    print("input_qs: ", input_qs.shape)
     y_qs = _invoke_int32_conv2d(
         input_qs.to(torch.int32),
         padded_input.to(torch.int32),
@@ -124,6 +125,7 @@ def qconv2d_tensor_scaled_integer(
         dilation,
         accum_dtype=accum_dtype,
     )
+    print("y_qs 1: ", y_qs.shape)
 
     # Apply offset corrections.
     if input_m is not None:
@@ -216,7 +218,6 @@ def _invoke_int32_conv2d(
             # may want to support an optional bias through the kernel.
             bias = torch.zeros((weight.shape[1],), dtype=input.dtype)
         y_qs = kernels.conv_2d_nchw_fchw(
-            input,
             padded_input,
             weight,
             bias,
@@ -246,7 +247,6 @@ def _invoke_int32_pooling_sum(
     """
     if debugging.flags.use_custom_int_conv_kernel:
         output = kernels.pooling_nchw_sum(
-            input,
             padded_input,
             kernel_size,
             stride,
