@@ -143,12 +143,15 @@ def qconv2d_tensor_scaled_integer(
         # output channels are zero, just
         # Note that we sum first to reduce the dimensionality by channel
         # prior, reducing memory and total computation.
-        weight_offset_fix = torch.sum(input_qs, dim=1, keepdim=True, dtype=accum_dtype)
-        weight_offset_fix_padded = _pad_last_2d(
-            weight_offset_fix, extended_padding_list
+        # weight_offset_fix = torch.sum(input_qs, dim=1, keepdim=True, dtype=accum_dtype)
+        # weight_offset_fix_padded = _pad_last_2d(
+        #     weight_offset_fix, extended_padding_list
+        # )
+        weight_offset_fix = torch.sum(
+            padded_input, dim=1, keepdim=True, dtype=accum_dtype
         )
         weight_offset_fix = _invoke_int32_pooling_sum(
-            weight_offset_fix_padded,
+            weight_offset_fix,
             [weight_qs.shape[2], weight_qs.shape[3]],
             stride,
             padding,
