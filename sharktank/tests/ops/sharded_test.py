@@ -303,6 +303,77 @@ class EqualTest(unittest.TestCase):
         assert not ops.equal(b_sharded, a_sharded)
 
 
+class InterpolateTest(unittest.TestCase):
+    def testInterpolateSplitChannelDim(self):
+        batches = 2
+        channels = 6
+        height = 5
+        width = 4
+        scale_factor = 2.0
+        mode = "bilinear"
+        align_corners = True
+        recompute_scale_factor = True
+        antialias = True
+        input = torch.rand(batches, channels, height, width, dtype=torch.float32)
+        expected_result = torch.nn.functional.interpolate(
+            input=input,
+            scale_factor=scale_factor,
+            mode=mode,
+            align_corners=align_corners,
+            recompute_scale_factor=recompute_scale_factor,
+            antialias=antialias,
+        )
+        shard_count = 3
+        sharded_input = ops.reshard_split(input, dim=1, count=shard_count)
+        sharded_result = ops.interpolate(
+            input=sharded_input,
+            scale_factor=scale_factor,
+            mode=mode,
+            align_corners=align_corners,
+            recompute_scale_factor=recompute_scale_factor,
+            antialias=antialias,
+        )
+        assert isinstance(sharded_result, SplitPrimitiveTensor)
+        assert sharded_result.shard_count == shard_count
+        assert sharded_result.shard_dim == 1
+        actual_result = ops.unbox_tensor(ops.unshard(sharded_result))
+        torch.testing.assert_close(actual_result, expected_result)
+
+    def testInterpolateReplicated(self):
+        batches = 2
+        channels = 6
+        height = 5
+        width = 4
+        scale_factor = 2.0
+        mode = "bilinear"
+        align_corners = True
+        recompute_scale_factor = True
+        antialias = True
+        input = torch.rand(batches, channels, height, width, dtype=torch.float32)
+        expected_result = torch.nn.functional.interpolate(
+            input=input,
+            scale_factor=scale_factor,
+            mode=mode,
+            align_corners=align_corners,
+            recompute_scale_factor=recompute_scale_factor,
+            antialias=antialias,
+        )
+        shard_count = 3
+        sharded_input = ops.replicate(input, count=shard_count)
+        sharded_result = ops.interpolate(
+            input=sharded_input,
+            scale_factor=scale_factor,
+            mode=mode,
+            align_corners=align_corners,
+            recompute_scale_factor=recompute_scale_factor,
+            antialias=antialias,
+        )
+        assert isinstance(sharded_result, ReplicatedTensor)
+        assert sharded_result.shard_count == shard_count
+        actual_result = ops.unbox_tensor(ops.unshard(sharded_result))
+        torch.testing.assert_close(actual_result, expected_result)
+
+
 class NormalizationTest(unittest.TestCase):
     def testGroupNormShardedGroups(self):
         """Shard the channel dimension such that the group count is multiple of the
