@@ -19,33 +19,24 @@ __all__ = [
 class pooling_nchw_sum(CustomOp):
     """Generic pooling sum operates on explicitly padded inputs."""
 
-    signature = "pooling_nchw_sum(Tensor inputs, int[] weights_size, int[] strides, int[] padding, int[] dilations) -> (Tensor)"
+    signature = "pooling_nchw_sum(Tensor inputs, int[] weights_size, int[] strides, int[] dilations) -> (Tensor)"
 
     def select(self, ksel: KernelSelection):
         inputs_desc = ksel.arg_tensor(0)
         weights_size_desc = ksel.attr_list_int(1)  # Shape [2]
         strides_desc = ksel.attr_list_int(2)  # Shape [2]
-        padding_desc = ksel.attr_list_int(3)  # Shape [2]
-        dilations_desc = ksel.attr_list_int(4)  # Shape [2]
+        dilations_desc = ksel.attr_list_int(3)  # Shape [2]
 
         # unpack
         n, c, h_pad, w_pad = inputs_desc.t.shape
 
         weights_size = weights_size_desc.v
         strides = strides_desc.v
-        padding = padding_desc.v
-        dilations = padding_desc.v
+        dilations = dilations_desc.v
 
-        # subtract padding shape
-        original_h = h_pad - padding[0] * 2
-        original_w = w_pad - padding[1] * 2
         # pooling shape math
-        h_out = math.floor(
-            (original_h + 2 * padding[0] - weights_size[0]) / strides[0] + 1
-        )
-        w_out = math.floor(
-            (original_w + 2 * padding[1] - weights_size[1]) / strides[1] + 1
-        )
+        h_out = math.floor((h_pad - weights_size[0]) / strides[0] + 1)
+        w_out = math.floor((w_pad - weights_size[1]) / strides[1] + 1)
         c_desc = ksel.return_new_tensor([n, c, h_out, w_out], dtype=inputs_desc.t.dtype)
 
     def generate(self, ksel: KernelSelection, kb: KernelBuilder):
@@ -53,7 +44,7 @@ class pooling_nchw_sum(CustomOp):
         inputs_tensor_type = RankedTensorType(inputs.type)
         weights = ksel.arg_descs[1].v
         strides = ksel.arg_descs[2].v
-        dilations = ksel.arg_descs[4].v
+        dilations = ksel.arg_descs[3].v
         result_desc = ksel.result_descs[0].t.shape
         H_out = result_desc[2]
         W_out = result_desc[3]

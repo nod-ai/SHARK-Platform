@@ -119,7 +119,6 @@ def qconv2d_tensor_scaled_integer(
         weight_qs.to(torch.int32),
         bias_qs.to(torch.int32) if bias_qs is not None else None,
         stride,
-        padding,
         dilation,
         accum_dtype=accum_dtype,
     )
@@ -143,10 +142,6 @@ def qconv2d_tensor_scaled_integer(
         # output channels are zero, just
         # Note that we sum first to reduce the dimensionality by channel
         # prior, reducing memory and total computation.
-        # weight_offset_fix = torch.sum(input_qs, dim=1, keepdim=True, dtype=accum_dtype)
-        # weight_offset_fix_padded = _pad_last_2d(
-        #     weight_offset_fix, extended_padding_list
-        # )
         weight_offset_fix = torch.sum(
             padded_input, dim=1, keepdim=True, dtype=accum_dtype
         )
@@ -154,7 +149,6 @@ def qconv2d_tensor_scaled_integer(
             weight_offset_fix,
             [weight_qs.shape[2], weight_qs.shape[3]],
             stride,
-            padding,
             dilation,
             accum_dtype=accum_dtype,
         )
@@ -200,9 +194,7 @@ conv2d.override(QuantizedTensor, QuantizedTensor, AnyTensor)(
 )
 
 
-def _invoke_int32_conv2d(
-    input, weight, bias, stride, padding, dilation, *, accum_dtype
-):
+def _invoke_int32_conv2d(input, weight, bias, stride, dilation, *, accum_dtype):
     """Does a low level invocation of a conv2d integer kernel on an explicitly padded input.
 
     This presumes that the stride/padding/dilation have already been normalized
@@ -223,7 +215,6 @@ def _invoke_int32_conv2d(
             weight,
             bias,
             stride,
-            padding,
             dilation,
         )
     else:
@@ -239,9 +230,7 @@ def _invoke_int32_conv2d(
     return y_qs
 
 
-def _invoke_int32_pooling_sum(
-    input, kernel_size, stride, padding, dilation, *, accum_dtype
-):
+def _invoke_int32_pooling_sum(input, kernel_size, stride, dilation, *, accum_dtype):
     """Invokes either a custom integer pooling sum or the built-in fp avg_pool2d
     kernel on an explicitly padded input.
     """
@@ -250,7 +239,6 @@ def _invoke_int32_pooling_sum(
             input,
             kernel_size,
             stride,
-            padding,
             dilation,
         )
     else:

@@ -39,7 +39,7 @@ class pooling_nchw_sum_test(unittest.TestCase):
         stride = [1, 1]
         dilations = [1, 1]
         result = kernels.pooling_nchw_sum(
-            inputs_pad.to(dtype), weight_shape, stride, padding, dilations
+            inputs_pad.to(dtype), weight_shape, stride, dilations
         )
 
         # Tolerances are empirical and results are not expected to match exactly.
@@ -55,7 +55,7 @@ class pooling_nchw_sum_test(unittest.TestCase):
     def testExportStaticDims(self):
         class MyModule(torch.nn.Module):
             def forward(self, a):
-                return kernels.pooling_nchw_sum(a, [3, 3], [1, 1], [1, 1], [1, 1])
+                return kernels.pooling_nchw_sum(a, [3, 3], [1, 1], [1, 1])
 
         mod = MyModule()
         dtype = torch.int8
