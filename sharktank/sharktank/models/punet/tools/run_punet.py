@@ -5,6 +5,7 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 from pathlib import Path
+import sys
 
 import torch
 
@@ -48,7 +49,14 @@ def load_inputs(st_path: Path, dtype, device):
     return inputs
 
 
-def main():
+def save_outputs(st_path: Path, outputs):
+    from safetensors.torch import save_file
+
+    tensors = {str(i): t for i, t in enumerate(outputs)}
+    save_file(tensors, st_path)
+
+
+def main(argv):
     from ....utils import cli
 
     parser = cli.create_parser()
@@ -61,7 +69,12 @@ def main():
         type=Path,
         help="Safetensors file of inputs (or random if not given)",
     )
-    args = cli.parse(parser)
+    parser.add_argument(
+        "--outputs",
+        type=Path,
+        help="Safetensors file of outputs",
+    )
+    args = cli.parse(parser, args=argv)
 
     device = args.device
     dtype = getattr(torch, args.dtype)
@@ -88,7 +101,10 @@ def main():
     else:
         results = mdl.forward(**inputs)
         print("1-step results:", results)
+        if args.outputs:
+            print(f"Saving outputs to {args.outputs}")
+            save_outputs(args.outputs, results)
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1:])

@@ -40,6 +40,22 @@ python -m sharktank.models.punet.tools.run_diffuser_ref
 python -m sharktank.models.punet.tools.run_punet --irpa-file ~/models/punet_fp16.irpa
 ```
 
+## Integration Testing
+
+Integration testing is set up via pytest:
+
+```
+pytest -v -m punet
+```
+
+These perform a variety of expensive tests that involve downloading live data
+that can be of considerable size. It is often helpful to run specific tests
+with the `-s` option (stream output) and by setting `SHARKTANK_TEST_ASSETS_DIR`
+to an explicit temp directory (in this mode, the temp directory will not
+be cleared, allowing you to inspect assets and intermediates -- but delete
+manually as every run will accumulate). Filtering by test name with
+`-k test_some_name` is also useful. Names have been chosen to facilitate this.
+
 ## License
 
 Significant portions of this implementation were derived from diffusers,
