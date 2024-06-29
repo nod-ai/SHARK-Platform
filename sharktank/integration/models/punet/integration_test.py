@@ -21,7 +21,7 @@ def punet_goldens():
     from huggingface_hub import hf_hub_download
 
     REPO_ID = "amd-shark/sharktank-goldens"
-    REVISION = "230dad4d85fbcb8759a331dcf1d45f0562875abe"
+    REVISION = "1d4cb6c452d15a180c1928246848128cdff5ddc8"
 
     def download(filename):
         return hf_hub_download(
@@ -35,6 +35,9 @@ def punet_goldens():
         ),
         "outputs_int8.safetensors": download(
             "classifier_free_guidance_int8_outputs.safetensors"
+        ),
+        "outputs_int8_emulated.safetensors": download(
+            "classifier_free_guidance_int8_emulated_outputs.safetensors"
         ),
     }
 
@@ -203,8 +206,8 @@ def test_punet_eager_fp16_validation(punet_goldens, sdxl_fp16_dataset, temp_dir)
 def test_punet_eager_int8_validation(punet_goldens, sdxl_int8_dataset, temp_dir):
     from sharktank.models.punet.tools import run_punet
 
-    # ROCM code generation isn't good enough for these dynamic eager kernels.
-    # Just use CPU for now.
+    # Eager runtime issues keep this from producing reliable results on multi
+    # GPU systems, so validate on CPU for now.
     # device = testing.get_best_torch_device()
     device = "cpu"
     output_path = (
@@ -256,5 +259,5 @@ def test_punet_eager_int8_emulated_validation(
             ]
         )
     testing.assert_golden_safetensors(
-        output_path, punet_goldens["outputs_int8.safetensors"]
+        output_path, punet_goldens["outputs_int8_emulated.safetensors"]
     )

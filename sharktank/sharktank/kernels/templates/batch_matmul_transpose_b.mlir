@@ -5,13 +5,14 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 !dtype = {{dtype}}
-!a_tensor_type = tensor<?x?x{{k}}x!dtype>
-!b_tensor_type = tensor<?x{{n}}x{{k}}x!dtype>
-!c_tensor_type = tensor<?x?x{{n}}x!dtype>
+!a_tensor_type = {{a_asm_type}}
+!b_tensor_type = {{b_asm_type}}
+!c_tensor_type = {{c_asm_type}}
+!c_dynamic_tensor_type = tensor<?x?x?x!dtype>
 
 module {
 
-util.func private @sharktank_batch_matmul_transpose_b_{{n}}_{{k}}_{{dtype}}(
+util.func private @sharktank_batch_matmul_transpose_b_{{spec_sig}}(
     %a: !a_tensor_type, %b: !b_tensor_type)
     -> !c_tensor_type {
   %zero = arith.constant 0: !dtype
@@ -19,7 +20,9 @@ util.func private @sharktank_batch_matmul_transpose_b_{{n}}_{{k}}_{{dtype}}(
   %c1 = arith.constant 1: index
   %batch_dim = tensor.dim %a, %c0 : !a_tensor_type
   %m_dim = tensor.dim %a, %c1 : !a_tensor_type
-  %result_empty = tensor.empty(%batch_dim, %m_dim) : !c_tensor_type
+  %n_dim = tensor.dim %b, %c0 : !b_tensor_type
+  %result_empty_dynamic = tensor.empty(%batch_dim, %m_dim, %n_dim) : !c_dynamic_tensor_type
+  %result_empty = tensor.cast %result_empty_dynamic : !c_dynamic_tensor_type to !c_tensor_type
   %result_fill = linalg.fill ins(%zero: !dtype) outs(%result_empty: !c_tensor_type) -> !c_tensor_type
   %result = linalg.batch_matmul_transpose_b ins(%a, %b: !a_tensor_type, !b_tensor_type) outs(%result_fill: !c_tensor_type) -> !c_tensor_type
   util.return %result : !c_tensor_type
