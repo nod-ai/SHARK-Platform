@@ -57,7 +57,7 @@ class batch_matmul_transpose_b_test(unittest.TestCase):
         output = aot.export(ep)
         output.verify()
         asm = str(output.mlir_module)
-        self.assertIn("@sharktank_batch_matmul_transpose_b_8_2_i32", asm)
+        self.assertIn("@sharktank_batch_matmul_transpose_b_L4x16x2xi32_R4x8x2xi32", asm)
 
 
 if __name__ == "__main__":

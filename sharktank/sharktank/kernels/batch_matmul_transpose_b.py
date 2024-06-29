@@ -56,36 +56,42 @@ class batch_matmul_transpose_b(CustomOp):
             lhs_batch == rhs_batch,
             lambda: f"batch_matmul_transpose_b: Batch dims must match ({lhs_desc.t.shape} vs {rhs_desc.t.shape})",
         )
-
-        # Specialize on K, N.
-        lhs_desc.specialize_dims(-1)
-        rhs_desc.specialize_dims(-1, -2)
-
         # Shape batch, m, n
         c_desc = ksel.return_new_tensor(
             [lhs_batch, lhs_m, rhs_n], dtype=lhs_desc.t.dtype
         )
+        specialize_all_known_dims(lhs_desc)
+        specialize_all_known_dims(rhs_desc)
+        specialize_all_known_dims(c_desc)
+
+        # Require specialize on K, N.
+        lhs_desc.specialize_dims(-1)
+        rhs_desc.specialize_dims(-1, -2)
         c_desc.specialize_dims(-1)
 
     def generate(self, ksel: KernelSelection, kb: KernelBuilder):
         lhs = kb.arg_value(0)
-        lhs_tensor_type = RankedTensorType(lhs.type)
         rhs = kb.arg_value(1)
-        rhs_tensor_type = RankedTensorType(rhs.type)
+        result_desc = ksel.result_descs[0]
 
-        b, m, k = lhs_tensor_type.shape
-        b, n, k = rhs_tensor_type.shape
-        dtype_str = str(lhs_tensor_type.element_type)
-
+        # Generate specialization signature and types.
+        a_asm_type, a_ident, accum_type = unpack_tensor_type(lhs.type)
+        b_asm_type, b_ident, _ = unpack_tensor_type(rhs.type)
+        spec_sig = f"L{a_ident}_R{b_ident}"
         template_file = "batch_matmul_transpose_b.mlir"
-        target_function_name = f"sharktank_batch_matmul_transpose_b_{n}_{k}_{dtype_str}"
+        target_function_name = f"sharktank_batch_matmul_transpose_b_{spec_sig}"
+
+        # Template params.
+        c_asm_type = f"tensor<{'x'.join('?' if d is None else str(d) for d in result_desc.spec_dims)}x{accum_type}>"
 
         target_function = inline_template_function(
             kb,
             template_file,
             target_function_name,
-            n=n,
-            k=k,
-            dtype=dtype_str,
+            spec_sig=spec_sig,
+            a_asm_type=a_asm_type,
+            b_asm_type=b_asm_type,
+            c_asm_type=c_asm_type,
+            dtype=str(accum_type),
         )
         kb.yield_results(*call_function(target_function, *kb.arg_bindings))
