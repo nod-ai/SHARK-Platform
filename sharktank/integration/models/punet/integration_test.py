@@ -10,13 +10,13 @@ import pytest
 from sharktank.utils import testing
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def temp_dir():
     with testing.temporary_directory(__name__) as td:
         yield Path(td)
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def punet_goldens():
     from huggingface_hub import hf_hub_download
 
@@ -44,7 +44,7 @@ def punet_goldens():
 ################################################################################
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def sdxl_fp16_base_files():
     from huggingface_hub import hf_hub_download
 
@@ -62,11 +62,11 @@ def sdxl_fp16_base_files():
     }
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def sdxl_fp16_dataset(sdxl_fp16_base_files, temp_dir):
     from sharktank.models.punet.tools import import_hf_dataset
 
-    dataset = temp_dir / "dataset.irpa"
+    dataset = temp_dir / "sdxl_fp16_dataset.irpa"
     import_hf_dataset.main(
         [
             f"--config-json={sdxl_fp16_base_files['config.json']}",
@@ -82,7 +82,7 @@ def sdxl_fp16_dataset(sdxl_fp16_base_files, temp_dir):
 ################################################################################
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def sdxl_int8_base_files():
     from huggingface_hub import hf_hub_download
 
@@ -101,11 +101,11 @@ def sdxl_int8_base_files():
     }
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def sdxl_int8_dataset(sdxl_int8_base_files, temp_dir):
     from sharktank.models.punet.tools import import_brevitas_dataset
 
-    dataset = temp_dir / "dataset.irpa"
+    dataset = temp_dir / "sdxl_int8_dataset.irpa"
     import_brevitas_dataset.main(
         [
             f"--config-json={sdxl_int8_base_files['config.json']}",
@@ -122,7 +122,7 @@ def sdxl_int8_dataset(sdxl_int8_base_files, temp_dir):
 ################################################################################
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def sdxl_fp16_export_mlir(sdxl_fp16_dataset, temp_dir):
     from sharktank.models.punet.tools import run_punet
 
@@ -145,7 +145,7 @@ def test_sdxl_export_fp16_mlir(sdxl_fp16_export_mlir):
     print(f"Exported: {sdxl_fp16_export_mlir}")
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def sdxl_int8_export_mlir(sdxl_int8_dataset, temp_dir):
     from sharktank.models.punet.tools import run_punet
 
@@ -179,7 +179,9 @@ def test_punet_eager_fp16_validation(punet_goldens, sdxl_fp16_dataset, temp_dir)
     from sharktank.models.punet.tools import run_punet
 
     device = testing.get_best_torch_device()
-    output_path = temp_dir / "actual_outputs.safetensors"
+    output_path = (
+        temp_dir / "test_punet_eager_fp16_validation_actual_outputs.safetensors"
+    )
     print("Using torch device:", device)
     run_punet.main(
         [
@@ -201,8 +203,13 @@ def test_punet_eager_fp16_validation(punet_goldens, sdxl_fp16_dataset, temp_dir)
 def test_punet_eager_int8_validation(punet_goldens, sdxl_int8_dataset, temp_dir):
     from sharktank.models.punet.tools import run_punet
 
-    device = testing.get_best_torch_device()
-    output_path = temp_dir / "actual_outputs.safetensors"
+    # ROCM code generation isn't good enough for these dynamic eager kernels.
+    # Just use CPU for now.
+    # device = testing.get_best_torch_device()
+    device = "cpu"
+    output_path = (
+        temp_dir / "test_punet_eager_int8_validation_actual_outputs.safetensors"
+    )
     print("Using torch device:", device)
     run_punet.main(
         [
@@ -213,7 +220,9 @@ def test_punet_eager_int8_validation(punet_goldens, sdxl_int8_dataset, temp_dir)
             f"--outputs={output_path}",
         ]
     )
-    testing.assert_golden_safetensors(output_path, punet_goldens["outputs.safetensors"])
+    testing.assert_golden_safetensors(
+        output_path, punet_goldens["outputs_int8.safetensors"]
+    )
 
 
 # Executes using emulated fp kernels for key integer operations.
@@ -226,7 +235,10 @@ def test_punet_eager_int8_emulated_validation(
     from sharktank.models.punet.tools import run_punet
 
     device = testing.get_best_torch_device()
-    output_path = temp_dir / "actual_outputs.safetensors"
+    output_path = (
+        temp_dir
+        / "test_punet_eager_int8_emulated_validation_actual_outputs.safetensors"
+    )
     print("Using torch device:", device)
     with testing.override_debug_flags(
         {
