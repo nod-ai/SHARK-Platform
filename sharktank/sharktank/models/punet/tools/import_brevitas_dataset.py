@@ -24,6 +24,7 @@ from typing import Optional
 import json
 from pathlib import Path
 import safetensors
+import sys
 import torch
 
 from ....types import *
@@ -138,7 +139,6 @@ def apply_per_layer_quant(
     # Spot check that things look sane.
     weight_dequant = weight_quant.unpack().dequant()
     weight_diff = weight.as_torch() - weight_dequant
-    print("WEIGHT_DIFF:", weight_diff)
 
     # Bias/output scaling.
     bias = layer_theta.optional_tensor("bias")
@@ -157,7 +157,6 @@ def apply_per_layer_quant(
         # Spot check that things look sane.
         bias_dequant = bias_quant.unpack().dequant()
         bias_diff = bias.as_torch() - bias_dequant
-        print("BIAS_DIFF:", bias_diff)
 
     # Input scaling.
     # Assume per tensor scaling of input.
@@ -171,7 +170,7 @@ def apply_per_layer_quant(
     updated_tensors[input_quantizer.name] = input_quantizer
 
 
-def main():
+def main(argv):
     from ....utils import cli
 
     parser = cli.create_parser()
@@ -196,7 +195,7 @@ def main():
         type=Path,
         help="Base parameters to initialize from (will be augmented with quantized)",
     )
-    args = cli.parse(parser)
+    args = cli.parse(parser, args=argv)
 
     config_json_path: Path = args.config_json
     params_path: Path = args.params
@@ -241,4 +240,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1:])

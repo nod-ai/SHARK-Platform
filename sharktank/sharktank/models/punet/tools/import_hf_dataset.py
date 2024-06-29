@@ -23,6 +23,7 @@ Properties are separated into a "meta" dict (for "_" prefixed props) and an
 
 import json
 from pathlib import Path
+import sys
 
 from ....types import *
 
@@ -50,7 +51,7 @@ def import_hf_config(config_json_path: Path, params_path: Path) -> Dataset:
     return Dataset(props, theta)
 
 
-def main():
+def main(argv):
     from ....utils import cli
 
     parser = cli.create_parser()
@@ -64,7 +65,7 @@ def main():
         default=Path("diffusion_pytorch_model.fp16.safetensors"),
         help="Parameter file name, relative to config.json",
     )
-    args = cli.parse(parser)
+    args = cli.parse(parser, args=argv)
 
     config_json_path: Path = args.config_json
     params_path: Path = args.params
@@ -76,4 +77,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1:])
