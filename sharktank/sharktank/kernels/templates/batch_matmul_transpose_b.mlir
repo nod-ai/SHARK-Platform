@@ -18,9 +18,9 @@ util.func private @sharktank_batch_matmul_transpose_b_{{spec_sig}}(
   %zero = arith.constant 0: !dtype
   %c0 = arith.constant 0: index
   %c1 = arith.constant 1: index
-  %batch_dim = tensor.dim %a, %c0 : !a_tensor_type
-  %m_dim = tensor.dim %a, %c1 : !a_tensor_type
-  %n_dim = tensor.dim %b, %c0 : !b_tensor_type
+  %batch_dim = tensor.dim %a, %c0 : !a_tensor_type  // b, m, k
+  %m_dim = tensor.dim %a, %c1 : !a_tensor_type  // b, m, k
+  %n_dim = tensor.dim %b, %c1 : !b_tensor_type  // b, n, k
   %result_empty_dynamic = tensor.empty(%batch_dim, %m_dim, %n_dim) : !c_dynamic_tensor_type
   %result_empty = tensor.cast %result_empty_dynamic : !c_dynamic_tensor_type to !c_tensor_type
   %result_fill = linalg.fill ins(%zero: !dtype) outs(%result_empty: !c_tensor_type) -> !c_tensor_type
