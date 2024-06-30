@@ -45,23 +45,26 @@ class MainRunnerTestBase(TempDirTestBase):
         self.assertGreater(p.stat().st_size, 0, msg=f"Expected file {p} had zero size")
 
 
-def temporary_directory(identifier: str) -> tempfile.TemporaryDirectory:
+@contextlib.contextmanager
+def temporary_directory(identifier: str):
     """Returns a context manager TemporaryDirectory suitable for testing.
 
     If the env var SHARKTANK_TEST_ASSETS_DIR is set then directories will be
-    created under there, prefixed by identifier and will not be deleted.
+    created under there, named by `identifier`. If the `identifier` subdirectory
+    exists, it will be deleted first.
 
     This is useful for getting updated goldens and such.
     """
     explicit_dir = os.getenv("SHARKTANK_TEST_ASSETS_DIR", None)
     if explicit_dir is None:
-        return tempfile.TemporaryDirectory(prefix=f"{identifier}_")
+        with tempfile.TemporaryDirectory(prefix=f"{identifier}_") as td:
+            yield td
     else:
-        explicit_path = Path(explicit_dir)
+        explicit_path = Path(explicit_dir) / identifier
+        if explicit_path.exists():
+            shutil.rmtree(explicit_path)
         explicit_path.mkdir(parents=True, exist_ok=True)
-        return tempfile.TemporaryDirectory(
-            prefix=f"{identifier}_", dir=explicit_path, delete=False
-        )
+        yield explicit_path
 
 
 @contextlib.contextmanager

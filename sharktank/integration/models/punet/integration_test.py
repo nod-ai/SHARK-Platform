@@ -202,7 +202,6 @@ def test_punet_eager_fp16_validation(punet_goldens, sdxl_fp16_dataset, temp_dir)
 @pytest.mark.model_punet
 @pytest.mark.expensive
 @pytest.mark.golden
-@pytest.mark.skip("Not yet working")
 def test_punet_eager_int8_validation(punet_goldens, sdxl_int8_dataset, temp_dir):
     from sharktank.models.punet.tools import run_punet
 

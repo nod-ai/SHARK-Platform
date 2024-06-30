@@ -19,7 +19,7 @@ module {
 util.func private @sharktank_conv_2d_nchw_fchw_{{spec_sig}}
   (%input_pad: !inputs_asm_type, %weights: !weights_asm_type, %bias: !bias_asm_type)
     -> !result_asm_type {
-  %zero = arith.constant 0: !accum_type
+  %zero = arith.constant {{zero}}: !accum_type
   %c0 = arith.constant 0: index
   %c1 = arith.constant 1: index
   %c2 = arith.constant 2: index
@@ -43,7 +43,7 @@ util.func private @sharktank_conv_2d_nchw_fchw_{{spec_sig}}
     ins(%result, %bias : !result_asm_type, !bias_asm_type)
     outs(%result : !result_asm_type) {
     ^bb0(%in: !accum_type, %in_1: !accum_type, %out: !accum_type):
-      %add = arith.addi %in, %in_1 : !accum_type
+      %add = {{add_op}} %in, %in_1 : !accum_type
       linalg.yield %add : !accum_type
     } -> !result_asm_type
   util.return %result_biased : !result_asm_type
