@@ -115,9 +115,9 @@ def qconv2d_tensor_scaled_integer(
     extended_padding_list = [item for item in padding for _ in range(2)]
     padded_input = _pad_last_2d(input_qs, extended_padding_list)
     y_qs = _invoke_int32_conv2d(
-        padded_input.to(torch.int32),
-        weight_qs.to(torch.int32),
-        bias_qs.to(torch.int32) if bias_qs is not None else None,
+        padded_input,
+        weight_qs,
+        bias_qs.to(accum_dtype) if bias_qs is not None else None,
         stride,
         dilation,
         accum_dtype=accum_dtype,
@@ -209,13 +209,16 @@ def _invoke_int32_conv2d(input, weight, bias, stride, dilation, *, accum_dtype):
             # We don't have any non-test use of convs without bias, so just
             # use a zero vector for the None case. If this becomes common, we
             # may want to support an optional bias through the kernel.
-            bias = torch.zeros((weight.shape[1],), dtype=input.dtype)
+            bias = torch.zeros(
+                (weight.shape[1],), dtype=accum_dtype, device=input.device
+            )
         y_qs = kernels.conv_2d_nchw_fchw(
             input,
             weight,
             bias,
             stride,
             dilation,
+            output_dtype=str(accum_dtype),
         )
     else:
         # FP emulation.

@@ -24,12 +24,12 @@ def _randomize_per_axis(t: torch.Tensor, axis: int, offset_range: float = 0.0):
     return t + rnd_offset
 
 
-def _scale_offset_per_axis_ui8(t: torch.Tensor, reduce_dim: int):
+def _scale_offset_per_axis_i8(t: torch.Tensor, reduce_dim: int):
     mn, _ = torch.min(t, reduce_dim)
     mx, _ = torch.max(t, reduce_dim)
     scale = 255.0 / (mx - mn)
-    offset = torch.round(mn * scale)
-    return scale, offset.to(dtype=torch.uint8)
+    offset = torch.round(mn * scale) - 128
+    return scale, offset.to(dtype=torch.int8)
 
 
 def _scale_per_tensor_i8(t: torch.Tensor):
@@ -55,13 +55,13 @@ class QConvTest(unittest.TestCase):
         )
 
         input_scale = _scale_per_tensor_i8(input)
-        weight_scale, weight_offset = _scale_offset_per_axis_ui8(weight.flatten(1), 1)
+        weight_scale, weight_offset = _scale_offset_per_axis_i8(weight.flatten(1), 1)
 
         input_q = StaticScaledQuantizer(scale=input_scale, dtype=torch.int8).quantize(
             input
         )
         weight_q = StaticScaledQuantizer(
-            scale=weight_scale, offset=weight_offset, dtype=torch.uint8, axis=0
+            scale=weight_scale, offset=weight_offset, dtype=torch.int8, axis=0
         ).quantize(weight)
 
         y_actual = (
@@ -93,13 +93,13 @@ class QConvTest(unittest.TestCase):
         bias = torch.rand(8, dtype=torch.float32) + 5.0
 
         input_scale = _scale_per_tensor_i8(input)
-        weight_scale, weight_offset = _scale_offset_per_axis_ui8(weight.flatten(1), 1)
+        weight_scale, weight_offset = _scale_offset_per_axis_i8(weight.flatten(1), 1)
 
         input_q = StaticScaledQuantizer(scale=input_scale, dtype=torch.int8).quantize(
             input
         )
         weight_q = StaticScaledQuantizer(
-            scale=weight_scale, offset=weight_offset, dtype=torch.uint8, axis=0
+            scale=weight_scale, offset=weight_offset, dtype=torch.int8, axis=0
         ).quantize(weight)
 
         y_actual = ops.conv2d(input_q, weight_q, bias, stride=1, padding=(1, 1))
@@ -127,14 +127,14 @@ class QConvTest(unittest.TestCase):
         bias = torch.rand(8, dtype=torch.float32) + 5.0
 
         input_scale = _scale_per_tensor_i8(input)
-        weight_scale, weight_offset = _scale_offset_per_axis_ui8(weight.flatten(1), 1)
+        weight_scale, weight_offset = _scale_offset_per_axis_i8(weight.flatten(1), 1)
         bias_scale = input_scale * weight_scale
 
         input_q = StaticScaledQuantizer(scale=input_scale, dtype=torch.int8).quantize(
             input
         )
         weight_q = StaticScaledQuantizer(
-            scale=weight_scale, offset=weight_offset, dtype=torch.uint8, axis=0
+            scale=weight_scale, offset=weight_offset, dtype=torch.int8, axis=0
         ).quantize(weight)
         bias_q = StaticScaledQuantizer(
             scale=bias_scale, dtype=torch.int32, axis=0
@@ -173,9 +173,9 @@ class QConvTest(unittest.TestCase):
         input_q = StaticScaledQuantizer(scale=input_scale, dtype=torch.int8).quantize(
             input
         )
-        weight_q = StaticScaledQuantizer(
-            scale=weight_scale, dtype=torch.uint8
-        ).quantize(weight)
+        weight_q = StaticScaledQuantizer(scale=weight_scale, dtype=torch.int8).quantize(
+            weight
+        )
 
         y_actual = (
             ops.conv2d(input_q, weight_q, bias=None, stride=1, padding=(1, 1))
@@ -205,16 +205,16 @@ class QConvTest(unittest.TestCase):
             torch.rand(8, 8, 4, 4, dtype=torch.float32), axis=0, offset_range=0.2
         )
 
-        input_scale, input_offset = _scale_offset_per_axis_ui8(
+        input_scale, input_offset = _scale_offset_per_axis_i8(
             input.transpose(0, 1).flatten(1), 1
         )
-        weight_scale, weight_offset = _scale_offset_per_axis_ui8(weight.flatten(1), 1)
+        weight_scale, weight_offset = _scale_offset_per_axis_i8(weight.flatten(1), 1)
 
         input_q = StaticScaledQuantizer(
-            scale=input_scale, offset=input_offset, dtype=torch.uint8, axis=1
+            scale=input_scale, offset=input_offset, dtype=torch.int8, axis=1
         ).quantize(input)
         weight_q = StaticScaledQuantizer(
-            scale=weight_scale, offset=weight_offset, dtype=torch.uint8, axis=0
+            scale=weight_scale, offset=weight_offset, dtype=torch.int8, axis=0
         ).quantize(weight)
 
         y_actual = (

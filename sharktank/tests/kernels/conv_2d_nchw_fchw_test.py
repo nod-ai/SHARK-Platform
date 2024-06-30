@@ -24,24 +24,33 @@ class conv_2d_nchw_fchw_test(unittest.TestCase):
 
     @parameterized.expand(
         [
-            (1e-3, 1e-5),
-            (1e-3, 1e-5),
-            (1e-3, 1e-5),
+            (torch.int8, "int32", 1e-3, 1e-5),
+            (torch.int8, "int8", 1e-3, 1e-5),
+            (torch.float16, "float16", 1e-1, 1e-1),  # Different accumulators from ref
+            (torch.float16, "float32", 1e-3, 1e-5),
+            (torch.float32, "float32", 1e-3, 1e-5),
         ]
     )
-    def testBS32(self, atol, rtol):
-        dtype = torch.int8
-        inputs = (torch.rand([2, 320, 64, 64]) * 64).to(dtype)
+    def testBS32(self, input_dtype, output_dtype_name, atol, rtol):
+        output_dtype = getattr(torch, output_dtype_name)
+        inputs = (torch.rand([2, 4, 64, 64]) * 64).to(input_dtype)
         padding = [1, 1]
         extended_list = [item for item in padding for _ in range(2)]
         inputs_pad = _pad_last_2d(inputs, extended_list)
-        weights = (torch.rand([640, 320, 3, 3]) * 64).to(dtype)
-        bias = (torch.rand([640]) * 64).to(dtype)
-        result = kernels.conv_2d_nchw_fchw(inputs_pad, weights, bias, [1, 1], [1, 1])
+        weights = (torch.rand([8, 4, 3, 3]) * 64).to(input_dtype)
+        bias = (torch.rand([8]) * 64).to(dtype=output_dtype)
+        result = kernels.conv_2d_nchw_fchw(
+            inputs_pad, weights, bias, [1, 1], [1, 1], output_dtype=output_dtype_name
+        )
 
         # Tolerances are empirical and results are not expected to match exactly.
         ref = torch.nn.functional.conv2d(
-            inputs, weights, bias=bias, stride=(1, 1), padding=(1, 1), dilation=(1, 1)
+            inputs.to(dtype=output_dtype),
+            weights.to(dtype=output_dtype),
+            bias=bias.to(dtype=output_dtype),
+            stride=(1, 1),
+            padding=(1, 1),
+            dilation=(1, 1),
         )
         print(result.shape)
         print(ref.shape)
@@ -50,7 +59,9 @@ class conv_2d_nchw_fchw_test(unittest.TestCase):
     def testExportStaticDims(self):
         class MyModule(torch.nn.Module):
             def forward(self, a, b, c):
-                return kernels.conv_2d_nchw_fchw(a, b, c, [1, 1], [1, 1])
+                return kernels.conv_2d_nchw_fchw(
+                    a, b, c, [1, 1], [1, 1], output_dtype="int32"
+                )
 
         mod = MyModule()
         dtype = torch.int8
@@ -63,13 +74,16 @@ class conv_2d_nchw_fchw_test(unittest.TestCase):
             args=(
                 (inputs_pad).to(dtype),
                 (torch.rand([640, 320, 3, 3]) * 64).to(dtype),
-                (torch.rand([640]) * 64).to(dtype),
+                (torch.rand([640]) * 64).to(torch.int32),
             ),
         )
         output = aot.export(ep)
         output.verify()
         asm = str(output.mlir_module)
-        self.assertIn("@sharktank_conv_2d_nchw_fchw", asm)
+        self.assertIn(
+            "@sharktank_conv_2d_nchw_fchw_I2x320x66x66xi8_W640x320x3x3xi8_B640xi32_Oi32_S1x1_D1x1",
+            asm,
+        )
 
 
 if __name__ == "__main__":
