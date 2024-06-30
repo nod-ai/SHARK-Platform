@@ -94,4 +94,5 @@ class batch_matmul_transpose_b(CustomOp):
             c_asm_type=c_asm_type,
             dtype=str(accum_type),
         )
+        print(kb.module_body)
         kb.yield_results(*call_function(target_function, *kb.arg_bindings))
