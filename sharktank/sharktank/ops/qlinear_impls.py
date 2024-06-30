@@ -86,8 +86,6 @@ def qlinear_tensor_scaled_integer(
     # TODO: Handle permutation that we have a kernel for.
 
     # Fall back to automatic fusion based on integer, high precision matmul.
-    x_qs = x_qs.to(accum_dtype)
-    weight_qs = weight_qs.to(accum_dtype)
     y_qs = _invoke_int32_mmt(x_qs, weight_qs, accum_dtype=accum_dtype)
 
     # Offset correction. By applying the offset correction in post, it is
@@ -178,7 +176,9 @@ def _invoke_int32_mmt(lhs, rhs, *, accum_dtype):
             assert (rhs_rank + 1) == lhs_rank
             rhs_size = [lhs.shape[0]] + list(rhs.shape)
             rhs = rhs.unsqueeze(0).expand(rhs_size)
-        y_qs = kernels.batch_matmul_transpose_b(lhs, rhs)
+        y_qs = kernels.batch_matmul_transpose_b(
+            lhs.to(accum_dtype), rhs.to(accum_dtype)
+        )
     else:
         # FP emulation.
         y_qs = torch.matmul(
