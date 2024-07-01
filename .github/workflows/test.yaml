@@ -16,7 +16,6 @@ concurrency:
 
 jobs:
   test_llama:
-    if: 0 # DO NOT SUBMIT
     name: "Integration Tests - llama"
     strategy:
       matrix:
