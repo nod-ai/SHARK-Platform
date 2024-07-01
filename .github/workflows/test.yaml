@@ -91,4 +91,5 @@ jobs:
 
       - name: Run punet tests
         run: |
+          source ${VENV_DIR}/bin/activate
           pytest -v sharktank/ -m model_punet
