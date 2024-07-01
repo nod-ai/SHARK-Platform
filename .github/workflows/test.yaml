@@ -84,10 +84,10 @@ jobs:
         run: |
           source ${VENV_DIR}/bin/activate
           python -m pip install --no-compile --upgrade pip
-          pip install -r pytorch-rocm-requirements.txt
-          pip install -f https://iree.dev/pip-release-links.html --src deps \
+          pip install --no-compile -r pytorch-rocm-requirements.txt
+          pip install --no-compile -f https://iree.dev/pip-release-links.html --src deps \
             -e "git+https://github.com/iree-org/iree-turbine.git#egg=shark-turbine"
-          pip install -r requirements.txt -e sharktank/ shortfin/
+          pip install --no-compile -r requirements.txt -e sharktank/ shortfin/
 
       - name: Run punet tests
         run: |
