@@ -15,8 +15,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
-    name: "Integration Tests"
+  test_llama:
+    name: "Integration Tests - llama"
     strategy:
       matrix:
         version: [3.11]
@@ -66,3 +66,37 @@ jobs:
 
       - name: Run llama test
         run: ./build_tools/integration_tests/llama_export_compile_serve.sh
+
+  test_punet:
+    name: "Integration Tests - punet"
+    runs-on: nodai-amdgpu-mi250-x86-64
+    env:
+      PIP_CACHE_DIR: "${{ github.workspace }}/.pip-cache"
+    steps:
+      - name: "Setting up Python"
+        id: setup_python
+        uses: actions/setup-python@v3
+        with:
+          python-version: ${{matrix.version}}
+
+      - name: "Checkout Code"
+        uses: actions/checkout@v3
+
+      - name: Cache Pip Packages
+        uses: actions/cache@v4
+        id: cache-pip
+        with:
+          path: ${{ env.PIP_CACHE_DIR }}
+          key: pip-${{ steps.setup_python.outputs.python-version }}-${{ hashFiles('*requirements.txt') }}
+
+      - name: Install pip deps
+        run: |
+          python -m pip install --no-compile --upgrade pip
+          pip install --no-compile -r pytorch-cpu-requirements.txt
+          pip install --no-compile -f https://iree.dev/pip-release-links.html --src deps \
+            -e "git+https://github.com/iree-org/iree-turbine.git#egg=shark-turbine"
+          pip install --no-compile -r requirements.txt -e sharktank/ shortfin/
+
+      - name: Run punet tests
+        run: |
+          pytest -v sharktank/ -m model_punet
