@@ -78,7 +78,7 @@ jobs:
         id: setup_python
         uses: actions/setup-python@v3
         with:
-          python-version: ${{matrix.version}}
+          python-version: 3.11
 
       - name: "Checkout Code"
         uses: actions/checkout@v3
