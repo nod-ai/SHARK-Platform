@@ -45,7 +45,7 @@ python -m sharktank.models.punet.tools.run_punet --irpa-file ~/models/punet_fp16
 Integration testing is set up via pytest:
 
 ```
-pytest -v -m punet
+pytest -v sharktank/ -m model_punet
 ```
 
 These perform a variety of expensive tests that involve downloading live data
