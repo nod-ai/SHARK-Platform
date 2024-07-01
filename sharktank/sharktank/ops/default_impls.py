@@ -7,15 +7,21 @@
 # This file contains overrides of the standard ops for normal torch and
 # generic primitive/quantized types.
 
-from typing import Optional, List
+from typing import Optional, List, Sequence
 
 import torch
 from torch import Tensor, dtype
 import torch.nn.functional as F
 
 from ..types import PrimitiveTensor, QuantizedTensor
-from ._registry import unbox_tensor
+from ._registry import unbox_tensor, AllOfType
 from .signatures import *
+
+
+@cat.override(AllOfType(Tensor, PrimitiveTensor))
+def cat_default(tensors: Sequence[Tensor | PrimitiveTensor], dim: int):
+    return torch.cat([unbox_tensor(t) for t in tensors], dim)
+
 
 # conv2d
 

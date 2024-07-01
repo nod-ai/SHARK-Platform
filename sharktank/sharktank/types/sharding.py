@@ -8,6 +8,8 @@
 sharded."""
 
 from abc import ABC, abstractmethod
+from ..utils import tree
+from ..types.theta import flat_to_nested_dict
 
 
 class Sharding(ABC):
@@ -43,7 +45,13 @@ class ThetaSharding(dict):
     """
 
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        d = flat_to_nested_dict(dict(*args, **kwargs))
+        for k, v in d.items():
+            d[k] = tree.map_nodes(
+                tree=v,
+                f=lambda x: x if isinstance(x, TensorSharding) else ThetaSharding(x),
+            )
+        super().__init__(d)
 
 
 class ThetaLayerSharding(Sharding):

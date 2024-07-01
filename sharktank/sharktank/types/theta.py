@@ -33,6 +33,7 @@ from .tensors import (
 
 __all__ = [
     "Dataset",
+    "flat_to_nested_dict",
     "Theta",
 ]
 
@@ -82,7 +83,7 @@ class Theta:
             tensors = {t.name: t for t in tensors}
         assert all(isinstance(k, str) for k in _all_keys(tensors))
         assert all(isinstance(v, InferenceTensor) for v in _leaf_values(tensors))
-        self._tree = _flat_to_nested_dict(tensors)
+        self._tree = flat_to_nested_dict(tensors)
 
     def transform(self, *transforms: InferenceTensorTransform) -> "Theta":
         """Transforms all inference tensors by applying transform functions.
@@ -191,7 +192,28 @@ class Theta:
             inference_tensor_metas[name] = meta
 
 
-def _flat_to_nested_dict(flat: dict[str, Any]) -> dict[str, Any]:
+def flat_to_nested_dict(flat: dict[str, Any]) -> dict[str, Any]:
+    """Nest a flat or semi-flat dictionary.
+
+    The key nesting separator is the "." symbol.
+    Example:
+    ```python
+    flat_to_nested_dict({
+        "a.b": 0,
+        "a": { "c": 1 }
+    })
+    ```
+
+    Results in:
+    ```python
+    {
+        "a": {
+            "b": 0,
+            "c": 1
+        }
+    }
+    ```
+    """
     nested: dict = {}
 
     def add_to_dict(

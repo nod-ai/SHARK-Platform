@@ -5,9 +5,11 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 import unittest
+from typing import List
 
 import torch
 
+from sharktank.models.punet.testing import make_resnet_block_2d_theta
 from sharktank.models.punet.layers import ResnetBlock2D
 from sharktank.types import *
 from sharktank.models.punet.sharding import ResnetBlock2DSplitOutputChannelsSharding
@@ -20,73 +22,20 @@ class ResnetBlockTest(unittest.TestCase):
         batches = 2
         in_channels = 6
         out_channels = [12, 8]
-        height = 17
-        width = 19
+        height = 11
+        width = 13
         kernel_height = 5
         kernel_width = 5
         input_time_emb_shape = [batches, 8]
         norm_groups = 2
         eps = 0.01
         shard_count = 2
-        theta = Theta(
-            {
-                "norm1.weight": DefaultPrimitiveTensor(
-                    data=torch.rand(in_channels, dtype=torch.float32)
-                ),
-                "norm1.bias": DefaultPrimitiveTensor(
-                    data=torch.rand(in_channels, dtype=torch.float32)
-                ),
-                "conv1.weight": DefaultPrimitiveTensor(
-                    data=torch.rand(
-                        out_channels[0],
-                        in_channels,
-                        kernel_height,
-                        kernel_width,
-                        dtype=torch.float32,
-                    )
-                ),
-                "conv1.bias": DefaultPrimitiveTensor(
-                    data=torch.rand(out_channels[0], dtype=torch.float32),
-                ),
-                "norm2.weight": DefaultPrimitiveTensor(
-                    data=torch.rand(out_channels[0], dtype=torch.float32)
-                ),
-                "norm2.bias": DefaultPrimitiveTensor(
-                    data=torch.rand(out_channels[0], dtype=torch.float32)
-                ),
-                "conv2.weight": DefaultPrimitiveTensor(
-                    data=torch.rand(
-                        out_channels[1],
-                        out_channels[0],
-                        kernel_height,
-                        kernel_width,
-                        dtype=torch.float32,
-                    )
-                ),
-                "conv2.bias": DefaultPrimitiveTensor(
-                    data=torch.rand(out_channels[1], dtype=torch.float32),
-                ),
-                "time_emb_proj.weight": DefaultPrimitiveTensor(
-                    data=torch.rand(
-                        out_channels[0], input_time_emb_shape[1], dtype=torch.float32
-                    ),
-                ),
-                "time_emb_proj.bias": DefaultPrimitiveTensor(
-                    data=torch.rand(out_channels[0], dtype=torch.float32),
-                ),
-                "conv_shortcut.weight": DefaultPrimitiveTensor(
-                    data=torch.rand(
-                        out_channels[1],
-                        in_channels,
-                        kernel_height,
-                        kernel_width,
-                        dtype=torch.float32,
-                    )
-                ),
-                "conv_shortcut.bias": DefaultPrimitiveTensor(
-                    data=torch.rand(out_channels[1], dtype=torch.float32),
-                ),
-            }
+        theta = make_resnet_block_2d_theta(
+            in_channels=in_channels,
+            out_channels=out_channels,
+            kernel_height=kernel_height,
+            kernel_width=kernel_width,
+            input_time_emb_channels=input_time_emb_shape[1],
         )
         resnet_block = ResnetBlock2D(
             theta=theta,
@@ -101,8 +50,8 @@ class ResnetBlockTest(unittest.TestCase):
         input_image = torch.rand(
             batches,
             in_channels,
-            width,
             height,
+            width,
         )
         input_time_emb = torch.rand(input_time_emb_shape)
         expected_result = resnet_block(input_image, input_time_emb)
