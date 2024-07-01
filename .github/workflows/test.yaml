@@ -72,31 +72,22 @@ jobs:
     name: "Integration Tests - punet"
     runs-on: nodai-amdgpu-mi250-x86-64
     env:
-      PIP_CACHE_DIR: "${{ github.workspace }}/.pip-cache"
+      VENV_DIR: ${{ github.workspace }}/.venv
     steps:
-      - name: "Setting up Python"
-        id: setup_python
-        uses: actions/setup-python@v3
-        with:
-          python-version: 3.11
-
       - name: "Checkout Code"
         uses: actions/checkout@v3
 
-      - name: Cache Pip Packages
-        uses: actions/cache@v4
-        id: cache-pip
-        with:
-          path: ${{ env.PIP_CACHE_DIR }}
-          key: pip-${{ steps.setup_python.outputs.python-version }}-${{ hashFiles('*requirements.txt') }}
+      - name: "Setup Python venv"
+        run: python3 -m venv ${VENV_DIR}
 
       - name: Install pip deps
         run: |
+          source ${VENV_DIR}/bin/activate
           python -m pip install --no-compile --upgrade pip
-          pip install --no-compile -r pytorch-rocm-requirements.txt
-          pip install --no-compile -f https://iree.dev/pip-release-links.html --src deps \
+          pip install -r pytorch-rocm-requirements.txt
+          pip install -f https://iree.dev/pip-release-links.html --src deps \
             -e "git+https://github.com/iree-org/iree-turbine.git#egg=shark-turbine"
-          pip install --no-compile -r requirements.txt -e sharktank/ shortfin/
+          pip install -r requirements.txt -e sharktank/ shortfin/
 
       - name: Run punet tests
         run: |
