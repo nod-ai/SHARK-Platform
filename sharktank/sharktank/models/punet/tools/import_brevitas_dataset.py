@@ -63,6 +63,12 @@ def _load_theta(st_source) -> Theta:
     return Theta(tensors)
 
 
+def _dtype_str_to_dtype(dtype_str: str) -> torch.dtype:
+    prefix = "torch."
+    assert dtype_str.startswith(prefix), f"Expected 'torch.`DTYPE`', got {dtype_str}"
+    return getattr(torch, dtype_str[len(prefix) :])
+
+
 def apply_per_layer_quant(
     root_theta: Theta, layer_name: str, qp, updated_tensors: dict[str, InferenceTensor]
 ):
@@ -72,10 +78,21 @@ def apply_per_layer_quant(
 
     # The config file has tensors as 1d and a _shape suffixed array with the
     # concrete shape.
-    def _get_json_tensor(name: str, dtype: torch.dtype) -> Optional[torch.Tensor]:
+    def _get_json_tensor(
+        name: str, dtype: Optional[torch.dtype]
+    ) -> Optional[torch.Tensor]:
         data_1d = qp.get(name)
         if data_1d is None:
             return None
+        if dtype is not None:
+            assert (
+                f"{name}_dtype" not in qp
+            ), f"Explicit dtype for {name} but json has dtype"
+        else:
+            # _dtype key must come from the dict
+            dtype_str = qp[f"{name}_dtype"]
+            dtype = _dtype_str_to_dtype(dtype_str)
+
         shape = qp[f"{name}_shape"]
         return torch.tensor(data_1d, dtype=dtype).reshape(shape)
 
@@ -91,18 +108,11 @@ def apply_per_layer_quant(
 
     input_scale = _get_json_tensor("input_scale", torch.float32)
     weight_scale = _get_json_tensor("weight_scale", torch.float32)
-    # In the JSON file, zero points are purely positive numbers representing
-    # the zero point assuming a uint8 datatype. Since we prefer to use
-    # signed arithmetic, since that is better accelerated, we offset these by
-    # -128. By decoding them as uint8, it validates our range assumption.
-    # Then we widen/cast to offset.
-    weight_zp = _get_json_tensor("weight_zp", torch.uint8)
-    if weight_zp is not None:
-        weight_zp = (weight_zp.to(dtype=torch.int32) - 128).to(torch.int8)
+    weight_zp = _get_json_tensor("weight_zp", dtype=None)
 
-    # In the current version, we assume that the input is not offset and is
-    # per-tensor quantized for signed arithmetic.
-    input_zp = _get_json_tensor("input_zp", torch.int8)
+    # In the current version, we assume that the input is per-tensor quantized
+    # for signed arithmetic.
+    input_zp = _get_json_tensor("input_zp", dtype=None)
     if input_zp is not None:
         assert torch.count_nonzero(input_zp) == 0
 
@@ -187,7 +197,7 @@ def main(argv):
     parser.add_argument(
         "--quant-params",
         type=Path,
-        default=Path("quant_param.json"),
+        default=Path("quant_params.json"),
         help="Quantization parameters",
     )
     parser.add_argument(
