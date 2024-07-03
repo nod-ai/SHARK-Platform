@@ -12,6 +12,7 @@ import torch
 from shark_turbine import aot
 
 from ..model import Unet2DConditionModel, ClassifierFreeGuidanceUnetModel
+from ....utils.patching import SaveModuleResultTensorsPatch
 
 
 def get_random_inputs(dtype, device):
@@ -74,6 +75,11 @@ def main(argv):
         type=Path,
         help="Safetensors file of outputs",
     )
+    parser.add_argument(
+        "--save-intermediates-path",
+        type=Path,
+        help="Path of safetensors file in which to save all module outputs",
+    )
     args = cli.parse(parser, args=argv)
 
     device = args.device
@@ -99,11 +105,21 @@ def main(argv):
         )
         output.save_mlir(args.export)
     else:
+        # Save intermediates.
+        intermediates_saver = None
+        if args.save_intermediates_path:
+            intermediates_saver = SaveModuleResultTensorsPatch()
+            intermediates_saver.patch_child_modules(mdl.cond_model)
+
         results = mdl.forward(**inputs)
         print("1-step results:", results)
         if args.outputs:
             print(f"Saving outputs to {args.outputs}")
             save_outputs(args.outputs, results)
+
+        if intermediates_saver:
+            print(f"Saving intermediate tensors to: {args.save_intermediates_path}")
+            intermediates_saver.save_file(args.save_intermediates_path)
 
 
 if __name__ == "__main__":
