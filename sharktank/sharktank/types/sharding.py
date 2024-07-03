@@ -19,7 +19,7 @@ class Sharding(ABC):
 
 class TensorSharding(Sharding):
     def __init__(self, *, shard_count: int):
-        super(Sharding).__init__()
+        super().__init__()
         self.shard_count = shard_count
 
 
@@ -77,7 +77,7 @@ class ThetaLayerSharding(Sharding):
 
 class Conv2DSplitOutputChannelSharding(ThetaLayerSharding):
     def __init__(self, shard_count: int):
-        super(Sharding).__init__()
+        super().__init__()
         self.shard_count = shard_count
 
     def theta_sharding(self) -> ThetaSharding:
@@ -91,7 +91,7 @@ class Conv2DSplitOutputChannelSharding(ThetaLayerSharding):
 
 class GroupNormSplitChannelSharding(ThetaLayerSharding):
     def __init__(self, shard_count: int):
-        super(Sharding).__init__()
+        super().__init__()
         self.shard_count = shard_count
 
     def theta_sharding(self) -> ThetaSharding:
@@ -105,7 +105,7 @@ class GroupNormSplitChannelSharding(ThetaLayerSharding):
 
 class LinearReplicatedInputSplitWeightAndBiasSharding(ThetaLayerSharding):
     def __init__(self, shard_count: int, weight_and_bias_spit_dim: int = 0):
-        super(Sharding).__init__()
+        super().__init__()
         self.shard_count = shard_count
         self.weight_and_bias_spit_dim = weight_and_bias_spit_dim
 

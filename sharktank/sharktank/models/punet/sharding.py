@@ -13,7 +13,7 @@ class ResnetBlock2DSplitOutputChannelsSharding(ThetaLayerSharding):
     """Shards the input channel and output channels of the convolutions."""
 
     def __init__(self, shard_count: int):
-        super(Sharding).__init__()
+        super().__init__()
         self.shard_count = shard_count
 
     def theta_sharding(self) -> ThetaSharding:
@@ -49,7 +49,7 @@ class UpDownSample2DSplitChannelSharding(ThetaLayerSharding):
     """
 
     def __init__(self, shard_count: int):
-        super(Sharding).__init__()
+        super().__init__()
         self.shard_count = shard_count
 
     def theta_sharding(self) -> ThetaSharding:
@@ -76,7 +76,7 @@ class UpDownBlock2DSplitChannelsSharing(ThetaLayerSharding):
         upsamplers_count: int = 0,
         downsamplers_count: int = 0,
     ):
-        super(Sharding).__init__()
+        super().__init__()
         self.shard_count = shard_count
         self.resnet_layers_count = resnet_layers_count
         self.upsamplers_count = upsamplers_count
