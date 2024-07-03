@@ -15,6 +15,40 @@ from sharktank.types import sharding
 from sharktank.layers import Conv2DLayer
 
 
+class CatTest(unittest.TestCase):
+    def testCatSplitDim(self):
+        """Concatenation along the sharded split dimension."""
+        shard_dim = 1
+        shard_count = 2
+        cat_dim = 1
+        a = torch.rand(3, 6, dtype=torch.float32)
+        b = torch.rand(3, 4, dtype=torch.float32)
+        unsharded_result = torch.cat([a, b], dim=cat_dim)
+        expected_result = ops.reshard_split(
+            unsharded_result, count=shard_count, dim=shard_dim
+        )
+        sharded_a = ops.reshard_split(a, count=shard_count, dim=shard_dim)
+        sharded_b = ops.reshard_split(b, count=shard_count, dim=shard_dim)
+        actual_result = ops.cat([sharded_a, sharded_b], dim=cat_dim)
+        assert ops.equal(expected_result, actual_result)
+
+    def testCatNonSplitDim(self):
+        """Concatenation along a non-split dimension."""
+        shard_dim = 1
+        shard_count = 2
+        cat_dim = 0
+        a = torch.rand(5, 4, dtype=torch.float32)
+        b = torch.rand(3, 4, dtype=torch.float32)
+        unsharded_result = torch.cat([a, b], dim=cat_dim)
+        expected_result = ops.reshard_split(
+            unsharded_result, count=shard_count, dim=shard_dim
+        )
+        sharded_a = ops.reshard_split(a, count=shard_count, dim=shard_dim)
+        sharded_b = ops.reshard_split(b, count=shard_count, dim=shard_dim)
+        actual_result = ops.cat([sharded_a, sharded_b], dim=cat_dim)
+        assert ops.equal(expected_result, actual_result)
+
+
 class ConvTest(unittest.TestCase):
     def testAllGather(self):
         shard_count = 3

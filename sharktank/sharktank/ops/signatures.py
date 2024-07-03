@@ -6,7 +6,7 @@
 
 """Signatures for dynamic dispatch of ops covering our fundamental tensor types."""
 
-from typing import Optional, Sequence, Union, List
+from typing import Optional, Sequence, Union, List, Tuple
 
 import torch
 import numbers
@@ -17,6 +17,7 @@ from ._registry import *
 
 __all__ = [
     "all_gather",
+    "cat",
     "conv2d",
     "elementwise",
     "embedding_lookup",
@@ -52,6 +53,23 @@ def _all_gather_trampoline(
     tensors = (maybe_sharded,)
     for override in d.find_overrides(tensors):
         result = override(maybe_sharded, dim=dim)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(tensors)
+
+
+@overridable
+def cat(tensors: Tuple[AnyTensor, ...] | List[AnyTensor], dim: int = 0) -> AnyTensor:
+    ...
+
+
+@cat.trampoline
+def _cat_trampoline(
+    d: SignatureDispatcher, tensors: Tuple[Tensor, ...] | List[Tensor], dim: int = 0
+):
+    for override in d.find_overrides(tensors):
+        result = override(tensors, dim)
         if result is not NotImplemented:
             return override, result
     else:

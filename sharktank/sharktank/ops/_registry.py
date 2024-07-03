@@ -6,7 +6,7 @@
 
 """Signatures for dynamic dispatch of ops covering our fundamental tensor types."""
 
-from typing import Any, Callable, Iterable, Optional, Union
+from typing import Any, Callable, Iterable, Optional, Union, Tuple
 
 import collections
 import inspect
@@ -17,8 +17,11 @@ from torch import Tensor
 from ..types import PrimitiveTensor, QuantizedTensor
 
 __all__ = [
-    "SignatureDispatcher",
+    "AllOfType",
+    "AnyOfType",
     "overridable",
+    "SignatureDispatcher",
+    "BoolTypeExpr",
     "unbox_tensor",
 ]
 
@@ -48,6 +51,63 @@ def _test_get_last_op_dispatch():
         _ENABLE_TEST_LAST_OP_DISPATCH
     ), "Cannot get last op dispatched without calling _test_enable_last_op_dispatch()"
     return _TEST_LAST_OP_DISPATCH
+
+
+class BoolTypeExpr:
+    """Expression that returns bool and accepts types as arguments."""
+
+    def __init__(self, expr: Callable[..., bool]):
+        self._expr = expr
+
+    def __call__(self, *args: type) -> bool:
+        return self._expr(*args)
+
+
+class AllOfType(BoolTypeExpr):
+    """Returns True if all of the types are from a set of types.
+
+    ```python
+    # False. str is not in (int, float).
+    AllOfType(int, float)(int, str)
+
+     # True. int is in (int, float).
+    AllOfType(int, float)(int, int)
+    ```
+    """
+
+    def __init__(self, *types: type):
+        self._types = types
+
+        def expr(*types: type):
+            return all(
+                any([issubclass(t, required) for required in self._types])
+                for t in types
+            )
+
+        super().__init__(expr)
+
+
+class AnyOfType(BoolTypeExpr):
+    """Returns True if any of the types are from a set of types.
+
+    ```python
+    # True. int is in (int, float).
+    AnyOfType(int, float)(int, str)
+
+     # False. str is not in (int, float).
+    AnyOfType(int, float)(str, str)
+    ```
+    """
+
+    def __init__(self, *types: type):
+        self._types = types
+
+        def expr(*types: type):
+            return any(
+                [issubclass(t, required) for t in types for required in self._types]
+            )
+
+        super().__init__(expr)
 
 
 class SignatureDispatcher:
@@ -89,7 +149,7 @@ class SignatureDispatcher:
 
     def override(
         self,
-        *type_spec: tuple[type, ...],
+        *type_spec: tuple[type | BoolTypeExpr, ...],
         salience: int = 0,
         auto_unbox: bool = True,
         auto_dequant: bool = False,
@@ -134,10 +194,36 @@ class SignatureDispatcher:
         assert self._trampoline is None
         self._trampoline = trampoline
 
+    def _is_type_expr_target(
+        self, override_type_spec: Tuple[type, ...], type_spec: Tuple[type, ...]
+    ) -> bool:
+        if len(override_type_spec) > 0 and isinstance(
+            override_type_spec[0], BoolTypeExpr
+        ):
+            if len(override_type_spec) > 1:
+                raise TypeError(
+                    "Override with multiple arguments not allowed when using BoolTypeExpr."
+                )
+            return True
+        return False
+
+    def _is_type_expr_target_match(
+        self, type_expr: BoolTypeExpr, type_spec: Tuple[type, ...]
+    ) -> bool:
+        return type_expr(*type_spec)
+
     def _match_targets(self, type_spec: tuple):
         targets = []
         for override in self._overrides:
             override_type_spec = override.type_spec
+
+            # Check if the override is a boolean type expression and if it is that it
+            # satisfied.
+            if self._is_type_expr_target(override_type_spec, type_spec):
+                if self._is_type_expr_target_match(override_type_spec[0], type_spec):
+                    targets.append(override.target)
+                continue
+
             if len(override_type_spec) != len(type_spec):
                 continue
             for expected, actual in zip(override.type_spec, type_spec):

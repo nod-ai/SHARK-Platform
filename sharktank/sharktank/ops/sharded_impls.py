@@ -6,7 +6,7 @@
 
 import torch
 from torch import Tensor
-from typing import List, Optional
+from typing import List, Optional, Sequence
 import itertools
 
 from ..types import (
@@ -20,7 +20,7 @@ from ..types import (
     Theta,
     UnreducedTensor,
 )
-from ._registry import unbox_tensor
+from ._registry import unbox_tensor, AllOfType
 from .signatures import *
 from .shape import broadcast_dims
 
@@ -39,6 +39,30 @@ def all_gather_split(
     # collapse them.
     shards = [sharded_cat(input) for i in range(input.shard_count)]
     return ReplicatedTensor(ts=shards)
+
+
+@cat.override(AllOfType(SplitPrimitiveTensor))
+def cat_sharded(tensors: Sequence[SplitPrimitiveTensor], dim: int):
+    assert len(tensors) > 0
+    assert all(
+        [
+            t.shard_count == tensors[0].shard_count
+            and t.shard_dim == tensors[0].shard_dim
+            for t in tensors
+        ]
+    )
+
+    shard_dim = tensors[0].shard_dim
+    shard_count = tensors[0].shard_count
+    if dim != shard_dim:
+        shards = [cat(shards, dim) for shards in zip(*[t.shards for t in tensors])]
+        return SplitPrimitiveTensor(ts=shards, shard_dim=shard_dim)
+    else:
+        # TODO: implement efficient cat along split dim.
+        concatenated_unsharded = cat(
+            [shard for t in tensors for shard in t.shards], dim
+        )
+        return reshard_split(concatenated_unsharded, dim=shard_dim, count=shard_count)
 
 
 # conv2d

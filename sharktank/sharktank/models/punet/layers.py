@@ -80,7 +80,7 @@ class UpDownBlock2D(ThetaLayer):
         hidden_states: torch.Tensor,
         temb: Optional[torch.Tensor] = None,
         *,
-        encoder_hidden_states: torch.Tensor,
+        encoder_hidden_states: Optional[torch.Tensor],
         attention_mask: Optional[torch.Tensor],
         encoder_attention_mask: Optional[torch.Tensor],
         upsample_size: Optional[int] = None,
@@ -93,7 +93,7 @@ class UpDownBlock2D(ThetaLayer):
             if res_hidden_states_tuple is not None:
                 res_hidden_states = res_hidden_states_tuple[-1]
                 res_hidden_states_tuple = res_hidden_states_tuple[:-1]
-                hidden_states = torch.cat([hidden_states, res_hidden_states], dim=1)
+                hidden_states = ops.cat([hidden_states, res_hidden_states], dim=1)
 
             hidden_states = resnet(hidden_states, temb)
             output_states = output_states + (hidden_states,)
@@ -250,11 +250,11 @@ class Upsample2D(ThetaLayer):
     def forward(self, hidden_states: torch.Tensor, output_size: Optional[int] = None):
         if self.interpolate:
             if output_size is None:
-                hidden_states = nn.functional.interpolate(
+                hidden_states = ops.interpolate(
                     hidden_states, scale_factor=2.0, mode="nearest"
                 )
             else:
-                hidden_states = nn.functional.interpolate(
+                hidden_states = ops.interpolate(
                     hidden_states, size=output_size, mode="nearest"
                 )
         hidden_states = self.conv(hidden_states)

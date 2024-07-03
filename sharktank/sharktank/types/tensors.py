@@ -4,7 +4,7 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-from typing import Any, Callable, Optional, Union, TypeVar, Generic, Type
+from typing import Any, Callable, Optional, Union, TypeVar, Generic, Type, Iterable
 from copy import deepcopy
 from collections.abc import Collection
 from numbers import Integral
@@ -17,19 +17,21 @@ from ..utils.math import ceildiv
 from shark_turbine.aot import (
     ExternalTensorTrait,
 )
+from ..utils import tree as tree_utils
 
 from ..utils.io import ShardedArchiveBuilder
 
 __all__ = [
     "AnyTensor",
-    "register_quantized_layout",
+    "DefaultPrimitiveTensor",
+    "flatten_tensor_tree",
     "InferenceTensor",
     "MetaDataValueType",
-    "DefaultPrimitiveTensor",
     "PlanarQuantizedTensor",
     "PrimitiveTensor",
-    "QuantizedTensor",
     "QuantizedLayout",
+    "QuantizedTensor",
+    "register_quantized_layout",
     "ReplicatedTensor",
     "ShardedTensor",
     "SplitPrimitiveTensor",
@@ -931,6 +933,21 @@ class UnreducedTensor(ShardedTensorBase):
         shape = list(ts[0].shape if shape is None else shape)
         assert all(shape == list(t.shape) for t in ts)
         super().__init__(name=name, ts=ts, shape=shape, shard_dim=None)
+
+
+def flatten_tensor_tree(
+    tree: tree_utils.Tree,
+) -> Iterable[torch.Tensor | InferenceTensor]:
+    return tree_utils.flatten(
+        tree,
+        is_leaf=lambda x: isinstance(
+            x,
+            (
+                torch.Tensor,
+                InferenceTensor,
+            ),
+        ),
+    )
 
 
 ########################################################################################

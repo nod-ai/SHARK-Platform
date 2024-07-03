@@ -8,6 +8,8 @@
 sharded."""
 
 from abc import ABC, abstractmethod
+from ..utils import tree
+from ..types.theta import flat_to_nested_dict
 
 
 class Sharding(ABC):
@@ -17,7 +19,7 @@ class Sharding(ABC):
 
 class TensorSharding(Sharding):
     def __init__(self, *, shard_count: int):
-        super(Sharding).__init__()
+        super().__init__()
         self.shard_count = shard_count
 
 
@@ -43,7 +45,13 @@ class ThetaSharding(dict):
     """
 
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        d = flat_to_nested_dict(dict(*args, **kwargs))
+        for k, v in d.items():
+            d[k] = tree.map_nodes(
+                tree=v,
+                f=lambda x: x if isinstance(x, TensorSharding) else ThetaSharding(x),
+            )
+        super().__init__(d)
 
 
 class ThetaLayerSharding(Sharding):
@@ -69,7 +77,7 @@ class ThetaLayerSharding(Sharding):
 
 class Conv2DSplitOutputChannelSharding(ThetaLayerSharding):
     def __init__(self, shard_count: int):
-        super(Sharding).__init__()
+        super().__init__()
         self.shard_count = shard_count
 
     def theta_sharding(self) -> ThetaSharding:
@@ -83,7 +91,7 @@ class Conv2DSplitOutputChannelSharding(ThetaLayerSharding):
 
 class GroupNormSplitChannelSharding(ThetaLayerSharding):
     def __init__(self, shard_count: int):
-        super(Sharding).__init__()
+        super().__init__()
         self.shard_count = shard_count
 
     def theta_sharding(self) -> ThetaSharding:
@@ -97,7 +105,7 @@ class GroupNormSplitChannelSharding(ThetaLayerSharding):
 
 class LinearReplicatedInputSplitWeightAndBiasSharding(ThetaLayerSharding):
     def __init__(self, shard_count: int, weight_and_bias_spit_dim: int = 0):
-        super(Sharding).__init__()
+        super().__init__()
         self.shard_count = shard_count
         self.weight_and_bias_spit_dim = weight_and_bias_spit_dim
 
