@@ -23,7 +23,7 @@ from ..types import (
 )
 from ..utils import debugging
 
-from ._registry import unbox_tensor
+from ..types.tensors import unbox_tensor
 from .signatures import (
     IntOrSequenceInt,
     conv2d,

@@ -14,7 +14,8 @@ from torch import Tensor, dtype
 import torch.nn.functional as F
 
 from ..types import PrimitiveTensor, QuantizedTensor
-from ._registry import unbox_tensor, AllOfType
+from ..types.tensors import unbox_tensor
+from ._registry import AllOfType
 from .signatures import *
 
 

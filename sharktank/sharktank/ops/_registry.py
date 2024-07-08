@@ -22,7 +22,6 @@ __all__ = [
     "overridable",
     "SignatureDispatcher",
     "BoolTypeExpr",
-    "unbox_tensor",
 ]
 
 _TargetOverride = collections.namedtuple(
@@ -255,14 +254,3 @@ def overridable(f):
     dispatcher = SignatureDispatcher(f)
     functools.update_wrapper(dispatcher, f)
     return dispatcher
-
-
-def unbox_tensor(t: Any) -> Tensor:
-    """Unboxes a value that can be isomorphically interpreted as a Tensor."""
-    if isinstance(t, Tensor):
-        return t
-    elif isinstance(t, PrimitiveTensor):
-        return t.as_torch()
-    elif isinstance(t, QuantizedTensor):
-        return t.unpack().dequant()
-    raise ValueError(f"Expected a Tensor or PrimitiveTensor but got {type(t)}")

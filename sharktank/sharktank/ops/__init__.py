@@ -17,7 +17,7 @@ and layouts.
 """
 
 from . import _registry
-from ._registry import unbox_tensor
+from ..types.tensors import unbox_tensor
 from .signatures import *
 from .shape import *
 
