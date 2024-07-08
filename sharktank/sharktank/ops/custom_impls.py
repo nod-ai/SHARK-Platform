@@ -24,7 +24,7 @@ from ..types import (
     SuperBlockOffsetScaled_4_6_Layout,
 )
 
-from ._registry import unbox_tensor
+from ..types.tensors import unbox_tensor
 from .signatures import *
 
 

@@ -13,6 +13,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 import torch
+from torch import Tensor
 from ..utils.math import ceildiv
 from shark_turbine.aot import (
     ExternalTensorTrait,
@@ -35,6 +36,7 @@ __all__ = [
     "ReplicatedTensor",
     "ShardedTensor",
     "SplitPrimitiveTensor",
+    "unbox_tensor",
     "UnreducedTensor",
 ]
 
@@ -948,6 +950,17 @@ def flatten_tensor_tree(
             ),
         ),
     )
+
+
+def unbox_tensor(t: Any) -> Tensor:
+    """Unboxes a value that can be isomorphically interpreted as a Tensor."""
+    if isinstance(t, Tensor):
+        return t
+    elif isinstance(t, PrimitiveTensor):
+        return t.as_torch()
+    elif isinstance(t, QuantizedTensor):
+        return t.unpack().dequant()
+    raise ValueError(f"Expected a Tensor or PrimitiveTensor but got {type(t)}")
 
 
 ########################################################################################

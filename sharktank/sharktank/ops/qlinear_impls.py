@@ -22,7 +22,7 @@ from ..types import (
 )
 from ..utils import debugging
 
-from ._registry import unbox_tensor
+from ..types.tensors import unbox_tensor
 from .signatures import *
 
 from sharktank import kernels
