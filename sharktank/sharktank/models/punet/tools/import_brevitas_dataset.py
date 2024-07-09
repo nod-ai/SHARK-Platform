@@ -27,12 +27,12 @@ import safetensors
 import sys
 import torch
 
-from ....types import *
+from sharktank.types import *
 
 # It is possible to import quant params from stock unet weights for testing.
 # Quality won't be great but needs SMOOTHQUANT prescaling disabled to work
 # at all.
-IMPORT_SMOOTHQUANT_PRESCALE = True
+IMPORT_SMOOTHQUANT_PRESCALE = False
 
 
 def _load_json(p: Path):
@@ -58,6 +58,10 @@ def _load_theta(st_source) -> Theta:
     ]
     return Theta(tensors)
 
+def as_torch_or_none(tensor: Optional[InferenceTensor]) -> Optional[torch.Tensor]:
+    if tensor is None:
+        return None
+    return tensor.as_torch()
 
 def _dtype_str_to_dtype(dtype_str: str) -> torch.dtype:
     prefix = "torch."
@@ -66,8 +70,10 @@ def _dtype_str_to_dtype(dtype_str: str) -> torch.dtype:
 
 
 def apply_per_layer_quant(
-    root_theta: Theta, layer_name: str, qp, updated_tensors: dict[str, InferenceTensor]
+    root_theta: Theta, layer_name: str, updated_tensors: dict[str, InferenceTensor]
 ):
+    if "kv_cache_scaling_factor" in layer_name:
+        return
     layer_theta = root_theta(layer_name)
     weight = layer_theta.tensor("weight")
     weight_dtype = weight.as_torch().dtype
@@ -161,7 +167,7 @@ def apply_per_layer_quant(
         # If the bias is present, it dictates the overall output quantization
         # and will not be checked for correct parameters at runtime. It must
         # be quantized to match properly.
-        bias_scale = 1.0 / (input_scale * weight_scale)
+        bias_scale = 1.0 / (input_quant_scale * weight_quant_scale)
         bias_quantizer = StaticScaledQuantizer(
             scale=bias_scale,
             dtype=torch.int32,
@@ -248,18 +254,18 @@ def apply_per_layer_quant(
 
     # Input scaling.
     # Assume per tensor scaling of input.
-    assert len(input_scale.shape) == 0
+    assert len(input_quant_scale.shape) == 0
     input_quantizer = StaticScaledQuantizer(
         name=f"{layer_name}.q_input",
-        scale=1.0 / input_scale,
-        reciprocal_scale=input_scale,
-        dtype=torch.int8,
+        scale=1.0 / input_quant_scale,
+        reciprocal_scale=input_quant_scale,
+        dtype=torch.float16
     )
     updated_tensors[input_quantizer.name] = input_quantizer
 
 
 def main(argv):
-    from ....utils import cli
+    from sharktank.utils import cli
 
     parser = cli.create_parser()
     cli.add_output_dataset_options(parser)
@@ -307,14 +313,21 @@ def main(argv):
             base_theta = _load_theta(st)
 
     ds = Dataset(dataset_props, quant_theta if base_theta is None else base_theta)
-
+    print('\n'.join(quant_theta.flatten()))
+    print(quant_theta("model.layers.1"))
     # The quant_params_struct has quantization parameter structs keyed by full
     # layer name. We process each of these in turn to produce a per-layer
     # quantization scheme where no quantized tensors escape their layer.
     updated_tensors: dict[str, InferenceTensor] = {}
-    for layer_name, qp in quant_params_struct.items():
-        print(f"Applying per-layer quants: {layer_name}")
-        apply_per_layer_quant(quant_theta, layer_name, qp, updated_tensors)
+    model_layers = ["model.layers."+str(i) for i in range(80)]
+    sub_layers = ['mlp.down_proj', 'mlp.up_proj', 'self_attn.o_proj', 'self_attn.qkv' ]
+    for layer in model_layers:
+        for sub in sub_layers:
+
+            layer_name = layer + '.' + sub
+            #if layern_name not in ["quantization", "decoder_type", 
+            print(f"Applying per-layer quants: {layer_name}")
+            apply_per_layer_quant(quant_theta, layer_name, updated_tensors)
 
     # Apply updates into a new Theta.
     theta = base_theta if base_theta is not None else quant_theta
