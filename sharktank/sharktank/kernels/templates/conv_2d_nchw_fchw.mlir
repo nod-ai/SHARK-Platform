@@ -41,7 +41,7 @@ util.func private @sharktank_conv_2d_nchw_fchw_{{spec_sig}}
       indexing_maps = [#map0, #map1, #map0],
       iterator_types = ["parallel", "parallel", "parallel", "parallel"]}
     ins(%result, %bias : !result_asm_type, !bias_asm_type)
-    outs(%result : !result_asm_type) {
+    outs(%result_empty : !result_asm_type) {
     ^bb0(%in: !accum_type, %in_1: !accum_type, %out: !accum_type):
       %add = {{add_op}} %in, %in_1 : !accum_type
       linalg.yield %add : !accum_type
