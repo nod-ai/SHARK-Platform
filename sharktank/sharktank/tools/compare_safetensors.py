@@ -32,20 +32,33 @@ class Reporter:
     def compare(self, name: str, expected: torch.Tensor, actual: torch.Tensor):
         f = self.index
 
+        def print_line(line: str, color: str = ""):
+            style = ""
+            if color:
+                style = f"color: {color}"
+            f.write(f"<div style='font-family: monospace; white-space: pre; {style}'>")
+            f.write(line)
+            f.write("</div>\n")
+
         def print_stats(label, t):
             t = t.to(dtype=torch.float32)
             std, mean = torch.std_mean(t)
-            f.write(
+            print_line(
                 f"    {label}: "
                 f"MIN={torch.min(t)}, "
                 f"MAX={torch.max(t)}, "
                 f"MEAN={mean}, STD={std}"
-                f"\n"
             )
 
         exp_flat = expected.flatten().to(torch.float32)
         act_flat = actual.flatten().to(torch.float32)
         diff_flat = exp_flat - act_flat
+        diff_min = torch.min(diff_flat)
+        diff_max = torch.max(diff_flat)
+        diff_mean, diff_stddev = torch.std_mean(diff_flat)
+        exp_max = torch.max(exp_flat)
+        exp_min = torch.min(exp_flat)
+        bound = torch.abs(exp_max - exp_min) / 2.0
 
         f.write("<hr>\n")
         f.write(f"<h3>{name}</h3>\n")
@@ -55,32 +68,45 @@ class Reporter:
             .shape[0]
         )
         if non_finite_count > 0:
-            f.write(f"<div style='color: red'>\n")
-            f.write(f"Samples have {non_finite_count} non finite values!")
-            f.write(f"</div>\n")
+            print_line(f"Samples have {non_finite_count} non finite values!", "red")
 
-        f.write(f"<pre>")
         print_stats(" REF", expected)
         print_stats(" ACT", actual)
-        print_stats("DIFF", (expected - actual))
-        f.write(f"</pre>")
+        print_stats("DIFF", diff_flat)
+
+        diff_mean_percent = 100.0 * torch.abs(diff_mean) / bound
+        diff_outlier_percent = (
+            100.0 * max(float(torch.abs(diff_min)), float(torch.abs(diff_max))) / bound
+        )
+        diff_stddev_percent = 100.0 * torch.abs(diff_stddev) / bound
+        print_line(
+            f"       DIFF MEAN PERCENT: {diff_mean_percent:.5f}%",
+            color="red" if diff_mean_percent > 1.0 else "",
+        )
+        print_line(
+            f"     DIFF STDDEV PERCENT: {diff_stddev_percent:.5f}%",
+            color="red" if diff_stddev_percent > 1.0 else "",
+        )
+        print_line(
+            f"    DIFF OUTLIER PERCENT: {diff_outlier_percent:.5f}%",
+            color="red" if diff_outlier_percent > 1.0 else "",
+        )
 
         print(f"Generating plots {name}")
         dpi = 144
         file_name_root = f"{self.counter}_{name}_"
         plot_filename = f"{file_name_root}_diff.png"
         self.counter += 1
-        max = torch.max(exp_flat)
-        min = torch.min(exp_flat)
-        bound = torch.abs(max - min) / 2.0
         x = torch.arange(0, diff_flat.shape[0])
         y = diff_flat
 
         fig, ax = plt.subplots()
         ax.plot(x, y)
         ax.set(xlabel="dim", ylabel="diff", title="Difference")
-        ax.axhline(float(bound), linestyle=":", color="red", alpha=0.5)
-        ax.axhline(float(-bound), linestyle=":", color="red", alpha=0.5)
+        ax.axhline(float(bound), linestyle=":", color="red", alpha=1.0)
+        ax.axhline(float(-bound), linestyle=":", color="red", alpha=1.0)
+        ax.axhline(float(diff_min), linestyle=":", color="blue", alpha=1.0)
+        ax.axhline(float(diff_max), linestyle=":", color="blue", alpha=1.0)
         ax.grid()
         fig.set_figheight(2.5)
         fig.set_figwidth(8)
