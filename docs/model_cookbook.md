@@ -72,7 +72,7 @@ graph LR
 ## Useful tools and projects
 
 * https://huggingface.co/docs/huggingface_hub/en/guides/cli
-* https://github.com/ggerganov/llama.cpp (specifically for [`convert-hf-to-gguf.py`](https://github.com/ggerganov/llama.cpp/blob/master/convert-hf-to-gguf.py))
+* https://github.com/ggerganov/llama.cpp (specifically for [`convert_hf_to_gguf.py`](https://github.com/ggerganov/llama.cpp/blob/master/convert_hf_to_gguf.py))
 
 ## Create a quantized .irpa file
 
