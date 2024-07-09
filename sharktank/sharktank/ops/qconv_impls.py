@@ -184,6 +184,8 @@ def qconv2d_tensor_scaled_integer(
     # If we have an unquantized bias, dequantize the result and add here.
     if bias is not None and bias_qs is None:
         y = y.unpack().dequant()
+        # TODO: Fix at HEAD. Need to unbox.
+        bias = bias.as_torch()
         y = elementwise(torch.add, y, bias.reshape(-1, 1, 1))
     return y
 

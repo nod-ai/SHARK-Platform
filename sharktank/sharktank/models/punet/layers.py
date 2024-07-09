@@ -391,9 +391,23 @@ class AttentionLayer(ThetaLayer):
     def __init__(self, theta: Theta, *, heads: int):
         super().__init__(theta)
         self.heads = heads
-        self.to_q = LinearLayer(theta("to_q"))
-        self.to_k = LinearLayer(theta("to_k"))
-        self.to_v = LinearLayer(theta("to_v"))
+        # In order to handle fused qkv linear layers, we handle them explicitly.
+        # These layers never have a bias and use shared quantization. In MHA
+        # cases, all will share the quantization of the q. In MHCA cases,
+        # q will be quantized with its parameters and k/v will share k.
+        self.to_q_theta = theta("to_q")
+        self.to_k_theta = theta("to_k")
+        self.to_v_theta = theta("to_v")
+
+        # Ensure that we don't have a quantized bias. If we did, then we would
+        # need to be careful about bias scaling in the quantized case.
+        assert not isinstance(self.to_q_theta.optional_tensor("bias"), QuantizedTensor)
+        assert not isinstance(self.to_k_theta.optional_tensor("bias"), QuantizedTensor)
+        assert not isinstance(self.to_v_theta.optional_tensor("bias"), QuantizedTensor)
+
+        # self.to_q = LinearLayer(theta("to_q"))
+        # self.to_k = LinearLayer(theta("to_k"))
+        # self.to_v = LinearLayer(theta("to_v"))
         # Diffusers models this wonky. They have dropout as the second layer of
         # to_out. But ignored for inference.
         self.to_out = LinearLayer(theta("to_out", 0))
@@ -404,12 +418,55 @@ class AttentionLayer(ThetaLayer):
         attention_mask: Optional[torch.Tensor],
         encoder_hidden_states: Optional[torch.Tensor],
     ):
+        # Quantize the hidden states according to q.
+        q_premul_input = self.to_q_theta.optional_tensor("premul_input")
+        q_input_quantizer = self.to_q_theta.optional_tensor("q_input")
+        if q_premul_input is not None:
+            hidden_states = ops.elementwise(torch.mul, hidden_states, q_premul_input)
+        if q_input_quantizer is not None:
+            hidden_states = q_input_quantizer.quantize(hidden_states)
+
+        # For MHCA case, quantize k/v according to the encoder_hidden_states
         if encoder_hidden_states is None:
             encoder_hidden_states = hidden_states
-        bs, sl, *_ = encoder_hidden_states.shape
-        query = self.to_q(hidden_states)
-        key = self.to_k(encoder_hidden_states)
-        value = self.to_v(encoder_hidden_states)
+        else:
+            kv_premul_input = self.to_k_theta.optional_tensor("premul_input")
+            kv_input_quantizer = self.to_k_theta.optional_tensor("q_input")
+            if kv_premul_input is not None:
+                encoder_hidden_states = ops.elementwise(
+                    torch.mul, encoder_hidden_states, kv_premul_input
+                )
+            if kv_input_quantizer is not None:
+                encoder_hidden_states = kv_input_quantizer.quantize(
+                    encoder_hidden_states
+                )
+
+        bs, sl, *_ = hidden_states.shape
+        query = ops.linear(
+            hidden_states,
+            self.to_q_theta.tensor("weight"),
+            self.to_q_theta.optional_tensor("bias"),
+        )
+        key = ops.linear(
+            encoder_hidden_states,
+            self.to_k_theta.tensor("weight"),
+            self.to_k_theta.optional_tensor("bias"),
+        )
+        value = ops.linear(
+            encoder_hidden_states,
+            self.to_v_theta.tensor("weight"),
+            self.to_v_theta.optional_tensor("bias"),
+        )
+
+        # Force dequantize.
+        # TODO: Use unbox() once sync'd to head
+        query = (
+            query.unpack().dequant() if isinstance(query, QuantizedTensor) else query
+        )
+        key = key.unpack().dequant() if isinstance(key, QuantizedTensor) else key
+        value = (
+            value.unpack().dequant() if isinstance(value, QuantizedTensor) else value
+        )
 
         # Transpose.
         inner_dim = key.shape[-1]

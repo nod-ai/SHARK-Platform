@@ -152,7 +152,10 @@ def apply_per_layer_quant(
 
     # Bias/output scaling.
     bias = layer_theta.optional_tensor("bias")
-    if QUANTIZE_BIAS and bias is not None:
+    do_quantize_bias = QUANTIZE_BIAS
+    if "to_k" in layer_name or "to_q" in layer_name or "to_v" in layer_name:
+        do_quantize_bias = False
+    if do_quantize_bias and bias is not None:
         # If the bias is present, it dictates the overall output quantization
         # and will not be checked for correct parameters at runtime. It must
         # be quantized to match properly.
