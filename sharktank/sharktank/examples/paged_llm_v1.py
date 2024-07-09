@@ -13,13 +13,13 @@ import sys
 
 import torch
 
-from ..layers import *
-from ..types import *
+from sharktank.layers import *
+from sharktank.types import *
 
 # TODO: Should be using a base class with the protocol supported.
-from ..models.llama.llama import *
-from ..utils.debugging import trace_tensor
-from ..utils.tokenizer import InferenceTokenizer, load_tokenizer
+from sharktank.models.llama.llama import *
+from sharktank.utils.debugging import trace_tensor
+from sharktank.utils.tokenizer import InferenceTokenizer, load_tokenizer
 
 
 class TorchGenerator:
