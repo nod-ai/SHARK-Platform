@@ -27,12 +27,12 @@ import safetensors
 import sys
 import torch
 
-from sharktank.types import *
+from ....types import *
 
 # It is possible to import quant params from stock unet weights for testing.
 # Quality won't be great but needs SMOOTHQUANT prescaling disabled to work
 # at all.
-IMPORT_SMOOTHQUANT_PRESCALE = False
+IMPORT_SMOOTHQUANT_PRESCALE = True
 
 
 def _load_json(p: Path):
@@ -58,10 +58,6 @@ def _load_theta(st_source) -> Theta:
     ]
     return Theta(tensors)
 
-def as_torch_or_none(tensor: Optional[InferenceTensor]) -> Optional[torch.Tensor]:
-    if tensor is None:
-        return None
-    return tensor.as_torch()
 
 def _dtype_str_to_dtype(dtype_str: str) -> torch.dtype:
     prefix = "torch."
@@ -70,13 +66,12 @@ def _dtype_str_to_dtype(dtype_str: str) -> torch.dtype:
 
 
 def apply_per_layer_quant(
-    root_theta: Theta, layer_name: str, updated_tensors: dict[str, InferenceTensor]
+    root_theta: Theta, layer_name: str, qp, updated_tensors: dict[str, InferenceTensor]
 ):
-    if "kv_cache_scaling_factor" in layer_name:
-        return
     layer_theta = root_theta(layer_name)
     weight = layer_theta.tensor("weight")
     weight_dtype = weight.as_torch().dtype
+<<<<<<< HEAD
     bias = layer_theta.optional_tensor("bias")
 
     # The config file has tensors as 1d and a _shape suffixed array with the
@@ -96,6 +91,15 @@ def apply_per_layer_quant(
             dtype_str = qp[f"{name}_dtype"]
             dtype = _dtype_str_to_dtype(dtype_str)
 
+=======
+
+    # The config file has tensors as 1d and a _shape suffixed array with the
+    # concrete shape.
+    def _get_json_tensor(name: str, dtype: torch.dtype) -> Optional[torch.Tensor]:
+        data_1d = qp.get(name)
+        if data_1d is None:
+            return None
+>>>>>>> 08af8e6 (re-add original)
         shape = qp[f"{name}_shape"]
         return torch.tensor(data_1d, dtype=dtype).reshape(shape)
 
@@ -111,11 +115,26 @@ def apply_per_layer_quant(
 
     input_scale = _get_json_tensor("input_scale", torch.float32)
     weight_scale = _get_json_tensor("weight_scale", torch.float32)
+<<<<<<< HEAD
     weight_zp = _get_json_tensor("weight_zp", dtype=None)
 
     # In the current version, we assume that the input is per-tensor quantized
     # for signed arithmetic.
     input_zp = _get_json_tensor("input_zp", dtype=None)
+=======
+    # In the JSON file, zero points are purely positive numbers representing
+    # the zero point assuming a uint8 datatype. Since we prefer to use
+    # signed arithmetic, since that is better accelerated, we offset these by
+    # -128. By decoding them as uint8, it validates our range assumption.
+    # Then we widen/cast to offset.
+    weight_zp = _get_json_tensor("weight_zp", torch.uint8)
+    if weight_zp is not None:
+        weight_zp = (weight_zp.to(dtype=torch.int32) - 128).to(torch.int8)
+
+    # In the current version, we assume that the input is not offset and is
+    # per-tensor quantized for signed arithmetic.
+    input_zp = _get_json_tensor("input_zp", torch.int8)
+>>>>>>> 08af8e6 (re-add original)
     if input_zp is not None:
         assert torch.count_nonzero(input_zp) == 0
 
@@ -130,12 +149,17 @@ def apply_per_layer_quant(
 
     # Quantized layer must have all quantization info.
     assert (
+<<<<<<< HEAD
         weight_scale is not None
+=======
+        weight_scale is not None and weight_zp is not None
+>>>>>>> 08af8e6 (re-add original)
     ), f"Could not find weight scale (in {qp.keys()}) for {layer_name}"
     assert (
         input_scale is not None
     ), f"Could not find input scale (in {qp.keys()}) for {layer_name}"
 
+<<<<<<< HEAD
     def quantize_weight(
         weight_name: str,
         weight: torch.Tensor,
@@ -164,10 +188,32 @@ def apply_per_layer_quant(
         input_scale: torch.Tensor,
         weight_scale: torch.Tensor,
     ):
+=======
+    # Weight scaling.
+    # There is an implicit assumption that the weight is asym (uint8) quantized.
+    # Our quantizer uses scale/offset nomenclature. The offset maps to
+    # zero-point, and the scale maps to the *dequant* scale (so terms differ
+    # by reciprocal).
+    weight_quantizer = StaticScaledQuantizer(
+        scale=1.0 / weight_scale,
+        reciprocal_scale=weight_scale,
+        offset=None if torch.count_nonzero(weight_zp) == 0 else weight_zp,
+        dtype=torch.int8,
+    )
+    weight_quant = weight_quantizer.quantize(weight, name=weight.name)
+    updated_tensors[weight_quant.name] = weight_quant
+    # Spot check that things look sane.
+    weight_dequant = weight_quant.unpack().dequant()
+    weight_diff = weight.as_torch() - weight_dequant
+
+    # Bias/output scaling.
+    bias = layer_theta.optional_tensor("bias")
+    if QUANTIZE_BIAS and bias is not None:
+>>>>>>> 08af8e6 (re-add original)
         # If the bias is present, it dictates the overall output quantization
         # and will not be checked for correct parameters at runtime. It must
         # be quantized to match properly.
-        bias_scale = 1.0 / (input_quant_scale * weight_quant_scale)
+        bias_scale = 1.0 / (input_scale * weight_scale)
         bias_quantizer = StaticScaledQuantizer(
             scale=bias_scale,
             dtype=torch.int32,
@@ -254,18 +300,18 @@ def apply_per_layer_quant(
 
     # Input scaling.
     # Assume per tensor scaling of input.
-    assert len(input_quant_scale.shape) == 0
+    assert len(input_scale.shape) == 0
     input_quantizer = StaticScaledQuantizer(
         name=f"{layer_name}.q_input",
-        scale=1.0 / input_quant_scale,
-        reciprocal_scale=input_quant_scale,
-        dtype=torch.float16
+        scale=1.0 / input_scale,
+        reciprocal_scale=input_scale,
+        dtype=torch.int8,
     )
     updated_tensors[input_quantizer.name] = input_quantizer
 
 
 def main(argv):
-    from sharktank.utils import cli
+    from ....utils import cli
 
     parser = cli.create_parser()
     cli.add_output_dataset_options(parser)
@@ -311,25 +357,16 @@ def main(argv):
             args.base_params, framework="pt", device="cpu"
         ) as st:
             base_theta = _load_theta(st)
-    print(dataset_props)
-    exit()
 
     ds = Dataset(dataset_props, quant_theta if base_theta is None else base_theta)
-    print('\n'.join(quant_theta.flatten()))
-    print(quant_theta("model.layers.1"))
+
     # The quant_params_struct has quantization parameter structs keyed by full
     # layer name. We process each of these in turn to produce a per-layer
     # quantization scheme where no quantized tensors escape their layer.
     updated_tensors: dict[str, InferenceTensor] = {}
-    model_layers = ["model.layers."+str(i) for i in range(80)]
-    sub_layers = ['mlp.down_proj', 'mlp.up_proj', 'self_attn.o_proj', 'self_attn.qkv' ]
-    for layer in model_layers:
-        for sub in sub_layers:
-
-            layer_name = layer + '.' + sub
-            #if layern_name not in ["quantization", "decoder_type", 
-            print(f"Applying per-layer quants: {layer_name}")
-            apply_per_layer_quant(quant_theta, layer_name, updated_tensors)
+    for layer_name, qp in quant_params_struct.items():
+        print(f"Applying per-layer quants: {layer_name}")
+        apply_per_layer_quant(quant_theta, layer_name, qp, updated_tensors)
 
     # Apply updates into a new Theta.
     theta = base_theta if base_theta is not None else quant_theta
