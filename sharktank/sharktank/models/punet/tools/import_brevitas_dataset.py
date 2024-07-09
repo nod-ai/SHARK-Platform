@@ -241,6 +241,7 @@ def apply_per_layer_quant(
     # Spot check that things look sane.
     weight_dequant = weight_quant.unpack().dequant()
     weight_diff = weight.as_torch() - weight_dequant
+<<<<<<< HEAD
 >>>>>>> 2dd8825 ((WIP) llama fp8 safetensor conversion)
 
     def quantize_bias(
@@ -249,6 +250,12 @@ def apply_per_layer_quant(
         input_scale: torch.Tensor,
         weight_scale: torch.Tensor,
     ):
+=======
+    print(torch.sum(weight_diff))
+    # Bias/output scaling.
+    bias = layer_theta.optional_tensor("bias")
+    if QUANTIZE_BIAS and bias is not None:
+>>>>>>> 9a05ba2 (add in changes for loading model.)
         # If the bias is present, it dictates the overall output quantization
         # and will not be checked for correct parameters at runtime. It must
         # be quantized to match properly.
@@ -396,6 +403,8 @@ def main(argv):
             args.base_params, framework="pt", device="cpu"
         ) as st:
             base_theta = _load_theta(st)
+    print(dataset_props)
+    exit()
 
     ds = Dataset(dataset_props, quant_theta if base_theta is None else base_theta)
     print('\n'.join(quant_theta.flatten()))
