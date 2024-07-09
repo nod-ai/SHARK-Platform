@@ -157,7 +157,7 @@ def apply_per_layer_quant(
     # Spot check that things look sane.
     weight_dequant = weight_quant.unpack().dequant()
     weight_diff = weight.as_torch() - weight_dequant
-
+    print(torch.sum(weight_diff))
     # Bias/output scaling.
     bias = layer_theta.optional_tensor("bias")
     if QUANTIZE_BIAS and bias is not None:
@@ -235,6 +235,8 @@ def main(argv):
             args.base_params, framework="pt", device="cpu"
         ) as st:
             base_theta = _load_theta(st)
+    print(dataset_props)
+    exit()
 
     ds = Dataset(dataset_props, quant_theta if base_theta is None else base_theta)
     print('\n'.join(quant_theta.flatten()))
