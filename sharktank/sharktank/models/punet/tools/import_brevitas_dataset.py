@@ -311,6 +311,8 @@ def main(argv):
             args.base_params, framework="pt", device="cpu"
         ) as st:
             base_theta = _load_theta(st)
+    print(dataset_props)
+    exit()
 
     ds = Dataset(dataset_props, quant_theta if base_theta is None else base_theta)
     print('\n'.join(quant_theta.flatten()))
