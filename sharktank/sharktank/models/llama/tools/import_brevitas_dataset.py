@@ -102,7 +102,7 @@ def apply_per_layer_quant(
                 layout=TensorScaledLayout(
                     shape=q_weight.shape,
                     d=1.0/weight_quant_scale,
-                    qs=q_weight.to(dtype=torch.float8_e4m3fn),
+                    qs=q_weight.to(dtype=torch.float8_e4m3fnuz),
                     m=weight_quant_zero_point,
                     dtype=torch.float16,  # Original dtype.
                 )
@@ -113,7 +113,7 @@ def apply_per_layer_quant(
                 layout=TensorScaledLayout(
                     shape=k_weight.shape,
                     d=1.0/weight_quant_scale,
-                    qs=k_weight.to(dtype=torch.float8_e4m3fn),
+                    qs=k_weight.to(dtype=torch.float8_e4m3fnuz),
                     m=weight_quant_zero_point,
                     dtype=torch.float16,  # Original dtype.
                 )
@@ -124,7 +124,7 @@ def apply_per_layer_quant(
                 layout=TensorScaledLayout(
                     shape=v_weight.shape,
                     d=1.0/weight_quant_scale,
-                    qs=v_weight.to(dtype=torch.float8_e4m3fn),
+                    qs=v_weight.to(dtype=torch.float8_e4m3fnuz),
                     m=weight_quant_zero_point,
                     dtype=torch.float16,  # Original dtype.
                 )
@@ -143,7 +143,7 @@ def apply_per_layer_quant(
             layout=TensorScaledLayout(
                 shape=weight.shape,
                 d=1.0/weight_quant_scale,
-                qs=weight,
+                qs=weight.to(dtype=torch.float8_e4m3fnuz),
                 m=weight_quant_zero_point,
                 dtype=torch.float16,  # Original dtype.
             )
