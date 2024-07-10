@@ -107,7 +107,7 @@ and use the following commands:
 ```bash
 huggingface-cli download --local-dir . NousResearch/Meta-Llama-3-8B
 
-python ~/llama.cpp/convert.py --outtype f16 --outfile Meta-Llama-3-8B-f16.gguf . --vocab-type bpe
+python ~/llama.cpp/convert_hf_to_gguf.py --outtype f16 --outfile Meta-Llama-3-8B-f16.gguf . --vocab-type bpe
 ```
 
 Another example:
@@ -115,7 +115,7 @@ Another example:
 ```bash
 huggingface-cli login
 huggingface-cli download --local-dir /tmp/mistral-7b mistralai/Mistral-7B-v0.1
-python ~/llama.cpp/convert.py --outtype f32 --outfile /tmp/mistral-7b-v0.1-f32.gguf /tmp/mistral-7b
+python ~/llama.cpp/convert_hf_to_gguf.py --outtype f32 --outfile /tmp/mistral-7b-v0.1-f32.gguf /tmp/mistral-7b
 
 # Run through reference implementation
 python -m sharktank.examples.paged_llm_v1 \
