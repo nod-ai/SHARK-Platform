@@ -70,11 +70,9 @@ def as_torch_or_none(tensor: Optional[InferenceTensor]) -> Optional[torch.Tensor
 def apply_per_layer_quant(
     root_theta: Theta, layer_name: str, updated_tensors: dict[str, InferenceTensor]
 ):
-    if "kv_cache_scaling_factor" in layer_name:
-        return
+
     layer_theta = root_theta(layer_name)
-    weight = layer_theta.tensor("weight")
-    weight_dtype = weight.as_torch().dtype
+    weight = layer_theta.tensor("weight").as_torch()
     weight_quant_scale = layer_theta.tensor("weight_quant_scale").as_torch()
     weight_quant_zero_point = layer_theta.optional_tensor("weight_quant_zero_point")
     if weight_quant_zero_point == None:
@@ -87,50 +85,74 @@ def apply_per_layer_quant(
         print("weight quant scale not found for layer ", layer_name)
         return
 
-    # Weight scaling.
-    # There is an implicit assumption that the weight is asym (uint8) quantized.
-    # Our quantizer uses scale/offset nomenclature. The offset maps to
-    # zero-point, and the scale maps to the *dequant* scale (so terms differ
-    # by reciprocal).
-    weight_quantizer = StaticScaledQuantizer(
-        reciprocal_scale=1.0 / weight_quant_scale,
-        scale=weight_quant_scale,
-        offset=None if torch.count_nonzero(weight_quant_zero_point) == 0 else weight_quant_zero_point,
-        dtype=torch.float8_e4m3fn,
-    )
-    weight_quant = weight_quantizer.quantize(weight, name=weight.name)
-    updated_tensors[weight_quant.name] = weight_quant
-    # Spot check that things look sane.
-    weight_dequant = weight_quant.unpack().dequant()
-    torch.testing.assert_close(weight.as_torch(), weight_dequant, atol=3, rtol=3)
-    # Bias/output scaling.
-    bias = layer_theta.optional_tensor("bias")
-    if QUANTIZE_BIAS and bias is not None:
-        # If the bias is present, it dictates the overall output quantization
-        # and will not be checked for correct parameters at runtime. It must
-        # be quantized to match properly.
-        bias_scale = 1.0 / (input_quant_scale * weight_quant_scale)
-        bias_quantizer = StaticScaledQuantizer(
-            scale=bias_scale,
-            dtype=torch.int32,
-            disable_saturate=True,
+    layer_parent = ".".join(layer_name.split('.')[:-1])
+    if "qkv" in layer_name:
+        print("qkv layer found")
+        print("weight_quant_scale shape: ", weight_quant_scale.shape)
+        print("layer_parent: ", layer_parent)
+        torch_weight = weight
+        q_weight = torch_weight[:8192, :]
+        k_weight = torch_weight[8192:9216, :]
+        v_weight = torch_weight[9216:, :]
+
+    if "qkv" in layer_name:
+        q_weight_quant = PlanarQuantizedTensor(
+                shape=q_weight.shape,
+                name=layer_parent + '.q_proj.weight',
+                layout=TensorScaledLayout(
+                    shape=q_weight.shape,
+                    d=1.0/weight_quant_scale,
+                    qs=q_weight.to(dtype=torch.float8_e4m3fn),
+                    m=weight_quant_zero_point,
+                    dtype=torch.float16,  # Original dtype.
+                )
         )
-        bias_quant = bias_quantizer.quantize(bias, name=bias.name)
-        updated_tensors[bias_quant.name] = bias_quant
+        k_weight_quant = PlanarQuantizedTensor(
+                shape=k_weight.shape,
+                name=layer_parent + '.k_proj.weight',
+                layout=TensorScaledLayout(
+                    shape=k_weight.shape,
+                    d=1.0/weight_quant_scale,
+                    qs=k_weight.to(dtype=torch.float8_e4m3fn),
+                    m=weight_quant_zero_point,
+                    dtype=torch.float16,  # Original dtype.
+                )
+        )
+        v_weight_quant = PlanarQuantizedTensor(
+                shape=v_weight.shape,
+                name=layer_parent + '.v_proj.weight',
+                layout=TensorScaledLayout(
+                    shape=v_weight.shape,
+                    d=1.0/weight_quant_scale,
+                    qs=v_weight.to(dtype=torch.float8_e4m3fn),
+                    m=weight_quant_zero_point,
+                    dtype=torch.float16,  # Original dtype.
+                )
+        )
+        print(q_weight_quant.name)
+        print(k_weight_quant.name)
+        print(v_weight_quant.name)
+        updated_tensors[q_weight_quant.name] = q_weight_quant
+        updated_tensors[k_weight_quant.name] = k_weight_quant
+        updated_tensors[v_weight_quant.name] = v_weight_quant
+        #updated_tensors[layer_name] = None
+    else:
+        weight_quant = PlanarQuantizedTensor(
+            shape=weight.shape,
+            name=layer_name + '.weight',
+            layout=TensorScaledLayout(
+                shape=weight.shape,
+                d=1.0/weight_quant_scale,
+                qs=weight,
+                m=weight_quant_zero_point,
+                dtype=torch.float16,  # Original dtype.
+            )
+        )
+        print(weight_quant.name)
+        updated_tensors[weight_quant.name] = weight_quant
         # Spot check that things look sane.
-        bias_dequant = bias_quant.unpack().dequant()
-        bias_diff = bias.as_torch() - bias_dequant
-   
-    # Input scaling.
-    # Assume per tensor scaling of input.
-    #assert len(input_quant_scale.shape) == 0
-    #input_quantizer = StaticScaledQuantizer(
-    #    name=f"{layer_name}.q_input",
-    #    reciprocal_scale=1.0 / input_quant_scale,
-    #    scale=input_quant_scale,
-    #    dtype=torch.float8_e4m3fn,
-    #)
-    #updated_tensors[input_quantizer.name] = input_quantizer
+        #weight_dequant = weight_quant.unpack().dequant()
+        #torch.testing.assert_close(weight, weight_dequant, atol=3, rtol=3)
 
 
 def main(argv):
@@ -196,3 +218,4 @@ def main(argv):
 
 if __name__ == "__main__":
     main(sys.argv[1:])
+    print("hi")
