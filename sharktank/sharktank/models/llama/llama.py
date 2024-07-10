@@ -137,7 +137,8 @@ class PagedLlamaModelV1(BaseCausalLMModel):
                 theta(key), epsilon=self.hp.attention_layer_norm_rms_epsilon
             ),
         )
-        key = "output_lm_head" if "output_lm_head" in list(theta.keys) else "lm_head"
+        print(theta.keys)
+        key = "output" if "output" in list(theta.keys) else "lm_head"
         self.add_module("output_lm_head", LinearLayer(theta(key)))
         key = "blk" if "blk" in list(theta.keys) else "model.layers"
         self.attn_blocks = nn.ModuleList(
@@ -288,14 +289,14 @@ class PagedLlamaAttentionBlock(ThetaLayer):
     ):  
         super().__init__(theta)
         if hf:
-            tensor = theta("self_attn.qkv.weight").tensor
-            tensor = tensor.reshape(head_count_kv, head_count // head_count_kv + 2, head_dim, head_dim * head_count)
-            print(tensor)
+            #tensor = theta("self_attn.qkv.weight").tensor
+            #tensor = tensor.reshape(head_count_kv, head_count // head_count_kv + 2, head_dim, head_dim * head_count)
+            #print(tensor)
             self.add_module("attn_norm", RMSNormLayer(theta("input_layernorm"), epsilon=rms_epsilon))
-            self.add_module("attn_qkv", LinearLayer(theta("self_attn.qkv")))
-            #self.add_module("attn_q", LinearLayer(theta("self_attn.q_proj")))
-            #self.add_module("attn_k", LinearLayer(theta("self_attn.k_proj")))
-            #self.add_module("attn_v", LinearLayer(theta("self_attn.v_proj")))
+            #self.add_module("attn_qkv", LinearLayer(theta("self_attn.qkv")))
+            self.add_module("attn_q", LinearLayer(theta("self_attn.q_proj")))
+            self.add_module("attn_k", LinearLayer(theta("self_attn.k_proj")))
+            self.add_module("attn_v", LinearLayer(theta("self_attn.v_proj")))
             self.add_module("attn_output", LinearLayer(theta("self_attn.o_proj")))
             self.add_module("ffn_norm", RMSNormLayer(theta("post_attention_layernorm"), epsilon=rms_epsilon))
             self.add_module("ffn_gate", LinearLayer(theta("mlp.gate_proj")))
@@ -318,6 +319,8 @@ class PagedLlamaAttentionBlock(ThetaLayer):
 
         self.block_index = block_index
         self.cache = cache
+        print(head_count)
+        assert(isinstance(head_count, int))
         self.head_count = head_count
         self.head_dim = head_dim
         self.head_count_kv = head_count_kv

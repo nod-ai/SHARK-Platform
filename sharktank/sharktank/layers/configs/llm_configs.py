@@ -45,7 +45,7 @@ class LlamaHParams:
     def from_hf_props(p: dict[str, Any]):
         hp = p["hparams"]
         attn_head_dim=int(_int_prop(hp, "hidden_size") // _int_prop(hp, "num_attention_heads"))
-        attention_head_count=_int_prop(hp, "num_attention_heads"),
+        attention_head_count=_int_prop(hp, "num_attention_heads")
         return LlamaHParams(
             context_length=_int_prop(hp, "max_position_embeddings"),
             embedding_length=_int_prop(hp, "hidden_size"),
