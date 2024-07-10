@@ -288,10 +288,14 @@ class PagedLlamaAttentionBlock(ThetaLayer):
     ):  
         super().__init__(theta)
         if hf:
+            tensor = theta("self_attn.qkv.weight").tensor
+            tensor = tensor.reshape(head_count_kv, head_count // head_count_kv + 2, head_dim, head_dim * head_count)
+            print(tensor)
             self.add_module("attn_norm", RMSNormLayer(theta("input_layernorm"), epsilon=rms_epsilon))
-            self.add_module("attn_q", LinearLayer(theta("self_attn.q_proj")))
-            self.add_module("attn_k", LinearLayer(theta("self_attn.k_proj")))
-            self.add_module("attn_v", LinearLayer(theta("self_attn.v_proj")))
+            self.add_module("attn_qkv", LinearLayer(theta("self_attn.qkv")))
+            #self.add_module("attn_q", LinearLayer(theta("self_attn.q_proj")))
+            #self.add_module("attn_k", LinearLayer(theta("self_attn.k_proj")))
+            #self.add_module("attn_v", LinearLayer(theta("self_attn.v_proj")))
             self.add_module("attn_output", LinearLayer(theta("self_attn.o_proj")))
             self.add_module("ffn_norm", RMSNormLayer(theta("post_attention_layernorm"), epsilon=rms_epsilon))
             self.add_module("ffn_gate", LinearLayer(theta("mlp.gate_proj")))
