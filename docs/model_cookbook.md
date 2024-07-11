@@ -256,3 +256,13 @@ iree-run-module \
   --input=1x2662400xf16 \
   --parameters=model=/tmp/open_llama_3b_v2/open-llama-3b-v2-f16.gguf
 ```
+
+## Generating data for llama models
+
+```bash
+python -m sharktank.models.llama.tools.generate_data \
+  --tokenizer=openlm-research/open_llama_3b_v2 \
+  --config=/tmp/open_llama_3b_v2/open-llama-3b-v2-f16.json \
+  --output-dir=/tmp/open_llama_3b_v2/inputs \
+  --prompt="What is the meaning of life?"
+```
