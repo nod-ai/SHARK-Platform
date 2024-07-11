@@ -196,6 +196,13 @@ class Theta:
             meta = inference_tensor.add_to_archive(irpa)
             inference_tensor_metas[name] = meta
 
+    def rename_tensors_to_paths(self):
+        """Rename each tensor to have name equal to its path in the theta.
+        Example: name="a.b.c"
+        """
+        for path, tensor in self.flatten().items():
+            tensor.name = path
+
 
 def flat_to_nested_dict(flat: dict[str, Any]) -> dict[str, Any]:
     """Nest a flat or semi-flat dictionary.

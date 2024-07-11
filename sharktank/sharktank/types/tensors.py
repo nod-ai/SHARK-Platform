@@ -4,7 +4,18 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-from typing import Any, Callable, Optional, Union, TypeVar, Generic, Type, Iterable
+from typing import (
+    Any,
+    Callable,
+    Optional,
+    Union,
+    TypeVar,
+    Generic,
+    Type,
+    Iterable,
+    List,
+    Tuple,
+)
 from copy import deepcopy
 from collections.abc import Collection
 from numbers import Integral
@@ -14,6 +25,7 @@ from dataclasses import dataclass
 
 import torch
 from torch import Tensor
+from torch.utils._pytree import register_pytree_node
 from ..utils.math import ceildiv
 from shark_turbine.aot import (
     ExternalTensorTrait,
@@ -162,7 +174,7 @@ class InferenceTensor(ABC):
     """
 
     def __init__(self, *, shape: list[int], name: str = UnnamedTensorName):
-        self.name = name
+        self._name = name
         self.shape = shape
 
     @classmethod
@@ -184,6 +196,14 @@ class InferenceTensor(ABC):
             f"InferenceTensor {cls} cannot be directly "
             f"serialized (does not implement serialized_name())"
         )
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @name.setter
+    def name(self, name: str):
+        self._name = name
 
     @property
     @abstractmethod
@@ -558,6 +578,12 @@ class ShardedTensor(InferenceTensor):
         """Returns whether the original tensor is replicated.
         If replicated, `shard_dim` does not make sense and is None."""
         ...
+
+    @InferenceTensor.name.setter
+    def name(self, name: str):
+        super(ShardedTensor, self.__class__).name.__set__(self, name)
+        for i, shard in enumerate(self.shards):
+            shard.name = f"{name}.shard.{i}"
 
 
 @register_inference_tensor
@@ -1029,3 +1055,68 @@ _maybe_dtype(
 _DTYPE_TO_NAME: dict[torch.dtype, str] = {v: k for k, v in _NAME_TO_DTYPE.items()}
 
 AnyTensor = Union[torch.Tensor, InferenceTensor]
+
+########################################################################################
+# Tensor types registration with PyTorch.
+# This enables our tensor types to be part of function signatures during exporting.
+########################################################################################
+
+
+def flatten_default_primitive_tensor(
+    t: DefaultPrimitiveTensor,
+) -> Tuple[List[Any], torch.utils._pytree.Context]:
+    return [t.as_torch()], {"name": t.name}
+
+
+def unflatten_defult_primitive_tensor(
+    values: Iterable[Any], ctx: torch.utils._pytree.Context
+) -> DefaultPrimitiveTensor:
+    values_as_list = list(values)
+    return DefaultPrimitiveTensor(data=values_as_list[0], name=ctx["name"])
+
+
+register_pytree_node(
+    DefaultPrimitiveTensor,
+    flatten_fn=flatten_default_primitive_tensor,
+    unflatten_fn=unflatten_defult_primitive_tensor,
+)
+
+
+def flatten_split_primitive_tensor(
+    t: SplitPrimitiveTensor,
+) -> Tuple[List[Any], torch.utils._pytree.Context]:
+    return t.shards, {"name": t.name, "shard_dim": t.shard_dim}
+
+
+def unflatten_split_primitive_tensor(
+    values: Iterable[Any], ctx: torch.utils._pytree.Context
+) -> SplitPrimitiveTensor:
+    return SplitPrimitiveTensor(
+        shard_dim=ctx["shard_dim"], ts=list(values), name=ctx["name"]
+    )
+
+
+register_pytree_node(
+    SplitPrimitiveTensor,
+    flatten_fn=flatten_split_primitive_tensor,
+    unflatten_fn=unflatten_split_primitive_tensor,
+)
+
+
+def flatten_replicated_tensor(
+    t: ReplicatedTensor,
+) -> Tuple[List[Any], torch.utils._pytree.Context]:
+    return list(t.shards), {"name": t.name}
+
+
+def unflatten_replicated_tensor(
+    values: Iterable[Any], ctx: torch.utils._pytree.Context
+) -> ReplicatedTensor:
+    return ReplicatedTensor(ts=list(values), name=ctx["name"])
+
+
+register_pytree_node(
+    ReplicatedTensor,
+    flatten_fn=flatten_replicated_tensor,
+    unflatten_fn=unflatten_replicated_tensor,
+)
