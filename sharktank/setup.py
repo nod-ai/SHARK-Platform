@@ -90,7 +90,10 @@ setup(
         "Programming Language :: Python :: 3",
     ],
     packages=packages,
-    package_data={"sharktank": ["py.typed"]},
+    include_package_data=True,
+    package_data={
+        "sharktank": ["py.typed", "kernels/templates/*.mlir"],
+    },
     install_requires=[
         "shark-turbine",
     ],
