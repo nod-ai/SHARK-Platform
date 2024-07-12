@@ -169,7 +169,7 @@ def apply_per_layer_quant(
         updated_tensors[bias_quant.name] = bias_quant
 
     # If dealing with a fused QKV layer, then we need to split the weight as
-    # Brevitas concats it along the [n * input_dim, output_dim] axis, where
+    # Brevitas concats it along the [n * output_dim, input_dim] axis, where
     # n is 2 (to_kv) or 3 (to_qkv).
     # We do this here vs in the model since it is much more efficient to
     # operate on the weights contiguously at rest.
