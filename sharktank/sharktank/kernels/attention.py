@@ -48,7 +48,7 @@ class flash_attention(CustomOp):
         v_desc.specialize_dims(1, 2)
 
         # Result 0: Shape batch..., m, n
-        ksel.return_new_tensor((q_b, q_l, v_e), dtype=q_desc.t.dtype).specialize_dims(
+        ksel.return_new_tensor((q_b, q_l, v_e), dtype=torch.float32).specialize_dims(
             1, 2
         )
 
@@ -62,7 +62,7 @@ class flash_attention(CustomOp):
         _, s, e = v_tensor_type.shape
 
         i_type_str = str(q_tensor_type.element_type)
-        o_type_str = str(q_tensor_type.element_type)
+        o_type_str = "f32"
 
         kwargs = {
             "n": n,
