@@ -260,6 +260,7 @@ iree-run-module \
 ## Generating data for llama models
 
 ```bash
+set TURBINE_DEBUG=log_level=info
 python -m sharktank.models.llama.tools.generate_data \
   --tokenizer=openlm-research/open_llama_3b_v2 \
   --config=/tmp/open_llama_3b_v2/open-llama-3b-v2-f16.json \

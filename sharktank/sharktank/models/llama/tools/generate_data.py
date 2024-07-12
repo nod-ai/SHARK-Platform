@@ -111,5 +111,4 @@ def main(argv):
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
     main(argv=sys.argv[1:])
