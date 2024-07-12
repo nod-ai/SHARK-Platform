@@ -412,8 +412,8 @@ class AttentionLayer(ThetaLayer):
         value = value.view(bs, -1, self.heads, head_dim).transpose(1, 2)
 
         # the output of sdp = (batch, num_heads, seq_len, head_dim)
-        hidden_states = torch.nn.functional.scaled_dot_product_attention(
-            query, key, value, attn_mask=attention_mask, dropout_p=0.0, is_causal=False
+        hidden_states = ops.scaled_dot_product_attention(
+            query, key, value, attn_mask=attention_mask
         )
 
         hidden_states = hidden_states.transpose(1, 2).reshape(bs, -1, inner_dim)
