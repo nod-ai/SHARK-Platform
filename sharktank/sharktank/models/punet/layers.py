@@ -391,9 +391,6 @@ class AttentionLayer(ThetaLayer):
     def __init__(self, theta: Theta, *, heads: int):
         super().__init__(theta)
         self.heads = heads
-        self.to_q = LinearLayer(theta("to_q"))
-        self.to_k = LinearLayer(theta("to_k"))
-        self.to_v = LinearLayer(theta("to_v"))
         # Diffusers models this wonky. They have dropout as the second layer of
         # to_out. But ignored for inference.
         self.to_out = LinearLayer(theta("to_out", 0))
@@ -404,12 +401,8 @@ class AttentionLayer(ThetaLayer):
         attention_mask: Optional[torch.Tensor],
         encoder_hidden_states: Optional[torch.Tensor],
     ):
-        if encoder_hidden_states is None:
-            encoder_hidden_states = hidden_states
-        bs, sl, *_ = encoder_hidden_states.shape
-        query = self.to_q(hidden_states)
-        key = self.to_k(encoder_hidden_states)
-        value = self.to_v(encoder_hidden_states)
+        bs, *_ = hidden_states.shape
+        query, key, value = self.project_qkv(hidden_states, encoder_hidden_states)
 
         # Transpose.
         inner_dim = key.shape[-1]
@@ -429,6 +422,90 @@ class AttentionLayer(ThetaLayer):
         # Linear proj.
         hidden_states = self.to_out(hidden_states)
         return hidden_states
+
+    def project_qkv(self, hidden_states, encoder_hidden_states):
+        # There are several ways to do the qkv projection, depending on how/if
+        # activation quantization is fused:
+        #  * MHA QKV fusion: All projections share activation quant..
+        #  * MCHA KV fusion: Q is quantized standalone, and KV share activation quant.
+        #  * Unfused: Q/K/V activations are quantized individually.
+        theta = self.theta
+        kv_states = (
+            encoder_hidden_states
+            if encoder_hidden_states is not None
+            else hidden_states
+        )
+        if "to_qkv" in theta:
+            # Fused qkv quantization. Sub-layers of:
+            #  to_qkv
+            #  to_qkv.to_q
+            #  to_qkv.to_k
+            #  to_qkv.to_v
+            assert (
+                encoder_hidden_states is None
+            ), "QKV quant fusion incompatible with MCHA encoder_hidden_states"
+            to_qkv_theta = theta("to_qkv")
+            to_q_theta = to_qkv_theta("to_q")
+            to_k_theta = to_qkv_theta("to_k")
+            to_v_theta = to_qkv_theta("to_v")
+            qkv_activation = self._quantize_activation(to_qkv_theta, hidden_states)
+            return (
+                self._apply_linear(to_q_theta, qkv_activation),
+                self._apply_linear(to_k_theta, qkv_activation),
+                self._apply_linear(to_v_theta, qkv_activation),
+            )
+        elif "to_q" in theta and "to_kv" in theta:
+            # Unfused q, fused kv quantization. Sub-layers of:
+            #  to_q
+            #  to_kv.to_k
+            #  to_kv.to_v
+            to_q_theta = theta("to_q")
+            to_kv_theta = theta("to_kv")
+            to_k_theta = to_kv_theta("to_k")
+            to_v_theta = to_kv_theta("to_v")
+            q_activation = self._quantize_activation(to_q_theta, hidden_states)
+            kv_activation = self._quantize_activation(to_kv_theta, kv_states)
+            return (
+                self._apply_linear(to_q_theta, q_activation),
+                self._apply_linear(to_k_theta, kv_activation),
+                self._apply_linear(to_v_theta, kv_activation),
+            )
+        else:
+            # Unfused.
+            to_q_theta = theta("to_q")
+            to_k_theta = theta("to_k")
+            to_v_theta = theta("to_v")
+            return (
+                self._apply_linear(
+                    to_q_theta, self._quantize_activation(to_q_theta, hidden_states)
+                ),
+                self._apply_linear(
+                    to_k_theta, self._quantize_activation(to_k_theta, kv_states)
+                ),
+                self._apply_linear(
+                    to_v_theta, self._quantize_activation(to_v_theta, kv_states)
+                ),
+            )
+
+    def _quantize_activation(self, act_theta: Theta, x):
+        # Matches the input conditioning sequence from LinearLayer.
+        premul_input = act_theta.optional_tensor("premul_input")
+        q_input = act_theta.optional_tensor("q_input")
+        if premul_input is not None:
+            x = ops.elementwise(torch.mul, x, premul_input)
+        if q_input is not None:
+            x = q_input.quantize(x)
+        return x
+
+    def _apply_linear(self, weight_theta: Theta, x):
+        # Matches the primary computation (minus activation conditioning)
+        # of LinearLayer.
+        weight = weight_theta.tensor("weight")
+        bias = weight_theta.optional_tensor("bias")
+        y = ops.linear(x, weight, bias)
+        if isinstance(y, QuantizedTensor):
+            y = y.unpack().dequant()
+        return y
 
 
 ################################################################################
