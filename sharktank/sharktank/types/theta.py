@@ -82,7 +82,9 @@ class Theta:
         if not isinstance(tensors, dict):
             tensors = {t.name: t for t in tensors}
         assert all(isinstance(k, str) for k in _all_keys(tensors))
-        assert all(isinstance(v, InferenceTensor) for v in _leaf_values(tensors))
+        assert all(
+            v is None or isinstance(v, InferenceTensor) for v in _leaf_values(tensors)
+        )
         self._tree = flat_to_nested_dict(tensors)
 
     def transform(self, *transforms: InferenceTensorTransform) -> "Theta":
@@ -149,6 +151,9 @@ class Theta:
     @property
     def keys(self) -> Collection[str]:
         return self._tree.keys()
+
+    def __contains__(self, key) -> bool:
+        return key in self._tree
 
     @property
     def tensors(self) -> Collection[InferenceTensor]:
@@ -230,7 +235,8 @@ def flat_to_nested_dict(flat: dict[str, Any]) -> dict[str, Any]:
             assert isinstance(
                 current, dict
             ), f"Name collision in parameter dict: {name}"
-        current[parts[-1]] = value
+        if value is not None:
+            current[parts[-1]] = value
 
     for name, value in flat.items():
         add_to_dict(name, value)
