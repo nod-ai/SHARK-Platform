@@ -16,12 +16,13 @@ __all__ = [
 @CustomOp.register(library=LIBRARY)
 class flash_attention(CustomOp):
 
-    signature = "flash_attention(Tensor q, Tensor k, Tensor v) -> (Tensor)"
+    signature = "flash_attention(Tensor q, Tensor k, Tensor v, Tensor scale) -> (Tensor)"
 
     def select(self, ksel: KernelSelection):
         q_desc = ksel.arg_tensor(0)  # Shape b, l, d
         k_desc = ksel.arg_tensor(1)  # Shape b, s, d
         v_desc = ksel.arg_tensor(2)  # Shape b, s, e
+        s_desc = ksel.arg_tensor(3)
 
         q_b, q_l, q_d = q_desc.t.shape
         k_b, k_s, k_d = k_desc.t.shape
@@ -30,7 +31,8 @@ class flash_attention(CustomOp):
         torch._check(
             q_desc.t.dtype.is_floating_point
             and k_desc.t.dtype.is_floating_point
-            and k_desc.t.dtype.is_floating_point,
+            and k_desc.t.dtype.is_floating_point
+            and s_desc.t.dtype.is_floating_point,
             lambda: f"flash_attention: Expected floating point",
         )
 
@@ -54,14 +56,18 @@ class flash_attention(CustomOp):
 
     def generate(self, ksel: KernelSelection, kb: KernelBuilder):
         q = kb.arg_value(0)
+        k = kb.arg_value(1)
         v = kb.arg_value(2)
+        scale = kb.arg_value(3)
         q_tensor_type = RankedTensorType(q.type)
+        scale_tensor_type = RankedTensorType(scale.type)
         v_tensor_type = RankedTensorType(v.type)
 
         n, l, d = q_tensor_type.shape
         _, s, e = v_tensor_type.shape
 
         i_type_str = str(q_tensor_type.element_type)
+        scale_type_str = str(scale_tensor_type.element_type)
         o_type_str = "f32"
 
         kwargs = {
@@ -71,11 +77,12 @@ class flash_attention(CustomOp):
             "s": s,
             "e": e,
             "i_type": i_type_str,
+            "scale_type": scale_type_str,
             "o_type": o_type_str,
         }
         template_file = "flash_attention.mlir"
         target_function_name = (
-            f"sharktank_flash_attention_{l}_{s}_{d}_{e}_{i_type_str}_{o_type_str}"
+            f"sharktank_flash_attention_{l}_{s}_{d}_{e}_{i_type_str}_{scale_type_str}_{o_type_str}"
         )
         target_function = inline_template_function(
             kb,
@@ -83,5 +90,5 @@ class flash_attention(CustomOp):
             target_function_name,
             **kwargs,
         )
-        kb.yield_results(*call_function(target_function, *kb.arg_bindings))
+        kb.yield_results(*call_function(target_function, q, k, v, scale))
         pass

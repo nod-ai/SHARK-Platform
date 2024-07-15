@@ -9,6 +9,7 @@
 
 from typing import Optional
 
+import math
 import torch
 import warnings
 
@@ -21,10 +22,11 @@ from types import NoneType
 
 from ..types import (
     AnyTensor,
-    QuantizedTensor,
     PlanarQuantizedTensor,
-    TensorScaledLayout,
 )
+
+from ..types.layouts import TensorScaledLayout
+
 from ..utils import debugging
 
 from ..types.tensors import unbox_tensor
@@ -34,12 +36,25 @@ from .signatures import (
     elementwise,
 )
 
+def _extract_linear_scale(t):
+    if isinstance(t, PlanarQuantizedTensor) and isinstance(t.layout, TensorScaledLayout) and t.layout.m is None:
+        return t.layout.qs, t.layout.d
+    return unbox_tensor(t), None
 
 def flash_attention(q, k, v, a):
-    q = unbox_tensor(q)
-    k = unbox_tensor(k)
-    v = unbox_tensor(v)
-    return kernels.flash_attention(q, k, v)
+    scale = torch.scalar_tensor(1.0 / math.sqrt(q.shape[-1]), dtype=torch.float32)
+
+    q, qscale = _extract_linear_scale(q)
+    k, kscale = _extract_linear_scale(k)
+    v, vscale = _extract_linear_scale(v)
+
+    scale = scale * qscale if qscale is not None else scale
+    scale = scale * kscale if kscale is not None else scale
+
+    atten = kernels.flash_attention(q, k, v, scale)
+
+    atten = atten * vscale if vscale is not None else atten
+    return atten
 
 
 scaled_dot_product_attention.override(AnyTensor, AnyTensor, AnyTensor, NoneType)(flash_attention)
