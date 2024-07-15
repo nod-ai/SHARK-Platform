@@ -88,10 +88,11 @@ def main(argv):
     prefill_batch_size = config["prefill_batch_sizes"][0]
 
     # Declare input arguments.
-    arg0_prefill_tokens = np.ndarray(
+    # TODO(scotttodd): compute max_seq_len from tokens, _not_ config here
+    arg0_prefill_tokens = np.zeros(
         [prefill_batch_size, config["max_seq_len"]], dtype=np.int64
     )
-    arg1_prefill_seq_lens = np.ndarray(prefill_batch_size, dtype=np.int64)
+    arg1_prefill_seq_lens = np.zeros(prefill_batch_size, dtype=np.int64)
     # TODO(scotttodd): arg2 - attention block indices
     # TODO(scotttodd): arg3 - attention block buffer
 
@@ -103,6 +104,11 @@ def main(argv):
     prompt_seq_len = len(prompt_tokens)
     arg0_prefill_tokens[0, 0:prompt_seq_len] = prompt_tokens
     arg1_prefill_seq_lens[0] = prompt_seq_len
+    with np.printoptions(threshold=np.inf):
+        logger.debug("arg0_prefill_tokens:")
+        logger.debug(arg0_prefill_tokens)
+        logger.debug("arg1_prefill_seq_lens:")
+        logger.debug(arg1_prefill_seq_lens)
 
     logger.info(f"Writing argument .bin files to '{args.output_dir}'")
     args.output_dir.mkdir(parents=True, exist_ok=True)
