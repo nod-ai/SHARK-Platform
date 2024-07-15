@@ -124,7 +124,7 @@ def apply_per_layer_quant(
 
     # Quantized layer must have all quantization info.
     assert (
-        weight_scale is not None and weight_zp is not None
+        weight_scale is not None
     ), f"Could not find weight scale (in {qp.keys()}) for {layer_name}"
     assert (
         input_scale is not None
@@ -144,7 +144,9 @@ def apply_per_layer_quant(
         weight_quantizer = StaticScaledQuantizer(
             scale=1.0 / weight_scale,
             reciprocal_scale=weight_scale,
-            offset=None if torch.count_nonzero(weight_zp) == 0 else weight_zp,
+            offset=None
+            if (weight_zp is None or torch.count_nonzero(weight_zp) == 0)
+            else weight_zp,
             dtype=torch.int8,
         )
         weight_quant = weight_quantizer.quantize(weight, name=weight_name)
@@ -241,7 +243,8 @@ def apply_per_layer_quant(
     else:
         # Unfused.
         quantize_weight(weight.name, weight, weight_scale, weight_zp)
-        quantize_bias(bias.name, bias, input_scale, weight_scale)
+        if bias is not None:
+            quantize_bias(bias.name, bias, input_scale, weight_scale)
 
     # Input scaling.
     # Assume per tensor scaling of input.
