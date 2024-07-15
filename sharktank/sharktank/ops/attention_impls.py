@@ -36,7 +36,10 @@ from .signatures import (
 
 
 def flash_attention(q, k, v, a):
+    q = unbox_tensor(q)
+    k = unbox_tensor(k)
+    v = unbox_tensor(v)
     return kernels.flash_attention(q, k, v)
 
 
-scaled_dot_product_attention.override(Tensor, Tensor, Tensor, NoneType)(flash_attention)
+scaled_dot_product_attention.override(AnyTensor, AnyTensor, AnyTensor, NoneType)(flash_attention)
