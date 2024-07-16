@@ -400,11 +400,17 @@ class AttentionLayer(ThetaLayer):
         inner_dim = t.shape[-1]
         head_dim = inner_dim // self.heads
 
-        if isinstance(t, PlanarQuantizedTensor) and isinstance(t.layout, TensorScaledLayout):
-            layout = t.layout.view(bs, -1, self.heads, head_dim).transpose(1, 2).flatten(0,1)
+        if isinstance(t, PlanarQuantizedTensor) and isinstance(
+            t.layout, TensorScaledLayout
+        ):
+            layout = (
+                t.layout.view(bs, -1, self.heads, head_dim)
+                .transpose(1, 2)
+                .flatten(0, 1)
+            )
             return PlanarQuantizedTensor(shape=layout.shape, layout=layout)
 
-        return t.view(bs, -1, self.heads, head_dim).transpose(1, 2).flatten(0,1)
+        return t.view(bs, -1, self.heads, head_dim).transpose(1, 2).flatten(0, 1)
 
     def forward(
         self,

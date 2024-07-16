@@ -18,7 +18,7 @@ util.func private @sharktank_flash_attention_{{l}}_{{s}}_{{d}}_{{e}}_{{i_type}}_
     %k: !k_type,
     %v: !v_type,
     %s: !s_type) -> !o_type {
-        
+
         %c0 = arith.constant 0 : index
         %c1 = arith.constant 1 : index
         %c2 = arith.constant 2 : index

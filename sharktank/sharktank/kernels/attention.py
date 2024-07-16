@@ -16,7 +16,9 @@ __all__ = [
 @CustomOp.register(library=LIBRARY)
 class flash_attention(CustomOp):
 
-    signature = "flash_attention(Tensor q, Tensor k, Tensor v, Tensor scale) -> (Tensor)"
+    signature = (
+        "flash_attention(Tensor q, Tensor k, Tensor v, Tensor scale) -> (Tensor)"
+    )
 
     def select(self, ksel: KernelSelection):
         q_desc = ksel.arg_tensor(0)  # Shape b, l, d
@@ -81,9 +83,7 @@ class flash_attention(CustomOp):
             "o_type": o_type_str,
         }
         template_file = "flash_attention.mlir"
-        target_function_name = (
-            f"sharktank_flash_attention_{l}_{s}_{d}_{e}_{i_type_str}_{scale_type_str}_{o_type_str}"
-        )
+        target_function_name = f"sharktank_flash_attention_{l}_{s}_{d}_{e}_{i_type_str}_{scale_type_str}_{o_type_str}"
         target_function = inline_template_function(
             kb,
             template_file,

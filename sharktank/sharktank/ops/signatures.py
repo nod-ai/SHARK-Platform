@@ -43,7 +43,8 @@ IntOrSequenceInt = Union[int, Sequence[int]]
 
 
 @overridable
-def all_gather(maybe_sharded: AnyTensor, *, dim: int | None = None) -> AnyTensor: ...
+def all_gather(maybe_sharded: AnyTensor, *, dim: int | None = None) -> AnyTensor:
+    ...
 
 
 @all_gather.trampoline
@@ -60,9 +61,8 @@ def _all_gather_trampoline(
 
 
 @overridable
-def cat(
-    tensors: Tuple[AnyTensor, ...] | List[AnyTensor], dim: int = 0
-) -> AnyTensor: ...
+def cat(tensors: Tuple[AnyTensor, ...] | List[AnyTensor], dim: int = 0) -> AnyTensor:
+    ...
 
 
 @cat.trampoline
@@ -560,7 +560,8 @@ def _sharded_cat_trampoline(d: SignatureDispatcher, maybe_sharded: AnyTensor):
 
 
 @overridable
-def sharded_sum(maybe_sharded: AnyTensor): ...
+def sharded_sum(maybe_sharded: AnyTensor):
+    ...
 
 
 @sharded_sum.trampoline

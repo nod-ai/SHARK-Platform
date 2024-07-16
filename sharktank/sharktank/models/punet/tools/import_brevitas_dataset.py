@@ -91,8 +91,7 @@ def apply_per_layer_quant(
     if layer_name.endswith("output_softmax_quant"):
         softmax_scale = _get_json_tensor("act_scale", dtype=torch.float32)
         softmax_scale = DefaultPrimitiveTensor(
-            name=f"{layer_name}.act_scale",
-            data=softmax_scale
+            name=f"{layer_name}.act_scale", data=softmax_scale
         )
         updated_tensors[softmax_scale.name] = softmax_scale
         return

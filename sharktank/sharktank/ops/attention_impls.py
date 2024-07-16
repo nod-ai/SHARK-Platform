@@ -36,10 +36,16 @@ from .signatures import (
     elementwise,
 )
 
+
 def _extract_linear_scale(t):
-    if isinstance(t, PlanarQuantizedTensor) and isinstance(t.layout, TensorScaledLayout) and t.layout.m is None:
+    if (
+        isinstance(t, PlanarQuantizedTensor)
+        and isinstance(t.layout, TensorScaledLayout)
+        and t.layout.m is None
+    ):
         return t.layout.qs, t.layout.d
     return unbox_tensor(t), None
+
 
 def flash_attention(q, k, v, a):
     scale = torch.scalar_tensor(1.0 / math.sqrt(q.shape[-1]), dtype=torch.float32)
@@ -66,4 +72,6 @@ def flash_attention(q, k, v, a):
     return atten
 
 
-scaled_dot_product_attention.override(AnyTensor, AnyTensor, AnyTensor, NoneType)(flash_attention)
+scaled_dot_product_attention.override(AnyTensor, AnyTensor, AnyTensor, NoneType)(
+    flash_attention
+)

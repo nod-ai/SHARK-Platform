@@ -144,15 +144,21 @@ class TensorScaledLayout(QuantizedLayout):
 
     def view(self, *args, **kwargs):
         qs = self.qs.view(*args, **kwargs)
-        return TensorScaledLayout(shape=qs.shape, d=self.d, qs=qs, m=self.m, dtype=self.dtype)
+        return TensorScaledLayout(
+            shape=qs.shape, d=self.d, qs=qs, m=self.m, dtype=self.dtype
+        )
 
     def flatten(self, *args, **kwargs):
         qs = self.qs.flatten(*args, **kwargs)
-        return TensorScaledLayout(shape=qs.shape, d=self.d, qs=qs, m=self.m, dtype=self.dtype)
+        return TensorScaledLayout(
+            shape=qs.shape, d=self.d, qs=qs, m=self.m, dtype=self.dtype
+        )
 
     def transpose(self, *args, **kwargs):
         qs = self.qs.transpose(*args, **kwargs)
-        return TensorScaledLayout(shape=qs.shape, d=self.d, qs=qs, m=self.m, dtype=self.dtype)
+        return TensorScaledLayout(
+            shape=qs.shape, d=self.d, qs=qs, m=self.m, dtype=self.dtype
+        )
 
     def dequant(self, dtype: Optional[torch.dtype] = None) -> torch.Tensor:
         return self.dequant_blocked(dtype)
