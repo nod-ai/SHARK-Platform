@@ -26,7 +26,7 @@ util.func private @sharktank_flash_attention_{{l}}_{{s}}_{{d}}_{{e}}_{{i_type}}_
         %b = tensor.dim %q, %c0 : !q_type
         %l = tensor.dim %q, %c1 : !q_type
         %d = tensor.dim %q, %c2 : !q_type
-        %e = tensor.dim %v, %c2 : !q_type
+        %e = tensor.dim %v, %c2 : !v_type
 
         %scale = tensor.extract %s[] : !s_type
 
@@ -36,7 +36,12 @@ util.func private @sharktank_flash_attention_{{l}}_{{s}}_{{d}}_{{e}}_{{i_type}}_
         %f0 = arith.constant 0.0 : f32
         %fill = linalg.fill ins(%f0 : f32) outs(%empty : !o_type)  -> !o_type
 
-        %atten = iree_linalg_ext.attention ins(%q, %k, %v, %scale : !q_type, !k_type, !v_type, {{scale_type}}) outs(%fill : !o_type) -> !o_type
+        %atten = iree_linalg_ext.attention {indexing_maps = [
+                    affine_map<(d0, d1, d2, d3, d4) -> (d0, d1, d2)>,
+                    affine_map<(d0, d1, d2, d3, d4) -> (d0, d3, d2)>,
+                    affine_map<(d0, d1, d2, d3, d4) -> (d0, d3, d4)>,
+                    affine_map<(d0, d1, d2, d3, d4) -> (d0, d1, d4)>]}
+                    ins(%q, %k, %v, %scale : !q_type, !k_type, !v_type, {{scale_type}}) outs(%fill : !o_type) -> !o_type
         util.return %atten : !o_type
     }
 }

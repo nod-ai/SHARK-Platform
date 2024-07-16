@@ -31,7 +31,7 @@ class flash_attention(CustomOp):
         torch._check(
             q_desc.t.dtype.is_floating_point
             and k_desc.t.dtype.is_floating_point
-            and k_desc.t.dtype.is_floating_point
+            and v_desc.t.dtype.is_floating_point
             and s_desc.t.dtype.is_floating_point,
             lambda: f"flash_attention: Expected floating point",
         )

@@ -51,6 +51,15 @@ def flash_attention(q, k, v, a):
     scale = scale * qscale if qscale is not None else scale
     scale = scale * kscale if kscale is not None else scale
 
+    if q.dtype == torch.float32:
+        q = q.to(torch.float16)
+
+    if k.dtype == torch.float32:
+        k = k.to(torch.float16)
+
+    if v.dtype == torch.float32:
+        v = v.to(torch.float16)
+
     atten = kernels.flash_attention(q, k, v, scale)
 
     atten = atten * vscale if vscale is not None else atten
