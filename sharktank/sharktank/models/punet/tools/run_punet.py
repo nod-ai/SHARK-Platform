@@ -25,6 +25,7 @@ def main(argv):
     parser.add_argument("--device", default="cuda:0", help="Torch device to run on")
     parser.add_argument("--dtype", default="float16", help="DType to run in")
     parser.add_argument("--export", type=Path, help="Export to path (vs run)")
+    parser.add_argument("--bs", default=1, type=int, help="Batch size for export")
     parser.add_argument(
         "--inputs",
         type=Path,
@@ -53,9 +54,9 @@ def main(argv):
 
     # Run a step for debugging.
     if args.inputs:
-        inputs = load_inputs(args.inputs, dtype=dtype, device=device)
+        inputs = load_inputs(args.inputs, dtype=dtype, device=device, bs=args.bs)
     else:
-        inputs = get_random_inputs(dtype=dtype, device=device)
+        inputs = get_random_inputs(dtype=dtype, device=device, bs=args.bs)
 
     if args.export:
         # Temporary: Need a dedicated exporter.
