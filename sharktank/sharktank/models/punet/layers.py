@@ -487,11 +487,21 @@ class AttentionLayer(ThetaLayer):
             to_v_theta = to_kv_theta("to_v")
             q_activation = self._quantize_activation(to_q_theta, hidden_states)
             kv_activation = self._quantize_activation(to_kv_theta, kv_states)
-            return (
-                self._apply_linear(to_q_theta, q_activation),
-                self._apply_linear(to_k_theta, kv_activation),
-                self._apply_linear(to_v_theta, kv_activation),
-            )
+            q = self._apply_linear(to_q_theta, q_activation)
+            k = self._apply_linear(to_k_theta, kv_activation)
+            v = self._apply_linear(to_v_theta, kv_activation)
+
+            q_output = to_q_theta.optional_tensor("q_output")
+            kv_output = to_kv_theta.optional_tensor("q_output")
+
+            if q_output is not None:
+                q = q_output.quantize(q)
+
+            if kv_output is not None:
+                k = kv_output.quantize(k)
+                v = kv_output.quantize(v)
+
+            return q, k, v
         else:
             # Unfused.
             to_q_theta = theta("to_q")
