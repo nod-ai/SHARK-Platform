@@ -11,7 +11,7 @@
 ```shell
 git clone https://github.com/ROCm/flash-attention.git
 cd flash-attention
-git checkout main_perf
+git checkout ck_tile
 git submodule update --init --recursive --progress
 ```
 
