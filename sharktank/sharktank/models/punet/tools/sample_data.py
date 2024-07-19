@@ -11,29 +11,29 @@ from pathlib import Path
 import torch
 
 
-def get_random_inputs(dtype, device):
+def get_random_inputs(dtype, device, bs: int = 1):
     torch.random.manual_seed(42)
     max_length = 64
     height = 1024
     width = 1024
-    bs = 1
+    init_batch_dim = 2
     return {
         "sample": torch.rand(bs, 4, height // 8, width // 8, dtype=dtype).to(device),
         "timestep": torch.zeros(1, dtype=torch.int32).to(device),
-        "encoder_hidden_states": torch.rand(2 * bs, max_length, 2048, dtype=dtype).to(
-            device
-        ),
-        "text_embeds": torch.rand(2 * bs, 1280, dtype=dtype).to(device),
-        "time_ids": torch.zeros(2 * bs, 6, dtype=dtype).to(device),
+        "encoder_hidden_states": torch.rand(
+            init_batch_dim * bs, max_length, 2048, dtype=dtype
+        ).to(device),
+        "text_embeds": torch.rand(init_batch_dim * bs, 1280, dtype=dtype).to(device),
+        "time_ids": torch.zeros(init_batch_dim * bs, 6, dtype=dtype).to(device),
         "guidance_scale": torch.tensor([7.5], dtype=dtype).to(device),
     }
 
 
-def load_inputs(st_path: Path, dtype, device):
+def load_inputs(st_path: Path, dtype, device, bs: int = 1):
     from safetensors import safe_open
 
     with safe_open(st_path, framework="pt", device=device) as st:
-        random_inputs = get_random_inputs(dtype=dtype, device=device)
+        random_inputs = get_random_inputs(dtype=dtype, device=device, bs=bs)
         inputs = {}
         for name, random_input in random_inputs.items():
             if name in st.keys():
