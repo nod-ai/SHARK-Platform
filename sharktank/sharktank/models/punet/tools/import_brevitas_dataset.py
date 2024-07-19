@@ -130,7 +130,7 @@ def apply_per_layer_quant(
             name=f"{layer_name}.q_output",
             scale=1.0 / output_scale,
             reciprocal_scale=output_scale,
-            dtype=torch.float8_e4m3fnuz, # hardcoded for right now until breviatas updates
+            dtype=torch.float8_e4m3fnuz,  # hardcoded for right now until breviatas updates
         )
         updated_tensors[output_quantizer.name] = output_quantizer
 
