@@ -225,7 +225,7 @@ def main():
     prompts = args.prompt
 
     config = LlamaModelConfig(
-        hp=configs.LlamaHParams.from_gguf_props(dataset.properties),
+        hp=configs.LlamaHParams.from_hf_props(dataset.properties),
         block_seq_stride=16,
         kv_cache_type=args.kv_cache_type,
         device=device,
