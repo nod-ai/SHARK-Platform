@@ -72,6 +72,7 @@ def flash_attention(q, k, v, a):
     return atten
 
 
-scaled_dot_product_attention.override(AnyTensor, AnyTensor, AnyTensor, NoneType)(
-    flash_attention
-)
+if debugging.flags.use_custom_iree_kernels:
+    scaled_dot_product_attention.override(AnyTensor, AnyTensor, AnyTensor, NoneType)(
+        flash_attention
+    )

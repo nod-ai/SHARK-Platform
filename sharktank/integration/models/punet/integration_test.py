@@ -246,8 +246,7 @@ def test_punet_eager_int8_emulated_validation(
     print("Using torch device:", device)
     with testing.override_debug_flags(
         {
-            "use_custom_int_conv_kernel": False,
-            "use_custom_int_mm_kernel": False,
+            "use_custom_iree_kernels": False,
         }
     ):
         run_punet.main(

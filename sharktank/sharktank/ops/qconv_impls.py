@@ -203,7 +203,7 @@ def _invoke_int32_conv2d(input, weight, bias, stride, dilation, *, accum_dtype):
     It is advantageous in some situations to use fp emulation of an int kernel
     so we fork here.
     """
-    if debugging.flags.use_custom_int_conv_kernel:
+    if debugging.flags.use_custom_iree_kernels:
         # True int kernel.
         if bias is None:
             # We don't have any non-test use of convs without bias, so just
@@ -237,7 +237,7 @@ def _invoke_int32_pooling_sum(input, kernel_size, stride, dilation, *, accum_dty
     """Invokes either a custom integer pooling sum or the built-in fp avg_pool2d
     kernel on an explicitly padded input.
     """
-    if debugging.flags.use_custom_int_conv_kernel:
+    if debugging.flags.use_custom_iree_kernels:
         output = kernels.pooling_nchw_sum(
             input,
             kernel_size,
