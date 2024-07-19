@@ -62,10 +62,12 @@ def _load_theta(st_source) -> Theta:
     ]
     return Theta(tensors)
 
+
 def as_torch_or_none(tensor: Optional[InferenceTensor]) -> Optional[torch.Tensor]:
     if tensor is None:
         return None
     return tensor.as_torch()
+
 
 def apply_per_layer_quant(
     root_theta: Theta, layer_name: str, updated_tensors: dict[str, InferenceTensor]
@@ -79,55 +81,58 @@ def apply_per_layer_quant(
         weight_quant_zero_point = torch.zeros(1, dtype=torch.float32)
     else:
         weight_quant_zero_point = weight_quant_zero_point.as_torch()
-    input_quant_scale = as_torch_or_none(layer_theta.optional_tensor("input_quant_scale"))
+    input_quant_scale = as_torch_or_none(
+        layer_theta.optional_tensor("input_quant_scale")
+    )
 
     if weight_quant_scale is None:
         print("weight quant scale not found for layer ", layer_name)
         return
 
-    layer_parent = ".".join(layer_name.split('.')[:-1])
+    layer_parent = ".".join(layer_name.split(".")[:-1])
     if "qkv" in layer_name:
         print("qkv layer found")
         print("weight_quant_scale shape: ", weight_quant_scale.shape)
         print("layer_parent: ", layer_parent)
         torch_weight = weight
+        print("torch weight shape: ", torch_weight.shape)
         q_weight = torch_weight[:8192, :]
         k_weight = torch_weight[8192:9216, :]
         v_weight = torch_weight[9216:, :]
 
     if "qkv" in layer_name:
         q_weight_quant = PlanarQuantizedTensor(
+            shape=q_weight.shape,
+            name=layer_parent + ".q_proj.weight",
+            layout=TensorScaledLayout(
                 shape=q_weight.shape,
-                name=layer_parent + '.q_proj.weight',
-                layout=TensorScaledLayout(
-                    shape=q_weight.shape,
-                    d=1.0/weight_quant_scale,
-                    qs=q_weight.to(dtype=torch.float8_e4m3fnuz),
-                    m=weight_quant_zero_point,
-                    dtype=torch.float16,  # Original dtype.
-                )
+                d=1.0 / weight_quant_scale,
+                qs=q_weight.to(dtype=torch.float8_e4m3fnuz),
+                m=weight_quant_zero_point,
+                dtype=torch.float16,  # Original dtype.
+            ),
         )
         k_weight_quant = PlanarQuantizedTensor(
+            shape=k_weight.shape,
+            name=layer_parent + ".k_proj.weight",
+            layout=TensorScaledLayout(
                 shape=k_weight.shape,
-                name=layer_parent + '.k_proj.weight',
-                layout=TensorScaledLayout(
-                    shape=k_weight.shape,
-                    d=1.0/weight_quant_scale,
-                    qs=k_weight.to(dtype=torch.float8_e4m3fnuz),
-                    m=weight_quant_zero_point,
-                    dtype=torch.float16,  # Original dtype.
-                )
+                d=1.0 / weight_quant_scale,
+                qs=k_weight.to(dtype=torch.float8_e4m3fnuz),
+                m=weight_quant_zero_point,
+                dtype=torch.float16,  # Original dtype.
+            ),
         )
         v_weight_quant = PlanarQuantizedTensor(
+            shape=v_weight.shape,
+            name=layer_parent + ".v_proj.weight",
+            layout=TensorScaledLayout(
                 shape=v_weight.shape,
-                name=layer_parent + '.v_proj.weight',
-                layout=TensorScaledLayout(
-                    shape=v_weight.shape,
-                    d=1.0/weight_quant_scale,
-                    qs=v_weight.to(dtype=torch.float8_e4m3fnuz),
-                    m=weight_quant_zero_point,
-                    dtype=torch.float16,  # Original dtype.
-                )
+                d=1.0 / weight_quant_scale,
+                qs=v_weight.to(dtype=torch.float8_e4m3fnuz),
+                m=weight_quant_zero_point,
+                dtype=torch.float16,  # Original dtype.
+            ),
         )
         print(q_weight_quant.name)
         print(k_weight_quant.name)
@@ -135,24 +140,24 @@ def apply_per_layer_quant(
         updated_tensors[q_weight_quant.name] = q_weight_quant
         updated_tensors[k_weight_quant.name] = k_weight_quant
         updated_tensors[v_weight_quant.name] = v_weight_quant
-        #updated_tensors[layer_name] = None
+        # updated_tensors[layer_name] = None
     else:
         weight_quant = PlanarQuantizedTensor(
             shape=weight.shape,
-            name=layer_name + '.weight',
+            name=layer_name + ".weight",
             layout=TensorScaledLayout(
                 shape=weight.shape,
-                d=1.0/weight_quant_scale,
+                d=1.0 / weight_quant_scale,
                 qs=weight.to(dtype=torch.float8_e4m3fnuz),
                 m=weight_quant_zero_point,
                 dtype=torch.float16,  # Original dtype.
-            )
+            ),
         )
         print(weight_quant.name)
         updated_tensors[weight_quant.name] = weight_quant
         # Spot check that things look sane.
-        #weight_dequant = weight_quant.unpack().dequant()
-        #torch.testing.assert_close(weight, weight_dequant, atol=3, rtol=3)
+        # weight_dequant = weight_quant.unpack().dequant()
+        # torch.testing.assert_close(weight, weight_dequant, atol=3, rtol=3)
 
 
 def main(argv):
@@ -195,13 +200,13 @@ def main(argv):
     # layer name. We process each of these in turn to produce a per-layer
     # quantization scheme where no quantized tensors escape their layer.
     updated_tensors: dict[str, InferenceTensor] = {}
-    model_layers = ["model.layers."+str(i) for i in range(80)]
-    sub_layers = ['mlp.down_proj', 'mlp.up_proj', 'self_attn.o_proj', 'self_attn.qkv' ]
+    model_layers = ["model.layers." + str(i) for i in range(32)]
+    sub_layers = ["mlp.down_proj", "mlp.up_proj", "self_attn.o_proj", "self_attn.qkv"]
     for layer in model_layers:
         for sub in sub_layers:
 
-            layer_name = layer + '.' + sub
-            #if layern_name not in ["quantization", "decoder_type", 
+            layer_name = layer + "." + sub
+            # if layern_name not in ["quantization", "decoder_type",
             print(f"Applying per-layer quants: {layer_name}")
             apply_per_layer_quant(quant_theta, layer_name, updated_tensors)
 

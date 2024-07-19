@@ -71,7 +71,6 @@ def apply_per_layer_quant(
     layer_theta = root_theta(layer_name)
     weight = layer_theta.tensor("weight")
     weight_dtype = weight.as_torch().dtype
-<<<<<<< HEAD
     bias = layer_theta.optional_tensor("bias")
 
     # The config file has tensors as 1d and a _shape suffixed array with the
@@ -91,15 +90,6 @@ def apply_per_layer_quant(
             dtype_str = qp[f"{name}_dtype"]
             dtype = _dtype_str_to_dtype(dtype_str)
 
-=======
-
-    # The config file has tensors as 1d and a _shape suffixed array with the
-    # concrete shape.
-    def _get_json_tensor(name: str, dtype: torch.dtype) -> Optional[torch.Tensor]:
-        data_1d = qp.get(name)
-        if data_1d is None:
-            return None
->>>>>>> 08af8e6 (re-add original)
         shape = qp[f"{name}_shape"]
         return torch.tensor(data_1d, dtype=dtype).reshape(shape)
 
@@ -142,26 +132,11 @@ def apply_per_layer_quant(
     input_scale = _get_json_tensor("input_scale", torch.float32)
     output_scale = _get_json_tensor("output_scale", torch.float32)
     weight_scale = _get_json_tensor("weight_scale", torch.float32)
-<<<<<<< HEAD
     weight_zp = _get_json_tensor("weight_zp", dtype=None)
 
     # In the current version, we assume that the input is per-tensor quantized
     # for signed arithmetic.
     input_zp = _get_json_tensor("input_zp", dtype=None)
-=======
-    # In the JSON file, zero points are purely positive numbers representing
-    # the zero point assuming a uint8 datatype. Since we prefer to use
-    # signed arithmetic, since that is better accelerated, we offset these by
-    # -128. By decoding them as uint8, it validates our range assumption.
-    # Then we widen/cast to offset.
-    weight_zp = _get_json_tensor("weight_zp", torch.uint8)
-    if weight_zp is not None:
-        weight_zp = (weight_zp.to(dtype=torch.int32) - 128).to(torch.int8)
-
-    # In the current version, we assume that the input is not offset and is
-    # per-tensor quantized for signed arithmetic.
-    input_zp = _get_json_tensor("input_zp", torch.int8)
->>>>>>> 08af8e6 (re-add original)
     if input_zp is not None:
         assert torch.count_nonzero(input_zp) == 0
 
@@ -185,17 +160,12 @@ def apply_per_layer_quant(
 
     # Quantized layer must have all quantization info.
     assert (
-<<<<<<< HEAD
         weight_scale is not None
-=======
-        weight_scale is not None and weight_zp is not None
->>>>>>> 08af8e6 (re-add original)
     ), f"Could not find weight scale (in {qp.keys()}) for {layer_name}"
     assert (
         input_scale is not None
     ), f"Could not find input scale (in {qp.keys()}) for {layer_name}"
 
-<<<<<<< HEAD
     def quantize_weight(
         weight_name: str,
         weight: torch.Tensor,
@@ -224,28 +194,6 @@ def apply_per_layer_quant(
         input_scale: torch.Tensor,
         weight_scale: torch.Tensor,
     ):
-=======
-    # Weight scaling.
-    # There is an implicit assumption that the weight is asym (uint8) quantized.
-    # Our quantizer uses scale/offset nomenclature. The offset maps to
-    # zero-point, and the scale maps to the *dequant* scale (so terms differ
-    # by reciprocal).
-    weight_quantizer = StaticScaledQuantizer(
-        scale=1.0 / weight_scale,
-        reciprocal_scale=weight_scale,
-        offset=None if torch.count_nonzero(weight_zp) == 0 else weight_zp,
-        dtype=torch.int8,
-    )
-    weight_quant = weight_quantizer.quantize(weight, name=weight.name)
-    updated_tensors[weight_quant.name] = weight_quant
-    # Spot check that things look sane.
-    weight_dequant = weight_quant.unpack().dequant()
-    weight_diff = weight.as_torch() - weight_dequant
-
-    # Bias/output scaling.
-    bias = layer_theta.optional_tensor("bias")
-    if QUANTIZE_BIAS and bias is not None:
->>>>>>> 08af8e6 (re-add original)
         # If the bias is present, it dictates the overall output quantization
         # and will not be checked for correct parameters at runtime. It must
         # be quantized to match properly.
