@@ -26,9 +26,17 @@ class flash_attention(CustomOp):
         v_desc = ksel.arg_tensor(2)  # Shape b, s, e
         s_desc = ksel.arg_tensor(3)
 
-        q_b, q_l, q_d = q_desc.t.shape
-        k_b, k_s, k_d = k_desc.t.shape
-        v_b, v_s, v_e = v_desc.t.shape
+        q_bs = q_desc.t.shape[:-2]
+        k_bs = k_desc.t.shape[:-2]
+        v_bs = v_desc.t.shape[:-2]
+
+        bs = len(q_bs)
+
+        torch._check(len(q_bs) == 2, lambda: f"TODO: batch dims {bs} not supported")
+
+        q_l, q_d = q_desc.t.shape[-2:]
+        k_s, k_d = k_desc.t.shape[-2:]
+        v_s, v_e = v_desc.t.shape[-2:]
 
         torch._check(
             q_desc.t.dtype.is_floating_point
@@ -38,21 +46,22 @@ class flash_attention(CustomOp):
             lambda: f"flash_attention: Expected floating point",
         )
 
-        torch._check(
-            q_b == k_b and q_b == v_b,
-            lambda: f"expected matching batch dims: {q_b}, {k_b}, {v_b}",
-        )
+        for q_b, k_b, v_b in zip(q_bs, k_bs, v_bs):
+            torch._check(
+                q_b == k_b and q_b == v_b,
+                lambda: f"expected matching batch dims: {q_b}, {k_b}, {v_b}",
+            )
 
         torch._check(q_d == k_d, lambda: f"expected matching qk features: {q_d}, {k_d}")
 
         torch._check(k_s == v_s, lambda: f"expected matching kv length: {q_d}, {k_d}")
 
-        q_desc.specialize_dims(1, 2)
-        k_desc.specialize_dims(1, 2)
-        v_desc.specialize_dims(1, 2)
+        q_desc.specialize_dims(bs, bs + 1)
+        k_desc.specialize_dims(bs, bs + 1)
+        v_desc.specialize_dims(bs, bs + 1)
 
         # Result 0: Shape batch..., m, n
-        ksel.return_new_tensor((q_b, q_l, v_e), dtype=torch.float16).specialize_dims(
+        ksel.return_new_tensor((*q_bs, q_l, v_e), dtype=torch.float16).specialize_dims(
             1, 2
         )
 
@@ -65,8 +74,8 @@ class flash_attention(CustomOp):
         scale_tensor_type = RankedTensorType(scale.type)
         v_tensor_type = RankedTensorType(v.type)
 
-        n, l, d = q_tensor_type.shape
-        _, s, e = v_tensor_type.shape
+        _, _, l, d = q_tensor_type.shape
+        _, _, s, e = v_tensor_type.shape
 
         i_type_str = str(q_tensor_type.element_type)
         scale_type_str = str(scale_tensor_type.element_type)

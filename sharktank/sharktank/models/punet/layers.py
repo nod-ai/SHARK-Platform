@@ -403,14 +403,10 @@ class AttentionLayer(ThetaLayer):
         if isinstance(t, PlanarQuantizedTensor) and isinstance(
             t.layout, TensorScaledLayout
         ):
-            layout = (
-                t.layout.view(bs, -1, self.heads, head_dim)
-                .transpose(1, 2)
-                .flatten(0, 1)
-            )
+            layout = t.layout.view(bs, -1, self.heads, head_dim).transpose(1, 2)
             return PlanarQuantizedTensor(shape=layout.shape, layout=layout)
 
-        return t.view(bs, -1, self.heads, head_dim).transpose(1, 2).flatten(0, 1)
+        return t.view(bs, -1, self.heads, head_dim).transpose(1, 2)
 
     def forward(
         self,
@@ -431,7 +427,6 @@ class AttentionLayer(ThetaLayer):
             query, key, value, a=attention_mask
         )
 
-        hidden_states.unflatten(0, (bs, self.heads))
         hidden_states = hidden_states.transpose(1, 2).reshape(bs, -1, inner_dim)
 
         # Linear proj.
