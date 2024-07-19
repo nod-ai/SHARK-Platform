@@ -73,7 +73,6 @@ class flash_attention(CustomOp):
         o_type_str = "f16"
 
         kwargs = {
-            "n": n,
             "l": l,
             "d": d,
             "s": s,

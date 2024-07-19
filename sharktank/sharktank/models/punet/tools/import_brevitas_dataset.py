@@ -88,6 +88,9 @@ def apply_per_layer_quant(
         shape = qp[f"{name}_shape"]
         return torch.tensor(data_1d, dtype=dtype).reshape(shape)
 
+    # If the quantization layer is for the output softmax we only have
+    # the activation scale. This will likely change when the softmax
+    # quantization carries the full type and scale.
     if layer_name.endswith("output_softmax_quant"):
         softmax_scale = _get_json_tensor("act_scale", dtype=torch.float32)
         softmax_scale = DefaultPrimitiveTensor(
@@ -127,7 +130,7 @@ def apply_per_layer_quant(
             name=f"{layer_name}.q_output",
             scale=1.0 / output_scale,
             reciprocal_scale=output_scale,
-            dtype=torch.float8_e4m3fnuz,
+            dtype=torch.float8_e4m3fnuz, # hardcoded for right now until breviatas updates
         )
         updated_tensors[output_quantizer.name] = output_quantizer
 
