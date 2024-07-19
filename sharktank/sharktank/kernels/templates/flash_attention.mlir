@@ -33,8 +33,8 @@ util.func private @sharktank_flash_attention_{{l}}_{{s}}_{{d}}_{{e}}_{{i_type}}_
         %empty_dyn = tensor.empty(%b, %l, %e) : !o_dyn_type
         %empty = tensor.cast %empty_dyn : !o_dyn_type to !o_type
 
-        %f0 = arith.constant 0.0 : f32
-        %fill = linalg.fill ins(%f0 : f32) outs(%empty : !o_type)  -> !o_type
+        %f0 = arith.constant 0.0 : {{o_type}}
+        %fill = linalg.fill ins(%f0 : {{o_type}}) outs(%empty : !o_type)  -> !o_type
 
         %atten = iree_linalg_ext.attention {indexing_maps = [
                     affine_map<(d0, d1, d2, d3, d4) -> (d0, d1, d2)>,
