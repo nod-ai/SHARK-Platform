@@ -68,11 +68,6 @@ def _dtype_str_to_dtype(dtype_str: str) -> torch.dtype:
 def apply_per_layer_quant(
     root_theta: Theta, layer_name: str, qp, updated_tensors: dict[str, InferenceTensor]
 ):
-    layer_theta = root_theta(layer_name)
-    weight = layer_theta.tensor("weight")
-    weight_dtype = weight.as_torch().dtype
-    bias = layer_theta.optional_tensor("bias")
-
     # The config file has tensors as 1d and a _shape suffixed array with the
     # concrete shape.
     def _get_json_tensor(
@@ -93,6 +88,22 @@ def apply_per_layer_quant(
         shape = qp[f"{name}_shape"]
         return torch.tensor(data_1d, dtype=dtype).reshape(shape)
 
+    # If the quantization layer is for the output softmax we only have
+    # the activation scale. This will likely change when the softmax
+    # quantization carries the full type and scale.
+    if layer_name.endswith("output_softmax_quant"):
+        softmax_scale = _get_json_tensor("act_scale", dtype=torch.float32)
+        softmax_scale = DefaultPrimitiveTensor(
+            name=f"{layer_name}.act_scale", data=softmax_scale
+        )
+        updated_tensors[softmax_scale.name] = softmax_scale
+        return
+
+    layer_theta = root_theta(layer_name)
+    weight = layer_theta.tensor("weight")
+    weight_dtype = weight.as_torch().dtype
+    bias = layer_theta.optional_tensor("bias")
+
     # Optional activation pre-multiplier.
     if IMPORT_SMOOTHQUANT_PRESCALE:
         smoothquant_mul = _get_json_tensor("smoothquant_mul", dtype=weight_dtype)
@@ -104,6 +115,7 @@ def apply_per_layer_quant(
             updated_tensors[premul_input.name] = premul_input
 
     input_scale = _get_json_tensor("input_scale", torch.float32)
+    output_scale = _get_json_tensor("output_scale", torch.float32)
     weight_scale = _get_json_tensor("weight_scale", torch.float32)
     weight_zp = _get_json_tensor("weight_zp", dtype=None)
 
@@ -112,6 +124,15 @@ def apply_per_layer_quant(
     input_zp = _get_json_tensor("input_zp", dtype=None)
     if input_zp is not None:
         assert torch.count_nonzero(input_zp) == 0
+
+    if output_scale is not None:
+        output_quantizer = StaticScaledQuantizer(
+            name=f"{layer_name}.q_output",
+            scale=1.0 / output_scale,
+            reciprocal_scale=output_scale,
+            dtype=torch.float8_e4m3fnuz,  # hardcoded for right now until breviatas updates
+        )
+        updated_tensors[output_quantizer.name] = output_quantizer
 
     if (
         input_scale is None

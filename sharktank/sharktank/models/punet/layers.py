@@ -395,6 +395,19 @@ class AttentionLayer(ThetaLayer):
         # to_out. But ignored for inference.
         self.to_out = LinearLayer(theta("to_out", 0))
 
+    def _reshape_qkv(self, t):
+        bs = t.shape[0]
+        inner_dim = t.shape[-1]
+        head_dim = inner_dim // self.heads
+
+        if isinstance(t, PlanarQuantizedTensor) and isinstance(
+            t.layout, TensorScaledLayout
+        ):
+            layout = t.layout.view(bs, -1, self.heads, head_dim).transpose(1, 2)
+            return PlanarQuantizedTensor(shape=layout.shape, layout=layout)
+
+        return t.view(bs, -1, self.heads, head_dim).transpose(1, 2)
+
     def forward(
         self,
         hidden_states: torch.Tensor,
@@ -403,21 +416,18 @@ class AttentionLayer(ThetaLayer):
     ):
         bs, *_ = hidden_states.shape
         query, key, value = self.project_qkv(hidden_states, encoder_hidden_states)
-
-        # Transpose.
         inner_dim = key.shape[-1]
-        head_dim = inner_dim // self.heads
-        query = query.view(bs, -1, self.heads, head_dim).transpose(1, 2)
-        key = key.view(bs, -1, self.heads, head_dim).transpose(1, 2)
-        value = value.view(bs, -1, self.heads, head_dim).transpose(1, 2)
+
+        query = self._reshape_qkv(query)
+        key = self._reshape_qkv(key)
+        value = self._reshape_qkv(value)
 
         # the output of sdp = (batch, num_heads, seq_len, head_dim)
-        hidden_states = torch.nn.functional.scaled_dot_product_attention(
-            query, key, value, attn_mask=attention_mask, dropout_p=0.0, is_causal=False
+        hidden_states = ops.scaled_dot_product_attention(
+            query, key, value, a=attention_mask
         )
 
         hidden_states = hidden_states.transpose(1, 2).reshape(bs, -1, inner_dim)
-        hidden_states = hidden_states.to(query.dtype)
 
         # Linear proj.
         hidden_states = self.to_out(hidden_states)
@@ -449,11 +459,18 @@ class AttentionLayer(ThetaLayer):
             to_k_theta = to_qkv_theta("to_k")
             to_v_theta = to_qkv_theta("to_v")
             qkv_activation = self._quantize_activation(to_qkv_theta, hidden_states)
-            return (
-                self._apply_linear(to_q_theta, qkv_activation),
-                self._apply_linear(to_k_theta, qkv_activation),
-                self._apply_linear(to_v_theta, qkv_activation),
-            )
+            q = self._apply_linear(to_q_theta, qkv_activation)
+            k = self._apply_linear(to_k_theta, qkv_activation)
+            v = self._apply_linear(to_v_theta, qkv_activation)
+
+            q_output = to_qkv_theta.optional_tensor("q_output")
+            if q_output is not None:
+                q = q_output.quantize(q)
+                k = q_output.quantize(k)
+                v = q_output.quantize(v)
+
+            return (q, k, v)
+
         elif "to_q" in theta and "to_kv" in theta:
             # Unfused q, fused kv quantization. Sub-layers of:
             #  to_q
@@ -465,11 +482,21 @@ class AttentionLayer(ThetaLayer):
             to_v_theta = to_kv_theta("to_v")
             q_activation = self._quantize_activation(to_q_theta, hidden_states)
             kv_activation = self._quantize_activation(to_kv_theta, kv_states)
-            return (
-                self._apply_linear(to_q_theta, q_activation),
-                self._apply_linear(to_k_theta, kv_activation),
-                self._apply_linear(to_v_theta, kv_activation),
-            )
+            q = self._apply_linear(to_q_theta, q_activation)
+            k = self._apply_linear(to_k_theta, kv_activation)
+            v = self._apply_linear(to_v_theta, kv_activation)
+
+            q_output = to_q_theta.optional_tensor("q_output")
+            kv_output = to_kv_theta.optional_tensor("q_output")
+
+            if q_output is not None:
+                q = q_output.quantize(q)
+
+            if kv_output is not None:
+                k = kv_output.quantize(k)
+                v = kv_output.quantize(v)
+
+            return q, k, v
         else:
             # Unfused.
             to_q_theta = theta("to_q")

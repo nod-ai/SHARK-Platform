@@ -28,6 +28,8 @@ from . import default_impls
 from . import custom_impls
 from . import sharded_impls
 
+from . import attention_impls
+
 # Comment this out to completely disable optimized quantized implementations.
 from . import qconv_impls
 from . import qlinear_impls
