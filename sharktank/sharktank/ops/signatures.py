@@ -33,6 +33,7 @@ __all__ = [
     "reshard",
     "reshard_split",
     "reshard_like",
+    "scaled_dot_product_attention",
     "sharded_cat",
     "sharded_sum",
     "unshard",
@@ -182,7 +183,8 @@ def equal(a: AnyTensor, b: AnyTensor) -> bool:
     Therefore, each first-only argument override must internally decide whether
     it can handle an equality check with an arbitrary b tensor.
 
-    torch.Tensor and DefaultPrimitiveTensor with the same contents would compare equal."""
+    torch.Tensor and DefaultPrimitiveTensor with the same contents would compare equal.
+    """
     ...
 
 
@@ -442,11 +444,36 @@ def _replicate_trampoline(
 
 
 @overridable
+def scaled_dot_product_attention(
+    q: AnyTensor, k: AnyTensor, v: AnyTensor, a: Optional[AnyTensor]
+) -> AnyTensor:
+    """Computes the scaled dot product attention using QKV."""
+    raise NotImplementedError
+
+
+@scaled_dot_product_attention.trampoline
+def _scaled_dot_product_attention(
+    d: SignatureDispatcher,
+    q: AnyTensor,
+    k: AnyTensor,
+    v: AnyTensor,
+    a: Optional[AnyTensor],
+):
+    tensors = (q, k, v, a)
+    for override in d.find_overrides(tensors):
+        result = override(q, k, v, a)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(tensors)
+
+
+@overridable
 def reshard(
     input: AnyTensor | Theta,
-    spec: sharding.TensorSharding
-    | sharding.ThetaLayerSharding
-    | sharding.ThetaSharding,
+    spec: (
+        sharding.TensorSharding | sharding.ThetaLayerSharding | sharding.ThetaSharding
+    ),
 ) -> AnyTensor | Theta:
     """Reshard to the given specification.
     If a Theta is given then the tensor nesting is preserved,
