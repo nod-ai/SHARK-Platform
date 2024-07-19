@@ -209,6 +209,10 @@ def main():
     parser.add_argument("--kv-cache-type", default="paged", help="KV cache type")
     parser.add_argument("--device", help="Torch device (or default)")
     parser.add_argument(
+        "--save_intermediates_path",
+        help="save module forward outputs to safetensors, ex: run_0 will save to run_0_prefill.savetensors",
+    )
+    parser.add_argument(
         "--activation-dtype",
         help="DType to use for activations in the model",
         default="float32",
@@ -233,6 +237,11 @@ def main():
         attention_dtype=activation_dtype,
     )
     model = PagedLlamaModelV1(dataset.root_theta, config)
+    if args.save_intermediates_path:
+        from ..utils.patching import SaveModuleResultTensorsPatch
+
+        intermediates_saver = SaveModuleResultTensorsPatch()
+        intermediates_saver.patch_child_modules(model)
     generator = TorchGenerator(model, tokenizer)
 
     print(f":: Prompting:")
@@ -244,8 +253,17 @@ def main():
     batch.prefill()
     print(batch.detokenize())
 
+    if args.save_intermediates_path:
+        intermediates_saver.save_file(
+            args.save_intermediates_path + "_prefill.safetensors"
+        )
+    counter = 0
     while not batch.done:
         batch.decode()
+        if args.save_intermediates_path:
+            intermediates_saver.save_file(
+                args.save_intermediates_path + f"_step_{counter}.safetensors"
+            )
         print(f":: Result tokens: {batch.results}")
         batch.print_current_results()
 
