@@ -167,7 +167,7 @@ linear.override(Tensor, QuantizedTensor, AnyTensor)(linear_quantized_weight)
 
 
 def _invoke_int32_mmt(lhs, rhs, *, accum_dtype):
-    if debugging.flags.use_custom_int_mm_kernel:
+    if debugging.flags.use_custom_iree_kernels:
         # The custom kernel requires that the lhs and rhs be the same
         # rank. Broadcast the rhs to match.
         lhs_rank = len(lhs.shape)

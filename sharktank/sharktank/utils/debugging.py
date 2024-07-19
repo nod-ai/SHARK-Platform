@@ -33,8 +33,11 @@ class DebugFlags:
     golden_sequence_value: int = 0
 
     # Feature flags.
-    use_custom_int_conv_kernel: bool = True
-    use_custom_int_mm_kernel: bool = True
+    # Enables use of custom IREE kernels in lieu of PyTorch general
+    # for certain low level operations. We'd like to remove this flag but
+    # certain eager use cases are still having problems with these custom
+    # kernels, so keeping it to unblock progress.
+    use_custom_iree_kernels: bool = True
 
     def set(self, part: str):
         m = re.match(SETTING_PART_PATTERN, part)
@@ -51,10 +54,8 @@ class DebugFlags:
             self.enable_nan_checks = logical_sense
         elif name == "save_goldens_path":
             self.save_goldens_path = Path(value)
-        elif name == "use_custom_int_conv_kernel":
-            self.use_custom_int_conv_kernel = logical_sense
-        elif name == "use_custom_int_mm_kernel":
-            self.use_custom_int_mm_kernel = logical_sense
+        elif name == "use_custom_iree_kernels":
+            self.use_custom_iree_kernels = logical_sense
         else:
             logger.warn("Unrecognized %s flag: '%s'", FLAGS_ENV_NAME, name)
 
