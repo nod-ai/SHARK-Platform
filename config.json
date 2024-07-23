@@ -1,0 +1,9 @@
+{
+    "max_seq_len": 4096,
+    "attn_head_count": 64,
+    "transformer_block_count": 8,
+    "attn_head_dim": 160,
+    "block_seq_stride": 16,
+    "prefill_batch_sizes": [2],
+    "decode_batch_sizes": [2]
+}

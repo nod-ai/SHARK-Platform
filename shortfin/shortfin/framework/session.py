@@ -378,7 +378,7 @@ class TransferBuffer:
     def __init__(self, session: DeviceSession, buffer_size_bytes: int):
         self.host_buffer = session.device.allocator.allocate_buffer(
             memory_type=MemoryType.HOST_LOCAL | MemoryType.DEVICE_VISIBLE,
-            allowed_usage=BufferUsage.DEFAULT,
+            allowed_usage=BufferUsage.TRANSFER | BufferUsage.MAPPING_SCOPED,
             allocation_size=buffer_size_bytes,
         )
         self.device_buffer = session.device.allocator.allocate_buffer(

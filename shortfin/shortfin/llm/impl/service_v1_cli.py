@@ -13,6 +13,7 @@ from transformers import LlamaTokenizer  # type: ignore
 
 from iree.runtime import (  # type: ignore
     HalElementType,
+    DeviceArray
 )
 
 from shortfin.framework.session import DeviceSession
@@ -45,9 +46,10 @@ def setup(vmfb_path, config_path, gguf_path):
     )
 
     disable_leak_checker()
-    session = DeviceSession(uri="local-sync", queue_count=2)
+    session = DeviceSession(uri="hip://3", queue_count=2)
     attn_block_cache = AttnBlockCache(session, cache_params)
 
+    device = session.device
     lms = session.create_module_set(model_params.module_name, context_count=1)
     lms.load_io_module(gguf_path)
     lms.load_vmfb(vmfb_path)
@@ -56,12 +58,11 @@ def setup(vmfb_path, config_path, gguf_path):
 
     params = ServiceParams(cache=cache_params, model=model_params)
     service = GenerateServiceV1(session=session, params=params, cache=attn_block_cache)
-    return service
+    return service, device
 
 
-def map_buffer(value):
-    mapped = value.map()
-    return mapped.asarray(value.shape, HalElementType.map_to_dtype(value.element_type))
+def map_buffer(value, device):
+    return DeviceArray(device, value, override_dtype=HalElementType.map_to_dtype(value.element_type))
 
 
 async def main(argv):
@@ -77,7 +78,7 @@ async def main(argv):
     vmfb_path = parsed.vmfb
     gguf_path = parsed.gguf
 
-    service = setup(vmfb_path, config_path, gguf_path)
+    service, device = setup(vmfb_path, config_path, gguf_path)
     tokenizer = LlamaTokenizer.from_pretrained(hf_path)
     state = service.start()
 
@@ -93,7 +94,7 @@ async def main(argv):
         logits = await state.prefill()
 
         seq_len = len(input_ids)
-        mapped_logits = map_buffer(logits.value)
+        mapped_logits = map_buffer(logits.value, device).to_host()
         predicted_tokens = numpy.argmax(mapped_logits[0, :seq_len], axis=-1)
         predicted_token = predicted_tokens[-1]
         decoded_token = tokenizer.decode(predicted_token)
@@ -104,7 +105,7 @@ async def main(argv):
         #   'decode' is for hypothesis exploration, one step at a time
         await state.set_decode_step([predicted_token])
         logits = await state.decode()
-        mapped_logits = map_buffer(logits.value)
+        mapped_logits = map_buffer(logits.value, device).to_host()
         predicted_tokens = numpy.argmax(mapped_logits, axis=-1)
         predicted_token = predicted_tokens[0]
         decoded_token = tokenizer.decode(predicted_token)
