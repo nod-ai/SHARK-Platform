@@ -63,7 +63,10 @@ def map_buffer(value, device):
     return DeviceArray(device, value, override_dtype=HalElementType.map_to_dtype(value.element_type))
 
 # async def main(argv):
-async def mlperf_shortfin(**llm_kwargs, input_ids):
+async def mlperf_shortfin(
+    llm_kwargs: dict, 
+    input_ids,
+    ):
     # parser = argparse.ArgumentParser()
     # parser.add_argument("--tokenizer", help="name of hugginface tokenizer to use")
     # parser.add_argument("--config", help="json config file with hyperparameters")
@@ -75,6 +78,8 @@ async def mlperf_shortfin(**llm_kwargs, input_ids):
     # config_path = parsed.config
     # vmfb_path = parsed.vmfb
     # gguf_path = parsed.gguf
+
+    print('inside shortfin...')
 
     hf_path = llm_kwargs['tokenizer_path']
     config_path = llm_kwargs['config_path']
@@ -111,7 +116,7 @@ async def mlperf_shortfin(**llm_kwargs, input_ids):
     #   'prefill' is for initialization with multiple steps at once
     #   'decode' is for hypothesis exploration, one step at a time
 
-    
+    print('prefill predicted_token', predicted_token)
     await state.set_decode_step([predicted_token])
     logits = await state.decode()
     mapped_logits = map_buffer(logits.value).to_host()
@@ -121,9 +126,11 @@ async def mlperf_shortfin(**llm_kwargs, input_ids):
     print(f"Decode predicted token: {predicted_token}, decoded: '{decoded_token}'")
     await state.recycle()
 
+    print('Decode predicted_token', predicted_token)
+
     service.shutdown()
 
-    return input_ids
+    return predicted_token
 
 
 # if __name__ == "__main__":
