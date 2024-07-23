@@ -91,12 +91,22 @@ def apply_per_layer_quant(
     # If the quantization layer is for the output softmax we only have
     # the activation scale. This will likely change when the softmax
     # quantization carries the full type and scale.
-    if layer_name.endswith("output_softmax_quant"):
-        softmax_scale = _get_json_tensor("act_scale", dtype=torch.float32)
-        softmax_scale = DefaultPrimitiveTensor(
-            name=f"{layer_name}.act_scale", data=softmax_scale
+    if (
+        layer_name.endswith("output_softmax_quant")
+        or layer_name.endswith("out_q")
+        or layer_name.endswith("out_k")
+        or layer_name.endswith("out_v")
+    ):
+        output_scale = _get_json_tensor("act_scale", torch.float32)
+        dtype = _dtype_str_to_dtype(qp.get("act_zp_dtype"))
+        output_quantizer = StaticScaledQuantizer(
+            name=layer_name,
+            scale=1.0 / output_scale,
+            reciprocal_scale=output_scale,
+            dtype=dtype,
         )
-        updated_tensors[softmax_scale.name] = softmax_scale
+
+        updated_tensors[output_quantizer.name] = output_quantizer
         return
 
     layer_theta = root_theta(layer_name)

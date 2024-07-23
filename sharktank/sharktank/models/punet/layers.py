@@ -416,6 +416,15 @@ class AttentionLayer(ThetaLayer):
     ):
         bs, *_ = hidden_states.shape
         query, key, value = self.project_qkv(hidden_states, encoder_hidden_states)
+
+        out_q = self.theta.optional_tensor("out_q")
+        out_k = self.theta.optional_tensor("out_k")
+        out_v = self.theta.optional_tensor("out_v")
+
+        query = query if out_q is None else out_q.quantize(query)
+        key = key if out_k is None else out_k.quantize(key)
+        value = value if out_v is None else out_v.quantize(value)
+
         inner_dim = key.shape[-1]
 
         query = self._reshape_qkv(query)
@@ -463,12 +472,6 @@ class AttentionLayer(ThetaLayer):
             k = self._apply_linear(to_k_theta, qkv_activation)
             v = self._apply_linear(to_v_theta, qkv_activation)
 
-            q_output = to_qkv_theta.optional_tensor("q_output")
-            if q_output is not None:
-                q = q_output.quantize(q)
-                k = q_output.quantize(k)
-                v = q_output.quantize(v)
-
             return (q, k, v)
 
         elif "to_q" in theta and "to_kv" in theta:
@@ -485,16 +488,6 @@ class AttentionLayer(ThetaLayer):
             q = self._apply_linear(to_q_theta, q_activation)
             k = self._apply_linear(to_k_theta, kv_activation)
             v = self._apply_linear(to_v_theta, kv_activation)
-
-            q_output = to_q_theta.optional_tensor("q_output")
-            kv_output = to_kv_theta.optional_tensor("q_output")
-
-            if q_output is not None:
-                q = q_output.quantize(q)
-
-            if kv_output is not None:
-                k = kv_output.quantize(k)
-                v = kv_output.quantize(v)
 
             return q, k, v
         else:
