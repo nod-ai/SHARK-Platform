@@ -43,7 +43,7 @@ def _extract_linear_scale(t):
         and isinstance(t.layout, TensorScaledLayout)
         and t.layout.m is None
     ):
-        return t.layout.qs, t.layout.d
+        return t.layout.dequant(), None
     return unbox_tensor(t), None
 
 
