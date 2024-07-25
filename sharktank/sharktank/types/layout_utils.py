@@ -166,7 +166,7 @@ def saturate_cast(
         isfp8 = finfo.bits == 8
         if isfp8 and not disable_saturate:
             t = t.clamp(finfo.min, finfo.max)
-        return t.to(dtype=type)
+        return t.to(dtype=dtype)
 
     iinfo = torch.iinfo(dtype)
     if round_int:
