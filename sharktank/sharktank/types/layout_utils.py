@@ -160,10 +160,12 @@ def saturate_cast(
     needed if (for example, trying to saturate a high precision integer
     type like int32) with a low precision tensor.
     """
-    isfp8 = (dtype == torch.float8_e4m3fn
-             or dtype == torch.float8_e4m3fnuz
-             or dtype == torch.float8_e5m2
-             or dtype == torch.float8_e5m2fnuz)
+    isfp8 = (
+        dtype == torch.float8_e4m3fn
+        or dtype == torch.float8_e4m3fnuz
+        or dtype == torch.float8_e5m2
+        or dtype == torch.float8_e5m2fnuz
+    )
     if dtype.is_floating_point and not isfp8:
         return t.to(dtype=dtype)
 
