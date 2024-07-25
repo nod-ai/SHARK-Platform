@@ -201,6 +201,20 @@ class Batch:
         return torch.tensor(rows, device=self.parent.model.device)
 
 
+def quantize_theta(theta):
+    if isinstance(theta, Theta) or isinstance(theta, dict):
+        if "q_input" not in (theta._tree if isinstance(theta, Theta) else theta):
+            (theta._tree if isinstance(theta, Theta) else theta)["q_input"] = DynamicScaledQuantizer(name="q_input", dtype=torch.float8_e4m3fn)
+
+        for subbranch_name in list((theta._tree if isinstance(theta, Theta) else theta).keys()):
+            subbranch = theta.optional_tensor(subbranch_name) if isinstance(theta, Theta) else theta[subbranch_name]
+            quantize_theta(subbranch)
+
+            if isinstance(theta, Theta):
+                theta._tree[subbranch_name] = subbranch
+            else:
+                theta[subbranch_name] = subbranch
+
 def main():
     from ..utils import cli
 
@@ -213,25 +227,35 @@ def main():
         help="DType to use for activations in the model",
         default="float32",
     )
+    parser.add_argument(
+        "--use-fp8-quantization",
+        help="DType to use for activations in the model",
+        default="false",
+    )
     cli.add_input_dataset_options(parser)
     cli.add_tokenizer_options(parser)
     args = cli.parse(parser)
 
     device = torch.device(args.device) if args.device else None
     activation_dtype = getattr(torch, args.activation_dtype)
+    use_fp8_quantization = args.use_fp8_quantization.lower() == 'true'
     assert isinstance(activation_dtype, torch.dtype)
     dataset = cli.get_input_dataset(args)
     tokenizer = cli.get_tokenizer(args)
     prompts = args.prompt
 
     config = LlamaModelConfig(
-        hp=configs.LlamaHParams.from_hf_props(dataset.properties),
+        # hp=configs.LlamaHParams.from_hf_props(dataset.properties),
+        hp=configs.LlamaHParams.from_gguf_props(dataset.properties),
         block_seq_stride=16,
         kv_cache_type=args.kv_cache_type,
         device=device,
         activation_dtype=activation_dtype,
         attention_dtype=activation_dtype,
     )
+    if use_fp8_quantization:
+        quantize_theta(dataset.root_theta)
+    print(dataset.root_theta._tree)
     model = PagedLlamaModelV1(dataset.root_theta, config)
     generator = TorchGenerator(model, tokenizer)
 

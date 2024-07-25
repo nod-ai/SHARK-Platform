@@ -65,7 +65,9 @@ class LinearLayer(ThetaLayer):
             x = ops.elementwise(torch.mul, x, self.premul_input)
 
         if q_input is not None:
+            print(x, "not quantized :(")
             x = q_input.quantize(x)
+            print(x, "quantizing :D")
         elif qdq_input is not None:
             x = qdq_input.quantize(x).unpack().dequant()
 
