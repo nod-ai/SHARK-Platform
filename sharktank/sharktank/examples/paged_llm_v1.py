@@ -52,6 +52,7 @@ class TorchGenerator:
         )
         token_ids = torch.tensor(token_ids, device=self.model.device)
         seq_lens = torch.tensor(seq_lens, device=self.model.device)
+        import pdb; pdb.set_trace()
         if self.shared_cache_state is not None:
             cache_state = self.shared_cache_state
         else:
@@ -251,21 +252,21 @@ def main():
     batch = generator.begin_batch(prompts)
     print(f":: Prompt tokens: {batch.token_ids}")
     batch.prefill()
-    print(batch.detokenize())
+    # print(batch.detokenize())
 
-    if args.save_intermediates_path:
-        intermediates_saver.save_file(
-            args.save_intermediates_path + "_prefill.safetensors"
-        )
-    counter = 0
-    while not batch.done:
-        batch.decode()
-        if args.save_intermediates_path:
-            intermediates_saver.save_file(
-                args.save_intermediates_path + f"_step_{counter}.safetensors"
-            )
-        print(f":: Result tokens: {batch.results}")
-        batch.print_current_results()
+    # if args.save_intermediates_path:
+    #     intermediates_saver.save_file(
+    #         args.save_intermediates_path + "_prefill.safetensors"
+    #     )
+    # counter = 0
+    # while not batch.done:
+    #     batch.decode()
+    #     if args.save_intermediates_path:
+    #         intermediates_saver.save_file(
+    #             args.save_intermediates_path + f"_step_{counter}.safetensors"
+    #         )
+    #     print(f":: Result tokens: {batch.results}")
+    #     batch.print_current_results()
 
 
 if __name__ == "__main__":

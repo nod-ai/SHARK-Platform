@@ -163,6 +163,7 @@ class PagedLlamaModelV1(BaseCausalLMModel):
         self._assert_device(seq_block_ids)
         self._assert_device(*cache_state, dtype=self.activation_dtype)
         h = self.token_embedding(tokens)
+        import pdb; pdb.set_trace()
         self.trace_tensor("llama.token_embedding", h)
 
         # Iterate over attention blocks.
@@ -330,7 +331,10 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         # Fast path to start_index based embedding lookup if available.
         # Falls back to a slower position based index lookup.
         if start_index is not None:
+            print('HERE 1')
             xq, xk = embedding.forward(xq=xq, xk=xk, start_index=start_index)
+            print('xq:', xq.shape)
+            print('xk:', xk.shape)
         else:
             xq, xk = embedding.apply_batched_mask(
                 xq=xq, xk=xk, mask=embedding_batch_mask
