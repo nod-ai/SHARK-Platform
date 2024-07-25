@@ -166,11 +166,17 @@ def saturate_cast(
         or dtype == torch.float8_e5m2
         or dtype == torch.float8_e5m2fnuz
     )
-    if dtype.is_floating_point and not isfp8:
+
+    if isfp8:
+        finfo = torch.finfo(dtype)
+        if not disable_saturate:
+            t = t.clamp(finfo.min, finfo.max)
+
+    if dtype.is_floating_point:
         return t.to(dtype=dtype)
 
-    iinfo = torch.finfo(dtype) if dtype.is_floating_point else torch.iinfo(dtype)
-    if round_int and not isfp8:
+    iinfo = torch.iinfo(dtype)
+    if round_int:
         t = torch.round(t)
     if not disable_saturate:
         t = t.clamp(iinfo.min, iinfo.max)
