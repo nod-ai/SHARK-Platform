@@ -1,14 +1,19 @@
 from transformers import AutoTokenizer, LlamaForCausalLM
 import transformers
+from ..utils.tokenizer import InferenceTokenizer
+import torch
 
 
 from ..utils import cli
 parser = cli.create_parser()
+parser.add_argument("prompt", nargs="+", help="Prompt strings")
 parser.add_argument(
     "--save_intermediates_path",
     help="save module forward outputs to safetensors, ex: run_0 will save to run_0_prefill.savetensors",
 )
+cli.add_tokenizer_options(parser)
 args = cli.parse(parser)
+tokenizer = cli.get_tokenizer(args)
 
 model = LlamaForCausalLM.from_pretrained(
     "/srv/shark/Llama-2-70b-chat-hf"
@@ -18,16 +23,19 @@ if args.save_intermediates_path:
 
     intermediates_saver = SaveModuleResultTensorsPatch()
     intermediates_saver.patch_child_modules(model)
-tokenizer = AutoTokenizer.from_pretrained("/srv/shark/Llama-2-70b-chat-hf")
 
-prompt = "What is MLIR?"
-inputs = tokenizer(prompt, return_tensors="pt")
-print('INPUTS:', inputs.input_ids)
+prompts = args.prompt
+# tokenizer = AutoTokenizer.from_pretrained("/srv/shark/Llama-2-70b-chat-hf")
+token_ids, seq_lens = tokenizer.encode(
+    prompts, pad_to_multiple_of=16
+)
+token_ids = torch.tensor(token_ids)
 
-# generate_ids = model.generate(inputs.input_ids, max_length=30)
-# print('GENERATE IDS:', generate_ids, generate_ids.shape)
+# inputs = tokenizer(prompt, return_tensors="pt")
+# print('INPUTS:', inputs.input_ids)
 
-results = model.forward(inputs.input_ids)
+# results = model.forward(inputs.input_ids)
+results = model.forward(token_ids)
 if args.save_intermediates_path:
     intermediates_saver.save_file(
         args.save_intermediates_path + "_prefill.safetensors"
