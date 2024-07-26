@@ -23,7 +23,7 @@ Key concepts:
 """
 
 from typing import Any, Callable, Coroutine, Generic, TypeVar, Optional, Union
-
+import sys
 import asyncio
 import concurrent.futures
 import math
@@ -55,6 +55,26 @@ from iree.runtime import (  # type: ignore[import-untyped]
 )
 
 from .logging import get_logger, NDEBUG
+
+import pdb
+
+class ForkablePdb(pdb.Pdb):
+
+    _original_stdin_fd = sys.stdin.fileno()
+    _original_stdin = None
+
+    def __init__(self):
+        pdb.Pdb.__init__(self, nosigint=True)
+
+    def _cmdloop(self):
+        current_stdin = sys.stdin
+        try:
+            if not self._original_stdin:
+                self._original_stdin = os.fdopen(self._original_stdin_fd)
+            sys.stdin = self._original_stdin
+            self.cmdloop()
+        finally:
+            sys.stdin = current_stdin
 
 T = TypeVar("T")
 
@@ -93,15 +113,24 @@ class DeviceSession:
         vm_instance: Optional[VmInstance] = None,
         queue_count: int = 1,
     ):
+        print('inside DeviceSession 0')
         self._queue_request_count = 0
+        print('inside DeviceSession 1')
         self.vm_instance = vm_instance or get_vm_instance()
+        print('inside DeviceSession 2')
         if uri is not None:
             assert (
                 driver is None and device is None
             ), "If 'uri' is given, 'driver' and 'device' cannot be set"
             logger.info("Opening device by uri: %s", uri)
-            driver = uri_driver = get_driver(uri)
+            print('inside DeviceSession 3')
+            uri_driver = get_driver(uri)
+            print('uri_driver', uri_driver)
+            print('uri_driver.create_device_by_uri(uri)', uri_driver.create_device_by_uri(uri))
+            driver = uri_driver
             device = uri_driver.create_device_by_uri(uri)
+
+            print('device, driver', device, driver, isinstance(driver, str))
         assert driver is not None, "'driver' cannot be None"
         self.driver = driver if not isinstance(driver, str) else get_driver(driver)
         self.device = device if device else self.driver.create_default_device()
@@ -109,6 +138,7 @@ class DeviceSession:
         # Dependent objects.
         self._module_sets: dict[str, "ModuleSet"] = {}
         self.queues = [WorkQueue(self, i) for i in range(queue_count)]
+        print('DeviceSession init done')
 
     def shutdown(self):
         for ms in self._module_sets.values():

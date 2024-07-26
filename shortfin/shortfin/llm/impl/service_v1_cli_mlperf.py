@@ -8,7 +8,8 @@ import asyncio
 import argparse
 import numpy
 import sys
-
+import ast
+import pandas as pd
 from transformers import LlamaTokenizer  # type: ignore
 
 from iree.runtime import (  # type: ignore
@@ -34,30 +35,20 @@ from shortfin.llm.service import GenerateRequest
 
 
 def setup(vmfb_path, config_path, gguf_path):
-    print('here setup')
-
     from iree.runtime._binding import disable_leak_checker  # type: ignore
-    print('here setup')
 
     model_params = ModelParams.load_json(config_path)
-    print('here setup')
 
     device_block_count = model_params.max_seq_len // model_params.block_seq_stride
-    print('here setup')
-
     cache_params = CacheParams(
         model=model_params,
         device_block_count=device_block_count,
         block_pos_stride=model_params.block_seq_stride,
     )
-    print('here setup')
 
     disable_leak_checker()
     session = DeviceSession(uri="hip://3", queue_count=2)
-    print('here setup')
-
     attn_block_cache = AttnBlockCache(session, cache_params)
-    print('here setup')
 
     device = session.device
     lms = session.create_module_set(model_params.module_name, context_count=1)
@@ -74,79 +65,65 @@ def setup(vmfb_path, config_path, gguf_path):
 def map_buffer(value, device):
     return DeviceArray(device, value, override_dtype=HalElementType.map_to_dtype(value.element_type))
 
-# async def main(argv):
-async def mlperf_shortfin(
-    llm_kwargs: dict, 
-    input_ids,
-    ):
-    # parser = argparse.ArgumentParser()
-    # parser.add_argument("--tokenizer", help="name of hugginface tokenizer to use")
-    # parser.add_argument("--config", help="json config file with hyperparameters")
-    # parser.add_argument("--vmfb", help="vmfb with compiler LLM kernels")
-    # parser.add_argument("--gguf", help="gguf file containing modle coefficients")
-    # parsed = parser.parse_args(argv)
 
-    # hf_path = parsed.tokenizer
-    # config_path = parsed.config
-    # vmfb_path = parsed.vmfb
-    # gguf_path = parsed.gguf
+async def main(argv):
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--tokenizer", help="name of hugginface tokenizer to use")
+    parser.add_argument("--config", help="json config file with hyperparameters")
+    parser.add_argument("--vmfb", help="vmfb with compiler LLM kernels")
+    parser.add_argument("--gguf", help="gguf file containing modle coefficients")
+    parsed = parser.parse_args(argv)
 
-    print('inside shortfin...')
-
-    hf_path = llm_kwargs['tokenizer_path']
-    config_path = llm_kwargs['config_path']
-    vmfb_path = llm_kwargs['vmfb_path']
-    gguf_path = llm_kwargs['gguf_path']
+    hf_path = parsed.tokenizer
+    config_path = parsed.config
+    vmfb_path = parsed.vmfb
+    gguf_path = parsed.gguf
 
     service, device = setup(vmfb_path, config_path, gguf_path)
     tokenizer = LlamaTokenizer.from_pretrained(hf_path)
     state = service.start()
 
-    # for line in ["one two three four five six seven eight"]:
-    # prompt = line.strip()
-    # if not prompt:
-    #     break
+    df = pd.read_csv('golden_outputs_llama2_70b_fp8_latest.csv')  
+    prompt_tokens = list(df['groundtruth_tok_input'])
+    promt_list = list(df['groundtruth_input'])
+    prompt_test_bool = []
+    i = 0
+    for idx, line in enumerate(prompt_tokens):
+        input_ids = ast.literal_eval(line)
+        if not prompt:
+            break
+        prompt = tokenizer.batch_decode(
+                input_ids, skip_special_tokens=True)
+        if i ==0:
+            print(prompt[:20])
+        prompt_test_bool.append(promt_list[idx] == prompt)
+        request = GenerateRequest("request_id", prompt, input_ids)
+        await state.set_sequences([request])
+        logits = await state.prefill()
 
-    # prompt = "Write about the llamas"
-    # input_ids = tokenizer.encode(prompt, return_tensors="pt")[0].tolist()
-    prompt = tokenizer.batch_decode(
-        input_ids, skip_special_tokens=True)
+        seq_len = len(input_ids)
+        mapped_logits = map_buffer(logits.value, device).to_host()
+        predicted_tokens = numpy.argmax(mapped_logits[0, :seq_len], axis=-1)
+        predicted_token = predicted_tokens[-1]
+        decoded_token = tokenizer.decode(predicted_token)
+        print(f"Prefill predicted token: {predicted_token}, decoded: '{decoded_token}'")
 
-    pred_output_tokens = []
-    # print('prompt, input_ids', prompt, input_ids)
-    request = GenerateRequest("request_id", prompt, input_ids)
-    await state.set_sequences([request])
-    logits = await state.prefill()
-
-    seq_len = len(input_ids)
-    mapped_logits = map_buffer(logits.value, device).to_host()
-    predicted_tokens = numpy.argmax(mapped_logits[0, :seq_len], axis=-1)
-    predicted_token = predicted_tokens[-1]
-    decoded_token = tokenizer.decode(predicted_token)
-    print(f"Prefill predicted token: {predicted_token}, decoded: '{decoded_token}'")
-    pred_output_tokens.append(predicted_token)
-
-    # TODO(scotttodd): sanity check tokenizer use, document inputs/outputs
-    #   'prefill' is for initialization with multiple steps at once
-    #   'decode' is for hypothesis exploration, one step at a time
-
-    print('prefill predicted_token', predicted_token)
-    await state.set_decode_step([predicted_token])
-    logits = await state.decode()
-    mapped_logits = map_buffer(logits.value, device).to_host()
-    predicted_tokens = numpy.argmax(mapped_logits, axis=-1)
-    predicted_token = predicted_tokens[0]
-    decoded_token = tokenizer.decode(predicted_token)
-    print(f"Decode predicted token: {predicted_token}, decoded: '{decoded_token}'")
-    pred_output_tokens.append(predicted_token)
-    await state.recycle()
-
+        # TODO(scotttodd): sanity check tokenizer use, document inputs/outputs
+        #   'prefill' is for initialization with multiple steps at once
+        #   'decode' is for hypothesis exploration, one step at a time
+        await state.set_decode_step([predicted_token])
+        logits = await state.decode()
+        mapped_logits = map_buffer(logits.value, device).to_host()
+        predicted_tokens = numpy.argmax(mapped_logits, axis=-1)
+        predicted_token = predicted_tokens[0]
+        decoded_token = tokenizer.decode(predicted_token)
+        print(f"Decode predicted token: {predicted_token}, decoded: '{decoded_token}'")
+        i =+ 1
+        await state.recycle()
+        
+    print('sum(prompt_test_bool), len(prompt_test_bool)', sum(prompt_test_bool), len(prompt_test_bool))
     service.shutdown()
 
-    return pred_output_tokens
 
-# if __name__ == "__main__":
-#     print(sys.argv)
-#     asyncio.run(main(sys.argv[1:]))
-
-
+if __name__ == "__main__":
+    asyncio.run(main(sys.argv[1:]))
