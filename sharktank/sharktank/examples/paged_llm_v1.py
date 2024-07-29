@@ -252,16 +252,12 @@ def main():
     batch = generator.begin_batch(prompts)
     print(f":: Prompt tokens: {batch.token_ids}")
     batch.prefill()
+    print(batch.detokenize())
+
     if args.save_intermediates_path:
         intermediates_saver.save_file(
             args.save_intermediates_path + "_prefill.safetensors"
         )
-    # print(batch.detokenize())
-
-    # if args.save_intermediates_path:
-    #     intermediates_saver.save_file(
-    #         args.save_intermediates_path + "_prefill.safetensors"
-    #     )
     # counter = 0
     # while not batch.done:
     #     batch.decode()

@@ -1,3 +1,4 @@
+import torch
 import safetensors.torch
 from sharktank.utils import cli
 parser = cli.create_parser()
@@ -41,9 +42,16 @@ def print_all_tensor_shapes(sharktank_file_path, hf_file_path):
         hf_key = find_matching_key(hf_key, hf_tensors.keys())
 
         if sharktank_key and hf_key:
-            sharktank_tensor_shape = sharktank_tensors[sharktank_key].shape
-            hf_tensor_shape = hf_tensors[hf_key].shape
-            print(f"'{sharktank_key}': {sharktank_tensor_shape}, '{hf_key}': {hf_tensor_shape}")
+            sharktank_tensor = sharktank_tensors[sharktank_key]
+            hf_tensor = sharktank_tensors[sharktank_key]
+            sharktank_tensor_shape = sharktank_tensor.shape
+            hf_tensor_shape = hf_tensor.shape
+            assert sharktank_tensor_shape == hf_tensor_shape
+            all_close_res = torch.allclose(sharktank_tensor, hf_tensor)
+            if all_close_res:
+                print(f"LAYER '{sharktank_key}' EQUALS '{hf_key}'")
+            else:
+                print(f"LAYER '{sharktank_key}' NOT EQUALS '{hf_key}'")
         else:
             if not sharktank_key:
                 print(f"'{sharktank_key}' not found in sharktank safetensors file.")
