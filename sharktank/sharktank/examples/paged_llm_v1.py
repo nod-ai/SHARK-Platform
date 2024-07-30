@@ -151,6 +151,8 @@ class Batch:
             seq_block_ids=seq_block_ids_tensor,
             cache_state=self.cache_state,
         )
+        import numpy as np
+        np.save('paged_llm_v1_logits.npy', logits.detach().numpy())
 
         # TODO: Generalize the sampling and don't make it swap on/off cpu.
         # TODO: Normalize the output of extract_tokens_from_logits into

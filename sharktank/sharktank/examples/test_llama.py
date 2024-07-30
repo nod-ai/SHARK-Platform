@@ -40,6 +40,8 @@ if args.save_intermediates_path:
     intermediates_saver.save_file(
         args.save_intermediates_path + "_prefill.safetensors"
     )
+import numpy as np
+np.save('test_llama_results.npy', results.logits.detach().numpy())
 # print(results.logits)
 # print(results.logits.shape)
 
