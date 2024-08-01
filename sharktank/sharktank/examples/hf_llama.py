@@ -5,6 +5,7 @@ import torch
 
 
 from ..utils import cli
+
 parser = cli.create_parser()
 parser.add_argument("prompt", nargs="+", help="Prompt strings")
 parser.add_argument(
@@ -15,9 +16,7 @@ cli.add_tokenizer_options(parser)
 args = cli.parse(parser)
 tokenizer = cli.get_tokenizer(args)
 
-model = LlamaForCausalLM.from_pretrained(
-    "/srv/shark/Llama-2-70b-chat-hf"
-)
+model = LlamaForCausalLM.from_pretrained("/home/avsharma/Llama-2-70b-chat-hf")
 if args.save_intermediates_path:
     from ..utils.patching import SaveModuleResultTensorsPatch
 
@@ -26,9 +25,7 @@ if args.save_intermediates_path:
 
 prompts = args.prompt
 # tokenizer = AutoTokenizer.from_pretrained("/srv/shark/Llama-2-70b-chat-hf")
-token_ids, seq_lens = tokenizer.encode(
-    prompts, pad_to_multiple_of=16
-)
+token_ids, seq_lens = tokenizer.encode(prompts, pad_to_multiple_of=16)
 token_ids = torch.tensor(token_ids)
 
 # inputs = tokenizer(prompt, return_tensors="pt")
@@ -37,11 +34,10 @@ token_ids = torch.tensor(token_ids)
 # results = model.forward(inputs.input_ids)
 results = model.forward(token_ids)
 if args.save_intermediates_path:
-    intermediates_saver.save_file(
-        args.save_intermediates_path + "_prefill.safetensors"
-    )
+    intermediates_saver.save_file(args.save_intermediates_path + "_prefill.safetensors")
 import numpy as np
-np.save('test_llama_results.npy', results.logits.detach().numpy())
+
+np.save("test_llama_results.npy", results.logits.detach().numpy())
 # print(results.logits)
 # print(results.logits.shape)
 

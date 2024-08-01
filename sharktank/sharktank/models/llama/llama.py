@@ -143,7 +143,7 @@ class PagedLlamaModelV1(BaseCausalLMModel):
                     head_count_kv=hp.attention_head_count_kv,
                     rms_epsilon=hp.attention_layer_norm_rms_epsilon,
                 )
-                for n in range(2)#hp.block_count)
+                for n in range(2)  # hp.block_count)
             ]
         )
 
@@ -316,12 +316,14 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         assert bool(start_index is not None) ^ bool(embedding_batch_mask is not None)
 
         x = self.attn_norm(h)
+        print("x:", x.shape)
 
         bs, batch_seq_len, feature_dim = x.shape
         assert feature_dim == self.head_count * self.head_dim
 
         xq = self.attn_q(x)
         xk = self.attn_k(x)
+        print("xk:", xk.shape)
         xv = self.attn_v(x)
 
         xq = xq.view(bs, batch_seq_len, self.head_count, self.head_dim)
