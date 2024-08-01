@@ -15,16 +15,16 @@ parser.add_argument(
 args = cli.parse(parser)
 
 sharktank_to_hf_layers = {
-    # "output_lm_head" : "lm_head",
+    # "output_lm_head" : "lm_head", #generalize script for layers not starting with model.layers
     # "attn_norm" : "input_layernorm",
-    # "attn_q" : "self_attn.q_proj",
+    "attn_q": "self_attn.q_proj",
     "attn_k": "self_attn.k_proj",
-    # "attn_v" : "self_attn.v_proj",
-    # "attn_output" : "self_attn.o_proj",
-    # "ffn_norm" : "post_attention_layernorm",
-    # "ffn_gate" : "mlp.gate_proj",
-    # "ffn_up" : "mlp.up_proj",
-    # "ffn_down" : "mlp.down_proj",
+    "attn_v": "self_attn.v_proj",
+    "attn_output": "self_attn.o_proj",
+    "ffn_norm": "post_attention_layernorm",
+    "ffn_gate": "mlp.gate_proj",
+    "ffn_up": "mlp.up_proj",
+    "ffn_down": "mlp.down_proj",
     # "output_norm" : "norm",
     # "token_embedding" : "embed_tokens",
 }

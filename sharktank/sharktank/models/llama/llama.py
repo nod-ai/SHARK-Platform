@@ -163,6 +163,9 @@ class PagedLlamaModelV1(BaseCausalLMModel):
         self._assert_device(seq_block_ids)
         self._assert_device(*cache_state, dtype=self.activation_dtype)
         h = self.token_embedding(tokens)
+        import numpy as np
+
+        np.save("token_embedding.npy", h.detach().numpy())
 
         self.trace_tensor("llama.token_embedding", h)
 
