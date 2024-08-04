@@ -36,8 +36,8 @@ void HostCPUSystemConfig::InitializeHostCPUDefaults() {
 }
 
 LocalSystemPtr HostCPUSystemConfig::CreateLocalSystem() {
-  InitializeHostCPUDefaults();
   auto lsys = std::make_shared<LocalSystem>(host_allocator());
+  InitializeHostCPUDefaults();
   auto *driver = InitializeHostCPUDriver(*lsys);
   InitializeHostCPUDevices(*lsys, driver);
   lsys->FinishInitialization();
@@ -83,7 +83,7 @@ void HostCPUSystemConfig::InitializeHostCPUDevices(LocalSystem &lsys,
   devices.reserve(device_info_count);
   for (iree_host_size_t i = 0; i < device_info_count; ++i) {
     iree_hal_device_ptr device;
-    iree_hal_device_info_t *it = &device_infos.ptr[i];
+    iree_hal_device_info_t *it = &device_infos.get()[i];
     SHORTFIN_THROW_IF_ERROR(iree_hal_driver_create_device_by_id(
         driver, it->device_id, 0, nullptr, host_allocator(),
         device.for_output()));

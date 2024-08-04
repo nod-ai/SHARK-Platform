@@ -63,6 +63,8 @@ class iree_object_ptr {
     return iree_object_ptr(owned);
   }
 
+  operator T *() noexcept { return ptr; }
+
   // Releases any current reference held by this instance and returns a
   // pointer to the raw backing pointer. This is typically used for passing
   // to out parameters which are expected to store a new owned pointer directly.
@@ -98,11 +100,15 @@ using iree_hal_device_ptr = iree_object_ptr<iree_hal_device_t>;
 // at destruction time.
 template <typename T>
 struct allocated_ptr {
-  T *ptr = nullptr;
   iree_allocator_t allocator;
 
   allocated_ptr(iree_allocator_t allocator) : allocator(allocator) {}
-  ~allocated_ptr() { iree_allocator_free(allocator, ptr); }
+  ~allocated_ptr() { reset(); }
+
+  void reset(T *other = nullptr) {
+    iree_allocator_free(allocator, ptr);
+    ptr = other;
+  }
 
   T *release() {
     T *ret = ptr;
@@ -111,8 +117,20 @@ struct allocated_ptr {
   }
 
   T *operator->() noexcept { return ptr; }
-
   T **operator&() noexcept { return &ptr; }
+  operator T *() noexcept { return ptr; }
+  T *get() noexcept { return ptr; }
+
+  // Releases any current reference held by this instance and returns a
+  // pointer to the raw backing pointer. This is typically used for passing
+  // to out parameters which are expected to store a new owned pointer directly.
+  T **for_output() {
+    reset();
+    return &ptr;
+  }
+
+ private:
+  T *ptr = nullptr;
 };
 
 // -------------------------------------------------------------------------- //

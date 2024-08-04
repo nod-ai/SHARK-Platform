@@ -23,3 +23,17 @@ shortfin_cc_component(
     iree_task_api
     iree_task_task
 )
+
+shortfin_cc_component(
+  NAME
+    shortfin_systems_amdgpu
+  HDRS
+    amdgpu.h
+  SRCS
+    amdgpu.cc
+  COMPONENTS
+    shortfin_local_system
+    shortfin_support
+  DEPS
+    iree_hal_drivers_hip_hip
+)

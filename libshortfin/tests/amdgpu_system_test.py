@@ -8,6 +8,6 @@
 def test_create_host_cpu_system():
     from _shortfin import lib as sfl
 
-    sc = sfl.host.CPUSystemConfig()
+    sc = sfl.amdgpu.SystemConfig()
     ls = sc.create_local_system()
     print(f"LOCAL SYSTEM:", ls)
