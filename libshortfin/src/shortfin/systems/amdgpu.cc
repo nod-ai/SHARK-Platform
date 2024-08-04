@@ -10,15 +10,15 @@
 
 namespace shortfin::systems {
 
-AMDGPUSystemConfig::AMDGPUSystemConfig(iree_allocator_t host_allocator)
-    : HostCPUSystemConfig(host_allocator) {
+AMDGPUSystemBuilder::AMDGPUSystemBuilder(iree_allocator_t host_allocator)
+    : HostCPUSystemBuilder(host_allocator) {
   InitializeDefaultSetting();
   iree_hal_hip_device_params_initialize(&default_device_params_);
 }
 
-AMDGPUSystemConfig::~AMDGPUSystemConfig() = default;
+AMDGPUSystemBuilder::~AMDGPUSystemBuilder() = default;
 
-void AMDGPUSystemConfig::InitializeDefaultSetting() {
+void AMDGPUSystemBuilder::InitializeDefaultSetting() {
   char *raw_dylib_path_env_cstr = std::getenv("IREE_HIP_DYLIB_PATH");
   if (raw_dylib_path_env_cstr) {
     std::string_view rest(raw_dylib_path_env_cstr);
@@ -35,7 +35,7 @@ void AMDGPUSystemConfig::InitializeDefaultSetting() {
   }
 }
 
-void AMDGPUSystemConfig::Enumerate() {
+void AMDGPUSystemBuilder::Enumerate() {
   if (hip_hal_driver_) return;
 
   iree_hal_hip_driver_options_t driver_options;
@@ -71,7 +71,7 @@ void AMDGPUSystemConfig::Enumerate() {
   }
 }
 
-LocalSystemPtr AMDGPUSystemConfig::CreateLocalSystem() {
+LocalSystemPtr AMDGPUSystemBuilder::CreateLocalSystem() {
   auto lsys = std::make_shared<LocalSystem>(host_allocator());
   Enumerate();
   lsys->InitializeHalDriver("amdgpu", hip_hal_driver_);

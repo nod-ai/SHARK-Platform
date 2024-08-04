@@ -16,19 +16,19 @@
 namespace shortfin::systems {
 
 // Configuration for building a host-based LocalSystem.
-class SHORTFIN_API HostSystemConfig : public LocalSystemConfig {
+class SHORTFIN_API HostSystemBuilder : public LocalSystemBuilder {
  public:
-  using LocalSystemConfig::LocalSystemConfig;
+  using LocalSystemBuilder::LocalSystemBuilder;
 };
 
-// Specialization of HostSystemConfig which has CPU executors. Accelerator
+// Specialization of HostSystemBuilder which has CPU executors. Accelerator
 // based systems which wish to also enable heterogenous CPU-based execution
 // can extend this class (or provide features themselves).
-class SHORTFIN_API HostCPUSystemConfig : public HostSystemConfig {
+class SHORTFIN_API HostCPUSystemBuilder : public HostSystemBuilder {
  public:
-  HostCPUSystemConfig(iree_allocator_t host_allocator);
-  HostCPUSystemConfig() : HostCPUSystemConfig(iree_allocator_system()) {}
-  ~HostCPUSystemConfig() override;
+  HostCPUSystemBuilder(iree_allocator_t host_allocator);
+  HostCPUSystemBuilder() : HostCPUSystemBuilder(iree_allocator_system()) {}
+  ~HostCPUSystemBuilder() override;
 
   // Creates a LocalSystem based purely on the CPU config. Derived classes
   // must wholly replace this method, using protected piece-wise components.

@@ -22,28 +22,29 @@ NB_MODULE(lib, m) {
 }
 
 void BindLocalSystem(py::module_ &m) {
-  py::class_<LocalSystemConfig>(m, "LocalSystemConfig")
+  py::class_<LocalSystemBuilder>(m, "LocalSystemBuilder")
       .def("create_local_system",
-           [](LocalSystemConfig &self) { return self.CreateLocalSystem(); });
+           [](LocalSystemBuilder &self) { return self.CreateLocalSystem(); });
 
   py::class_<LocalSystem>(m, "LocalSystem");
 }
 
 void BindHostSystem(py::module_ &global_m) {
   auto m = global_m.def_submodule("host", "Host device management");
-  py::class_<systems::HostSystemConfig, LocalSystemConfig>(m, "SystemConfig");
-  py::class_<systems::HostCPUSystemConfig, systems::HostSystemConfig>(
-      m, "CPUSystemConfig")
+  py::class_<systems::HostSystemBuilder, LocalSystemBuilder>(m,
+                                                             "SystemBuilder");
+  py::class_<systems::HostCPUSystemBuilder, systems::HostSystemBuilder>(
+      m, "CPUSystemBuilder")
       .def(py::init<>());
 }
 
 void BindAMDGPUSystem(py::module_ &global_m) {
   auto m = global_m.def_submodule("amdgpu", "AMDGPU system config");
-  py::class_<systems::AMDGPUSystemConfig, systems::HostCPUSystemConfig>(
-      m, "SystemConfig")
+  py::class_<systems::AMDGPUSystemBuilder, systems::HostCPUSystemBuilder>(
+      m, "SystemBuilder")
       .def(py::init<>())
       .def_rw("cpu_devices_enabled",
-              &systems::AMDGPUSystemConfig::cpu_devices_enabled);
+              &systems::AMDGPUSystemBuilder::cpu_devices_enabled);
 }
 
 }  // namespace shortfin::python

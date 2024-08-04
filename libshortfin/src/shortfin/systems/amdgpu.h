@@ -18,15 +18,15 @@
 namespace shortfin::systems {
 
 // System configuration for some subset of AMD GPUs connected to the local
-// system. Note that this inherits from HostCPUSystemConfig, allowing joint
+// system. Note that this inherits from HostCPUSystemBuilder, allowing joint
 // configuration of a heterogenous CPU/GPU system. Depending on the specific
 // system, this can involve more than simple starting CPU drivers: datacenter
 // GPU systems have specific NUMA configurations that need to be mated.
-class SHORTFIN_API AMDGPUSystemConfig : public HostCPUSystemConfig {
+class SHORTFIN_API AMDGPUSystemBuilder : public HostCPUSystemBuilder {
  public:
-  AMDGPUSystemConfig(iree_allocator_t host_allocator);
-  AMDGPUSystemConfig() : AMDGPUSystemConfig(iree_allocator_system()) {}
-  ~AMDGPUSystemConfig();
+  AMDGPUSystemBuilder(iree_allocator_t host_allocator);
+  AMDGPUSystemBuilder() : AMDGPUSystemBuilder(iree_allocator_system()) {}
+  ~AMDGPUSystemBuilder();
 
   // Triggers driver setup and initial device enumeration. No-op if already
   // done.

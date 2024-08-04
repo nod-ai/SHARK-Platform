@@ -12,20 +12,20 @@
 namespace shortfin::systems {
 
 // -------------------------------------------------------------------------- //
-// HostCPUSystemConfig
+// HostCPUSystemBuilder
 // -------------------------------------------------------------------------- //
 
-HostCPUSystemConfig::HostCPUSystemConfig(iree_allocator_t host_allocator)
-    : HostSystemConfig(host_allocator) {
+HostCPUSystemBuilder::HostCPUSystemBuilder(iree_allocator_t host_allocator)
+    : HostSystemBuilder(host_allocator) {
   iree_task_executor_options_initialize(&host_cpu_deps_.task_executor_options);
   iree_hal_task_device_params_initialize(&host_cpu_deps_.task_params);
 }
 
-HostCPUSystemConfig::~HostCPUSystemConfig() {
+HostCPUSystemBuilder::~HostCPUSystemBuilder() {
   iree_task_topology_deinitialize(&host_cpu_deps_.task_topology_options);
 }
 
-void HostCPUSystemConfig::InitializeHostCPUDefaults() {
+void HostCPUSystemBuilder::InitializeHostCPUDefaults() {
   // Give it a default device allocator.
   if (!host_cpu_deps_.device_allocator) {
     logging::info("Using default heap allocator for host CPU devices");
@@ -35,7 +35,7 @@ void HostCPUSystemConfig::InitializeHostCPUDefaults() {
   }
 }
 
-LocalSystemPtr HostCPUSystemConfig::CreateLocalSystem() {
+LocalSystemPtr HostCPUSystemBuilder::CreateLocalSystem() {
   auto lsys = std::make_shared<LocalSystem>(host_allocator());
   InitializeHostCPUDefaults();
   auto *driver = InitializeHostCPUDriver(*lsys);
@@ -44,7 +44,7 @@ LocalSystemPtr HostCPUSystemConfig::CreateLocalSystem() {
   return lsys;
 }
 
-iree_hal_driver_t *HostCPUSystemConfig::InitializeHostCPUDriver(
+iree_hal_driver_t *HostCPUSystemBuilder::InitializeHostCPUDriver(
     LocalSystem &lsys) {
   // TODO: Kill these flag variants in favor of settings on the config
   // object.
@@ -72,8 +72,8 @@ iree_hal_driver_t *HostCPUSystemConfig::InitializeHostCPUDriver(
   return unowned_driver;
 }
 
-void HostCPUSystemConfig::InitializeHostCPUDevices(LocalSystem &lsys,
-                                                   iree_hal_driver_t *driver) {
+void HostCPUSystemBuilder::InitializeHostCPUDevices(LocalSystem &lsys,
+                                                    iree_hal_driver_t *driver) {
   iree_host_size_t device_info_count = 0;
   allocated_ptr<iree_hal_device_info_t> device_infos(host_allocator());
   SHORTFIN_THROW_IF_ERROR(iree_hal_driver_query_available_devices(

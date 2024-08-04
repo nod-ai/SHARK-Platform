@@ -21,6 +21,11 @@
 
 namespace shortfin {
 
+class LocalSystem;
+class LocalSystemBuilder;
+class LocalSystemDevice;
+class LocalSystemNode;
+
 // Encapsulates resources attached to the local system. In most applications,
 // there will be one of these, and it is used to keep long lived access to
 // physical devices, connections, and other long lived resources which need
@@ -77,12 +82,12 @@ class SHORTFIN_API LocalSystem
 using LocalSystemPtr = std::shared_ptr<LocalSystem>;
 
 // Base class for configuration objects for setting up a LocalSystem.
-class SHORTFIN_API LocalSystemConfig {
+class SHORTFIN_API LocalSystemBuilder {
  public:
-  LocalSystemConfig(iree_allocator_t host_allocator)
+  LocalSystemBuilder(iree_allocator_t host_allocator)
       : host_allocator_(host_allocator) {}
-  LocalSystemConfig() : LocalSystemConfig(iree_allocator_system()) {}
-  virtual ~LocalSystemConfig() = default;
+  LocalSystemBuilder() : LocalSystemBuilder(iree_allocator_system()) {}
+  virtual ~LocalSystemBuilder() = default;
 
   iree_allocator_t host_allocator() { return host_allocator_; }
 
@@ -91,6 +96,34 @@ class SHORTFIN_API LocalSystemConfig {
 
  private:
   const iree_allocator_t host_allocator_;
+};
+
+// NUMA node on the LocalSystem. There will always be at least one node, and
+// not all NUMA nodes on the system may be included: only those applicable
+// to device pinning/scheduling.
+class SHORTFIN_API LocalSystemNode {
+ public:
+  LocalSystemNode(int node_num) : node_num_(node_num) {}
+
+  int node_num() const { return node_num_; }
+
+ private:
+  int node_num_;
+};
+
+// A device attached to the LocalSystem.
+class SHORTFIN_API LocalSystemDevice {
+ public:
+  LocalSystemDevice(iree_hal_device_ptr hal_device,
+                    LocalSystemNode *node_affinity, bool node_locked)
+      : hal_device_(hal_device),
+        node_affinity_(node_affinity),
+        node_locked_(node_locked) {}
+
+ private:
+  iree_hal_device_ptr hal_device_;
+  LocalSystemNode *node_affinity_;
+  bool node_locked_;
 };
 
 }  // namespace shortfin
