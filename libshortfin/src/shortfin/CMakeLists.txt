@@ -5,12 +5,18 @@
 # Apache-2.0 WITH LLVM-exception
 
 add_subdirectory(support)
+add_subdirectory(systems)
 
 shortfin_cc_component(
   NAME
-    shortfin_core
+    shortfin_local_system
   HDRS
-    globals.h
+    local_system.h
   SRCS
-    globals.cc
+    local_system.cc
+  DEPS
+    iree_base_base
+    iree_hal_hal
+    iree_modules_hal_hal
+    iree_vm_vm
 )

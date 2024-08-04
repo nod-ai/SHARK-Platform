@@ -4,6 +4,18 @@
 # https://llvm.org/LICENSE.txt for license information. SPDX-License-Identifier:
 # Apache-2.0 WITH LLVM-exception
 
+set(SHORTFIN_DEFAULT_COPTS
+  # General clang and GCC options application to C and C++.
+  $<$<C_COMPILER_ID:AppleClang,Clang,GNU>:
+  -Wall
+  -Werror
+  >
+
+  # General MSVC options applicable to C and C++.
+  $<$<C_COMPILER_ID:MSVC>:
+  >
+)
+
 function(shortfin_public_library)
   cmake_parse_arguments(
     _RULE
@@ -12,13 +24,8 @@ function(shortfin_public_library)
     "COMPONENTS"
     ${ARGN}
   )
-
-  set(_STATIC_COMPONENTS ${_RULE_COMPONENTS})
-  list(TRANSFORM _STATIC_COMPONENTS APPEND ".objects")
-
-  set(_DYLIB_COMPONENTS ${_RULE_COMPONENTS})
-  list(TRANSFORM _DYLIB_COMPONENTS APPEND ".dylib.objects")
-
+  shortfin_components_to_static_libs(_STATIC_COMPONENTS ${_RULE_COMPONENTS})
+  shortfin_components_to_dynamic_libs(_DYLIB_COMPONENTS ${_RULE_COMPONENTS})
   # Static library.
   add_library("${_RULE_NAME}-static" STATIC)
   target_link_libraries(
@@ -38,12 +45,15 @@ function(shortfin_cc_component)
     _RULE
     ""
     "NAME"
-    "HDRS;SRCS;DEPS"
+    "HDRS;SRCS;DEPS;COMPONENTS"
     ${ARGN}
   )
   set(CMAKE_POSITION_INDEPENDENT_CODE ON)
   set(_STATIC_OBJECTS_NAME "${_RULE_NAME}.objects")
   set(_DYLIB_OBJECTS_NAME "${_RULE_NAME}.dylib.objects")
+
+  shortfin_components_to_static_libs(_STATIC_COMPONENTS ${_RULE_COMPONENTS})
+  shortfin_components_to_dynamic_libs(_DYLIB_COMPONENTS ${_RULE_COMPONENTS})
 
   # Static object library.
   add_library(${_STATIC_OBJECTS_NAME} OBJECT)
@@ -52,11 +62,13 @@ function(shortfin_cc_component)
       ${_RULE_SRCS}
       ${_RULE_HDRS}
   )
+  target_compile_options(${_STATIC_OBJECTS_NAME} PRIVATE ${SHORTFIN_DEFAULT_COPTS})
   target_link_libraries(${_STATIC_OBJECTS_NAME}
     PUBLIC
-      ${_RULE_DEPS}
       _shortfin_defs
-    )
+      ${_STATIC_COMPONENTS}
+      ${_RULE_DEPS}
+  )
 
   # Dylib object library.
   add_library(${_DYLIB_OBJECTS_NAME} OBJECT)
@@ -65,17 +77,31 @@ function(shortfin_cc_component)
       ${_RULE_SRCS}
       ${_RULE_HDRS}
   )
+  target_compile_options(${_DYLIB_OBJECTS_NAME} PRIVATE ${SHORTFIN_DEFAULT_COPTS})
   target_link_libraries(${_DYLIB_OBJECTS_NAME}
     PUBLIC
-      ${_RULE_DEPS}
       _shortfin_defs
+      ${_DYLIB_COMPONENTS}
+      ${_RULE_DEPS}
   )
   set_target_properties(
-    ${_DYLIB_OBJECTS_NAME}
-    PROPERTIES CXX_VISIBILITY_PRESET hidden
+    ${_DYLIB_OBJECTS_NAME} PROPERTIES
+    CXX_VISIBILITY_PRESET hidden
     C_VISIBILITY_PRESET hidden
     VISIBILITY_INLINES_HIDDEN ON
   )
   target_compile_definitions(${_DYLIB_OBJECTS_NAME}
     PRIVATE _SHORTFIN_BUILDING_DYLIB)
+endfunction()
+
+function(shortfin_components_to_static_libs out_static_libs)
+  set(_LIBS ${ARGN})
+  list(TRANSFORM _LIBS APPEND ".objects")
+  set(${out_static_libs} ${_LIBS} PARENT_SCOPE)
+endfunction()
+
+function(shortfin_components_to_dynamic_libs out_dynamic_libs)
+  set(_LIBS ${ARGN})
+  list(TRANSFORM _LIBS APPEND ".dylib.objects")
+  set(${out_dynamic_libs} "${_LIBS}" PARENT_SCOPE)
 endfunction()

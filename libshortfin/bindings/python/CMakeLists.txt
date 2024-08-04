@@ -22,13 +22,15 @@ nanobind_add_module(shortfin_python_extension NB_STATIC LTO lib_ext.cc)
 set_target_properties(shortfin_python_extension
                       PROPERTIES OUTPUT_NAME "_shortfin_default/lib")
 
-target_link_libraries(shortfin_python_extension PRIVATE shortfin)
+target_link_libraries(shortfin_python_extension
+  # TODO: This should be configurable as to whether we link to the static
+  # or dynamic version.
+  PRIVATE shortfin-static
+)
 
 nanobind_add_stub(
   shortfin_python_extension_stub
-  MODULE
-  _shortfin_default.lib
-  OUTPUT
-  _shortfin_default/lib.pyi
-  DEPENDS
-  shortfin_python_extension)
+  MODULE _shortfin_default.lib
+  OUTPUT _shortfin_default/lib.pyi
+  DEPENDS shortfin_python_extension
+)

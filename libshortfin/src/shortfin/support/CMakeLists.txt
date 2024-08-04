@@ -9,9 +9,16 @@ shortfin_cc_component(
     shortfin_support
   HDRS
     api.h
+    globals.h
+    iree_helpers.h
     logging.h
   SRCS
+    globals.cc
+    iree_helpers.cc
     logging.cc
   DEPS
+    iree_base_base
+    iree_hal_hal
+    iree_modules_hal_types
     spdlog::spdlog
 )
