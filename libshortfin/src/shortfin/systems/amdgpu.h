@@ -17,6 +17,12 @@
 
 namespace shortfin::systems {
 
+// AMD GPU device subclass.
+class SHORTFIN_API AMDGPUDevice : public LocalSystemDevice {
+ public:
+  using LocalSystemDevice::LocalSystemDevice;
+};
+
 // System configuration for some subset of AMD GPUs connected to the local
 // system. Note that this inherits from HostCPUSystemBuilder, allowing joint
 // configuration of a heterogenous CPU/GPU system. Depending on the specific

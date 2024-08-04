@@ -37,6 +37,8 @@ void HostCPUSystemBuilder::InitializeHostCPUDefaults() {
 
 LocalSystemPtr HostCPUSystemBuilder::CreateLocalSystem() {
   auto lsys = std::make_shared<LocalSystem>(host_allocator());
+  // TODO: Real NUMA awareness.
+  lsys->InitializeNodes(1);
   InitializeHostCPUDefaults();
   auto *driver = InitializeHostCPUDriver(*lsys);
   InitializeHostCPUDevices(*lsys, driver);
@@ -79,17 +81,18 @@ void HostCPUSystemBuilder::InitializeHostCPUDevices(LocalSystem &lsys,
   SHORTFIN_THROW_IF_ERROR(iree_hal_driver_query_available_devices(
       driver, host_allocator(), &device_info_count, &device_infos));
 
-  std::vector<iree_hal_device_ptr> devices;
-  devices.reserve(device_info_count);
   for (iree_host_size_t i = 0; i < device_info_count; ++i) {
     iree_hal_device_ptr device;
     iree_hal_device_info_t *it = &device_infos.get()[i];
     SHORTFIN_THROW_IF_ERROR(iree_hal_driver_create_device_by_id(
         driver, it->device_id, 0, nullptr, host_allocator(),
         device.for_output()));
-    devices.push_back(std::move(device));
+    lsys.InitializeHalDevice(std::make_unique<HostCPUDevice>(
+        /*device_class=*/"cpu",
+        /*device_index=*/i,
+        /*driver_name=*/"host-cpu", std::move(device), /*node_affinity=*/0,
+        /*node_locked=*/false));
   }
-  lsys.InitializeHalDevices("host-cpu", std::move(devices));
 }
 
 }  // namespace shortfin::systems

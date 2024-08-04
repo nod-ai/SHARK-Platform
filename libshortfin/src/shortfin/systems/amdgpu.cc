@@ -74,19 +74,23 @@ void AMDGPUSystemBuilder::Enumerate() {
 LocalSystemPtr AMDGPUSystemBuilder::CreateLocalSystem() {
   auto lsys = std::make_shared<LocalSystem>(host_allocator());
   Enumerate();
+  // TODO: Real NUMA awareness.
+  lsys->InitializeNodes(1);
   lsys->InitializeHalDriver("amdgpu", hip_hal_driver_);
 
   // Initialize all visible GPU devices.
-  std::vector<iree_hal_device_ptr> devices;
-  devices.reserve(visible_devices_.size());
-  for (auto &it : visible_devices_) {
+  for (size_t i = 0; i < visible_devices_.size(); ++i) {
+    auto &it = visible_devices_[i];
     iree_hal_device_ptr device;
     SHORTFIN_THROW_IF_ERROR(iree_hal_driver_create_device_by_id(
         hip_hal_driver_, it.device_id, 0, nullptr, host_allocator(),
         device.for_output()));
-    devices.push_back(std::move(device));
+    lsys->InitializeHalDevice(std::make_unique<AMDGPUDevice>(
+        /*device_class=*/"gpu",
+        /*device_index=*/i,
+        /*driver_name=*/"amdgpu", std::move(device), /*node_affinity=*/0,
+        /*node_locked=*/false));
   }
-  lsys->InitializeHalDevices("gpu", std::move(devices));
 
   // Initialize CPU devices if requested.
   if (cpu_devices_enabled) {

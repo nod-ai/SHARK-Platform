@@ -17,7 +17,9 @@ execute_process(
   OUTPUT_VARIABLE nanobind_ROOT)
 find_package(nanobind CONFIG REQUIRED)
 
-nanobind_add_module(shortfin_python_extension NB_STATIC LTO lib_ext.cc)
+nanobind_add_module(shortfin_python_extension NB_STATIC LTO
+  lib_ext.cc
+)
 
 set_target_properties(shortfin_python_extension
                       PROPERTIES OUTPUT_NAME "_shortfin_default/lib")

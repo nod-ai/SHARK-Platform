@@ -15,6 +15,12 @@
 
 namespace shortfin::systems {
 
+// CPU device subclass.
+class SHORTFIN_API HostCPUDevice : public LocalSystemDevice {
+ public:
+  using LocalSystemDevice::LocalSystemDevice;
+};
+
 // Configuration for building a host-based LocalSystem.
 class SHORTFIN_API HostSystemBuilder : public LocalSystemBuilder {
  public:
