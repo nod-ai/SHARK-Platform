@@ -24,15 +24,15 @@ namespace shortfin {
 
 class LocalSystem;
 class LocalSystemBuilder;
-class LocalSystemDevice;
-class LocalSystemNode;
+class LocalDevice;
+class LocalNode;
 
 // NUMA node on the LocalSystem. There will always be at least one node, and
 // not all NUMA nodes on the system may be included: only those applicable
 // to device pinning/scheduling.
-class SHORTFIN_API LocalSystemNode {
+class SHORTFIN_API LocalNode {
  public:
-  LocalSystemNode(int node_num) : node_num_(node_num) {}
+  LocalNode(int node_num) : node_num_(node_num) {}
 
   int node_num() const { return node_num_; }
 
@@ -64,10 +64,10 @@ class SHORTFIN_API LocalSystem
   iree_allocator_t host_allocator() { return host_allocator_; }
 
   // Topology access.
-  std::span<const LocalSystemNode> nodes() const { return {nodes_}; }
-  const std::vector<LocalSystemDevice *> &devices() const { return devices_; }
-  const std::unordered_map<std::string_view, LocalSystemDevice *> &
-  named_devices() const {
+  std::span<const LocalNode> nodes() const { return {nodes_}; }
+  const std::vector<LocalDevice *> &devices() const { return devices_; }
+  const std::unordered_map<std::string_view, LocalDevice *> &named_devices()
+      const {
     return named_devices_;
   }
 
@@ -77,7 +77,7 @@ class SHORTFIN_API LocalSystem
   void InitializeNodes(int node_count);
   void InitializeHalDriver(std::string_view moniker,
                            iree_hal_driver_ptr driver);
-  void InitializeHalDevice(std::unique_ptr<LocalSystemDevice> device);
+  void InitializeHalDevice(std::unique_ptr<LocalDevice> device);
   void FinishInitialization();
 
  private:
@@ -92,7 +92,7 @@ class SHORTFIN_API LocalSystem
   const iree_allocator_t host_allocator_;
 
   // NUMA nodes relevant to this system.
-  std::vector<LocalSystemNode> nodes_;
+  std::vector<LocalNode> nodes_;
 
   // Map of retained hal drivers. These will be released as one of the
   // last steps of destruction. There are some ancillary uses for drivers
@@ -100,9 +100,9 @@ class SHORTFIN_API LocalSystem
   std::unordered_map<std::string_view, iree_hal_driver_ptr> hal_drivers_;
 
   // Map of device name to a LocalSystemDevice.
-  std::vector<std::unique_ptr<LocalSystemDevice>> retained_devices_;
-  std::unordered_map<std::string_view, LocalSystemDevice *> named_devices_;
-  std::vector<LocalSystemDevice *> devices_;
+  std::vector<std::unique_ptr<LocalDevice>> retained_devices_;
+  std::unordered_map<std::string_view, LocalDevice *> named_devices_;
+  std::vector<LocalDevice *> devices_;
 
   // Whether initialization is complete. If true, various low level
   // mutations are disallowed.
@@ -127,28 +127,94 @@ class SHORTFIN_API LocalSystemBuilder {
   const iree_allocator_t host_allocator_;
 };
 
-// A device attached to the LocalSystem.
-// Every device is uniquely named by a combination of its device_class
-// and device_index as "{device_class}:{device_index}".
-class SHORTFIN_API LocalSystemDevice {
+// Each device exists in the local system as part of some topology that consists
+// of the following levels:
+//
+//   Level 0: User device category / system driver prefix
+//     (i.e. "hip", "cuda", "local").
+//   Level 1: Device instance ordinal.
+//   Level 2: Instance topology vector representing the logical organization
+//     of the queues on the device instance.
+//
+// Concretely, this means that each leaf LocalSystemDevice instance consists
+// of an iree_hal_device_t (as managed by an iree_hal_driver_t) and a
+// single bit position within an iree_hal_queue_affinity_t. The total number
+// of devices of a class is thus equal to the product of the device instance
+// ordinal and every entry of the instance topology vector. There can be at
+// most 64 queues on a device instance.
+//
+// How the topology is laid out is system and use case specific, with multiple
+// valid arrangements which may be useful for different kinds of workloads.
+// There are some general guidelines:
+//
+//   * All components of a device with peered memory should share the same
+//     Level 1 / device instance.
+//   * Whether cross-bus devices should share an instance is use case
+//     specific, effectively dictated by the nature of the bus connection
+//     and intended use. While an instance can be shared across a lower speed
+//     link, it may be advantageous to split it and treat the corresponding
+//     device leaves as independent from a memory and scheduling perspective.
+//   * The instance topology should generally reflect some notion of locality
+//     within the physical architecture of some hardware such that co scheduling
+//     at leaf nodes of the vector may have some benefit.
+//
+// Examples:
+//   * Large CPU system with two NUMA nodes:
+//     - Split instances on NUMA node: local/2/8
+//     - Unified instances for an entire chip: local/1/2,8
+//     - Different exotic topologies can be represented with a longer topology
+//       vector with machine specific communication cost.
+//   * Machine with 8 MI300 GPUs (each with 4 memory controllers and 8
+//     partitions):
+//     - Split instances per host NUMA node: hip/2/4,4,2
+//     - Unified instances: hip/1/8,4,2
+//     - Simple 8x partition (ignore memory controller): hip/1/8,8,1
+//  * Machine with 8 MI300 GPUs operating as one large GPU each: hip/1/8,1,1
+//
+// Generally, there is a tension that must be negotiated between how much an
+// application cares about the hierarchy vs benefiting from tighter coordination
+// of locality. The shape of the instance topology must match among all devices
+// attached to a driver.
+struct SHORTFIN_API LocalDeviceAddress {
  public:
-  LocalSystemDevice(std::string device_class, int device_index,
-                    std::string driver_name, iree_hal_device_ptr hal_device,
-                    int node_affinity, bool node_locked);
-  virtual ~LocalSystemDevice();
+  // Note that all string_views passed should be literals or have a lifetime
+  // that exceeds the instance.
+  LocalDeviceAddress(std::string_view system_device_class,
+                     std::string_view logical_device_class,
+                     std::string_view hal_driver_prefix,
+                     iree_host_size_t instance_ordinal,
+                     iree_host_size_t queue_ordinal,
+                     std::vector<iree_host_size_t> instance_topology_address);
 
-  std::string_view device_class() const { return device_class_; }
-  int device_index() const { return device_index_; }
-  std::string_view name() const { return name_; }
-  std::string_view driver_name() const { return driver_name_; }
+  // User driver name (i.e. 'amdgpu'). In user visible names/messages, this
+  // is preferred over hal_driver_prefix, but must be 1:1 with it.
+  std::string_view system_device_class;
+  // User device class (i.e. 'gpu', 'cpu').
+  std::string_view logical_device_class;
+  // System HAL driver prefix (i.e. 'hip', 'cuda', 'local').
+  std::string_view hal_driver_prefix;
+  iree_host_size_t instance_ordinal;
+  iree_host_size_t queue_ordinal;
+  std::vector<iree_host_size_t> instance_topology_address;
+  // A system-unique device name:
+  //   {system_device_class}:{instance_ordinal}:{queue_ordinal}@{instance_topology_address}
+  std::string device_name;
+};
+
+// A device attached to the LocalSystem.
+class SHORTFIN_API LocalDevice {
+ public:
+  LocalDevice(LocalDeviceAddress address, iree_hal_device_ptr hal_device,
+              int node_affinity, bool node_locked);
+  virtual ~LocalDevice();
+
+  const LocalDeviceAddress &address() const { return address_; }
+  std::string_view name() const { return address_.device_name; }
   int node_affinity() const { return node_affinity_; }
   bool node_locked() const { return node_locked_; }
 
  private:
-  std::string device_class_;
-  int device_index_;
-  std::string name_;
-  std::string driver_name_;
+  LocalDeviceAddress address_;
   iree_hal_device_ptr hal_device_;
   int node_affinity_;
   bool node_locked_;

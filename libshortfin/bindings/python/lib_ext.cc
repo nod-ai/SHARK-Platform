@@ -50,25 +50,22 @@ void BindLocalSystem(py::module_ &m) {
           py::rv_policy::reference_internal);
 
   // Support classes.
-  py::class_<LocalSystemNode>(m, "LocalSystemNode")
-      .def_prop_ro("node_num", &LocalSystemNode::node_num)
-      .def("__repr__", [](LocalSystemNode &self) {
-        return fmt::format("LocalSystemNode({})", self.node_num());
+  py::class_<LocalNode>(m, "LocalNode")
+      .def_prop_ro("node_num", &LocalNode::node_num)
+      .def("__repr__", [](LocalNode &self) {
+        return fmt::format("LocalNode({})", self.node_num());
       });
-  py::class_<LocalSystemDevice>(m, "LocalSystemDevice")
-      .def("name", &LocalSystemDevice::name)
-      .def("driver_name", &LocalSystemDevice::driver_name)
-      .def("node_affinity", &LocalSystemDevice::node_affinity)
-      .def("node_locked", &LocalSystemDevice::node_locked)
+  py::class_<LocalDevice>(m, "LocalDevice")
+      .def("name", &LocalDevice::name)
+      .def("node_affinity", &LocalDevice::node_affinity)
+      .def("node_locked", &LocalDevice::node_locked)
       .def("__repr__", [](py::handle self_handle) {
         auto type_name =
             py::cast<std::string>(self_handle.type().attr("__name__"));
-        auto self = py::cast<LocalSystemDevice>(self_handle);
+        auto self = py::cast<LocalDevice>(self_handle);
         std::string repr = fmt::format(
-            "{}(name='{}', driver_name='{}', node_affinity={}, "
-            "node_locked={})",
-            type_name, self.name(), self.driver_name(), self.node_affinity(),
-            self.node_locked());
+            "{}(name='{}', node_affinity={}, node_locked={})", type_name,
+            self.name(), self.node_affinity(), self.node_locked());
         return repr;
       });
 }
@@ -80,7 +77,7 @@ void BindHostSystem(py::module_ &global_m) {
   py::class_<systems::HostCPUSystemBuilder, systems::HostSystemBuilder>(
       m, "CPUSystemBuilder")
       .def(py::init<>());
-  py::class_<systems::HostCPUDevice, LocalSystemDevice>(m, "HostCPUDevice");
+  py::class_<systems::HostCPUDevice, LocalDevice>(m, "HostCPUDevice");
 }
 
 void BindAMDGPUSystem(py::module_ &global_m) {
@@ -90,7 +87,7 @@ void BindAMDGPUSystem(py::module_ &global_m) {
       .def(py::init<>())
       .def_rw("cpu_devices_enabled",
               &systems::AMDGPUSystemBuilder::cpu_devices_enabled);
-  py::class_<systems::AMDGPUDevice, LocalSystemDevice>(m, "AMDGPUDevice");
+  py::class_<systems::AMDGPUDevice, LocalDevice>(m, "AMDGPUDevice");
 }
 
 }  // namespace shortfin::python

@@ -11,6 +11,12 @@
 
 namespace shortfin::systems {
 
+namespace {
+const std::string_view SYSTEM_DEVICE_CLASS = "host-cpu";
+const std::string_view LOGICAL_DEVICE_CLASS = "cpu";
+const std::string_view HAL_DRIVER_PREFIX = "local";
+}  // namespace
+
 // -------------------------------------------------------------------------- //
 // HostCPUSystemBuilder
 // -------------------------------------------------------------------------- //
@@ -70,7 +76,7 @@ iree_hal_driver_t *HostCPUSystemBuilder::InitializeHostCPUDriver(
       host_cpu_deps_.loaders, host_cpu_deps_.device_allocator, host_allocator(),
       driver.for_output()));
   unowned_driver = driver.get();
-  lsys.InitializeHalDriver("host-cpu", std::move(driver));
+  lsys.InitializeHalDriver(SYSTEM_DEVICE_CLASS, std::move(driver));
   return unowned_driver;
 }
 
@@ -88,9 +94,15 @@ void HostCPUSystemBuilder::InitializeHostCPUDevices(LocalSystem &lsys,
         driver, it->device_id, 0, nullptr, host_allocator(),
         device.for_output()));
     lsys.InitializeHalDevice(std::make_unique<HostCPUDevice>(
-        /*device_class=*/"cpu",
-        /*device_index=*/i,
-        /*driver_name=*/"host-cpu", std::move(device), /*node_affinity=*/0,
+        LocalDeviceAddress(
+            /*system_device_class=*/SYSTEM_DEVICE_CLASS,
+            /*logical_device_class=*/LOGICAL_DEVICE_CLASS,
+            /*hal_driver_prefix=*/HAL_DRIVER_PREFIX,
+            /*instance_ordinal=*/i,
+            /*queue_ordinal=*/0,
+            /*instance_topology_address=*/{0}),
+        /*hal_device=*/std::move(device),
+        /*node_affinity=*/0,
         /*node_locked=*/false));
   }
 }

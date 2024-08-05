@@ -10,6 +10,12 @@
 
 namespace shortfin::systems {
 
+namespace {
+const std::string_view SYSTEM_DEVICE_CLASS = "amdgpu";
+const std::string_view LOGICAL_DEVICE_CLASS = "gpu";
+const std::string_view HAL_DRIVER_PREFIX = "hip";
+}  // namespace
+
 AMDGPUSystemBuilder::AMDGPUSystemBuilder(iree_allocator_t host_allocator)
     : HostCPUSystemBuilder(host_allocator) {
   InitializeDefaultSetting();
@@ -76,7 +82,7 @@ LocalSystemPtr AMDGPUSystemBuilder::CreateLocalSystem() {
   Enumerate();
   // TODO: Real NUMA awareness.
   lsys->InitializeNodes(1);
-  lsys->InitializeHalDriver("amdgpu", hip_hal_driver_);
+  lsys->InitializeHalDriver(SYSTEM_DEVICE_CLASS, hip_hal_driver_);
 
   // Initialize all visible GPU devices.
   for (size_t i = 0; i < visible_devices_.size(); ++i) {
@@ -86,9 +92,14 @@ LocalSystemPtr AMDGPUSystemBuilder::CreateLocalSystem() {
         hip_hal_driver_, it.device_id, 0, nullptr, host_allocator(),
         device.for_output()));
     lsys->InitializeHalDevice(std::make_unique<AMDGPUDevice>(
-        /*device_class=*/"gpu",
-        /*device_index=*/i,
-        /*driver_name=*/"amdgpu", std::move(device), /*node_affinity=*/0,
+        LocalDeviceAddress(
+            /*system_device_class=*/SYSTEM_DEVICE_CLASS,
+            /*logical_device_class=*/LOGICAL_DEVICE_CLASS,
+            /*hal_driver_prefix=*/HAL_DRIVER_PREFIX,
+            /*instance_ordinal=*/i,
+            /*queue_ordinal=*/0,
+            /*instance_topology_address=*/{0}),
+        std::move(device), /*node_affinity=*/0,
         /*node_locked=*/false));
   }
 

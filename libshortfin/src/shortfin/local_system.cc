@@ -12,19 +12,43 @@
 
 namespace shortfin {
 
-LocalSystemDevice::LocalSystemDevice(std::string device_class, int device_index,
-                                     std::string driver_name,
-                                     iree_hal_device_ptr hal_device,
-                                     int node_affinity, bool node_locked)
-    : device_class_(std::move(device_class)),
-      device_index_(device_index),
-      name_(fmt::format("{}:{}", device_class_, device_index_)),
-      driver_name_(std::move(driver_name)),
+// -------------------------------------------------------------------------- //
+// LocalDeviceAddress
+// -------------------------------------------------------------------------- //
+
+LocalDeviceAddress::LocalDeviceAddress(
+    std::string_view system_device_class, std::string_view logical_device_class,
+    std::string_view hal_driver_prefix, iree_host_size_t instance_ordinal,
+    iree_host_size_t queue_ordinal,
+    std::vector<iree_host_size_t> instance_topology_address)
+    : system_device_class(std::move(system_device_class)),
+      logical_device_class(std::move(logical_device_class)),
+      hal_driver_prefix(std::move(hal_driver_prefix)),
+      instance_ordinal(instance_ordinal),
+      queue_ordinal(queue_ordinal),
+      instance_topology_address(instance_topology_address),
+      device_name(
+          fmt::format("{}:{}:{}@{}", this->system_device_class,
+                      this->instance_ordinal, this->queue_ordinal,
+                      fmt::join(this->instance_topology_address, ","))) {}
+
+// -------------------------------------------------------------------------- //
+// LocalDevice
+// -------------------------------------------------------------------------- //
+
+LocalDevice::LocalDevice(LocalDeviceAddress address,
+                         iree_hal_device_ptr hal_device, int node_affinity,
+                         bool node_locked)
+    : address_(std::move(address)),
       hal_device_(std::move(hal_device)),
       node_affinity_(node_affinity),
       node_locked_(node_locked) {}
 
-LocalSystemDevice::~LocalSystemDevice() = default;
+LocalDevice::~LocalDevice() = default;
+
+// -------------------------------------------------------------------------- //
+// LocalSystem
+// -------------------------------------------------------------------------- //
 
 LocalSystem::LocalSystem(iree_allocator_t host_allocator)
     : host_allocator_(host_allocator) {}
@@ -52,14 +76,13 @@ void LocalSystem::InitializeHalDriver(std::string_view moniker,
   slot.reset(driver.release());
 }
 
-void LocalSystem::InitializeHalDevice(
-    std::unique_ptr<LocalSystemDevice> device) {
+void LocalSystem::InitializeHalDevice(std::unique_ptr<LocalDevice> device) {
   AssertNotInitialized();
   auto device_name = device->name();
   auto [it, success] = named_devices_.try_emplace(device_name, device.get());
   if (!success) {
     throw std::logic_error(fmt::format(
-        "Cannot register LocalSystemDevice '{}' multiple times", device_name));
+        "Cannot register LocalDevice '{}' multiple times", device_name));
   }
   devices_.push_back(device.get());
   retained_devices_.push_back(std::move(device));
