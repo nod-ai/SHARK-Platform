@@ -14,7 +14,12 @@ from sharktank.layers.rotary_embedding import RotaryEmbeddingLayer
 from sharktank.models.llama.llama import PagedLlamaAttentionBlock, PagedKVCache
 from sharktank import ops
 
-from transformers.models.llama.modeling_llama import LlamaAttention, LlamaMLP, LlamaRMSNorm, LlamaDecoderLayer
+from transformers.models.llama.modeling_llama import (
+    LlamaAttention,
+    LlamaMLP,
+    LlamaRMSNorm,
+    LlamaDecoderLayer,
+)
 from transformers.models.llama.configuration_llama import LlamaConfig
 
 
@@ -32,15 +37,17 @@ class AttentionBlockTest(unittest.TestCase):
         rms_epsilon = 0.01
         rope_dimension_count = 100
         max_seq_len = 2048
-        attention_block_theta = make_attention_block_theta(feature_dim=head_count*head_dim, ffn_dim=ffn_dim, dtype=torch.float32)
+        attention_block_theta = make_attention_block_theta(
+            feature_dim=head_count * head_dim, ffn_dim=ffn_dim, dtype=torch.float32
+        )
         paged_kv_cache = PagedKVCache(
-                transformer_block_count=head_count,
-                attn_head_count=head_count,
-                attn_head_dim=head_dim,
-                cache_partition_count=2,  # One for each of K/V.
-                block_seq_stride=block_seq_stride,
-                device="cpu",
-                dtype=torch.float32,
+            transformer_block_count=head_count,
+            attn_head_count=head_count,
+            attn_head_dim=head_dim,
+            cache_partition_count=2,  # One for each of K/V.
+            block_seq_stride=block_seq_stride,
+            device="cpu",
+            dtype=torch.float32,
         )
         attention_block = PagedLlamaAttentionBlock(
             theta=attention_block_theta,
@@ -59,18 +66,14 @@ class AttentionBlockTest(unittest.TestCase):
             hf=True,
         )
 
-        input_tensor = torch.rand(
-            1,
-            seq_len,
-            head_count*head_dim
-        ) * 2 - 1
+        input_tensor = torch.rand(1, seq_len, head_count * head_dim) * 2 - 1
 
         h = attention_block(
             input_tensor,
             embedding=attention_embedding,
             start_index=0,
             cache_state=paged_kv_cache.paged.allocate(128),
-            seq_block_ids=torch.arange(seq_len).view(1, -1)
+            seq_block_ids=torch.arange(seq_len).view(1, -1),
         )
 
         llama_config = LlamaConfig(
@@ -82,35 +85,53 @@ class AttentionBlockTest(unittest.TestCase):
             rope_theta=10000,
         )
         llama_attention_block = LlamaAttention(
-            config=llama_config,
-            layer_idx=block_index
+            config=llama_config, layer_idx=block_index
         )
 
-        llama_attention_block.q_proj.weight = torch.nn.Parameter(attention_block_theta("self_attn.q_proj.weight").as_torch(), requires_grad=True)
-        llama_attention_block.k_proj.weight = torch.nn.Parameter(attention_block_theta("self_attn.k_proj.weight").as_torch(), requires_grad=True)
-        llama_attention_block.v_proj.weight = torch.nn.Parameter(attention_block_theta("self_attn.v_proj.weight").as_torch(), requires_grad=True)
-        llama_attention_block.o_proj.weight = torch.nn.Parameter(attention_block_theta("self_attn.o_proj.weight").as_torch(), requires_grad=True)
+        llama_attention_block.q_proj.weight = torch.nn.Parameter(
+            attention_block_theta("self_attn.q_proj.weight").as_torch(),
+            requires_grad=True,
+        )
+        llama_attention_block.k_proj.weight = torch.nn.Parameter(
+            attention_block_theta("self_attn.k_proj.weight").as_torch(),
+            requires_grad=True,
+        )
+        llama_attention_block.v_proj.weight = torch.nn.Parameter(
+            attention_block_theta("self_attn.v_proj.weight").as_torch(),
+            requires_grad=True,
+        )
+        llama_attention_block.o_proj.weight = torch.nn.Parameter(
+            attention_block_theta("self_attn.o_proj.weight").as_torch(),
+            requires_grad=True,
+        )
 
         llama_mlp = LlamaMLP(config=llama_config)
-        llama_mlp.gate_proj.weight = torch.nn.Parameter(attention_block_theta("mlp.gate_proj.weight").as_torch(), requires_grad=True)
-        llama_mlp.up_proj.weight = torch.nn.Parameter(attention_block_theta("mlp.up_proj.weight").as_torch(), requires_grad=True)
-        llama_mlp.down_proj.weight = torch.nn.Parameter(attention_block_theta("mlp.down_proj.weight").as_torch(), requires_grad=True)
-
-        llama_input_layernorm = LlamaRMSNorm(
-            hidden_size=hidden_size,
-            eps=rms_epsilon
+        llama_mlp.gate_proj.weight = torch.nn.Parameter(
+            attention_block_theta("mlp.gate_proj.weight").as_torch(), requires_grad=True
         )
-        llama_input_layernorm.weight = torch.nn.Parameter(attention_block_theta("input_layernorm.weight").as_torch(), requires_grad=True)
+        llama_mlp.up_proj.weight = torch.nn.Parameter(
+            attention_block_theta("mlp.up_proj.weight").as_torch(), requires_grad=True
+        )
+        llama_mlp.down_proj.weight = torch.nn.Parameter(
+            attention_block_theta("mlp.down_proj.weight").as_torch(), requires_grad=True
+        )
+
+        llama_input_layernorm = LlamaRMSNorm(hidden_size=hidden_size, eps=rms_epsilon)
+        llama_input_layernorm.weight = torch.nn.Parameter(
+            attention_block_theta("input_layernorm.weight").as_torch(),
+            requires_grad=True,
+        )
 
         llama_post_attention_layernorm = LlamaRMSNorm(
-            hidden_size=hidden_size,
-            eps=rms_epsilon
+            hidden_size=hidden_size, eps=rms_epsilon
         )
-        llama_post_attention_layernorm.weight = torch.nn.Parameter(attention_block_theta("post_attention_layernorm.weight").as_torch(), requires_grad=True)
+        llama_post_attention_layernorm.weight = torch.nn.Parameter(
+            attention_block_theta("post_attention_layernorm.weight").as_torch(),
+            requires_grad=True,
+        )
 
         llama_decoder_layer = LlamaDecoderLayer(
-            config=llama_config,
-            layer_idx=block_index
+            config=llama_config, layer_idx=block_index
         )
         llama_decoder_layer.self_attn = llama_attention_block
         llama_decoder_layer.mlp = llama_mlp
@@ -124,6 +145,7 @@ class AttentionBlockTest(unittest.TestCase):
 
         assert h.shape == g.shape
         torch.testing.assert_close(h, g)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -11,8 +11,10 @@ import torch
 from ...types.tensors import *
 from ...types.theta import Theta
 
+
 def make_rand_torch(shape, dtype):
     return torch.rand(shape, dtype=dtype) * 2 - 1
+
 
 def make_attention_block_theta(
     feature_dim: int,

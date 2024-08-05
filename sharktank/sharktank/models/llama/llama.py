@@ -128,7 +128,7 @@ class PagedLlamaModelV1(BaseCausalLMModel):
                 rope_dimension_count=hp.rope_dimension_count,
                 max_seqlen=hp.context_length,
                 device=self.device,
-                hf=self.hf
+                hf=self.hf,
             ),
         )
         key = "output_norm" if "output_norm" in list(theta.keys) else "model.norm"
