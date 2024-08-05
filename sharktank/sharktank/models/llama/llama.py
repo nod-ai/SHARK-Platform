@@ -15,6 +15,7 @@ import torch.nn.functional as F
 
 from ...layers import *
 from ...types import *
+from ... import ops
 
 __all__ = [
     "LlamaModelConfig",
@@ -45,6 +46,9 @@ class LlamaModelConfig:
 
     # Dtype to use for attention.
     attention_dtype: torch.dtype = torch.float16
+
+    # Indicates if running with HuggingFace implementation.
+    hf: bool = False
 
     def create_kv_cache(self) -> BaseKVCache:
         hp = self.hp
@@ -112,6 +116,8 @@ class PagedLlamaModelV1(BaseCausalLMModel):
         self.hp = hp
         self.cache = config.create_kv_cache()
         self.activation_dtype = config.activation_dtype
+        self.hf = config.hf
+
         self.add_module(
             "token_embedding",
             TokenEmbeddingLayer(theta("token_embd"), dtype=config.activation_dtype),
@@ -122,8 +128,10 @@ class PagedLlamaModelV1(BaseCausalLMModel):
                 rope_dimension_count=hp.rope_dimension_count,
                 max_seqlen=hp.context_length,
                 device=self.device,
+                hf=self.hf
             ),
         )
+        key = "output_norm" if "output_norm" in list(theta.keys) else "model.norm"
         self.add_module(
             "output_norm",
             RMSNormLayer(
@@ -142,6 +150,7 @@ class PagedLlamaModelV1(BaseCausalLMModel):
                     head_dim=hp.attn_head_dim,
                     head_count_kv=hp.attention_head_count_kv,
                     rms_epsilon=hp.attention_layer_norm_rms_epsilon,
+                    hf=self.hf,
                 )
                 for n in range(hp.block_count)
             ]
@@ -275,27 +284,46 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         head_dim: int,
         head_count_kv: int,
         rms_epsilon: float,
+        hf: bool = False,
     ):
         super().__init__(theta)
-        self.add_module(
-            "attn_norm", RMSNormLayer(theta("attn_norm"), epsilon=rms_epsilon)
-        )
-        self.add_module("attn_q", LinearLayer(theta("attn_q")))
-        self.add_module("attn_k", LinearLayer(theta("attn_k")))
-        self.add_module("attn_v", LinearLayer(theta("attn_v")))
-        self.add_module("attn_output", LinearLayer(theta("attn_output")))
-        self.add_module(
-            "ffn_norm", RMSNormLayer(theta("ffn_norm"), epsilon=rms_epsilon)
-        )
-        self.add_module("ffn_gate", LinearLayer(theta("ffn_gate")))
-        self.add_module("ffn_up", LinearLayer(theta("ffn_up")))
-        self.add_module("ffn_down", LinearLayer(theta("ffn_down")))
+        if hf:
+            self.add_module(
+                "attn_norm", RMSNormLayer(theta("input_layernorm"), epsilon=rms_epsilon)
+            )
+            self.add_module("attn_q", LinearLayer(theta("self_attn.q_proj")))
+            self.add_module("attn_k", LinearLayer(theta("self_attn.k_proj")))
+            self.add_module("attn_v", LinearLayer(theta("self_attn.v_proj")))
+            self.add_module("attn_output", LinearLayer(theta("self_attn.o_proj")))
+            self.add_module(
+                "ffn_norm",
+                RMSNormLayer(theta("post_attention_layernorm"), epsilon=rms_epsilon),
+            )
+            self.add_module("ffn_gate", LinearLayer(theta("mlp.gate_proj")))
+            self.add_module("ffn_up", LinearLayer(theta("mlp.up_proj")))
+            self.add_module("ffn_down", LinearLayer(theta("mlp.down_proj")))
+        else:
+            self.add_module(
+                "attn_norm", RMSNormLayer(theta("attn_norm"), epsilon=rms_epsilon)
+            )
+            self.add_module("attn_q", LinearLayer(theta("attn_q")))
+            self.add_module("attn_k", LinearLayer(theta("attn_k")))
+            self.add_module("attn_v", LinearLayer(theta("attn_v")))
+            self.add_module("attn_output", LinearLayer(theta("attn_output")))
+            self.add_module(
+                "ffn_norm", RMSNormLayer(theta("ffn_norm"), epsilon=rms_epsilon)
+            )
+            self.add_module("ffn_gate", LinearLayer(theta("ffn_gate")))
+            self.add_module("ffn_up", LinearLayer(theta("ffn_up")))
+            self.add_module("ffn_down", LinearLayer(theta("ffn_down")))
 
         self.block_index = block_index
         self.cache = cache
+        assert isinstance(head_count, int)
         self.head_count = head_count
         self.head_dim = head_dim
         self.head_count_kv = head_count_kv
+        self.hf = hf
 
     def forward(
         self,
@@ -377,7 +405,7 @@ class PagedLlamaAttentionBlock(ThetaLayer):
             xk = repeat_kv(xk)
             xv = repeat_kv(xv)
 
-        # Tranpose into [bs, heads, sl, dim]
+        # Transpose into [bs, heads, sl, dim]
         xq = xq.transpose(1, 2)
         keys = xk.transpose(1, 2)
         values = xv.transpose(1, 2)

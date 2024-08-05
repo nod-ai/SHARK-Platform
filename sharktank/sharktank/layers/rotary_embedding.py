@@ -20,17 +20,62 @@ class RotaryEmbeddingLayer(BaseLayer):
         rope_dimension_count: int,
         max_seqlen: int,
         device: Optional[torch.device] = None,
+        hf: bool = False,
     ):
         super().__init__()
         self.device = device
         self._table = self._create_rotary_embed_table(
             max_seqlen=max_seqlen,
             dim=rope_dimension_count,
+            hf=hf,
         )
+        self.hf = hf
 
     def forward(self, *, xq: torch.Tensor, xk: torch.Tensor, start_index: int):
         # xq_, xk_ shape: bs, sl, _, dim
         # freqs_cis shape: max_sl, dim
+        
+        def create_interleaved_tensor(dim):
+            """Creates a tensor which indexes an tensor such that
+            it alternates between elements of its first and second
+            half. Intended for use for HuggingFace's rotation
+            implementation.
+
+            Args:
+              dim: Size of tensor
+
+            Returns:
+              Interleaved indexing tensor
+            """
+            first_half = torch.arange(dim//2)
+            second_half = torch.arange(dim//2, dim)
+            
+            interleaved_tensor = torch.empty(dim, dtype=torch.long)
+            interleaved_tensor[0::2] = first_half
+            interleaved_tensor[1::2] = second_half
+            
+            return interleaved_tensor
+        
+        def create_ordering_tensor(dim):
+            """Creates a tensor which indexes an tensor such that
+            it reverses the alternation induced by create_interleaved_tesnor.
+            Intended for use for HuggingFace's rotation implementation.
+
+            Args:
+              dim: Size of tensor
+
+            Returns:
+              Ordering indexing tensor
+            """
+            order_tensor = torch.empty(dim, dtype=torch.long)
+            order_tensor[:dim // 2] = torch.arange(0, dim, 2)
+            order_tensor[dim // 2:] = torch.arange(1, dim, 2)
+            return order_tensor
+        
+        if self.hf:
+            xq = xq[..., create_interleaved_tensor(xq.shape[-1])]
+            xk = xk[..., create_interleaved_tensor(xq.shape[-1])]
+
         xq_ = torch.view_as_complex(xq.reshape(*xq.shape[:-1], -1, 2))
         xk_ = torch.view_as_complex(xk.reshape(*xk.shape[:-1], -1, 2))
         _, sl, _, dim = xq_.shape
@@ -43,9 +88,35 @@ class RotaryEmbeddingLayer(BaseLayer):
         ), f"Sequence length longer than embedding table ({sl} vs {freqs_cis.shape[0]})"
 
         broadcast_freqs_cis = freqs_cis[None, 0:sl, None, :]
+        
+        if self.hf:
+            xq_out = torch.view_as_real(self.complex_multiply(xq_, broadcast_freqs_cis)).flatten(3)
+            xk_out = torch.view_as_real(self.complex_multiply(xk_, broadcast_freqs_cis)).flatten(3)
+
+            xq_out = xq_out[...,create_ordering_tensor(xq_out.shape[-1])]
+            xk_out = xk_out[...,create_ordering_tensor(xq_out.shape[-1])]
+        
+            return xq_out.type_as(xq), xk_out.type_as(xk)
+        
         xq_out = torch.view_as_real(xq_ * broadcast_freqs_cis).flatten(3)
         xk_out = torch.view_as_real(xk_ * broadcast_freqs_cis).flatten(3)
         return xq_out.type_as(xq), xk_out.type_as(xk)
+
+    def complex_multiply(
+            self, a: torch.Tensor, b: torch.Tensor
+    ) -> torch.Tensor:
+        """Function for elementwise-multiplication of two complex torch tensors.
+        Functionally similar to a*b, but numerically accurate for HuggingFace
+        LLaMa implementation.
+
+        Args:
+          a: First torch tensor operand
+          b: Second torch tensor operand
+        Returns:
+          Tensor of same size to a, b whose elements is product of corresponding
+          elements in a, b
+        """
+        return torch.complex(a.real * b.real - a.imag * b.imag, a.real * b.imag + a.imag * b.real)
 
     def compute_batch_mask(
         self, start_positions: torch.Tensor, batch_seq_len: int
@@ -96,6 +167,7 @@ class RotaryEmbeddingLayer(BaseLayer):
         max_seqlen: int,
         dim: int,
         theta_value: float = 10000.0,
+        hf: bool = False,
     ):
         freqs = 1.0 / (
             theta_value
@@ -103,5 +175,7 @@ class RotaryEmbeddingLayer(BaseLayer):
         )
         t = torch.arange(max_seqlen, device=freqs.device)
         freqs = torch.outer(t, freqs).float()
-        freqs_cis = torch.polar(torch.ones_like(freqs), freqs)
+
+        freqs_cis = torch.complex(torch.cos(freqs), torch.sin(freqs)) if hf else torch.polar(torch.ones_like(freqs), freqs)
+
         return freqs_cis
