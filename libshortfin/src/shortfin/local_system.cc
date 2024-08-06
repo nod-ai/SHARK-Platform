@@ -118,11 +118,12 @@ void LocalSystem::FinishInitialization() {
   AssertNotInitialized();
 
   // TODO: Remove this. Just testing.
-  workers_.push_back(
-      std::make_unique<Worker>(Worker::Options(host_allocator(), "worker:0")));
-  workers_.back()->Start();
-  workers_.back()->EnqueueCallback(
-      []() { spdlog::info("Hi from a worker callback"); });
+  // workers_.push_back(
+  //     std::make_unique<Worker>(Worker::Options(host_allocator(),
+  //     "worker:0")));
+  // workers_.back()->Start();
+  // workers_.back()->EnqueueCallback(
+  //     []() { spdlog::info("Hi from a worker callback"); });
 
   initialized_ = true;
 }

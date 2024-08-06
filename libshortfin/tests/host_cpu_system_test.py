@@ -13,6 +13,3 @@ def test_create_host_cpu_system():
     print(f"LOCAL SYSTEM:", ls)
 
     print("Sleeping in Python")
-    import time
-
-    time.sleep(5)
