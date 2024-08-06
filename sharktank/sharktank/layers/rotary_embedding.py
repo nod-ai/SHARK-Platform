@@ -20,16 +20,15 @@ class RotaryEmbeddingLayer(BaseLayer):
         rope_dimension_count: int,
         max_seqlen: int,
         device: Optional[torch.device] = None,
-        hf: bool = False,
+        use_hf: bool = False,
     ):
         super().__init__()
         self.device = device
+        self.use_hf = use_hf
         self._table = self._create_rotary_embed_table(
             max_seqlen=max_seqlen,
             dim=rope_dimension_count,
-            hf=hf,
         )
-        self.hf = hf
 
     def forward(self, *, xq: torch.Tensor, xk: torch.Tensor, start_index: int):
         # xq_, xk_ shape: bs, sl, _, dim
@@ -72,7 +71,7 @@ class RotaryEmbeddingLayer(BaseLayer):
             order_tensor[dim // 2 :] = torch.arange(1, dim, 2)
             return order_tensor
 
-        if self.hf:
+        if self.use_hf:
             xq = xq[..., create_interleaved_tensor(xq.shape[-1])]
             xk = xk[..., create_interleaved_tensor(xq.shape[-1])]
 
@@ -89,7 +88,7 @@ class RotaryEmbeddingLayer(BaseLayer):
 
         broadcast_freqs_cis = freqs_cis[None, 0:sl, None, :]
 
-        if self.hf:
+        if self.use_hf:
             xq_out = torch.view_as_real(
                 self.complex_multiply(xq_, broadcast_freqs_cis)
             ).flatten(3)
@@ -171,7 +170,6 @@ class RotaryEmbeddingLayer(BaseLayer):
         max_seqlen: int,
         dim: int,
         theta_value: float = 10000.0,
-        hf: bool = False,
     ):
         freqs = 1.0 / (
             theta_value
@@ -182,7 +180,7 @@ class RotaryEmbeddingLayer(BaseLayer):
 
         freqs_cis = (
             torch.complex(torch.cos(freqs), torch.sin(freqs))
-            if hf
+            if self.use_hf
             else torch.polar(torch.ones_like(freqs), freqs)
         )
 

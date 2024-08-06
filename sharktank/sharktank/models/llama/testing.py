@@ -12,6 +12,8 @@ from ...types.tensors import *
 from ...types.theta import Theta
 
 
+# Range of torch.rand() is [0,1)
+# Range of torch.rand() * 2 - 1 is [-1, 1), includes negative values
 def make_rand_torch(shape, dtype):
     return torch.rand(shape, dtype=dtype) * 2 - 1
 
@@ -23,31 +25,31 @@ def make_attention_block_theta(
 ) -> Theta:
     return Theta(
         {
-            "self_attn.q_proj.weight": DefaultPrimitiveTensor(
+            "attn_q.weight": DefaultPrimitiveTensor(
                 data=make_rand_torch((feature_dim, feature_dim), dtype=dtype)
             ),
-            "self_attn.k_proj.weight": DefaultPrimitiveTensor(
+            "attn_k.weight": DefaultPrimitiveTensor(
                 data=make_rand_torch((feature_dim, feature_dim), dtype=dtype)
             ),
-            "self_attn.v_proj.weight": DefaultPrimitiveTensor(
+            "attn_v.weight": DefaultPrimitiveTensor(
                 data=make_rand_torch((feature_dim, feature_dim), dtype=dtype)
             ),
-            "self_attn.o_proj.weight": DefaultPrimitiveTensor(
+            "attn_output.weight": DefaultPrimitiveTensor(
                 data=make_rand_torch((feature_dim, feature_dim), dtype=dtype)
             ),
-            "input_layernorm.weight": DefaultPrimitiveTensor(
+            "attn_norm.weight": DefaultPrimitiveTensor(
                 data=make_rand_torch((feature_dim), dtype=dtype)
             ),
-            "mlp.gate_proj.weight": DefaultPrimitiveTensor(
+            "ffn_gate.weight": DefaultPrimitiveTensor(
                 data=make_rand_torch((ffn_dim, feature_dim), dtype=dtype)
             ),
-            "mlp.up_proj.weight": DefaultPrimitiveTensor(
+            "ffn_up.weight": DefaultPrimitiveTensor(
                 data=make_rand_torch((ffn_dim, feature_dim), dtype=dtype)
             ),
-            "mlp.down_proj.weight": DefaultPrimitiveTensor(
+            "ffn_down.weight": DefaultPrimitiveTensor(
                 data=make_rand_torch((feature_dim, ffn_dim), dtype=dtype)
             ),
-            "post_attention_layernorm.weight": DefaultPrimitiveTensor(
+            "ffn_norm.weight": DefaultPrimitiveTensor(
                 data=make_rand_torch((feature_dim), dtype=dtype)
             ),
         }
