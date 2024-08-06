@@ -13,6 +13,7 @@
 #include "iree/base/api.h"
 #include "iree/hal/api.h"
 #include "iree/modules/hal/types.h"
+#include "iree/vm/api.h"
 #include "shortfin/support/api.h"
 
 namespace shortfin {
@@ -30,22 +31,35 @@ inline std::string_view to_string_view(iree_string_view_t isv) {
 // -------------------------------------------------------------------------- //
 
 namespace iree_type_detail {
-inline void retain(iree_hal_device_t *obj) { iree_hal_device_retain(obj); }
-inline void release(iree_hal_device_t *obj) { iree_hal_device_release(obj); }
 
-inline void retain(iree_hal_driver_t *obj) { iree_hal_driver_retain(obj); }
-inline void release(iree_hal_driver_t *obj) { iree_hal_driver_release(obj); }
+struct iree_hal_device_ptr_helper {
+  static void retain(iree_hal_device_t *obj) { iree_hal_device_retain(obj); }
+  static void release(iree_hal_device_t *obj) { iree_hal_device_release(obj); }
+};
+
+struct iree_hal_driver_ptr_helper {
+  static void retain(iree_hal_driver_t *obj) { iree_hal_driver_retain(obj); }
+  static void release(iree_hal_driver_t *obj) { iree_hal_driver_release(obj); }
+};
+
+struct iree_vm_instance_ptr_helper {
+  static void retain(iree_vm_instance_t *obj) { iree_vm_instance_retain(obj); }
+  static void release(iree_vm_instance_t *obj) {
+    iree_vm_instance_release(obj);
+  }
+};
+
 };  // namespace iree_type_detail
 
 // Wraps an IREE retain/release style object pointer in a smart-pointer
 // like wrapper.
-template <typename T>
+template <typename T, typename Helper>
 class iree_object_ptr {
  public:
   iree_object_ptr() : ptr(nullptr) {}
   iree_object_ptr(const iree_object_ptr &other) : ptr(other.ptr) {
     if (ptr) {
-      iree_type_detail::retain(ptr);
+      Helper::retain(ptr);
     }
   }
   iree_object_ptr(iree_object_ptr &&other) : ptr(other.ptr) {
@@ -53,7 +67,7 @@ class iree_object_ptr {
   }
   ~iree_object_ptr() {
     if (ptr) {
-      iree_type_detail::release(ptr);
+      Helper::release(ptr);
     }
   }
 
@@ -77,7 +91,7 @@ class iree_object_ptr {
   T *get() const { return ptr; }
   void reset(T *other = nullptr) {
     if (ptr) {
-      iree_type_detail::release(ptr);
+      Helper::release(ptr);
     }
     ptr = other;
   }
@@ -93,8 +107,15 @@ class iree_object_ptr {
   T *ptr = nullptr;
 };
 
-using iree_hal_driver_ptr = iree_object_ptr<iree_hal_driver_t>;
-using iree_hal_device_ptr = iree_object_ptr<iree_hal_device_t>;
+using iree_hal_driver_ptr =
+    iree_object_ptr<iree_hal_driver_t,
+                    iree_type_detail::iree_hal_driver_ptr_helper>;
+using iree_hal_device_ptr =
+    iree_object_ptr<iree_hal_device_t,
+                    iree_type_detail::iree_hal_device_ptr_helper>;
+using iree_vm_instance_ptr =
+    iree_object_ptr<iree_vm_instance_t,
+                    iree_type_detail::iree_vm_instance_ptr_helper>;
 
 // Holds a pointer allocated by some allocator, deleting it if still owned
 // at destruction time.

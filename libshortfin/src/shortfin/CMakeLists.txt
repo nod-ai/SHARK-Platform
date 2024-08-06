@@ -12,10 +12,13 @@ shortfin_cc_component(
     shortfin_local_system
   HDRS
     local_system.h
+    worker.h
   SRCS
     local_system.cc
+    worker.cc
   DEPS
     iree_base_base
+    iree_base_loop_sync
     iree_hal_hal
     iree_modules_hal_hal
     iree_vm_vm

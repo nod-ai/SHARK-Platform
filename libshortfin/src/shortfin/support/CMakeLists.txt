@@ -11,6 +11,7 @@ shortfin_cc_component(
     api.h
     globals.h
     iree_helpers.h
+    iree_concurrency.h
     logging.h
   SRCS
     globals.cc
@@ -18,6 +19,9 @@ shortfin_cc_component(
     logging.cc
   DEPS
     iree_base_base
+    # TODO: Maybe reclassify some of these low level, shared support entities
+    # as externally usable.
+    iree_base_internal_threading
     iree_hal_hal
     iree_modules_hal_types
     spdlog::spdlog

@@ -51,7 +51,33 @@ LocalDevice::~LocalDevice() = default;
 // -------------------------------------------------------------------------- //
 
 LocalSystem::LocalSystem(iree_allocator_t host_allocator)
-    : host_allocator_(host_allocator) {}
+    : host_allocator_(host_allocator) {
+  SHORTFIN_THROW_IF_ERROR(iree_vm_instance_create(IREE_VM_TYPE_CAPACITY_DEFAULT,
+                                                  host_allocator_,
+                                                  vm_instance_.for_output()));
+}
+
+LocalSystem::~LocalSystem() {
+  // Worker drain and shutdown.
+  for (auto &worker : workers_) {
+    worker->Kill();
+  }
+  for (auto &worker : workers_) {
+    worker->WaitForShutdown();
+  }
+
+  // Orderly destruction of heavy-weight objects.
+  // Shutdown order is important so we don't leave it to field ordering.
+  vm_instance_.reset();
+
+  // Devices.
+  devices_.clear();
+  named_devices_.clear();
+  retained_devices_.clear();
+
+  // HAL drivers.
+  hal_drivers_.clear();
+}
 
 void LocalSystem::InitializeNodes(int node_count) {
   AssertNotInitialized();
@@ -90,6 +116,14 @@ void LocalSystem::InitializeHalDevice(std::unique_ptr<LocalDevice> device) {
 
 void LocalSystem::FinishInitialization() {
   AssertNotInitialized();
+
+  // TODO: Remove this. Just testing.
+  workers_.push_back(
+      std::make_unique<Worker>(Worker::Options(host_allocator(), "worker:0")));
+  workers_.back()->Start();
+  workers_.back()->EnqueueCallback(
+      []() { spdlog::info("Hi from a worker callback"); });
+
   initialized_ = true;
 }
 

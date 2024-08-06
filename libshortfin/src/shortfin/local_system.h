@@ -19,6 +19,7 @@
 #include "iree/vm/api.h"
 #include "shortfin/support/api.h"
 #include "shortfin/support/iree_helpers.h"
+#include "shortfin/worker.h"
 
 namespace shortfin {
 
@@ -57,11 +58,14 @@ class SHORTFIN_API LocalSystem
  public:
   LocalSystem(iree_allocator_t host_allocator);
   LocalSystem(const LocalSystem &) = delete;
+  ~LocalSystem();
 
   // Get a shared pointer from the instance.
   std::shared_ptr<LocalSystem> shared_ptr() { return shared_from_this(); }
 
+  // Access to underlying IREE API objects.
   iree_allocator_t host_allocator() { return host_allocator_; }
+  iree_vm_instance_t *vm_instance() { return vm_instance_.get(); }
 
   // Topology access.
   std::span<const LocalNode> nodes() const { return {nodes_}; }
@@ -103,6 +107,12 @@ class SHORTFIN_API LocalSystem
   std::vector<std::unique_ptr<LocalDevice>> retained_devices_;
   std::unordered_map<std::string_view, LocalDevice *> named_devices_;
   std::vector<LocalDevice *> devices_;
+
+  // VM management.
+  iree_vm_instance_ptr vm_instance_;
+
+  // Workers.
+  std::vector<std::unique_ptr<Worker>> workers_;
 
   // Whether initialization is complete. If true, various low level
   // mutations are disallowed.
