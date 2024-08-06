@@ -11,9 +11,11 @@ shortfin_cc_component(
   NAME
     shortfin_local_system
   HDRS
+    local_device.h
     local_system.h
     worker.h
   SRCS
+    local_device.cc
     local_system.cc
     worker.cc
   DEPS
