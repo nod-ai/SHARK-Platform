@@ -47,7 +47,9 @@ class LlamaModelConfig:
     # Dtype to use for attention.
     attention_dtype: torch.dtype = torch.float16
 
-    # Indicates if running with HuggingFace implementation and ensures numerical equivalency to HuggingFace's LLaMa if true (by modifying rotary embedding).
+    # Indicates if running with HuggingFace implementation and ensures
+    # numerical equivalency to HuggingFace's LLaMa if true (by modifying
+    # rotary embedding).
     use_hf: bool = False
 
     def create_kv_cache(self) -> BaseKVCache:
