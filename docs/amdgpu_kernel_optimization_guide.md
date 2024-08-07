@@ -230,7 +230,7 @@ worst case where all threads access the same bank, this can turn into a *waterfa
 loop* (only one thread gets to access LDS per cycle).
 
 For example, consider the following contiguous workgroup memory access patterns,
-where `T<n>` denotes thread executing on lane `n`:
+where `T<n>` denotes thread with ID `n`:
 
 1. 64 B, one byte per thread:
    ```
