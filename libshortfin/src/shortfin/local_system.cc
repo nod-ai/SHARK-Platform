@@ -8,9 +8,31 @@
 
 #include <fmt/core.h>
 
+#include "shortfin/local_scope.h"
 #include "shortfin/support/logging.h"
 
 namespace shortfin {
+
+namespace {
+
+// A LocalScope with a back reference to the LocalSystem from which it
+// originated.
+class ExtendingLocalScope : public LocalScope {
+ public:
+  using LocalScope::LocalScope;
+
+ private:
+  std::shared_ptr<LocalSystem> backref_;
+  friend std::shared_ptr<LocalSystem> &mutable_local_scope_backref(
+      ExtendingLocalScope &);
+};
+
+std::shared_ptr<LocalSystem> &mutable_local_scope_backref(
+    ExtendingLocalScope &scope) {
+  return scope.backref_;
+}
+
+}  // namespace
 
 // -------------------------------------------------------------------------- //
 // LocalSystem
@@ -43,6 +65,12 @@ LocalSystem::~LocalSystem() {
 
   // HAL drivers.
   hal_drivers_.clear();
+}
+
+std::unique_ptr<LocalScope> LocalSystem::CreateScope() {
+  auto new_scope = std::make_unique<ExtendingLocalScope>(devices());
+  mutable_local_scope_backref(*new_scope) = shared_from_this();
+  return new_scope;
 }
 
 void LocalSystem::InitializeNodes(int node_count) {

@@ -21,6 +21,7 @@
 
 namespace shortfin {
 
+class LocalScope;
 class LocalSystem;
 class LocalSystemBuilder;
 
@@ -51,12 +52,17 @@ class SHORTFIN_API LocalSystem
   iree_vm_instance_t *vm_instance() { return vm_instance_.get(); }
 
   // Topology access.
-  std::span<const LocalNode> nodes() const { return {nodes_}; }
-  const std::vector<LocalDevice *> &devices() const { return devices_; }
-  const std::unordered_map<std::string_view, LocalDevice *> &named_devices()
-      const {
+  std::span<const LocalNode> nodes() { return {nodes_}; }
+  std::span<LocalDevice *> devices() { return {devices_}; }
+  const std::unordered_map<std::string_view, LocalDevice *> &named_devices() {
     return named_devices_;
   }
+
+  // Scopes.
+  // Creates a new LocalScope bound to this LocalSystem (it will internally
+  // hold a reference to this instance). All devices in system order will be
+  // added to the scope.
+  std::unique_ptr<LocalScope> CreateScope();
 
   // Initialization APIs. Calls to these methods is only permitted between
   // construction and Initialize().

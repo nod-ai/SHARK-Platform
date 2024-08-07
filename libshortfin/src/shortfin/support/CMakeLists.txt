@@ -13,6 +13,7 @@ shortfin_cc_component(
     iree_helpers.h
     iree_concurrency.h
     logging.h
+    stl_extras.h
   SRCS
     globals.cc
     iree_helpers.cc

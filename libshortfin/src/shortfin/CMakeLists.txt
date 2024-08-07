@@ -12,10 +12,12 @@ shortfin_cc_component(
     shortfin_local_system
   HDRS
     local_device.h
+    local_scope.h
     local_system.h
     worker.h
   SRCS
     local_device.cc
+    local_scope.cc
     local_system.cc
     worker.cc
   DEPS

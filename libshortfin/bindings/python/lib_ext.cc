@@ -6,6 +6,7 @@
 
 #include "./lib_ext.h"
 
+#include "shortfin/local_scope.h"
 #include "shortfin/local_system.h"
 #include "shortfin/support/globals.h"
 #include "shortfin/support/logging.h"
@@ -17,6 +18,7 @@ namespace shortfin::python {
 NB_MODULE(lib, m) {
   m.def("initialize", shortfin::GlobalInitialize);
 
+  BindLocalScope(m);
   BindLocalSystem(m);
   BindHostSystem(m);
   BindAMDGPUSystem(m);
@@ -47,7 +49,8 @@ void BindLocalSystem(py::module_ &m) {
             }
             return it->second;
           },
-          py::rv_policy::reference_internal);
+          py::rv_policy::reference_internal)
+      .def("create_scope", &LocalSystem::CreateScope);
 
   // Support classes.
   py::class_<LocalNode>(m, "LocalNode")
@@ -64,10 +67,51 @@ void BindLocalSystem(py::module_ &m) {
             py::cast<std::string>(self_handle.type().attr("__name__"));
         auto self = py::cast<LocalDevice>(self_handle);
         std::string repr = fmt::format(
-            "{}(name='{}', node_affinity={}, node_locked={})", type_name,
-            self.name(), self.node_affinity(), self.node_locked());
+            "{}(name='{}', ordinal={}:{}, node_affinity={}, node_locked={})",
+            type_name, self.name(), self.address().instance_ordinal,
+            self.address().queue_ordinal, self.node_affinity(),
+            self.node_locked());
         return repr;
       });
+}
+
+void BindLocalScope(py::module_ &m) {
+  struct DevicesSet {
+    DevicesSet(LocalScope &scope) : scope(scope) {}
+    LocalScope &scope;
+  };
+  py::class_<LocalScope>(m, "LocalScope")
+      .def_prop_ro("devices", &LocalScope::devices,
+                   py::rv_policy::reference_internal)
+      .def_prop_ro(
+          "devices", [](LocalScope &self) { return DevicesSet(self); },
+          py::rv_policy::reference_internal)
+      .def("device", &LocalScope::device, py::rv_policy::reference_internal)
+      .def("device", &LocalScope::named_device,
+           py::rv_policy::reference_internal)
+      .def_prop_ro("device_names", &LocalScope::device_names)
+      .def_prop_ro("named_devices", &LocalScope::named_devices,
+                   py::rv_policy::reference_internal);
+
+  py::class_<DevicesSet>(m, "_LocalScopeDevicesSet")
+      .def("__len__",
+           [](DevicesSet &self) { return self.scope.devices().size(); })
+      .def(
+          "__getitem__",
+          [](DevicesSet &self, int index) { return self.scope.device(index); },
+          py::rv_policy::reference_internal)
+      .def(
+          "__getitem__",
+          [](DevicesSet &self, std::string_view name) {
+            return self.scope.named_device(name);
+          },
+          py::rv_policy::reference_internal)
+      .def(
+          "__getattr__",
+          [](DevicesSet &self, std::string_view name) {
+            return self.scope.named_device(name);
+          },
+          py::rv_policy::reference_internal);
 }
 
 void BindHostSystem(py::module_ &global_m) {
