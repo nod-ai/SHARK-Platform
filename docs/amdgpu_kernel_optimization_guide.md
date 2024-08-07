@@ -224,7 +224,7 @@ more banks, depending on the addresses accessed. The higher the number of
 threads that participate in a conflict over the same bank, the higher the LDS
 access latency.
 
-Bank conflicts are resolved by picking the first group of threads (by thread id)
+Bank conflicts are resolved by picking the first group of threads (by thread ID)
 that do not conflict, and then this is repeated for leftover threads. In the
 worst case where all threads access the same bank, this can turn into a *waterfall
 loop* (only one thread gets to access LDS per cycle).
