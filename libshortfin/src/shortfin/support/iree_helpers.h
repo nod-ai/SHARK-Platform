@@ -32,6 +32,11 @@ inline std::string_view to_string_view(iree_string_view_t isv) {
 
 namespace iree_type_detail {
 
+struct iree_hal_buffer_ptr_helper {
+  static void retain(iree_hal_buffer_t *obj) { iree_hal_buffer_retain(obj); }
+  static void release(iree_hal_buffer_t *obj) { iree_hal_buffer_release(obj); }
+};
+
 struct iree_hal_device_ptr_helper {
   static void retain(iree_hal_device_t *obj) { iree_hal_device_retain(obj); }
   static void release(iree_hal_device_t *obj) { iree_hal_device_release(obj); }
@@ -107,6 +112,9 @@ class iree_object_ptr {
   T *ptr = nullptr;
 };
 
+using iree_hal_buffer_ptr =
+    iree_object_ptr<iree_hal_buffer_t,
+                    iree_type_detail::iree_hal_buffer_ptr_helper>;
 using iree_hal_driver_ptr =
     iree_object_ptr<iree_hal_driver_t,
                     iree_type_detail::iree_hal_driver_ptr_helper>;

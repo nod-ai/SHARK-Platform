@@ -15,28 +15,21 @@ namespace shortfin::array {
 // Array storage backed by an IREE buffer of some form.
 class SHORTFIN_API Storage {
  public:
+  LocalScope &scope() { return scope_; }
+
+  iree_device_size_t byte_length() {
+    return iree_hal_buffer_byte_length(buffer_);
+  }
+
  private:
-  // Storage(LocalScope &scope, iree_hal_buffer_t *buffer)
-  //     : scope_(scope), buffer_(buffer) {}
-  // LocalScope &scope_;
-  // iree_hal_buffer_t *buffer_;
+  Storage(LocalScope &scope, DeviceAffinity affinity,
+          iree_hal_buffer_ptr buffer)
+      : buffer_(std::move(buffer)), scope_(scope), affinity_(affinity) {}
+  iree_hal_buffer_ptr buffer_;
+  LocalScope &scope_;
+  DeviceAffinity affinity_;
 };
 
 }  // namespace shortfin::array
 
 #endif  // SHORTFIN_ARRAY_ARRAY_H
-
-// // Base class for buffers attached to the local system.
-// class SHORTFIN_API LocalBuffer {
-//  public:
-//  protected:
-//   // Initialized with a backing iree_hal_buffer_t reference count transferred
-//   // to this object.
-//   LocalBuffer(LocalScope &owner, iree_hal_buffer_t *buffer)
-//       : owner_(owner), buffer_(buffer) {}
-//   LocalScope &owner_;
-//   iree_hal_buffer_t *buffer_;
-// };
-
-// // Unpeered buffer that which exists solely on the device.
-// class LocalDeviceBuffer : public LocalBuffer {};
