@@ -220,8 +220,9 @@ to 32 VGPRs), while for `b128` *all* VGPRs of 8 adjacent threads are handled
 
 When more than one thread within a group currently being handled attempts to
 accesses the same bank, a bank conflict occurs. The conflict may be over one or
-more banks, depending on the addresses accessed. The more threads participate in
-a conflict over the same bank, the higher the LDS access latency.
+more banks, depending on the addresses accessed. The higher the number of
+threads that participate in a conflict over the same bank, the higher the LDS
+access latency.
 
 Bank conflicts are resolved by picking the first group of threads (by thread id)
 that do not conflict, and then this is repeated for leftover threads. In the
