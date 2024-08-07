@@ -92,8 +92,8 @@ There are 3 levels of cache:
 | --- | --- | --- | --- | --- | --- |
 | L1D | 32 kB | 128 B | 64-way, 4 sets | Compute Unit | Write-through |
 | L1I | 64 kB | 128 B | 8-way set-associative | Compute Unit | Instruction cache |
-| L2 | 4 MB (16 channels * 256 kB) | 128 B | 16-way set-associative | XCD | Writeback / Write-allocate, Coherent within XCD |
-| LLC | 32 MB (16 channels * 2 MB), 256 MB total | 64 B | 16-way set-associative | IOD | Coherent, MALL |
+| L2 | 4 MB (16 channels * 256 kB) | 128 B | 16-way set-associative, 128 sets per channel | XCD | Writeback / Write-allocate, Coherent within XCD |
+| LLC | 32 MB (16 channels * 2 MB), 256 MB total | 64 B | 16-way set-associative, 2048 sets per channel | IOD | Coherent, MALL |
 
 L2 cache is flushed between kernel launches. Memory accesses that miss L2 are
 coalesced and go to the data fabric.
