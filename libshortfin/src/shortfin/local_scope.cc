@@ -35,7 +35,7 @@ void LocalScope::AddDevice(std::string_view device_class, LocalDevice *device) {
   devices_.push_back(device);
 }
 
-LocalDevice *LocalScope::named_device(std::string_view name) const {
+LocalDevice *LocalScope::device(std::string_view name) const {
   auto it = named_devices_.find(name);
   if (it == named_devices_.end()) [[unlikely]] {
     throw std::invalid_argument(

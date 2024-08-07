@@ -88,6 +88,7 @@ struct SHORTFIN_API LocalDeviceAddress {
                      iree_host_size_t instance_ordinal,
                      iree_host_size_t queue_ordinal,
                      std::vector<iree_host_size_t> instance_topology_address);
+  std::string to_s() const;
 
   // User driver name (i.e. 'amdgpu'). In user visible names/messages, this
   // is preferred over hal_driver_prefix, but must be 1:1 with it.
@@ -116,11 +117,63 @@ class SHORTFIN_API LocalDevice {
   int node_affinity() const { return node_affinity_; }
   bool node_locked() const { return node_locked_; }
 
+  std::string to_s() const;
+
  private:
   LocalDeviceAddress address_;
   iree_hal_device_ptr hal_device_;
   int node_affinity_;
   bool node_locked_;
+};
+
+// Holds a reference to a LocalDevice* and a bitmask of queues that are being
+// targeted.
+class SHORTFIN_API DeviceAffinity {
+ public:
+  DeviceAffinity() : device_(nullptr), queue_affinity_(0) {}
+  DeviceAffinity(LocalDevice *device)
+      : device_(device),
+        queue_affinity_(static_cast<iree_hal_queue_affinity_t>(1)
+                        << device->address().queue_ordinal) {}
+
+  // Adds a device to the set. It is only legal to do this with devices that
+  // share the same instance_ordinal (i.e. have the same underlying HAL device).
+  // In that case, the queue affinity bitmask will have a bit set for the
+  // added device and true will be returned.
+  // If the device is not compatible in this way, then false will be returned.
+  [[nodiscard]] bool AddDevice(LocalDevice *new_device) {
+    if (!new_device) return true;
+    if (!device_) {
+      // Empty to one device is always allowed.
+      device_ = new_device;
+    } else if (new_device->address().instance_ordinal !=
+               device_->address().instance_ordinal) {
+      // Different HAL device is disallowed.
+      return false;
+    }
+    queue_affinity_ |= static_cast<iree_hal_queue_affinity_t>(1)
+                       << new_device->address().queue_ordinal;
+    return true;
+  }
+
+  DeviceAffinity &operator|=(LocalDevice *other) {
+    if (!AddDevice(other)) {
+      ThrowIllegalDeviceAffinity(device(), other);
+    }
+    return *this;
+  }
+
+  LocalDevice *device() const { return device_; }
+  iree_hal_queue_affinity_t queue_affinity() const { return queue_affinity_; }
+
+  std::string to_s() const;
+
+ private:
+  static void ThrowIllegalDeviceAffinity(LocalDevice *first,
+                                         LocalDevice *second);
+
+  LocalDevice *device_;
+  iree_hal_queue_affinity_t queue_affinity_;
 };
 
 }  // namespace shortfin

@@ -17,6 +17,7 @@ shortfin_public_library(
   NAME
     shortfin
   COMPONENTS
+    shortfin_array
     shortfin_local_system
     shortfin_support
     shortfin_systems_amdgpu

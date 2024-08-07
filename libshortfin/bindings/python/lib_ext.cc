@@ -62,17 +62,13 @@ void BindLocalSystem(py::module_ &m) {
       .def("name", &LocalDevice::name)
       .def("node_affinity", &LocalDevice::node_affinity)
       .def("node_locked", &LocalDevice::node_locked)
-      .def("__repr__", [](py::handle self_handle) {
-        auto type_name =
-            py::cast<std::string>(self_handle.type().attr("__name__"));
-        auto self = py::cast<LocalDevice>(self_handle);
-        std::string repr = fmt::format(
-            "{}(name='{}', ordinal={}:{}, node_affinity={}, node_locked={})",
-            type_name, self.name(), self.address().instance_ordinal,
-            self.address().queue_ordinal, self.node_affinity(),
-            self.node_locked());
-        return repr;
-      });
+      .def("__repr__", &LocalDevice::to_s);
+  py::class_<DeviceAffinity>(m, "DeviceAffinity")
+      .def(py::init<>())
+      .def(py::init<LocalDevice *>())
+      .def("add", &DeviceAffinity::AddDevice)
+      .def("__add__", &DeviceAffinity::AddDevice)
+      .def("__repr__", &DeviceAffinity::to_s);
 }
 
 void BindLocalScope(py::module_ &m) {
@@ -86,12 +82,32 @@ void BindLocalScope(py::module_ &m) {
       .def_prop_ro(
           "devices", [](LocalScope &self) { return DevicesSet(self); },
           py::rv_policy::reference_internal)
-      .def("device", &LocalScope::device, py::rv_policy::reference_internal)
-      .def("device", &LocalScope::named_device,
-           py::rv_policy::reference_internal)
+      .def(
+          "device",
+          [](LocalScope &self, int index) { return self.device(index); },
+          py::rv_policy::reference_internal)
+      .def(
+          "device",
+          [](LocalScope &self, std::string_view name) {
+            return self.device(name);
+          },
+          py::rv_policy::reference_internal)
       .def_prop_ro("device_names", &LocalScope::device_names)
       .def_prop_ro("named_devices", &LocalScope::named_devices,
-                   py::rv_policy::reference_internal);
+                   py::rv_policy::reference_internal)
+      .def("device_affinity", [](LocalScope &self, py::args args) {
+        DeviceAffinity affinity;
+        for (auto arg : args) {
+          if (py::isinstance<int>(arg)) {
+            affinity |= self.device(py::cast<int>(arg));
+          } else if (py::isinstance<std::string>(arg)) {
+            affinity |= self.device(py::cast<std::string>(arg));
+          } else {
+            affinity |= self.device(py::cast<LocalDevice *>(arg));
+          }
+        }
+        return affinity;
+      });
 
   py::class_<DevicesSet>(m, "_LocalScopeDevicesSet")
       .def("__len__",
@@ -103,13 +119,13 @@ void BindLocalScope(py::module_ &m) {
       .def(
           "__getitem__",
           [](DevicesSet &self, std::string_view name) {
-            return self.scope.named_device(name);
+            return self.scope.device(name);
           },
           py::rv_policy::reference_internal)
       .def(
           "__getattr__",
           [](DevicesSet &self, std::string_view name) {
-            return self.scope.named_device(name);
+            return self.scope.device(name);
           },
           py::rv_policy::reference_internal);
 }

@@ -42,14 +42,29 @@ class SHORTFIN_API LocalScope {
   virtual ~LocalScope();
 
   // Device access.
-  LocalDevice *named_device(std::string_view name) const;
+  // Throws std::invalid_argument on lookup failure.
+  LocalDevice *device(std::string_view name) const;
   const std::unordered_map<std::string_view, LocalDevice *> named_devices()
       const {
     return named_devices_;
   }
   LocalDevice *device(int index) const;
+  LocalDevice *device(LocalDevice *d) const { return d; }
   std::vector<std::string_view> device_names() const;
   const std::vector<LocalDevice *> &devices() const { return devices_; }
+
+  // Variadic helper for making a DeviceAffinity from any of:
+  //  * Explicit LocalDevice*
+  //  * Device name (from a LocalScope)
+  //  * Device index (from a LocalScope)
+  // If at any point during accumulation, the DeviceAffinity would be invalid,
+  // then a std::invalid_argument exception is thrown. Any failure to resolve
+  // a name or index will also throw a std::invalid_argument.
+  DeviceAffinity device_affinity() { return DeviceAffinity(); }
+  template <typename T, typename... Args>
+  DeviceAffinity device_affinity(T first, Args... args) {
+    return device_affinity(args...) | DeviceAffinity(device(first));
+  }
 
  private:
   void AddDevice(std::string_view device_class, LocalDevice *device);

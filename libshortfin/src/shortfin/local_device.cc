@@ -32,6 +32,26 @@ LocalDeviceAddress::LocalDeviceAddress(
                       fmt::join(this->instance_topology_address, ","))) {}
 
 // -------------------------------------------------------------------------- //
+// DeviceAffinity
+// -------------------------------------------------------------------------- //
+
+void DeviceAffinity::ThrowIllegalDeviceAffinity(LocalDevice *first,
+                                                LocalDevice *second) {
+  throw std::invalid_argument(fmt::format(
+      "Cannot combine unrelated devices into a DeviceAffinity: {} vs {}",
+      first->name(), second->name()));
+}
+
+std::string DeviceAffinity::to_s() const {
+  if (device()) {
+    return fmt::format("DeviceAffinity({}[0x{:x}])", device()->name(),
+                       queue_affinity());
+  } else {
+    return "DeviceAffinity(ANY)";
+  }
+}
+
+// -------------------------------------------------------------------------- //
 // LocalDevice
 // -------------------------------------------------------------------------- //
 
@@ -44,5 +64,12 @@ LocalDevice::LocalDevice(LocalDeviceAddress address,
       node_locked_(node_locked) {}
 
 LocalDevice::~LocalDevice() = default;
+
+std::string LocalDevice::to_s() const {
+  return fmt::format(
+      "LocalDevice(name='{}', ordinal={}:{}, node_affinity={}, node_locked={})",
+      name(), address().instance_ordinal, address().queue_ordinal,
+      node_affinity(), node_locked());
+}
 
 }  // namespace shortfin
