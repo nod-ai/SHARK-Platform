@@ -280,7 +280,7 @@ where `T<n>` denotes thread executing on lane `n`:
    T0: Addr 0, Banks 0, 1, 2, 3
    T1: Addr 16, Banks 4, 5, 6, 7
    ...
-   T8: Addr 112, Banks 28, 29, 30, 31
+   T7: Addr 112, Banks 28, 29, 30, 31
    ```
    No bank conflicts ==> good.
 
