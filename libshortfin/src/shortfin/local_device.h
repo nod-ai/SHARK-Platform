@@ -43,8 +43,8 @@ class SHORTFIN_API LocalNode {
 // of an iree_hal_device_t (as managed by an iree_hal_driver_t) and a
 // single bit position within an iree_hal_queue_affinity_t. The total number
 // of devices of a class is thus equal to the product of the device instance
-// ordinal and every entry of the instance topology vector. There can be at
-// most 64 queues on a device instance.
+// arity and the arity of the topology vector. There can be at most 64 queues
+// on a device instance.
 //
 // How the topology is laid out is system and use case specific, with multiple
 // valid arrangements which may be useful for different kinds of workloads.
