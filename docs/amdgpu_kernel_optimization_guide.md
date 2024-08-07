@@ -4,7 +4,7 @@ Author: Jakub Kuderski @kuhar
 
 Date: 2024-06-24
 
-Last Update: 2024-06-25
+Last Update: 2024-08-07
 
 ## Introduction
 
@@ -212,13 +212,16 @@ SIMD size (16), it is not immediately obvious when bank conflicts arise.
 
 LDS is able to access 32 banks per cycle. Depending on the exact LDS instruction
 used (read/write of b32 vs. b64 vs. b128), different number of threads within
-the same subgroup access LDS banks. Assuming no bank conflicts, a `b32` access (
-single dword) handles 32 adjacent threads (amounting to 32 VGPRs), while for
-`b128` *all* VGPRs of 8 adjacent threads are handled (also 32 VGPRs in total).
+the same subgroup access LDS banks. The size of this group of threads is
+determined by the number of dwords accessed by each thread. Assuming no bank
+conflicts, a `b32` access ( single dword) handles 32 adjacent threads (amounting
+to 32 VGPRs), while for `b128` *all* VGPRs of 8 adjacent threads are handled
+(also 32 VGPRs in total).
 
-When more than a single thread within a group currently being handled attempts
-to accesses the same bank, a bank conflict occurs. The conflict may be over one
-or more banks, depending on the addresses accessed.
+When more than one thread within a group currently being handled attempts to
+accesses the same bank, a bank conflict occurs. The conflict may be over one or
+more banks, depending on the addresses accessed. The more threads participate in
+a conflict over the same bank, the higher the LDS access latency.
 
 Bank conflicts are resolved by picking the first group of threads (by thread id)
 that do not conflict, and then this is repeated for leftover threads. In the
