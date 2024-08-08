@@ -19,6 +19,8 @@ class SHORTFIN_API storage {
  public:
   ScopedDevice &device() { return device_; }
   LocalScope &scope() { return device_.scope(); }
+  const ScopedDevice &device() const { return device_; }
+  LocalScope &scope() const { return device_.scope(); }
 
   // Allocates device storage, compatible with the given device affinity.
   // By default, this will be IREE_HAL_MEMORY_TYPE_OPTIMAL_FOR_DEVICE.

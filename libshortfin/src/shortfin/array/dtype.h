@@ -12,11 +12,12 @@
 #include <string_view>
 
 #include "iree/hal/buffer_view.h"
+#include "shortfin/support/api.h"
 
 namespace shortfin::array {
 
 // Wraps an iree_hal_element_type into a DType like object.
-class DType {
+class SHORTFIN_API DType {
  public:
   static DType opaque8() {
     return DType(IREE_HAL_ELEMENT_TYPE_OPAQUE_8, "opaque8");

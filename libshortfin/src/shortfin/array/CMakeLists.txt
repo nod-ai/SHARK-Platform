@@ -13,6 +13,7 @@ shortfin_cc_component(
     dtype.h
     storage.h
   SRCS
+    array.cc
     dtype.cc
     storage.cc
   COMPONENTS

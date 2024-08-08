@@ -23,7 +23,8 @@ void BindArray(py::module_ &global_m) {
       .def_prop_ro("bit_count", &DType::bit_count)
       .def_prop_ro("is_byte_aligned", &DType::is_byte_aligned)
       .def_prop_ro("dense_byte_count", &DType::dense_byte_count)
-      .def("is_integer_bitwidth", &DType::is_integer_bitwidth);
+      .def("is_integer_bitwidth", &DType::is_integer_bitwidth)
+      .def("__repr__", &DType::name);
 
   m.attr("opaque8") = DType::opaque8();
   m.attr("opaque16") = DType::opaque16();
@@ -58,8 +59,23 @@ void BindArray(py::module_ &global_m) {
           [](ScopedDevice &device, iree_device_size_t allocation_size) {
             return storage::AllocateHost(device, allocation_size);
           },
-          py::arg("device"), py::arg("allocation_size"))
+          py::arg("device"), py::arg("allocation_size"), py::keep_alive<0, 1>())
       .def("__repr__", &storage::to_s);
+
+  py::class_<base_array>(m, "base_array")
+      .def_prop_ro("dtype", &base_array::dtype)
+      .def_prop_ro("shape", &base_array::shape);
+  py::class_<device_array, base_array>(m, "device_array")
+      .def(py::init<storage, std::span<const size_t>, DType>(),
+           py::keep_alive<0, 1>())
+      .def("__init__",
+           [](device_array *new_self, ScopedDevice &device,
+              std::span<const size_t> shape, DType dtype) {
+             new (new_self)
+                 device_array(device_array::allocate(device, shape, dtype));
+           })
+      .def_static("allocate", &device_array::allocate)
+      .def("__repr__", &device_array::to_s);
 }
 
 }  // namespace shortfin::python

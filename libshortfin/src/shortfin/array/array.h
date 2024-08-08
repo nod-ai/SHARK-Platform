@@ -13,49 +13,50 @@
 
 #include "shortfin/array/dtype.h"
 #include "shortfin/array/storage.h"
+#include "shortfin/support/api.h"
 
 namespace shortfin::array {
 
 // Either a host or device nd-array view.
-class base_array {
+class SHORTFIN_API base_array {
  public:
-  base_array(std::span<const size_t> dims, DType dtype) : dtype_(dtype) {
-    set_dims(dims);
+  base_array(std::span<const size_t> shape, DType dtype) : dtype_(dtype) {
+    set_shape(shape);
   }
   virtual ~base_array() { ClearDims(); }
 
   DType dtype() const { return dtype_; }
 
-  // Access dims.
-  void set_dims(std::span<const size_t> dims) {
+  // Access shape.
+  void set_shape(std::span<const size_t> shape) {
     ClearDims();
-    rank_ = dims.size();
+    rank_ = shape.size();
     if (rank_ > MAX_INLINE_RANK) {
       // Dynamic allocation.
-      new (&dims_.dynamic_dims) std::unique_ptr<size_t[]>(new size_t[rank_]);
-      std::copy(dims.begin(), dims.end(), dims_.dynamic_dims.get());
+      new (&shape_.dynamic_dims) std::unique_ptr<size_t[]>(new size_t[rank_]);
+      std::copy(shape.begin(), shape.end(), shape_.dynamic_dims.get());
     } else {
       // Inline allocation.
-      new (&dims_.inline_dims) Dims();
-      std::copy(dims.begin(), dims.end(), dims_.inline_dims.begin());
+      new (&shape_.inline_dims) Dims();
+      std::copy(shape.begin(), shape.end(), shape_.inline_dims.begin());
     }
   }
-  std::span<const size_t> dims() const {
+  std::span<const size_t> shape() const {
     if (rank_ > MAX_INLINE_RANK) {
       // Dynamic allocation.
-      return std::span<const size_t>(dims_.dynamic_dims.get(), rank_);
+      return std::span<const size_t>(shape_.dynamic_dims.get(), rank_);
     } else {
       // Inline allocation.
-      return std::span<const size_t>(&dims_.inline_dims.front(), rank_);
+      return std::span<const size_t>(&shape_.inline_dims.front(), rank_);
     }
   }
-  std::span<size_t> mutable_dims() {
+  std::span<size_t> mutable_shape() {
     if (rank_ > MAX_INLINE_RANK) {
       // Dynamic allocation.
-      return std::span<size_t>(dims_.dynamic_dims.get(), rank_);
+      return std::span<size_t>(shape_.dynamic_dims.get(), rank_);
     } else {
       // Inline allocation.
-      return std::span<size_t>(&dims_.inline_dims.front(), rank_);
+      return std::span<size_t>(&shape_.inline_dims.front(), rank_);
     }
   }
 
@@ -68,35 +69,35 @@ class base_array {
     std::unique_ptr<size_t[]> dynamic_dims;
   };
 
-  // Clears dims, setting the rank to zero and deleting any non-inline dimension
-  // storage.
+  // Clears shape, setting the rank to zero and deleting any non-inline
+  // dimension storage.
   void ClearDims() {
     if (rank_ > MAX_INLINE_RANK) {
-      dims_.dynamic_dims.~unique_ptr();
+      shape_.dynamic_dims.~unique_ptr();
     }
     rank_ = 0;
   }
 
   size_t rank_ = 0;
   DType dtype_;
-  Dims dims_;
+  Dims shape_;
 };
 
 // View over some device allocation, modeled as a dense C-order nd array.
-class device_array final : public base_array {
+class SHORTFIN_API device_array final : public base_array {
  public:
-  device_array(storage device_storage, std::span<const size_t> dims,
+  device_array(storage device_storage, std::span<const size_t> shape,
                DType dtype)
-      : base_array(dims, dtype), device_storage_(std::move(device_storage)) {}
+      : base_array(shape, dtype), device_storage_(std::move(device_storage)) {}
 
-  // static device_array allocate(LocalScope &scope, std::span<const size_t>
-  // dims,
-  //                              DType dtype) {
-  //   return device_array(storage::AllocateDevice(
-  //                           scope, device,
-  //                           dtype.compute_dense_nd_size(dims)),
-  //                       dims, dtype);
-  // }
+  static device_array allocate(ScopedDevice &device,
+                               std::span<const size_t> shape, DType dtype) {
+    return device_array(
+        storage::AllocateDevice(device, dtype.compute_dense_nd_size(shape)),
+        shape, dtype);
+  }
+
+  std::string to_s() const;
 
  private:
   storage device_storage_;
