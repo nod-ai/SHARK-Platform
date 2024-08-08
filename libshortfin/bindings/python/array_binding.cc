@@ -73,19 +73,53 @@ void BindArray(py::module_ &global_m) {
       .def_prop_ro("dtype", &base_array::dtype)
       .def_prop_ro("shape", &base_array::shape);
   py::class_<device_array, base_array>(m, "device_array")
-      .def(py::init<storage, std::span<const size_t>, DType>(),
-           py::keep_alive<0, 1>())
-      .def("__init__",
-           [](device_array *new_self, ScopedDevice &device,
-              std::span<const size_t> shape, DType dtype) {
-             new (new_self)
-                 device_array(device_array::allocate(device, shape, dtype));
-           })
+      .def("__init__", [](py::args, py::kwargs) {})
+      .def_static("__new__",
+                  [](py::handle py_type, class storage storage,
+                     std::span<const size_t> shape, DType dtype) {
+                    return custom_new_keep_alive<device_array>(
+                        py_type, /*keep_alive=*/storage.scope(), storage, shape,
+                        dtype);
+                  })
+      .def_static("__new__",
+                  [](py::handle py_type, ScopedDevice &device,
+                     std::span<const size_t> shape, DType dtype) {
+                    return custom_new_keep_alive<device_array>(
+                        py_type, /*keep_alive=*/device.scope(),
+                        device_array::allocate(device, shape, dtype));
+                  })
       .def_prop_ro("device", &device_array::device,
                    py::rv_policy::reference_internal)
       .def_prop_ro("storage", &device_array::storage,
                    py::rv_policy::reference_internal)
       .def("__repr__", &device_array::to_s);
+  py::class_<host_array, base_array>(m, "host_array")
+      .def("__init__", [](py::args, py::kwargs) {})
+      .def_static("__new__",
+                  [](py::handle py_type, class storage storage,
+                     std::span<const size_t> shape, DType dtype) {
+                    return custom_new_keep_alive<host_array>(
+                        py_type, /*keep_alive=*/storage.scope(), storage, shape,
+                        dtype);
+                  })
+      .def_static("__new__",
+                  [](py::handle py_type, ScopedDevice &device,
+                     std::span<const size_t> shape, DType dtype) {
+                    return custom_new_keep_alive<host_array>(
+                        py_type, /*keep_alive=*/device.scope(),
+                        host_array::allocate(device, shape, dtype));
+                  })
+      .def_static("__new__",
+                  [](py::handle py_type, device_array &device_array) {
+                    return custom_new_keep_alive<host_array>(
+                        py_type, /*keep_alive=*/device_array.device().scope(),
+                        host_array::for_transfer(device_array));
+                  })
+      .def_prop_ro("device", &host_array::device,
+                   py::rv_policy::reference_internal)
+      .def_prop_ro("storage", &host_array::storage,
+                   py::rv_policy::reference_internal)
+      .def("__repr__", &host_array::to_s);
 }
 
 }  // namespace shortfin::python

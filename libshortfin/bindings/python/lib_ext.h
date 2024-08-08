@@ -27,6 +27,37 @@ void BindLocalSystem(py::module_ &module);
 void BindHostSystem(py::module_ &module);
 void BindAMDGPUSystem(py::module_ &module);
 
+// Uses the low level object construction interface to do a custom, placement
+// new based allocation:
+// https://nanobind.readthedocs.io/en/latest/lowlevel.html#low-level-interface
+// This is used in a __new__ method when you want to do something custom with
+// the resulting py::object before returning it.
+template <typename CppType, typename... Args>
+inline py::object custom_new(py::handle py_type, Args &&...args) {
+  py::object py_self = py::inst_alloc(py_type);
+  CppType *self = py::inst_ptr<CppType>(py_self);
+  new (self) CppType(std::forward<Args>(args)...);
+  py::inst_mark_ready(py_self);
+  return py_self;
+}
+
+// Extends custom_new to also keep a patient instance alive such that the
+// keep_alive object is guaranteed to be kept alive for at least as long
+// as the constructed object.
+// This is used to perform a custom keep alive of some parent object vs
+// just something accessible as arguments. The keep_alive instance must
+// already be live python object (or a cast will fail).
+template <typename CppType, typename KeepAlivePatient, typename... Args>
+inline py::object custom_new_keep_alive(py::handle py_type,
+                                        KeepAlivePatient &keep_alive,
+                                        Args &&...args) {
+  py::object self = custom_new<CppType>(py_type, std::forward<Args>(args)...);
+  py::detail::keep_alive(
+      self.ptr(),
+      py::cast<KeepAlivePatient &>(keep_alive, py::rv_policy::none).ptr());
+  return self;
+}
+
 }  // namespace shortfin::python
 
 namespace nanobind::detail {

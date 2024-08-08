@@ -37,3 +37,10 @@ def test_device_array(scope):
     assert ary1.shape == [32, 1, 4]
     assert ary1.dtype == sfl.array.float32
     assert scope.device(0) == ary1.device
+
+    hary1 = sfl.array.host_array(ary1)
+    print(hary1)
+    assert isinstance(hary1, sfl.array.host_array)
+    assert hary1.shape == ary1.shape
+    assert hary1.dtype == ary1.dtype
+    assert hary1.device == ary1.device

@@ -23,6 +23,24 @@ class SHORTFIN_API base_array {
   base_array(std::span<const size_t> shape, DType dtype) : dtype_(dtype) {
     set_shape(shape);
   }
+  // Need to explicitly define copy/move constructors even though this is
+  // a value type because the Dims union is otherwise not copy/movable.
+  base_array(const base_array &other)
+      : base_array(other.shape(), other.dtype()) {}
+  base_array(base_array &&other) : rank_(other.rank_), dtype_(other.dtype_) {
+    // Custom move the dims to avoid an additional allocation. This could just
+    // be a memcpy on most impls, but this is the "right way".
+    if (rank_ > MAX_INLINE_RANK) {
+      // Dynamic allocation.
+      new (&shape_.dynamic_dims) Dims();
+      shape_.dynamic_dims = std::move(other.shape_.dynamic_dims);
+    } else {
+      // Inline allocation.
+      new (&shape_.inline_dims) Dims();
+      shape_.inline_dims = other.shape_.inline_dims;
+    }
+    other.rank_ = 0;
+  }
   virtual ~base_array() { ClearDims(); }
 
   DType dtype() const { return dtype_; }
@@ -95,6 +113,35 @@ class SHORTFIN_API device_array final : public base_array {
     return device_array(
         storage::AllocateDevice(device, dtype.compute_dense_nd_size(shape)),
         shape, dtype);
+  }
+
+  class storage &storage() { return storage_; }
+  ScopedDevice &device() { return storage_.device(); }
+  std::string to_s() const;
+
+ private:
+  class storage storage_;
+};
+
+// View over some host allocation, registered for transfer to/from the
+// device.
+// These arrays can either be allocated directly
+class SHORTFIN_API host_array final : public base_array {
+ public:
+  host_array(class storage storage, std::span<const size_t> shape, DType dtype)
+      : base_array(shape, dtype), storage_(std::move(storage)) {}
+
+  static host_array allocate(ScopedDevice &device,
+                             std::span<const size_t> shape, DType dtype) {
+    return host_array(
+        storage::AllocateHost(device, dtype.compute_dense_nd_size(shape)),
+        shape, dtype);
+  }
+
+  // Allocates a host array for transfer to/from the given device array.
+  static host_array for_transfer(device_array &with_device_array) {
+    return allocate(with_device_array.storage().device(),
+                    with_device_array.shape(), with_device_array.dtype());
   }
 
   class storage &storage() { return storage_; }
