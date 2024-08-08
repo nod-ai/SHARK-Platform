@@ -21,7 +21,7 @@ def scope(lsys):
 
 
 def test_storage(scope):
-    storage = sfl.array.storage.allocate_host(scope.device(0), 32)
+    storage = sfl.array.storage.allocate_device(scope.device(0), 32)
     print(storage)
     ary = sfl.array.device_array(storage, [2, 4], sfl.array.float32)
     print(ary)

@@ -61,6 +61,12 @@ void BindArray(py::module_ &global_m) {
             return storage::AllocateHost(device, allocation_size);
           },
           py::arg("device"), py::arg("allocation_size"), py::keep_alive<0, 1>())
+      .def_static(
+          "allocate_device",
+          [](ScopedDevice &device, iree_device_size_t allocation_size) {
+            return storage::AllocateDevice(device, allocation_size);
+          },
+          py::arg("device"), py::arg("allocation_size"), py::keep_alive<0, 1>())
       .def("__repr__", &storage::to_s);
 
   py::class_<base_array>(m, "base_array")
