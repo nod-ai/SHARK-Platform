@@ -116,6 +116,7 @@ class SHORTFIN_API LocalDevice {
   std::string_view name() const { return address_.device_name; }
   int node_affinity() const { return node_affinity_; }
   bool node_locked() const { return node_locked_; }
+  iree_hal_device_t *hal_device() const { return hal_device_.get(); }
 
   std::string to_s() const;
 
@@ -156,11 +157,21 @@ class SHORTFIN_API DeviceAffinity {
     return true;
   }
 
-  DeviceAffinity &operator|=(LocalDevice *other) {
-    if (!AddDevice(other)) {
-      ThrowIllegalDeviceAffinity(device(), other);
+  DeviceAffinity &operator|=(DeviceAffinity other) {
+    if (!AddDevice(other.device())) {
+      ThrowIllegalDeviceAffinity(device(), other.device());
     }
+    queue_affinity_ |= other.queue_affinity();
     return *this;
+  }
+
+  DeviceAffinity operator|(DeviceAffinity other) const {
+    DeviceAffinity result = *this;
+    if (!result.AddDevice(other.device())) {
+      ThrowIllegalDeviceAffinity(device(), other.device());
+    }
+    result.queue_affinity_ |= other.queue_affinity();
+    return result;
   }
 
   LocalDevice *device() const { return device_; }

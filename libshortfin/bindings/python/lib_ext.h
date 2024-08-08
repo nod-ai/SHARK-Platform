@@ -15,6 +15,7 @@
 namespace shortfin::python {
 namespace py = nanobind;
 
+void BindArray(py::module_ &module);
 void BindLocalScope(py::module_ &module);
 void BindLocalSystem(py::module_ &module);
 void BindHostSystem(py::module_ &module);

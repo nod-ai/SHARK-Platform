@@ -9,8 +9,12 @@ shortfin_cc_component(
     shortfin_array
   HDRS
     array.h
+    api.h
+    dtype.h
+    storage.h
   SRCS
-    array.cc
+    dtype.cc
+    storage.cc
   COMPONENTS
     shortfin_local_system
     shortfin_support

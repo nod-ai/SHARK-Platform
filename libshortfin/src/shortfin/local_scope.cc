@@ -35,7 +35,7 @@ void LocalScope::AddDevice(std::string_view device_class, LocalDevice *device) {
   devices_.push_back(device);
 }
 
-LocalDevice *LocalScope::device(std::string_view name) const {
+LocalDevice *LocalScope::raw_device(std::string_view name) const {
   auto it = named_devices_.find(name);
   if (it == named_devices_.end()) [[unlikely]] {
     throw std::invalid_argument(
@@ -45,7 +45,7 @@ LocalDevice *LocalScope::device(std::string_view name) const {
   return it->second;
 }
 
-LocalDevice *LocalScope::device(int ordinal) const {
+LocalDevice *LocalScope::raw_device(int ordinal) const {
   if (ordinal < 0 || ordinal >= devices_.size()) {
     throw std::invalid_argument(
         fmt::format("Device ordinal ({}) out of bounds", ordinal));

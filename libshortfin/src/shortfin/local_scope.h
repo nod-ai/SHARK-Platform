@@ -15,6 +15,29 @@
 
 namespace shortfin {
 
+class LocalScope;
+
+// Wraps a LocalScope and a DeviceAffinity together. This is used in all
+// Scope based APIs as a short-hand for "device" as it contains everything
+// needed to do thing with some slice of device queues.
+class ScopedDevice {
+ public:
+  ScopedDevice(LocalScope &scope, DeviceAffinity affinity)
+      : scope_(scope), affinity_(affinity) {}
+  ScopedDevice(LocalScope &scope, LocalDevice *device)
+      : scope_(scope), affinity_(device) {}
+
+  LocalScope &scope() const { return scope_; }
+  DeviceAffinity affinity() const { return affinity_; }
+  LocalDevice *raw_device() const { return affinity_.device(); }
+
+  std::string to_s() const { return affinity().to_s(); }
+
+ private:
+  LocalScope &scope_;
+  DeviceAffinity affinity_;
+};
+
 // A logical scope of execution, consisting of participating devices,
 // resources, and timelines. Most interaction with the compute resources
 // is done on these instances.
@@ -43,15 +66,15 @@ class SHORTFIN_API LocalScope {
 
   // Device access.
   // Throws std::invalid_argument on lookup failure.
-  LocalDevice *device(std::string_view name) const;
+  LocalDevice *raw_device(std::string_view name) const;
   const std::unordered_map<std::string_view, LocalDevice *> named_devices()
       const {
     return named_devices_;
   }
-  LocalDevice *device(int index) const;
-  LocalDevice *device(LocalDevice *d) const { return d; }
+  LocalDevice *raw_device(int index) const;
+  LocalDevice *raw_device(LocalDevice *device) const { return device; }
+  const std::vector<LocalDevice *> &raw_devices() const { return devices_; }
   std::vector<std::string_view> device_names() const;
-  const std::vector<LocalDevice *> &devices() const { return devices_; }
 
   // Variadic helper for making a DeviceAffinity from any of:
   //  * Explicit LocalDevice*
@@ -60,10 +83,14 @@ class SHORTFIN_API LocalScope {
   // If at any point during accumulation, the DeviceAffinity would be invalid,
   // then a std::invalid_argument exception is thrown. Any failure to resolve
   // a name or index will also throw a std::invalid_argument.
-  DeviceAffinity device_affinity() { return DeviceAffinity(); }
+  ScopedDevice device() { return ScopedDevice(*this, DeviceAffinity()); }
   template <typename T, typename... Args>
-  DeviceAffinity device_affinity(T first, Args... args) {
-    return device_affinity(args...) | DeviceAffinity(device(first));
+  ScopedDevice device(T first, Args... args) {
+    return ScopedDevice(
+        *this, device(args...).affinity() | DeviceAffinity(raw_device(first)));
+  }
+  ScopedDevice device(LocalDevice *d) {
+    return ScopedDevice(*this, DeviceAffinity(d));
   }
 
  private:
