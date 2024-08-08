@@ -23,7 +23,7 @@ class RMSNormLayer(ThetaLayer):
         theta: Theta,
         *,
         weight_name: str = "weight",
-        epsilon: float = 1e-6,
+        epsilon: float = 1e-5,
         dtype: torch.dtype = torch.float32,
     ):
         super().__init__(theta)
