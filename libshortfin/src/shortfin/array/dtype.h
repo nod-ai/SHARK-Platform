@@ -110,6 +110,8 @@ class SHORTFIN_API DType {
   // pre-condition
   iree_device_size_t compute_dense_nd_size(std::span<const size_t> dims);
 
+  bool operator==(const DType &other) const { return et_ == other.et_; }
+
  private:
   DType(iree_hal_element_type_t et, std::string_view name)
       : et_(et), name_(name) {}

@@ -64,10 +64,12 @@ void BindLocalSystem(py::module_ &m) {
       .def("name", &LocalDevice::name)
       .def("node_affinity", &LocalDevice::node_affinity)
       .def("node_locked", &LocalDevice::node_locked)
+      .def(py::self == py::self)
       .def("__repr__", &LocalDevice::to_s);
   py::class_<DeviceAffinity>(m, "DeviceAffinity")
       .def(py::init<>())
       .def(py::init<LocalDevice *>())
+      .def(py::self == py::self)
       .def("add", &DeviceAffinity::AddDevice)
       .def("__add__", &DeviceAffinity::AddDevice)
       .def("__repr__", &DeviceAffinity::to_s);
@@ -109,6 +111,7 @@ void BindLocalScope(py::module_ &m) {
                    py::rv_policy::reference_internal)
       .def_prop_ro("raw_device", &ScopedDevice::raw_device,
                    py::rv_policy::reference_internal)
+      .def(py::self == py::self)
       .def("__repr__", &ScopedDevice::to_s);
 
   py::class_<DevicesSet>(m, "_LocalScopeDevicesSet")

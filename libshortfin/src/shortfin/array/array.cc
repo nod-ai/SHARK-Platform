@@ -14,7 +14,7 @@ namespace shortfin::array {
 std::string device_array::to_s() const {
   return fmt::format("device_array([{}], dtype='{}', {})",
                      fmt::join(shape(), ", "), dtype().name(),
-                     device_storage_.device().to_s());
+                     storage_.device().to_s());
 }
 
 }  // namespace shortfin::array

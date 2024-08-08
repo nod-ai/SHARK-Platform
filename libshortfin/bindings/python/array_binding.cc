@@ -24,6 +24,7 @@ void BindArray(py::module_ &global_m) {
       .def_prop_ro("is_byte_aligned", &DType::is_byte_aligned)
       .def_prop_ro("dense_byte_count", &DType::dense_byte_count)
       .def("is_integer_bitwidth", &DType::is_integer_bitwidth)
+      .def(py::self == py::self)
       .def("__repr__", &DType::name);
 
   m.attr("opaque8") = DType::opaque8();
@@ -74,7 +75,10 @@ void BindArray(py::module_ &global_m) {
              new (new_self)
                  device_array(device_array::allocate(device, shape, dtype));
            })
-      .def_static("allocate", &device_array::allocate)
+      .def_prop_ro("device", &device_array::device,
+                   py::rv_policy::reference_internal)
+      .def_prop_ro("storage", &device_array::storage,
+                   py::rv_policy::reference_internal)
       .def("__repr__", &device_array::to_s);
 }
 

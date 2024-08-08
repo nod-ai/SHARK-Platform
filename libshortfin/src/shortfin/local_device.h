@@ -120,6 +120,11 @@ class SHORTFIN_API LocalDevice {
 
   std::string to_s() const;
 
+  bool operator==(const LocalDevice &other) const {
+    // Identity is equality.
+    return this == &other;
+  }
+
  private:
   LocalDeviceAddress address_;
   iree_hal_device_ptr hal_device_;
@@ -178,6 +183,10 @@ class SHORTFIN_API DeviceAffinity {
   iree_hal_queue_affinity_t queue_affinity() const { return queue_affinity_; }
 
   std::string to_s() const;
+
+  bool operator==(const DeviceAffinity &other) const {
+    return device_ == other.device_ && queue_affinity_ == other.queue_affinity_;
+  }
 
  private:
   static void ThrowIllegalDeviceAffinity(LocalDevice *first,

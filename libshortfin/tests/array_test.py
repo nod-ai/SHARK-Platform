@@ -21,13 +21,19 @@ def scope(lsys):
 
 
 def test_storage(scope):
-    storage = sfl.array.storage.allocate_host(scope.device("cpu0"), 32)
+    storage = sfl.array.storage.allocate_host(scope.device(0), 32)
     print(storage)
     ary = sfl.array.device_array(storage, [2, 4], sfl.array.float32)
     print(ary)
     print(ary.shape)
+    assert ary.shape == [2, 4]
+    assert ary.dtype == sfl.array.float32
+    assert ary.device == scope.device(0)
 
 
 def test_device_array(scope):
     ary1 = sfl.array.device_array(scope.device(0), [32, 1, 4], sfl.array.float32)
     print(ary1)
+    assert ary1.shape == [32, 1, 4]
+    assert ary1.dtype == sfl.array.float32
+    assert scope.device(0) == ary1.device

@@ -86,9 +86,9 @@ class SHORTFIN_API base_array {
 // View over some device allocation, modeled as a dense C-order nd array.
 class SHORTFIN_API device_array final : public base_array {
  public:
-  device_array(storage device_storage, std::span<const size_t> shape,
+  device_array(class storage storage, std::span<const size_t> shape,
                DType dtype)
-      : base_array(shape, dtype), device_storage_(std::move(device_storage)) {}
+      : base_array(shape, dtype), storage_(std::move(storage)) {}
 
   static device_array allocate(ScopedDevice &device,
                                std::span<const size_t> shape, DType dtype) {
@@ -97,10 +97,12 @@ class SHORTFIN_API device_array final : public base_array {
         shape, dtype);
   }
 
+  class storage &storage() { return storage_; }
+  ScopedDevice &device() { return storage_.device(); }
   std::string to_s() const;
 
  private:
-  storage device_storage_;
+  class storage storage_;
 };
 
 }  // namespace shortfin::array

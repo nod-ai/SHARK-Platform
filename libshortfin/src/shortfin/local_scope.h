@@ -33,6 +33,10 @@ class ScopedDevice {
 
   std::string to_s() const { return affinity().to_s(); }
 
+  bool operator==(const ScopedDevice &other) const {
+    return (&scope_ == &other.scope_) && affinity_ == other.affinity_;
+  }
+
  private:
   LocalScope &scope_;
   DeviceAffinity affinity_;
