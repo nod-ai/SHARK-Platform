@@ -196,7 +196,7 @@ addresses with two SIMDs accessing LDS concurrently. Next, each bank accesses a
 DWORD per cycle, until the LDS access completes.
 
 > [!TIP]
-> LDS access is 'fast' in only two cases: when all threads access the same
+> LDS access is 'fast' in only two cases: when threads access the same
 > address and the value gets broadcast, or when each thread accesses a
 > unique bank. Anything else results in **LDS bank conflicts**.
 
