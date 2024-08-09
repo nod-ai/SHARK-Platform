@@ -4,7 +4,7 @@ Author: Jakub Kuderski @kuhar
 
 Date: 2024-06-24
 
-Last Update: 2024-06-25
+Last Update: 2024-08-08
 
 ## Introduction
 
@@ -173,23 +173,30 @@ SIMD.
 > `amgpu-waves-per-eu` llvm function attribute:
 > https://llvm.org/docs/AMDGPUUsage.html#llvm-ir-attributes.
 
+> [!TIP]
+> In HIP, to utilize more than the default maximum number of registers (128)
+> you need to specify the workgroup size with the
+> `__launch_bounds__(MAX_THREADS_PER_BLOCK, MIN_WARPS_PER_EXECUTION_UNIT)`
+> attribute.
+
 ### Workgroup Memory (LDS)
 
 On GFX9, workgroup / shared memory is not the same as L1 cache and its size
-cannot be configured. A CU has 64 kB of workgroup memory (the same as the VGPR
-register file size!).
+cannot be configured. An MI300 CU has 64 kB of workgroup memory (the same as the
+VGPR register file size!).
 
 LDS is split into 32 banks of DWORD-sized (4 B) entries. For example, a 128 B
 contiguous chunk of memory spans all banks. The bank index of an accessed byte
 is calculated with `(address / 4) % 32`.
 
-When LDS is accessed, the first clock cycle is spent on pushing the addresses
+When LDS is accessed, the first clock cycles are spent on pushing the addresses
 to the hardware unit called *crossbar*, which implements swizzling and
-broadcasting. Next, each bank accesses a DWORD per cycle, until the LDS access
-completes.
+broadcasting. LDS accepts up to 16 addresses per SIMD per cycle, with up to 32
+addresses with two SIMDs accessing LDS concurrently. Next, each bank accesses a
+DWORD per cycle, until the LDS access completes.
 
 > [!TIP]
-> LDS access is 'fast' in only two cases: when all threads access the same
+> LDS access is 'fast' in only two cases: when threads access the same
 > address and the value gets broadcast, or when each thread accesses a
 > unique bank. Anything else results in **LDS bank conflicts**.
 
@@ -201,17 +208,29 @@ completes.
 #### Avoiding LDS Bank Conflicts
 
 With the number of LDS banks (32) not matching the subgroup size (64) nor the
-SIMD size (16), it's not immediately obvious when bank conflicts arise.
+SIMD size (16), it is not immediately obvious when bank conflicts arise.
 
-On the hardware level, LDS services request from either pair of neighboring
-SIMDs per cycle. However, because it's very hard to account for what code may
-be executing on the neighboring SIMD, we developed a mental model that analyzes
-execution of a single subgroup only. We determine the possible rate of bank
-conflicts by looking at banks accessed by each group of 16 adjacent threads
-executing on the same SIMD.
+LDS is able to access 32 banks per cycle. Depending on the exact LDS instruction
+used (read/write of `b32` vs. `b64` vs. `b128`), different number of threads
+within the same subgroup access LDS banks. The size of this group of threads is
+determined by the number of DWORDs accessed by each thread. A `b32` access
+results in two groups of threads: `T0`-`T31` and `T32`-`T63`, while `b128`
+results in 8 groups of threads: `T0`-`T7`, `T8`-`T15`, ..., `T56`-`T63`. Both
+amount to 32 VGPRs in total being accessed in each phase.
+
+When more than one thread within a group currently being handled attempts to
+access the same bank, a bank conflict occurs. The conflict may be over one or
+more banks, depending on the addresses accessed. The higher the number of
+threads that participate in a conflict over the same bank, the higher the LDS
+access latency.
+
+Bank conflicts are resolved by picking the first group of threads (by thread ID)
+that do not conflict, and then this is repeated for leftover threads. In the
+worst case where all threads access the same bank, this can turn into a *waterfall
+loop* (only one thread gets to access LDS per cycle).
 
 For example, consider the following contiguous workgroup memory access patterns,
-where `T<n>` denotes thread executing on lane `n`:
+where `T<n>` denotes thread with ID `n`:
 
 1. 64 B, one byte per thread:
    ```
@@ -222,6 +241,8 @@ where `T<n>` denotes thread executing on lane `n`:
    T4: Addr 4, Bank 1
    ...
    T15: Addr 15, Bank 3
+   ...
+   T31: Addr 31, Bank 7
    ```
    Bank conflict rate: 4x ==> bad.
 
@@ -233,35 +254,48 @@ where `T<n>` denotes thread executing on lane `n`:
    T3: Addr 6, Bank 1
    ...
    T15: Addr 30, Bank 15
+   ...
+   T31: Addr 62, Bank 31
    ```
    Bank conflict rate: 2x ==> bad.
 
-3. 256 B, 4 bytes per thread:
+3. 256 B, 4 bytes per thread (`b32`):
    ```
    T0: Addr 0, Bank 0
    T1: Addr 4, Bank 1
    ...
    T15: Addr 60, Bank 15
-   ```
-   No bank conflicts ==> good.
-
-4. 512 B, 8 bytes per thread:
-   ```
-   T0: Addr 0, Bank 0
-   T1: Addr 8, Bank 2
    ...
-   T15: Addr 120, Bank 30
+   T31: Addr 62, Bank 31
    ```
    No bank conflicts ==> good.
 
-Note that the above only shows accesses to the first DWORDs across the first
-group of 16 threads. The remaining threads and DWORDs would follow.
+4. 512 B, 8 bytes per thread (`b64`):
+   ```
+   T0: Addr 0, Banks 0, 1
+   T1: Addr 8, Banks 2, 3
+   ...
+   T15: Addr 120, Banks 30, 31
+   ```
+   No bank conflicts ==> good.
+
+5. 1024 B, 16 bytes per thread (`b128`):
+   ```
+   T0: Addr 0, Banks 0, 1, 2, 3
+   T1: Addr 16, Banks 4, 5, 6, 7
+   ...
+   T7: Addr 112, Banks 28, 29, 30, 31
+   ```
+   No bank conflicts ==> good.
+
+
+Note that the above only shows accesses to the first group of threads. The
+remaining threads and DWORDs would follow.
 
 > [!TIP]
-> It's best to use 4 or 8 byte-wide LDS instructions (e.g.,
-> `ds_read_b64`, `ds_read_b128`, or `ds_read2_b64` for two 4 B values at unique
-> addresses). When accessing 8 B element types, it may help to pad each row with
-> 4 B of data or interleave accesses to each set of 4 B halves.
+> It is best to use wide 16, 8, or 4 byte-wide LDS instructions (e.g.,
+> `ds_read_b128`, or `ds_read2_b64` for two 4 B values at unique
+> addresses, `ds_read_b64`, `ds_read_b32`).
 
 ### Global Memory
 
