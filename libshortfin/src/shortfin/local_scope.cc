@@ -11,20 +11,28 @@
 
 namespace shortfin {
 
+// -------------------------------------------------------------------------- //
+// LocalScope
+// -------------------------------------------------------------------------- //
+
 LocalScope::LocalScope(
-    std::span<std::pair<std::string_view, LocalDevice *>> devices) {
+    std::span<const std::pair<std::string_view, LocalDevice *>> devices) {
   for (auto &it : devices) {
     AddDevice(it.first, it.second);
   }
+  Initialize();
 }
 
-LocalScope::LocalScope(std::span<LocalDevice *> devices) {
+LocalScope::LocalScope(std::span<LocalDevice *const> devices) {
   for (auto *device : devices) {
     AddDevice(device->address().logical_device_class, device);
   }
+  Initialize();
 }
 
 LocalScope::~LocalScope() = default;
+
+void LocalScope::Initialize() { scheduler_.Initialize(devices_); }
 
 void LocalScope::AddDevice(std::string_view device_class, LocalDevice *device) {
   device_class = interner_.intern(device_class);
@@ -60,6 +68,32 @@ std::vector<std::string_view> LocalScope::device_names() const {
     names.push_back(it.first);
   }
   return names;
+}
+
+// -------------------------------------------------------------------------- //
+// ScopedScheduler
+// -------------------------------------------------------------------------- //
+
+ScopedScheduler::Timeline::Timeline(iree_hal_device_t *device) {
+  SHORTFIN_THROW_IF_ERROR(
+      iree_hal_semaphore_create(device, now_, sem_.for_output()));
+}
+
+ScopedScheduler::Account::Account(iree_hal_device_t *hal_device)
+    : hal_device_(hal_device),
+      tx_timeline_(hal_device),
+      ex_timeline_(hal_device) {}
+
+void ScopedScheduler::Initialize(std::span<LocalDevice *const> devices) {
+  for (LocalDevice *device : devices) {
+    if (accounts_.find(device->hal_device()) == accounts_.end()) {
+      // Already initialized.
+      continue;
+    }
+    auto [it, _] = accounts_.emplace(
+        std::make_pair(device->hal_device(), Account(device->hal_device())));
+    semaphore_count_ += it->second.semaphore_count();
+  }
 }
 
 }  // namespace shortfin

@@ -42,6 +42,40 @@ class ScopedDevice {
   DeviceAffinity affinity_;
 };
 
+// Handles scheduling state for a scope.
+class SHORTFIN_API ScopedScheduler {
+ public:
+  class Timeline {
+   public:
+    Timeline(iree_hal_device_t *device);
+
+   private:
+    iree_hal_semaphore_ptr sem_;
+    uint64_t now_ = 0ull;
+  };
+
+  // Accounting structure for a single iree_hal_device_t (note that multiple
+  // LocalDevice instances may map to a single HAL device).
+  class Account {
+   public:
+    Account(iree_hal_device_t *hal_device);
+    iree_hal_device_t *hal_device() { return hal_device_; }
+    size_t semaphore_count() const { return 2; }
+
+   private:
+    iree_hal_device_t *hal_device_ = nullptr;
+    Timeline tx_timeline_;  // Transfer timeline
+    Timeline ex_timeline_;  // Exec timeline
+  };
+
+ private:
+  void Initialize(std::span<LocalDevice *const> devices);
+  // Each distinct hal device gets an account.
+  std::unordered_map<iree_hal_device_t *, Account> accounts_;
+  size_t semaphore_count_ = 0;
+  friend class LocalScope;
+};
+
 // A logical scope of execution, consisting of participating devices,
 // resources, and timelines. Most interaction with the compute resources
 // is done on these instances.
@@ -61,9 +95,10 @@ class ScopedDevice {
 class SHORTFIN_API LocalScope {
  public:
   // Initialize with devices using logical_device_class as the device class.
-  LocalScope(std::span<LocalDevice *> devices);
+  LocalScope(std::span<LocalDevice *const> devices);
   // Initialize with devices with custom device class names.
-  LocalScope(std::span<std::pair<std::string_view, LocalDevice *>> devices);
+  LocalScope(
+      std::span<const std::pair<std::string_view, LocalDevice *>> devices);
   LocalScope(const LocalScope &) = delete;
   // Ensure polymorphic.
   virtual ~LocalScope();
@@ -99,6 +134,7 @@ class SHORTFIN_API LocalScope {
 
  private:
   void AddDevice(std::string_view device_class, LocalDevice *device);
+  void Initialize();  // Called after all devices are added.
 
   string_interner interner_;
 
@@ -108,6 +144,7 @@ class SHORTFIN_API LocalScope {
   std::vector<LocalDevice *> devices_;
   // Map of `<device_class><index>` to LocalDevice.
   std::unordered_map<std::string_view, LocalDevice *> named_devices_;
+  ScopedScheduler scheduler_;
 };
 
 }  // namespace shortfin

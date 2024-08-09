@@ -7,6 +7,7 @@
 #ifndef SHORTFIN_ARRAY_ARRAY_H
 #define SHORTFIN_ARRAY_ARRAY_H
 
+#include <algorithm>
 #include <array>
 #include <memory>
 #include <string_view>
@@ -125,7 +126,8 @@ class SHORTFIN_API device_array final : public base_array {
 
 // View over some host allocation, registered for transfer to/from the
 // device.
-// These arrays can either be allocated directly
+// These arrays can either be allocated directly or ::for_transfer with
+// a corresponding device_array.
 class SHORTFIN_API host_array final : public base_array {
  public:
   host_array(class storage storage, std::span<const size_t> shape, DType dtype)

@@ -47,6 +47,15 @@ struct iree_hal_driver_ptr_helper {
   static void release(iree_hal_driver_t *obj) { iree_hal_driver_release(obj); }
 };
 
+struct iree_hal_semaphore_ptr_helper {
+  static void retain(iree_hal_semaphore_t *obj) {
+    iree_hal_semaphore_retain(obj);
+  }
+  static void release(iree_hal_semaphore_t *obj) {
+    iree_hal_semaphore_release(obj);
+  }
+};
+
 struct iree_vm_instance_ptr_helper {
   static void retain(iree_vm_instance_t *obj) { iree_vm_instance_retain(obj); }
   static void release(iree_vm_instance_t *obj) {
@@ -121,6 +130,9 @@ using iree_hal_driver_ptr =
 using iree_hal_device_ptr =
     iree_object_ptr<iree_hal_device_t,
                     iree_type_detail::iree_hal_device_ptr_helper>;
+using iree_hal_semaphore_ptr =
+    iree_object_ptr<iree_hal_semaphore_t,
+                    iree_type_detail::iree_hal_semaphore_ptr_helper>;
 using iree_vm_instance_ptr =
     iree_object_ptr<iree_vm_instance_t,
                     iree_type_detail::iree_vm_instance_ptr_helper>;
