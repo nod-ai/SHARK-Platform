@@ -7,6 +7,7 @@
 #ifndef SHORTFIN_LOCAL_SCOPE_H
 #define SHORTFIN_LOCAL_SCOPE_H
 
+#include <functional>
 #include <span>
 #include <unordered_map>
 
@@ -45,34 +46,164 @@ class ScopedDevice {
 // Handles scheduling state for a scope.
 class SHORTFIN_API ScopedScheduler {
  public:
-  class Timeline {
-   public:
-    Timeline(iree_hal_device_t *device);
+  class SHORTFIN_API Account;
 
-   private:
-    iree_hal_semaphore_ptr sem_;
-    uint64_t now_ = 0ull;
+  // Transactions are accumulated into a command buffer by type and in
+  // auto-flush mode, the command buffer is submitted upon a change of type.
+  enum class TransactionType {
+    NONE = 0,
+    // Non-aliasing transfer. All transfers submitted in a sequence must not
+    // alias each other. If there is a dependency, then they must be flushed
+    // before adding an alising transfer.
+    TRANSFER = 1,
+    // Standalone dispatch that will be enqueued in an individual dispatch.
+    SEQUENTIAL_DISPATCH = 2,
+    // Parallelizable dispatch that can be enqueued with other parallel
+    // dispatches.
+    PARALLEL_DISPATCH = 3,
   };
 
-  // Accounting structure for a single iree_hal_device_t (note that multiple
-  // LocalDevice instances may map to a single HAL device).
-  class Account {
+  enum class TransactionMode {
+    // All pending command buffers are flushed when the transaction type
+    // changes.
+    AUTO_FLUSH = 0,
+    // Pending command buffers are not flushed until explicitly set to do so.
+    EXPLICIT_FLUSH = 1,
+  };
+
+  // Control object for a resource that is tracked on the timeline. Each such
+  // resource is associated with a single Account. In the case of a resource
+  // that is shared across device queues, a consistent account will be chosen
+  // as primary (typically corresponding to the lowest numbered queue). This
+  // object tracks two things about the resource:
+  //   1. Ready: Idle timepoint of the most recent affecting mutation. Since any
+  //      such mutation mutation must have been enqueued on a single Account,
+  //      we only need to track the timepoint here (against the account's sem).
+  //   2. Idle: Fence joined to all timepoints accessing the resource (read and
+  //      write). At any given time, this represents the point at which the
+  //      resource has no further pending uses.
+  // Since TimelineResources are shared (i.e. across subspan storage, etc),
+  // they are modeled as reference counted (using non atomics, since this is
+  // "scoped" same thread access). They must only be held in a context that
+  // is keeping the containing LocalScope alive.
+  class SHORTFIN_API TimelineResource {
    public:
-    Account(iree_hal_device_t *hal_device);
+    class SHORTFIN_API Ref {
+     public:
+      Ref() : res_(nullptr) {}
+      explicit Ref(TimelineResource *res) : res_(res) { res_->Retain(); }
+      Ref(const Ref &other) : res_(other.res_) { res_->Retain(); }
+      void operator=(const Ref &other) = delete;
+      Ref(Ref &&other) : res_(other.res_) { other.res_ = nullptr; }
+      ~Ref() {
+        if (res_) res_->Release();
+      }
+      TimelineResource &operator->() { return *res_; }
+
+     private:
+      TimelineResource *res_;
+    };
+    TimelineResource(TimelineResource &other) = delete;
+
+    Account &account() { return account_; }
+    uint64_t &ready_timepoint() { return ready_timepoint_; }
+    iree_hal_fence_t *idle_fence() { return idle_fence_.get(); }
+
+   private:
+    TimelineResource(Account &account) : account_(account) {}
+    static Ref New(Account &account) {
+      return Ref(new TimelineResource(account));
+    }
+    void Retain() { refcnt_++; }
+    void Release() {
+      if (--refcnt_ == 0) delete this;
+    }
+    uint64_t ready_timepoint_ = 0;
+    int refcnt_ = 0;
+    Account &account_;
+    iree_hal_fence_ptr idle_fence_;
+    friend class Account;
+  };
+
+  // Accounting structure for a single logical device (LocalDevice*), which
+  // means that each addressable queue gets its own Account.
+  class SHORTFIN_API Account {
+   public:
+    Account(LocalDevice *device);
+    LocalDevice *device() const { return device_; }
     iree_hal_device_t *hal_device() { return hal_device_; }
     size_t semaphore_count() const { return 2; }
 
+    // Creates a new TimelineResource associated with this account.
+    TimelineResource::Ref NewTimelineResource() {
+      return TimelineResource::New(*this);
+    }
+
+    // Accesses the active command buffer. This will only be non-null if a
+    // pending transaction has been set up (i.e. via AppendCommandBuffer).
+    iree_hal_command_buffer_t *active_command_buffer() {
+      return active_command_buffer_.get();
+    }
+
    private:
-    iree_hal_device_t *hal_device_ = nullptr;
-    Timeline tx_timeline_;  // Transfer timeline
-    Timeline ex_timeline_;  // Exec timeline
+    void Initialize();
+    LocalDevice *device_;
+    iree_hal_device_t *hal_device_;
+    TransactionType active_tx_type_ = TransactionType::NONE;
+    iree_hal_command_buffer_ptr active_command_buffer_;
+    iree_hal_queue_affinity_t active_queue_affinity_bits_;
+
+    // Timepoint at which this device is considered idle, inclusive of any
+    // active_command_buffer that has not yet been submitted. This means
+    // that at any time, a wait on this timepoint will produce the expected
+    // temporal sequencing, but it may represent a point in the future where
+    // the work needed to reach it has not been submitted yet.
+    // This means that it has two interpretations based on the state of
+    // active_command_buffer_:
+    //   - nullptr:  All work has been flushed to reach this timepoint.
+    //   - !nullptr: When flushed, the active command buffer will be submitted
+    //     to signal this timepoint, fulfilling any waiters.
+    // Whenever we transition active_command_buffer_ from nullptr,
+    // idle_timepoint_ *must* be incremented by at least 1 (or otherwise
+    // an eventual submission would submit a duplicate timepoint). We maintain
+    // this invariant by incrementing the global timepoint by 1 for every
+    // insertion of a command buffer row(s) and set the idle_timepoint_ to
+    // this new value. At most, this results in wasted timepoints (which are
+    // free), and it eliminates the hazzard.
+    uint64_t idle_timepoint_ = 0;
+    iree_hal_semaphore_ptr sem_;
+    friend class ScopedScheduler;
   };
+
+  void set_transaction_mode(TransactionMode tx_mode);
+  TransactionMode transaction_mode() const { return tx_mode_; }
+
+  // Given a ScopedDevice (which may logically bind to multiple queues),
+  // returns a deterministic Account associated with the device that can be
+  // used for accounting and scheduling.
+  Account &GetDefaultAccount(ScopedDevice &device);
+
+  // Sets up |device| for appending commands to a command buffer, invoking
+  // callback to complete the mutation. Depending on the current transaction
+  // mode and tx_type, this may involve flushing the current command buffer.
+  // This will always allocate a new timepoint from the global timeline and
+  // increment the elected device account's idle timepoint. It will also
+  // set any affinity bits on the pending submission.
+  void AppendCommandBuffer(ScopedDevice &device, TransactionType tx_type,
+                           std::function<void(Account &)> callback);
 
  private:
   void Initialize(std::span<LocalDevice *const> devices);
   // Each distinct hal device gets an account.
-  std::unordered_map<iree_hal_device_t *, Account> accounts_;
+  std::vector<Account> accounts_;
+  // Accounts indexed by LocalDeviceAddress::device_id().
+  std::unordered_map<uint64_t, Account *> accounts_by_device_id_;
   size_t semaphore_count_ = 0;
+
+  // Transaction management.
+  TransactionMode tx_mode_ = TransactionMode::AUTO_FLUSH;
+  TransactionType current_tx_type_ = TransactionType::NONE;
+
   friend class LocalScope;
 };
 
@@ -130,6 +261,11 @@ class SHORTFIN_API LocalScope {
   }
   ScopedDevice device(LocalDevice *d) {
     return ScopedDevice(*this, DeviceAffinity(d));
+  }
+  ScopedScheduler &scheduler() { return scheduler_; }
+  ScopedScheduler::TimelineResource::Ref NewTimelineResource(
+      ScopedDevice &device) {
+    return scheduler().GetDefaultAccount(device).NewTimelineResource();
   }
 
  private:

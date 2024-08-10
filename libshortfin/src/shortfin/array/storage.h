@@ -35,6 +35,20 @@ class SHORTFIN_API storage {
   static storage AllocateHost(ScopedDevice &device,
                               iree_device_size_t allocation_size);
 
+  // Creates a subspan view of the current storage given a byte offset and
+  // length. The returned storage shares the underlying allocation and
+  // scheduling control block.
+  storage Subspan(iree_device_size_t byte_offset,
+                  iree_device_size_t byte_length);
+
+  // Enqueues a fill of the storage with an arbitrary pattern of the given
+  // size. The pattern size must be 1, 2, or 4.
+  void Fill(const void *pattern, iree_host_size_t pattern_length);
+
+  // Performs either a d2h, h2d or d2d transfer from a source storage to this
+  // storage.
+  void CopyFrom(storage &source_storage);
+
   iree_device_size_t byte_length() const {
     return iree_hal_buffer_byte_length(buffer_.get());
   }
@@ -42,10 +56,14 @@ class SHORTFIN_API storage {
   std::string to_s() const;
 
  private:
-  storage(ScopedDevice device, iree_hal_buffer_ptr buffer)
-      : buffer_(std::move(buffer)), device_(device) {}
+  storage(ScopedDevice device, iree_hal_buffer_ptr buffer,
+          ScopedScheduler::TimelineResource::Ref timeline_resource)
+      : buffer_(std::move(buffer)),
+        device_(device),
+        timeline_resource_(std::move(timeline_resource)) {}
   iree_hal_buffer_ptr buffer_;
   ScopedDevice device_;
+  ScopedScheduler::TimelineResource::Ref timeline_resource_;
 };
 
 }  // namespace shortfin::array

@@ -17,8 +17,8 @@ namespace shortfin {
 
 LocalDeviceAddress::LocalDeviceAddress(
     std::string_view system_device_class, std::string_view logical_device_class,
-    std::string_view hal_driver_prefix, iree_host_size_t instance_ordinal,
-    iree_host_size_t queue_ordinal,
+    std::string_view hal_driver_prefix, uint32_t instance_ordinal,
+    uint32_t queue_ordinal,
     std::vector<iree_host_size_t> instance_topology_address)
     : system_device_class(std::move(system_device_class)),
       logical_device_class(std::move(logical_device_class)),

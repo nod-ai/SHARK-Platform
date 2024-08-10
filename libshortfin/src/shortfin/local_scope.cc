@@ -9,6 +9,8 @@
 #include <fmt/core.h>
 #include <fmt/ranges.h>
 
+#include "shortfin/support/logging.h"
+
 namespace shortfin {
 
 // -------------------------------------------------------------------------- //
@@ -71,28 +73,77 @@ std::vector<std::string_view> LocalScope::device_names() const {
 }
 
 // -------------------------------------------------------------------------- //
+// ScopedScheduler::Account
+// -------------------------------------------------------------------------- //
+
+ScopedScheduler::Account::Account(LocalDevice *device)
+    : device_(device), hal_device_(device->hal_device()) {}
+
+void ScopedScheduler::Account::Initialize() {
+  SHORTFIN_THROW_IF_ERROR(iree_hal_semaphore_create(
+      hal_device(), idle_timepoint_, sem_.for_output()));
+}
+
+// -------------------------------------------------------------------------- //
+// ScopedScheduler::TimelineResource
+// -------------------------------------------------------------------------- //
+
+// -------------------------------------------------------------------------- //
 // ScopedScheduler
 // -------------------------------------------------------------------------- //
 
-ScopedScheduler::Timeline::Timeline(iree_hal_device_t *device) {
-  SHORTFIN_THROW_IF_ERROR(
-      iree_hal_semaphore_create(device, now_, sem_.for_output()));
-}
-
-ScopedScheduler::Account::Account(iree_hal_device_t *hal_device)
-    : hal_device_(hal_device),
-      tx_timeline_(hal_device),
-      ex_timeline_(hal_device) {}
-
 void ScopedScheduler::Initialize(std::span<LocalDevice *const> devices) {
   for (LocalDevice *device : devices) {
-    if (accounts_.find(device->hal_device()) == accounts_.end()) {
-      // Already initialized.
-      continue;
+    accounts_.emplace_back(device);
+  }
+
+  for (Account &account : accounts_) {
+    auto [it, inserted] = accounts_by_device_id_.emplace(
+        std::make_pair(account.device()->address().device_id(), &account));
+    if (!inserted) {
+      throw std::logic_error("Duplicate device in ScopedScheduler");
     }
-    auto [it, _] = accounts_.emplace(
-        std::make_pair(device->hal_device(), Account(device->hal_device())));
-    semaphore_count_ += it->second.semaphore_count();
+    account.Initialize();
+    semaphore_count_ += account.semaphore_count();
+  }
+}
+
+ScopedScheduler::Account &ScopedScheduler::GetDefaultAccount(
+    ScopedDevice &device) {
+  auto queue_ordinal = device.affinity().lowest_queue_ordinal();
+  auto device_id =
+      device.raw_device()->address().device_id_for_queue(queue_ordinal);
+  auto it = accounts_by_device_id_.find(device_id);
+  if (it == accounts_by_device_id_.end()) [[unlikely]] {
+    throw std::logic_error(
+        fmt::format("Topology check failed: could not find scheduling account "
+                    "for device id {:x}",
+                    device_id));
+  }
+  return *it->second;
+}
+
+void ScopedScheduler::AppendCommandBuffer(
+    ScopedDevice &device, TransactionType tx_type,
+    std::function<void(Account &)> callback) {
+  Account &account = GetDefaultAccount(device);
+  auto needed_affinity_bits = device.affinity().queue_affinity();
+
+  if (account.active_tx_type_ != TransactionType::NONE) {
+    // Potentially auto flush.
+    bool needs_tx_type_flush = (tx_mode_ == TransactionMode::AUTO_FLUSH &&
+                                account.active_tx_type_ != tx_type);
+    bool needs_affinity_flush =
+        needed_affinity_bits != account.active_queue_affinity_bits_;
+    if (needs_tx_type_flush || needs_affinity_flush) {
+      logging::info("Auto flush device {:x}",
+                    account.device_->address().device_id());
+    }
+
+    // TODO: Does this need to be a flush of all devices? Or should the
+    // transaction type be carried at the scheduler level. We may need to
+    // do this at the scheduler level because there could in theory be causality
+    // cycles across devices, I think?
   }
 }
 

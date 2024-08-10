@@ -37,6 +37,15 @@ struct iree_hal_buffer_ptr_helper {
   static void release(iree_hal_buffer_t *obj) { iree_hal_buffer_release(obj); }
 };
 
+struct iree_hal_command_buffer_ptr_helper {
+  static void retain(iree_hal_command_buffer_t *obj) {
+    iree_hal_command_buffer_retain(obj);
+  }
+  static void release(iree_hal_command_buffer_t *obj) {
+    iree_hal_command_buffer_release(obj);
+  }
+};
+
 struct iree_hal_device_ptr_helper {
   static void retain(iree_hal_device_t *obj) { iree_hal_device_retain(obj); }
   static void release(iree_hal_device_t *obj) { iree_hal_device_release(obj); }
@@ -45,6 +54,11 @@ struct iree_hal_device_ptr_helper {
 struct iree_hal_driver_ptr_helper {
   static void retain(iree_hal_driver_t *obj) { iree_hal_driver_retain(obj); }
   static void release(iree_hal_driver_t *obj) { iree_hal_driver_release(obj); }
+};
+
+struct iree_hal_fence_ptr_helper {
+  static void retain(iree_hal_fence_t *obj) { iree_hal_fence_retain(obj); }
+  static void release(iree_hal_fence_t *obj) { iree_hal_fence_release(obj); }
 };
 
 struct iree_hal_semaphore_ptr_helper {
@@ -124,12 +138,18 @@ class iree_object_ptr {
 using iree_hal_buffer_ptr =
     iree_object_ptr<iree_hal_buffer_t,
                     iree_type_detail::iree_hal_buffer_ptr_helper>;
+using iree_hal_command_buffer_ptr =
+    iree_object_ptr<iree_hal_command_buffer_t,
+                    iree_type_detail::iree_hal_command_buffer_ptr_helper>;
 using iree_hal_driver_ptr =
     iree_object_ptr<iree_hal_driver_t,
                     iree_type_detail::iree_hal_driver_ptr_helper>;
 using iree_hal_device_ptr =
     iree_object_ptr<iree_hal_device_t,
                     iree_type_detail::iree_hal_device_ptr_helper>;
+using iree_hal_fence_ptr =
+    iree_object_ptr<iree_hal_fence_t,
+                    iree_type_detail::iree_hal_fence_ptr_helper>;
 using iree_hal_semaphore_ptr =
     iree_object_ptr<iree_hal_semaphore_t,
                     iree_type_detail::iree_hal_semaphore_ptr_helper>;

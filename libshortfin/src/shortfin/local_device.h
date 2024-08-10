@@ -7,6 +7,7 @@
 #ifndef SHORTFIN_LOCAL_DEVICE_H
 #define SHORTFIN_LOCAL_DEVICE_H
 
+#include <bit>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -85,8 +86,7 @@ struct SHORTFIN_API LocalDeviceAddress {
   LocalDeviceAddress(std::string_view system_device_class,
                      std::string_view logical_device_class,
                      std::string_view hal_driver_prefix,
-                     iree_host_size_t instance_ordinal,
-                     iree_host_size_t queue_ordinal,
+                     uint32_t instance_ordinal, uint32_t queue_ordinal,
                      std::vector<iree_host_size_t> instance_topology_address);
   std::string to_s() const;
 
@@ -97,12 +97,27 @@ struct SHORTFIN_API LocalDeviceAddress {
   std::string_view logical_device_class;
   // System HAL driver prefix (i.e. 'hip', 'cuda', 'local').
   std::string_view hal_driver_prefix;
-  iree_host_size_t instance_ordinal;
-  iree_host_size_t queue_ordinal;
+  uint32_t instance_ordinal;
+  uint32_t queue_ordinal;
   std::vector<iree_host_size_t> instance_topology_address;
   // A system-unique device name:
   //   {system_device_class}:{instance_ordinal}:{queue_ordinal}@{instance_topology_address}
   std::string device_name;
+
+  // Combines the instance and queue ordinal bitwise into one opaque device id.
+  // Can be used as a map key to uniquely identify this device.
+  uint64_t device_id() const {
+    return static_cast<uint64_t>(instance_ordinal) << 32 |
+           static_cast<uint64_t>(queue_ordinal);
+  }
+
+  // Creates a device_id() as if this device was for a different queue ordinal.
+  // Can be used when reassembling a device id from a queue affinity mask and
+  // using it to look up in a map.
+  uint64_t device_id_for_queue(uint32_t alternate_queue_ordinal) const {
+    return static_cast<uint64_t>(instance_ordinal) << 32 |
+           static_cast<uint64_t>(alternate_queue_ordinal);
+  }
 };
 
 // A device attached to the LocalSystem.
@@ -181,7 +196,12 @@ class SHORTFIN_API DeviceAffinity {
 
   LocalDevice *device() const { return device_; }
   iree_hal_queue_affinity_t queue_affinity() const { return queue_affinity_; }
-
+  // Returns the lowest queue ordinal in the affinity set. If there are no
+  // affinity bits, this will return 64, which is invalid (queues can only be
+  // 0..63).
+  iree_host_size_t lowest_queue_ordinal() const {
+    return std::countr_zero(queue_affinity());
+  }
   std::string to_s() const;
 
   bool operator==(const DeviceAffinity &other) const {
