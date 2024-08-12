@@ -331,6 +331,7 @@ class PagedLlamaAttentionBlock(ThetaLayer):
             )
             # self.add_module("attn_qkv", LinearLayer(theta("self_attn.qkv")))
             self.add_module("attn_q", LinearLayer(theta("self_attn.q_proj")))
+            print(f"self.attn_q.weightshape:  {self.attn_q.weight.shape}")
             self.add_module("attn_k", LinearLayer(theta("self_attn.k_proj")))
             self.add_module("attn_v", LinearLayer(theta("self_attn.v_proj")))
             self.add_module("attn_output", LinearLayer(theta("self_attn.o_proj")))
@@ -346,8 +347,11 @@ class PagedLlamaAttentionBlock(ThetaLayer):
                 "attn_norm", RMSNormLayer(theta("attn_norm"), epsilon=rms_epsilon)
             )
             self.add_module("attn_q", LinearLayer(theta("attn_q")))
+            print(f"self.attn_q.weightshape:  {self.attn_q.weight.shape}")
             self.add_module("attn_k", LinearLayer(theta("attn_k")))
+            print(f"self.attn_k.weightshape:  {self.attn_k.weight.shape}")
             self.add_module("attn_v", LinearLayer(theta("attn_v")))
+            print(f"self.attn_v.weightshape:  {self.attn_v.weight.shape}")
             self.add_module("attn_output", LinearLayer(theta("attn_output")))
             self.add_module(
                 "ffn_norm", RMSNormLayer(theta("ffn_norm"), epsilon=rms_epsilon)
@@ -386,16 +390,16 @@ class PagedLlamaAttentionBlock(ThetaLayer):
 
         bs, batch_seq_len, feature_dim = x.shape
         assert feature_dim == self.head_count * self.head_dim
-
+        def qdq(inputs: torch.Tensor, scale) -> torch.Tensor:
+            inputs_type = inputs.dtype
+            inputs = torch.clamp(inputs, min=-448, max=448)
+            outputs = (inputs).to(torch.float8_e4m3fn).to(inputs_type) * scale
+            return outputs
+        #x = qdq(x, 0.0111)
         xq = self.attn_q(x)
-        print("xq shape: ")
-        print(xq.shape)
         xk = self.attn_k(x)
         xv = self.attn_v(x)
 
-        print("batch_seq_len: ", batch_seq_len)
-        print("head count: ", self.head_count)
-        print("head_dim: ", self.head_dim)
         xq = xq.view(bs, batch_seq_len, self.head_count, self.head_dim)
         xk = xk.view(bs, batch_seq_len, self.head_count_kv, self.head_dim)
         xv = xv.view(bs, batch_seq_len, self.head_count_kv, self.head_dim)
