@@ -25,6 +25,7 @@ HostCPUSystemBuilder::HostCPUSystemBuilder(iree_allocator_t host_allocator)
     : HostSystemBuilder(host_allocator) {
   iree_task_executor_options_initialize(&host_cpu_deps_.task_executor_options);
   iree_hal_task_device_params_initialize(&host_cpu_deps_.task_params);
+  iree_task_topology_initialize(&host_cpu_deps_.task_topology_options);
 }
 
 HostCPUSystemBuilder::~HostCPUSystemBuilder() {

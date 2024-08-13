@@ -194,7 +194,6 @@ class SHORTFIN_API Scheduler {
   Scheduler(iree_allocator_t host_allocator)
       : host_allocator_(host_allocator) {}
 
-  void set_transaction_mode(TransactionMode tx_mode);
   TransactionMode transaction_mode() const { return tx_mode_; }
 
   // Given a ScopedDevice (which may logically bind to multiple queues),

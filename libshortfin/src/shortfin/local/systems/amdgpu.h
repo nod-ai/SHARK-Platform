@@ -53,7 +53,7 @@ class SHORTFIN_API AMDGPUSystemBuilder : public HostCPUSystemBuilder {
   std::vector<std::string> hip_lib_search_paths;
 
  private:
-  void InitializeDefaultSetting();
+  void InitializeDefaultSettings();
 
   // Valid at construction time.
   iree_hal_hip_device_params_t default_device_params_;

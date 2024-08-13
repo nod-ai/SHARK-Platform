@@ -137,9 +137,9 @@ void Worker::WaitForShutdown() {
   for (;;) {
     auto status = iree_wait_source_wait_one(signal_ended_.await(),
                                             iree_make_timeout_ms(5000));
-    if (iree_status_is_ok(status))
+    if (iree_status_is_ok(status)) {
       break;
-    else if (iree_status_code(status) == IREE_STATUS_DEADLINE_EXCEEDED) {
+    } else if (iree_status_is_deadline_exceeded(status)) {
       logging::warn("Still waiting for worker {} to terminate", options_.name);
     } else {
       SHORTFIN_THROW_IF_ERROR(status);

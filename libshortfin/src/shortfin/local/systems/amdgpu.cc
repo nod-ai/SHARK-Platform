@@ -18,13 +18,13 @@ const std::string_view HAL_DRIVER_PREFIX = "hip";
 
 AMDGPUSystemBuilder::AMDGPUSystemBuilder(iree_allocator_t host_allocator)
     : HostCPUSystemBuilder(host_allocator) {
-  InitializeDefaultSetting();
+  InitializeDefaultSettings();
   iree_hal_hip_device_params_initialize(&default_device_params_);
 }
 
 AMDGPUSystemBuilder::~AMDGPUSystemBuilder() = default;
 
-void AMDGPUSystemBuilder::InitializeDefaultSetting() {
+void AMDGPUSystemBuilder::InitializeDefaultSettings() {
   char *raw_dylib_path_env_cstr = std::getenv("IREE_HIP_DYLIB_PATH");
   if (raw_dylib_path_env_cstr) {
     std::string_view rest(raw_dylib_path_env_cstr);
