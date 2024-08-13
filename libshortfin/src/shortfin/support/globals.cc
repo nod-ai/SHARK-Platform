@@ -10,8 +10,6 @@
 
 namespace shortfin {
 
-void Hidden() { logging::info("Hello there."); }
-
-void GlobalInitialize() { Hidden(); }
+void GlobalInitialize() {}
 
 }  // namespace shortfin
