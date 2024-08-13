@@ -51,3 +51,4 @@ def test_device_array(scope):
 def test_device_array_fill(scope):
     ary1 = sfl.array.device_array(scope.device(0), [32, 1, 4], sfl.array.int32)
     ary1.storage.fill(array.array("i", [0]))
+    # TODO: Transfer to host and verify.
