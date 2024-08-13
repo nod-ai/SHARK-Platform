@@ -93,6 +93,11 @@ class iree_object_ptr {
   iree_object_ptr(iree_object_ptr &&other) : ptr(other.ptr) {
     other.ptr = nullptr;
   }
+  iree_object_ptr &operator=(iree_object_ptr &&other) {
+    ptr = other.ptr;
+    other.ptr = nullptr;
+    return *this;
+  }
   ~iree_object_ptr() {
     if (ptr) {
       Helper::release(ptr);

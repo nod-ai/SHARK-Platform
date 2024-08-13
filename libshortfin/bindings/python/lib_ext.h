@@ -27,6 +27,17 @@ void BindLocalSystem(py::module_ &module);
 void BindHostSystem(py::module_ &module);
 void BindAMDGPUSystem(py::module_ &module);
 
+// RAII wrapper for a Py_buffer which calls PyBuffer_Release when it goes
+// out of scope.
+class PyBufferReleaser {
+ public:
+  PyBufferReleaser(Py_buffer &b) : b_(b) {}
+  ~PyBufferReleaser() { PyBuffer_Release(&b_); }
+
+ private:
+  Py_buffer &b_;
+};
+
 // Uses the low level object construction interface to do a custom, placement
 // new based allocation:
 // https://nanobind.readthedocs.io/en/latest/lowlevel.html#low-level-interface

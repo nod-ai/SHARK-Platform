@@ -68,7 +68,8 @@ LocalSystem::~LocalSystem() {
 }
 
 std::unique_ptr<LocalScope> LocalSystem::CreateScope() {
-  auto new_scope = std::make_unique<ExtendingLocalScope>(devices());
+  auto new_scope =
+      std::make_unique<ExtendingLocalScope>(host_allocator(), devices());
   mutable_local_scope_backref(*new_scope) = shared_from_this();
   return new_scope;
 }

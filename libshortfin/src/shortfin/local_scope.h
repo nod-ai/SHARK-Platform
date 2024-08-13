@@ -51,24 +51,29 @@ class SHORTFIN_API ScopedScheduler {
   // Transactions are accumulated into a command buffer by type and in
   // auto-flush mode, the command buffer is submitted upon a change of type.
   enum class TransactionType {
-    NONE = 0,
     // Non-aliasing transfer. All transfers submitted in a sequence must not
     // alias each other. If there is a dependency, then they must be flushed
     // before adding an alising transfer.
-    TRANSFER = 1,
+    TRANSFER = 0,
     // Standalone dispatch that will be enqueued in an individual dispatch.
-    SEQUENTIAL_DISPATCH = 2,
+    SEQUENTIAL_DISPATCH = 1,
     // Parallelizable dispatch that can be enqueued with other parallel
     // dispatches.
-    PARALLEL_DISPATCH = 3,
+    PARALLEL_DISPATCH = 2,
+    // Special case: no active transaction type sentinel. Highest number
+    // so it doesn't clutter switch-jumps.
+    NONE = 3,
   };
 
   enum class TransactionMode {
-    // All pending command buffers are flushed when the transaction type
-    // changes.
-    AUTO_FLUSH = 0,
+    // All transactions are eagerly flushed in their own command buffers.
+    // While potentially not as efficient as possible, this mode is
+    // deterministic with respect to typical programming models. The submission
+    // logic may apply "as if eager" optimizations in narrow cases where it
+    // is obvious that batching is well defined.
+    EAGER = 0,
     // Pending command buffers are not flushed until explicitly set to do so.
-    EXPLICIT_FLUSH = 1,
+    EXPLICIT = 1,
   };
 
   // Control object for a resource that is tracked on the timeline. Each such
@@ -76,16 +81,24 @@ class SHORTFIN_API ScopedScheduler {
   // that is shared across device queues, a consistent account will be chosen
   // as primary (typically corresponding to the lowest numbered queue). This
   // object tracks two things about the resource:
-  //   1. Ready: Idle timepoint of the most recent affecting mutation. Since any
-  //      such mutation mutation must have been enqueued on a single Account,
-  //      we only need to track the timepoint here (against the account's sem).
-  //   2. Idle: Fence joined to all timepoints accessing the resource (read and
-  //      write). At any given time, this represents the point at which the
-  //      resource has no further pending uses.
+  //   1. Mutation Barrier: Idle timepoint of the most recent affecting
+  //      mutation. Since any such mutation mutation must have been enqueued
+  //      on a single Account, we only need to track the timepoint here
+  //      (against the account's sem).
+  //   2. Use Barrier: Fence joined to all timepoints accessing the resource
+  //      (read and write). At any given time, this represents the point at
+  //      which the resource has no further pending uses.
   // Since TimelineResources are shared (i.e. across subspan storage, etc),
   // they are modeled as reference counted (using non atomics, since this is
   // "scoped" same thread access). They must only be held in a context that
   // is keeping the containing LocalScope alive.
+  //
+  // Note to the future: in discussing the above, many cases were noted where
+  // a more advanced programming model would be desirable in order to exercise
+  // more concurrency. However, the conservative default behavior of
+  // (effectively) reader/writer locks on resources gives solid, understandable
+  // behavior for a default programming model. It is not meant to be valid
+  // for everything over time and should not be considered sacred.
   class SHORTFIN_API TimelineResource {
    public:
     class SHORTFIN_API Ref {
@@ -98,31 +111,53 @@ class SHORTFIN_API ScopedScheduler {
       ~Ref() {
         if (res_) res_->Release();
       }
-      TimelineResource &operator->() { return *res_; }
+      TimelineResource *operator->() { return res_; }
 
      private:
       TimelineResource *res_;
     };
     TimelineResource(TimelineResource &other) = delete;
 
-    Account &account() { return account_; }
-    uint64_t &ready_timepoint() { return ready_timepoint_; }
-    iree_hal_fence_t *idle_fence() { return idle_fence_.get(); }
+    // Sets the mutation barrier.
+    // Note that the semaphore set in this way is not retained as it is
+    // assumed to be part of the local scheduler.
+    void set_mutation_barrier(iree_hal_semaphore_t *sem, uint64_t timepoint) {
+      mutation_barrier_sem_ = sem;
+      mutation_barrier_timepoint_ = timepoint;
+    }
+    iree_hal_semaphore_list_t mutation_barrier() {
+      return iree_hal_semaphore_list_t{
+          .count = 1,
+          .semaphores = &mutation_barrier_sem_,
+          .payload_values = &mutation_barrier_timepoint_};
+    }
+
+    // Use barrier can have new timepoints inserted or converted to a
+    // semaphore list.
+    void use_barrier_insert(iree_hal_semaphore_t *sem, uint64_t timepoint);
+    iree_hal_semaphore_list_t use_barrier() {
+      return iree_hal_fence_semaphore_list(use_barrier_fence_);
+    }
 
    private:
-    TimelineResource(Account &account) : account_(account) {}
-    static Ref New(Account &account) {
-      return Ref(new TimelineResource(account));
-    }
+    TimelineResource(iree_allocator_t host_allocator,
+                     size_t semaphore_capacity);
     void Retain() { refcnt_++; }
     void Release() {
       if (--refcnt_ == 0) delete this;
     }
-    uint64_t ready_timepoint_ = 0;
+
     int refcnt_ = 0;
-    Account &account_;
-    iree_hal_fence_ptr idle_fence_;
-    friend class Account;
+    // Non-owning mutation barrier semaphore and timepoint. The fact that this
+    // is a single semaphore is an implementation detail that may be generalized
+    // in the future should it be necessary to track multiple write sources.
+    iree_hal_semaphore_t *mutation_barrier_sem_ = nullptr;
+    uint64_t mutation_barrier_timepoint_ = 0;
+
+    // Use barrier fence. The fact that this is a fence object with a fixed
+    // capacity is an implementation detail.
+    iree_hal_fence_ptr use_barrier_fence_;
+    friend class ScopedScheduler;
   };
 
   // Accounting structure for a single logical device (LocalDevice*), which
@@ -132,12 +167,7 @@ class SHORTFIN_API ScopedScheduler {
     Account(LocalDevice *device);
     LocalDevice *device() const { return device_; }
     iree_hal_device_t *hal_device() { return hal_device_; }
-    size_t semaphore_count() const { return 2; }
-
-    // Creates a new TimelineResource associated with this account.
-    TimelineResource::Ref NewTimelineResource() {
-      return TimelineResource::New(*this);
-    }
+    size_t semaphore_count() const { return 1; }
 
     // Accesses the active command buffer. This will only be non-null if a
     // pending transaction has been set up (i.e. via AppendCommandBuffer).
@@ -145,11 +175,20 @@ class SHORTFIN_API ScopedScheduler {
       return active_command_buffer_.get();
     }
 
+    // Extend the current command buffer active deps to join over sem_list.
+    void active_deps_extend(iree_hal_semaphore_list_t sem_list);
+
+    // Queue timeline.
+    iree_hal_semaphore_t *timeline_sem() { return sem_; }
+    uint64_t timeline_idle_timepoint() { return idle_timepoint_; }
+
    private:
     void Initialize();
+    void Reset();
     LocalDevice *device_;
     iree_hal_device_t *hal_device_;
     TransactionType active_tx_type_ = TransactionType::NONE;
+    iree_hal_fence_ptr active_deps_;
     iree_hal_command_buffer_ptr active_command_buffer_;
     iree_hal_queue_affinity_t active_queue_affinity_bits_;
 
@@ -165,15 +204,15 @@ class SHORTFIN_API ScopedScheduler {
     //     to signal this timepoint, fulfilling any waiters.
     // Whenever we transition active_command_buffer_ from nullptr,
     // idle_timepoint_ *must* be incremented by at least 1 (or otherwise
-    // an eventual submission would submit a duplicate timepoint). We maintain
-    // this invariant by incrementing the global timepoint by 1 for every
-    // insertion of a command buffer row(s) and set the idle_timepoint_ to
-    // this new value. At most, this results in wasted timepoints (which are
-    // free), and it eliminates the hazzard.
+    // an eventual submission would submit a duplicate timepoint). This
+    // timepoint is only valid for the local sem_.
     uint64_t idle_timepoint_ = 0;
     iree_hal_semaphore_ptr sem_;
     friend class ScopedScheduler;
   };
+
+  ScopedScheduler(iree_allocator_t host_allocator)
+      : host_allocator_(host_allocator) {}
 
   void set_transaction_mode(TransactionMode tx_mode);
   TransactionMode transaction_mode() const { return tx_mode_; }
@@ -192,8 +231,20 @@ class SHORTFIN_API ScopedScheduler {
   void AppendCommandBuffer(ScopedDevice &device, TransactionType tx_type,
                            std::function<void(Account &)> callback);
 
+  // Flushes any pending accounts that have accumulated commands.
+  void Flush();
+
+  // Gets a fresh TimelineResource which can be used for tracking resource
+  // read/write and setting barriers. Note that these are all allocated fresh
+  // on each call today but may be pooled in the future.
+  TimelineResource::Ref NewTimelineResource(iree_allocator_t host_allocator) {
+    return TimelineResource::Ref(
+        new TimelineResource(host_allocator, semaphore_count_));
+  }
+
  private:
   void Initialize(std::span<LocalDevice *const> devices);
+  iree_allocator_t host_allocator_;
   // Each distinct hal device gets an account.
   std::vector<Account> accounts_;
   // Accounts indexed by LocalDeviceAddress::device_id().
@@ -201,7 +252,7 @@ class SHORTFIN_API ScopedScheduler {
   size_t semaphore_count_ = 0;
 
   // Transaction management.
-  TransactionMode tx_mode_ = TransactionMode::AUTO_FLUSH;
+  TransactionMode tx_mode_ = TransactionMode::EAGER;
   TransactionType current_tx_type_ = TransactionType::NONE;
 
   friend class LocalScope;
@@ -226,9 +277,11 @@ class SHORTFIN_API ScopedScheduler {
 class SHORTFIN_API LocalScope {
  public:
   // Initialize with devices using logical_device_class as the device class.
-  LocalScope(std::span<LocalDevice *const> devices);
+  LocalScope(iree_allocator_t host_allocator,
+             std::span<LocalDevice *const> devices);
   // Initialize with devices with custom device class names.
   LocalScope(
+      iree_allocator_t host_allocator,
       std::span<const std::pair<std::string_view, LocalDevice *>> devices);
   LocalScope(const LocalScope &) = delete;
   // Ensure polymorphic.
@@ -263,17 +316,16 @@ class SHORTFIN_API LocalScope {
     return ScopedDevice(*this, DeviceAffinity(d));
   }
   ScopedScheduler &scheduler() { return scheduler_; }
-  ScopedScheduler::TimelineResource::Ref NewTimelineResource(
-      ScopedDevice &device) {
-    return scheduler().GetDefaultAccount(device).NewTimelineResource();
+  ScopedScheduler::TimelineResource::Ref NewTimelineResource() {
+    return scheduler().NewTimelineResource(host_allocator_);
   }
 
  private:
   void AddDevice(std::string_view device_class, LocalDevice *device);
   void Initialize();  // Called after all devices are added.
 
+  iree_allocator_t host_allocator_;
   string_interner interner_;
-
   // Map of `<device_class>` to the count of that class contained.
   std::unordered_map<std::string_view, int> device_class_count_;
   // Ordered devices.

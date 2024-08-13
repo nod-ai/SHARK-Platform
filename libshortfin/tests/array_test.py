@@ -4,6 +4,7 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
+import array
 import pytest
 
 from _shortfin import lib as sfl
@@ -44,3 +45,8 @@ def test_device_array(scope):
     assert hary1.shape == ary1.shape
     assert hary1.dtype == ary1.dtype
     assert hary1.device == ary1.device
+
+
+def test_device_array_fill(scope):
+    ary1 = sfl.array.device_array(scope.device(0), [32, 1, 4], sfl.array.int32)
+    ary1.storage.fill(array.array("i", [0]))

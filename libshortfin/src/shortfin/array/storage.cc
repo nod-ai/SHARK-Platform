@@ -7,6 +7,7 @@
 #include "shortfin/array/storage.h"
 
 #include "fmt/core.h"
+#include "shortfin/support/logging.h"
 
 namespace shortfin::array {
 
@@ -34,7 +35,7 @@ storage storage::AllocateDevice(ScopedDevice &device,
   SHORTFIN_THROW_IF_ERROR(iree_hal_allocator_allocate_buffer(
       allocator, params, allocation_size, buffer.for_output()));
   return storage(device, std::move(buffer),
-                 device.scope().NewTimelineResource(device));
+                 device.scope().NewTimelineResource());
 }
 
 storage storage::AllocateHost(ScopedDevice &device,
@@ -56,7 +57,7 @@ storage storage::AllocateHost(ScopedDevice &device,
   SHORTFIN_THROW_IF_ERROR(iree_hal_allocator_allocate_buffer(
       allocator, params, allocation_size, buffer.for_output()));
   return storage(device, std::move(buffer),
-                 device.scope().NewTimelineResource(device));
+                 device.scope().NewTimelineResource());
 }
 
 storage storage::Subspan(iree_device_size_t byte_offset,
@@ -71,14 +72,28 @@ void storage::Fill(const void *pattern, iree_host_size_t pattern_length) {
   device_.scope().scheduler().AppendCommandBuffer(
       device_, ScopedScheduler::TransactionType::TRANSFER,
       [&](ScopedScheduler::Account &account) {
+        logging::info("AppendCommandBuffer() CALLBACK");
+        // Must depend on all of this buffer's use dependencies to avoid
+        // write-after-read hazard.
+        account.active_deps_extend(timeline_resource_->use_barrier());
+        // And depend on any prior mutation in order to avoid a
+        // write-after-write hazard.
+        account.active_deps_extend(timeline_resource_->mutation_barrier());
+
         // TODO: I need to join the submission dependencies on the account
         // with the timeline resource idle fence to ensure that
         // write-after-access is properly sequenced.
         SHORTFIN_THROW_IF_ERROR(iree_hal_command_buffer_fill_buffer(
             account.active_command_buffer(),
-            iree_hal_make_buffer_ref(buffer_, /*offset=*/0,
-                                     /*length=*/IREE_WHOLE_BUFFER),
+            iree_hal_make_buffer_ref(
+                buffer_, /*offset=*/0,
+                /*length=*/iree_hal_buffer_byte_length(buffer_)),
             pattern, pattern_length));
+
+        // And move our own mutation barrier to the current pending timeline
+        // value.
+        timeline_resource_->set_mutation_barrier(
+            account.timeline_sem(), account.timeline_idle_timepoint());
       });
 }
 

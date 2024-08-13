@@ -67,6 +67,16 @@ void BindArray(py::module_ &global_m) {
             return storage::AllocateDevice(device, allocation_size);
           },
           py::arg("device"), py::arg("allocation_size"), py::keep_alive<0, 1>())
+      .def("fill",
+           [](storage &self, py::handle buffer) {
+             Py_buffer py_view;
+             int flags = PyBUF_FORMAT | PyBUF_ND;  // C-Contiguous ND.
+             if (PyObject_GetBuffer(buffer.ptr(), &py_view, flags) != 0) {
+               throw py::python_error();
+             }
+             PyBufferReleaser py_view_releaser(py_view);
+             self.Fill(py_view.buf, py_view.len);
+           })
       .def("__repr__", &storage::to_s);
 
   py::class_<base_array>(m, "base_array")
