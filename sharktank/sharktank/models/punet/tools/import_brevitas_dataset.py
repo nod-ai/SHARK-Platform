@@ -68,11 +68,6 @@ def _dtype_str_to_dtype(dtype_str: str) -> torch.dtype:
 def apply_per_layer_quant(
     root_theta: Theta, layer_name: str, qp, updated_tensors: dict[str, InferenceTensor]
 ):
-    layer_theta = root_theta(layer_name)
-    weight = layer_theta.tensor("weight")
-    weight_dtype = weight.as_torch().dtype
-    bias = layer_theta.optional_tensor("bias")
-
     # The config file has tensors as 1d and a _shape suffixed array with the
     # concrete shape.
     def _get_json_tensor(
