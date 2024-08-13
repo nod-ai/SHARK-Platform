@@ -306,23 +306,7 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         use_hf: bool = False,
     ):
         super().__init__(theta)
-
-        self.add_module(
-            "attn_norm", RMSNormLayer(theta("attn_norm"), epsilon=rms_epsilon)
-        )
-        self.add_module("attn_q", LinearLayer(theta("attn_q")))
-        self.add_module("attn_k", LinearLayer(theta("attn_k")))
-        self.add_module("attn_v", LinearLayer(theta("attn_v")))
-        self.add_module("attn_output", LinearLayer(theta("attn_output")))
-        self.add_module(
-            "ffn_norm", RMSNormLayer(theta("ffn_norm"), epsilon=rms_epsilon)
-        )
-        self.add_module("ffn_gate", LinearLayer(theta("ffn_gate")))
-        self.add_module("ffn_up", LinearLayer(theta("ffn_up")))
-        self.add_module("ffn_down", LinearLayer(theta("ffn_down")))
-    ):  
-        super().__init__(theta)
-        if hf:
+        if use_hf:
             # tensor = theta("self_attn.qkv.weight").tensor
             # tensor = tensor.reshape(head_count_kv, head_count // head_count_kv + 2, head_dim, head_dim * head_count)
             # print(tensor)
@@ -363,7 +347,6 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         self.block_index = block_index
         self.cache = cache
         assert isinstance(head_count, int)
->>>>>>> 4ed3c9d (add some fixes to run)
         self.head_count = head_count
         self.head_dim = head_dim
         self.head_count_kv = head_count_kv
