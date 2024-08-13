@@ -17,9 +17,8 @@ namespace shortfin::local {
 // Scope
 // -------------------------------------------------------------------------- //
 
-Scope::Scope(
-    iree_allocator_t host_allocator,
-    std::span<const std::pair<std::string_view, Device *>> devices)
+Scope::Scope(iree_allocator_t host_allocator,
+             std::span<const std::pair<std::string_view, Device *>> devices)
     : host_allocator_(host_allocator), scheduler_(host_allocator) {
   for (auto &it : devices) {
     AddDevice(it.first, it.second);
@@ -27,8 +26,7 @@ Scope::Scope(
   Initialize();
 }
 
-Scope::Scope(iree_allocator_t host_allocator,
-                       std::span<Device *const> devices)
+Scope::Scope(iree_allocator_t host_allocator, std::span<Device *const> devices)
     : host_allocator_(host_allocator), scheduler_(host_allocator) {
   for (auto *device : devices) {
     AddDevice(device->address().logical_device_class, device);

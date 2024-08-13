@@ -23,12 +23,10 @@ class ExtendingScope : public Scope {
 
  private:
   std::shared_ptr<System> backref_;
-  friend std::shared_ptr<System> &mutable_local_scope_backref(
-      ExtendingScope &);
+  friend std::shared_ptr<System> &mutable_local_scope_backref(ExtendingScope &);
 };
 
-std::shared_ptr<System> &mutable_local_scope_backref(
-    ExtendingScope &scope) {
+std::shared_ptr<System> &mutable_local_scope_backref(ExtendingScope &scope) {
   return scope.backref_;
 }
 

@@ -66,7 +66,7 @@ class SHORTFIN_API Scope {
   Scope(iree_allocator_t host_allocator, std::span<Device *const> devices);
   // Initialize with devices with custom device class names.
   Scope(iree_allocator_t host_allocator,
-             std::span<const std::pair<std::string_view, Device *>> devices);
+        std::span<const std::pair<std::string_view, Device *>> devices);
   Scope(const Scope &) = delete;
   // Ensure polymorphic.
   virtual ~Scope();
