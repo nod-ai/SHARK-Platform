@@ -6,6 +6,7 @@
 
 import array
 import pytest
+import time
 
 from _shortfin import lib as sfl
 

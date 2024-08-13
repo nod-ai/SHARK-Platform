@@ -126,10 +126,14 @@ class SHORTFIN_API ScopedScheduler {
       mutation_barrier_timepoint_ = timepoint;
     }
     iree_hal_semaphore_list_t mutation_barrier() {
-      return iree_hal_semaphore_list_t{
-          .count = 1,
-          .semaphores = &mutation_barrier_sem_,
-          .payload_values = &mutation_barrier_timepoint_};
+      if (!mutation_barrier_sem_) {
+        return iree_hal_semaphore_list_empty();
+      } else {
+        return iree_hal_semaphore_list_t{
+            .count = 1,
+            .semaphores = &mutation_barrier_sem_,
+            .payload_values = &mutation_barrier_timepoint_};
+      }
     }
 
     // Use barrier can have new timepoints inserted or converted to a
