@@ -9,7 +9,7 @@
 
 #include <string_view>
 
-#include "shortfin/local_scope.h"
+#include "shortfin/local/scope.h"
 #include "shortfin/support/api.h"
 
 namespace shortfin::array {

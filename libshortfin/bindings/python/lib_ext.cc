@@ -7,8 +7,8 @@
 #include "./lib_ext.h"
 
 #include "./utils.h"
-#include "shortfin/local_scope.h"
-#include "shortfin/local_system.h"
+#include "shortfin/local/scope.h"
+#include "shortfin/local/system.h"
 #include "shortfin/support/globals.h"
 #include "shortfin/support/logging.h"
 #include "shortfin/systems/amdgpu.h"

@@ -10,7 +10,7 @@
 #include <vector>
 
 #include "iree/hal/drivers/hip/api.h"
-#include "shortfin/local_system.h"
+#include "shortfin/local/system.h"
 #include "shortfin/support/api.h"
 #include "shortfin/support/iree_helpers.h"
 #include "shortfin/systems/host.h"

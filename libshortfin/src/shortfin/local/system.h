@@ -14,10 +14,10 @@
 #include <unordered_map>
 #include <vector>
 
-#include "shortfin/local_device.h"
+#include "shortfin/local/device.h"
+#include "shortfin/process/worker.h"
 #include "shortfin/support/api.h"
 #include "shortfin/support/iree_helpers.h"
-#include "shortfin/worker.h"
 
 namespace shortfin {
 

@@ -10,7 +10,7 @@
 #include "iree/hal/drivers/local_task/task_driver.h"
 #include "iree/hal/local/executable_plugin_manager.h"
 #include "iree/task/api.h"
-#include "shortfin/local_system.h"
+#include "shortfin/local/system.h"
 #include "shortfin/support/api.h"
 
 namespace shortfin::systems {

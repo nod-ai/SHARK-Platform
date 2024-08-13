@@ -12,7 +12,7 @@ shortfin_cc_component(
   SRCS
     host.cc
   COMPONENTS
-    shortfin_local_system
+    shortfin_local
     shortfin_support
   DEPS
     iree_hal_drivers_local_task_task_driver
@@ -32,7 +32,7 @@ shortfin_cc_component(
   SRCS
     amdgpu.cc
   COMPONENTS
-    shortfin_local_system
+    shortfin_local
     shortfin_support
   DEPS
     iree_hal_drivers_hip_hip

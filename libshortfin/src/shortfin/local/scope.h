@@ -11,7 +11,7 @@
 #include <span>
 #include <unordered_map>
 
-#include "shortfin/local_device.h"
+#include "shortfin/local/device.h"
 #include "shortfin/support/stl_extras.h"
 
 namespace shortfin {

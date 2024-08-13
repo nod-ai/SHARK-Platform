@@ -4,7 +4,7 @@
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-#include "shortfin/worker.h"
+#include "shortfin/process/worker.h"
 
 #include "shortfin/support/logging.h"
 

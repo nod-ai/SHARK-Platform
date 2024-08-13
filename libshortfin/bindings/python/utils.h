@@ -7,8 +7,8 @@
 #include <fmt/core.h>
 
 #include "./lib_ext.h"
-#include "shortfin/local_device.h"
-#include "shortfin/local_scope.h"
+#include "shortfin/local/device.h"
+#include "shortfin/local/scope.h"
 
 namespace shortfin::python {
 

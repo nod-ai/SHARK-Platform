@@ -4,7 +4,7 @@
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-#include "shortfin/local_scope.h"
+#include "shortfin/local/scope.h"
 
 #include <fmt/core.h>
 #include <fmt/ranges.h>
