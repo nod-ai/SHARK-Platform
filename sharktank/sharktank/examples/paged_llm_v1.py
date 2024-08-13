@@ -54,9 +54,10 @@ class TorchGenerator:
         #    prompts, pad_to_multiple_of=self.model.cache.pad_sequence_stride
         #)
         #token_ids = torch.tensor(token_ids, device=self.model.device)
+        #seq_lens = torch.tensor(seq_lens, device=self.model.device)
         with safe_open("/home/nod/batch.safetensors", framework="pt", device="cpu") as st:
             token_ids=st.get_tensor("batch")
-        seq_lens = torch.tensor([2048])#seq_lens, device=self.model.device)
+        seq_lens = torch.tensor([2048])
         if self.shared_cache_state is not None:
             cache_state = self.shared_cache_state
         else:
@@ -261,7 +262,6 @@ def main():
     print(f":: Prompt tokens: {batch.token_ids}")
     batch.prefill()
     intermediates_saver.save_file("/home/nod/stank.safetensors")
-    exit()
     print(batch.detokenize())
 
     if args.save_intermediates_path:

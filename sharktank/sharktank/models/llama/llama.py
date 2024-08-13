@@ -395,18 +395,20 @@ class PagedLlamaAttentionBlock(ThetaLayer):
             inputs = torch.clamp(inputs, min=-448, max=448)
             outputs = (inputs).to(torch.float8_e4m3fn).to(inputs_type) * scale
             return outputs
-        #x = qdq(x, 0.0111)
+        
+
         xq = self.attn_q(x)
         xk = self.attn_k(x)
         xv = self.attn_v(x)
 
-        xq = xq.view(bs, batch_seq_len, self.head_count, self.head_dim)
-        xk = xk.view(bs, batch_seq_len, self.head_count_kv, self.head_dim)
-        xv = xv.view(bs, batch_seq_len, self.head_count_kv, self.head_dim)
+        xq = xq.view(bs, batch_seq_len, self.head_count, self.head_dim).transpose(1,2)
+        xk = xk.view(bs, batch_seq_len, self.head_count_kv, self.head_dim).transpose(1,2)
+        xv = xv.view(bs, batch_seq_len, self.head_count_kv, self.head_dim).transpose(1,2)
 
         # Fast path to start_index based embedding lookup if available.
         # Falls back to a slower position based index lookup.
         if start_index is not None:
+            print(f"using start index: {start_index}")
             xq, xk = embedding.forward(xq=xq, xk=xk, start_index=start_index)
         else:
             xq, xk = embedding.apply_batched_mask(

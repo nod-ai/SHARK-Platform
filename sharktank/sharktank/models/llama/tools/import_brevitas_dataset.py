@@ -106,8 +106,8 @@ def apply_per_layer_quant(
         print("torch weight shape: ", torch_weight.shape)
         split_sizes = [4096, 4096, 4096]
         q_weight, k_weight, v_weight = torch.split(torch_weight, split_sizes)
-        #q_weight = q_weight.reshape(n_head, 2, q_weight.shape[0] // n_head // 2, *q_weight.shape[1:]).swapaxes(1, 2).reshape(q_weight.shape)
-        #k_weight = k_weight.reshape(n_head, 2, k_weight.shape[0] // n_head // 2, *k_weight.shape[1:]).swapaxes(1, 2).reshape(k_weight.shape)
+        q_weight = q_weight.reshape(n_head, 2, q_weight.shape[0] // n_head // 2, *q_weight.shape[1:]).swapaxes(1, 2).reshape(q_weight.shape)
+        k_weight = k_weight.reshape(n_head, 2, k_weight.shape[0] // n_head // 2, *k_weight.shape[1:]).swapaxes(1, 2).reshape(k_weight.shape)
         #save_file({"weight":weight, "q_weight": q_weight, "q_weight_scale":weight_quant_scale}, "/home/nod/orig_q_weight.safetensors")
         #exit()
 
@@ -148,8 +148,6 @@ def apply_per_layer_quant(
         updated_tensors[q_weight_quant.name] = q_weight_quant
         updated_tensors[k_weight_quant.name] = k_weight_quant
         updated_tensors[v_weight_quant.name] = v_weight_quant
-        save_file({"q_projweight": q_weight_quant.unpack().dequant()}, "/home/nod/q_projweight.safetensors")
-        exit()
        # assert torch.allclose(q_weight.to(torch.float8_e4m3fn).to(torch.float32),
        #                         q_weight_quant.unpack().qs.to(torch.float32),
        #                         atol=1e-3,
