@@ -11,8 +11,11 @@
 
 namespace shortfin::array {
 
+using namespace local;
+using namespace local::detail;
+
 namespace detail {
-void ThrowIllegalDeviceAffinity(LocalDevice *first, LocalDevice *second) {
+void ThrowIllegalDeviceAffinity(Device *first, Device *second) {
   throw std::invalid_argument(fmt::format(
       "Cannot combine unrelated devices into a DeviceAffinity: {} vs {}",
       first->name(), second->name()));
@@ -70,8 +73,7 @@ storage storage::Subspan(iree_device_size_t byte_offset,
 
 void storage::Fill(const void *pattern, iree_host_size_t pattern_length) {
   device_.scope().scheduler().AppendCommandBuffer(
-      device_, ScopedScheduler::TransactionType::TRANSFER,
-      [&](ScopedScheduler::Account &account) {
+      device_, TransactionType::TRANSFER, [&](Account &account) {
         logging::info("AppendCommandBuffer() CALLBACK");
         // Must depend on all of this buffer's use dependencies to avoid
         // write-after-read hazard.

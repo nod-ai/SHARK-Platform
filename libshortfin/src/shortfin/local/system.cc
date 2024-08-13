@@ -11,23 +11,23 @@
 #include "shortfin/local/scope.h"
 #include "shortfin/support/logging.h"
 
-namespace shortfin {
+namespace shortfin::local {
 
 namespace {
 
-// A LocalScope with a back reference to the LocalSystem from which it
+// A LocalScope with a back reference to the System from which it
 // originated.
 class ExtendingLocalScope : public LocalScope {
  public:
   using LocalScope::LocalScope;
 
  private:
-  std::shared_ptr<LocalSystem> backref_;
-  friend std::shared_ptr<LocalSystem> &mutable_local_scope_backref(
+  std::shared_ptr<System> backref_;
+  friend std::shared_ptr<System> &mutable_local_scope_backref(
       ExtendingLocalScope &);
 };
 
-std::shared_ptr<LocalSystem> &mutable_local_scope_backref(
+std::shared_ptr<System> &mutable_local_scope_backref(
     ExtendingLocalScope &scope) {
   return scope.backref_;
 }
@@ -35,17 +35,17 @@ std::shared_ptr<LocalSystem> &mutable_local_scope_backref(
 }  // namespace
 
 // -------------------------------------------------------------------------- //
-// LocalSystem
+// System
 // -------------------------------------------------------------------------- //
 
-LocalSystem::LocalSystem(iree_allocator_t host_allocator)
+System::System(iree_allocator_t host_allocator)
     : host_allocator_(host_allocator) {
   SHORTFIN_THROW_IF_ERROR(iree_vm_instance_create(IREE_VM_TYPE_CAPACITY_DEFAULT,
                                                   host_allocator_,
                                                   vm_instance_.for_output()));
 }
 
-LocalSystem::~LocalSystem() {
+System::~System() {
   // Worker drain and shutdown.
   for (auto &worker : workers_) {
     worker->Kill();
@@ -67,18 +67,17 @@ LocalSystem::~LocalSystem() {
   hal_drivers_.clear();
 }
 
-std::unique_ptr<LocalScope> LocalSystem::CreateScope() {
+std::unique_ptr<LocalScope> System::CreateScope() {
   auto new_scope =
       std::make_unique<ExtendingLocalScope>(host_allocator(), devices());
   mutable_local_scope_backref(*new_scope) = shared_from_this();
   return new_scope;
 }
 
-void LocalSystem::InitializeNodes(int node_count) {
+void System::InitializeNodes(int node_count) {
   AssertNotInitialized();
   if (!nodes_.empty()) {
-    throw std::logic_error(
-        "LocalSystem::InitializeNodes called more than once");
+    throw std::logic_error("System::InitializeNodes called more than once");
   }
   nodes_.reserve(node_count);
   for (int i = 0; i < node_count; ++i) {
@@ -86,8 +85,8 @@ void LocalSystem::InitializeNodes(int node_count) {
   }
 }
 
-void LocalSystem::InitializeHalDriver(std::string_view moniker,
-                                      iree_hal_driver_ptr driver) {
+void System::InitializeHalDriver(std::string_view moniker,
+                                 iree_hal_driver_ptr driver) {
   AssertNotInitialized();
   auto &slot = hal_drivers_[moniker];
   if (slot) {
@@ -97,19 +96,19 @@ void LocalSystem::InitializeHalDriver(std::string_view moniker,
   slot.reset(driver.release());
 }
 
-void LocalSystem::InitializeHalDevice(std::unique_ptr<LocalDevice> device) {
+void System::InitializeHalDevice(std::unique_ptr<Device> device) {
   AssertNotInitialized();
   auto device_name = device->name();
   auto [it, success] = named_devices_.try_emplace(device_name, device.get());
   if (!success) {
-    throw std::logic_error(fmt::format(
-        "Cannot register LocalDevice '{}' multiple times", device_name));
+    throw std::logic_error(
+        fmt::format("Cannot register Device '{}' multiple times", device_name));
   }
   devices_.push_back(device.get());
   retained_devices_.push_back(std::move(device));
 }
 
-void LocalSystem::FinishInitialization() {
+void System::FinishInitialization() {
   AssertNotInitialized();
 
   // TODO: Remove this. Just testing.
@@ -123,4 +122,4 @@ void LocalSystem::FinishInitialization() {
   initialized_ = true;
 }
 
-}  // namespace shortfin
+}  // namespace shortfin::local

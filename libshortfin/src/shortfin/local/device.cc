@@ -9,13 +9,13 @@
 #include <fmt/core.h>
 #include <fmt/ranges.h>
 
-namespace shortfin {
+namespace shortfin::local {
 
 // -------------------------------------------------------------------------- //
-// LocalDeviceAddress
+// DeviceAddress
 // -------------------------------------------------------------------------- //
 
-LocalDeviceAddress::LocalDeviceAddress(
+DeviceAddress::DeviceAddress(
     std::string_view system_device_class, std::string_view logical_device_class,
     std::string_view hal_driver_prefix, uint32_t instance_ordinal,
     uint32_t queue_ordinal,
@@ -35,8 +35,7 @@ LocalDeviceAddress::LocalDeviceAddress(
 // DeviceAffinity
 // -------------------------------------------------------------------------- //
 
-void DeviceAffinity::ThrowIllegalDeviceAffinity(LocalDevice *first,
-                                                LocalDevice *second) {
+void DeviceAffinity::ThrowIllegalDeviceAffinity(Device *first, Device *second) {
   throw std::invalid_argument(fmt::format(
       "Cannot combine unrelated devices into a DeviceAffinity: {} vs {}",
       first->name(), second->name()));
@@ -52,24 +51,23 @@ std::string DeviceAffinity::to_s() const {
 }
 
 // -------------------------------------------------------------------------- //
-// LocalDevice
+// Device
 // -------------------------------------------------------------------------- //
 
-LocalDevice::LocalDevice(LocalDeviceAddress address,
-                         iree_hal_device_ptr hal_device, int node_affinity,
-                         bool node_locked)
+Device::Device(DeviceAddress address, iree_hal_device_ptr hal_device,
+               int node_affinity, bool node_locked)
     : address_(std::move(address)),
       hal_device_(std::move(hal_device)),
       node_affinity_(node_affinity),
       node_locked_(node_locked) {}
 
-LocalDevice::~LocalDevice() = default;
+Device::~Device() = default;
 
-std::string LocalDevice::to_s() const {
+std::string Device::to_s() const {
   return fmt::format(
-      "LocalDevice(name='{}', ordinal={}:{}, node_affinity={}, node_locked={})",
+      "Device(name='{}', ordinal={}:{}, node_affinity={}, node_locked={})",
       name(), address().instance_ordinal, address().queue_ordinal,
       node_affinity(), node_locked());
 }
 
-}  // namespace shortfin
+}  // namespace shortfin::local

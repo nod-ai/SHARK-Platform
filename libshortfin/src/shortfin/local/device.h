@@ -16,14 +16,14 @@
 #include "shortfin/support/api.h"
 #include "shortfin/support/iree_helpers.h"
 
-namespace shortfin {
+namespace shortfin::local {
 
 // NUMA node on the LocalSystem. There will always be at least one node, and
 // not all NUMA nodes on the system may be included: only those applicable
 // to device pinning/scheduling.
-class SHORTFIN_API LocalNode {
+class SHORTFIN_API Node {
  public:
-  LocalNode(int node_num) : node_num_(node_num) {}
+  Node(int node_num) : node_num_(node_num) {}
 
   int node_num() const { return node_num_; }
 
@@ -79,15 +79,15 @@ class SHORTFIN_API LocalNode {
 // application cares about the hierarchy vs benefiting from tighter coordination
 // of locality. The shape of the instance topology must match among all devices
 // attached to a driver.
-struct SHORTFIN_API LocalDeviceAddress {
+struct SHORTFIN_API DeviceAddress {
  public:
   // Note that all string_views passed should be literals or have a lifetime
   // that exceeds the instance.
-  LocalDeviceAddress(std::string_view system_device_class,
-                     std::string_view logical_device_class,
-                     std::string_view hal_driver_prefix,
-                     uint32_t instance_ordinal, uint32_t queue_ordinal,
-                     std::vector<iree_host_size_t> instance_topology_address);
+  DeviceAddress(std::string_view system_device_class,
+                std::string_view logical_device_class,
+                std::string_view hal_driver_prefix, uint32_t instance_ordinal,
+                uint32_t queue_ordinal,
+                std::vector<iree_host_size_t> instance_topology_address);
   std::string to_s() const;
 
   // User driver name (i.e. 'amdgpu'). In user visible names/messages, this
@@ -121,13 +121,13 @@ struct SHORTFIN_API LocalDeviceAddress {
 };
 
 // A device attached to the LocalSystem.
-class SHORTFIN_API LocalDevice {
+class SHORTFIN_API Device {
  public:
-  LocalDevice(LocalDeviceAddress address, iree_hal_device_ptr hal_device,
-              int node_affinity, bool node_locked);
-  virtual ~LocalDevice();
+  Device(DeviceAddress address, iree_hal_device_ptr hal_device,
+         int node_affinity, bool node_locked);
+  virtual ~Device();
 
-  const LocalDeviceAddress &address() const { return address_; }
+  const DeviceAddress &address() const { return address_; }
   std::string_view name() const { return address_.device_name; }
   int node_affinity() const { return node_affinity_; }
   bool node_locked() const { return node_locked_; }
@@ -135,24 +135,24 @@ class SHORTFIN_API LocalDevice {
 
   std::string to_s() const;
 
-  bool operator==(const LocalDevice &other) const {
+  bool operator==(const Device &other) const {
     // Identity is equality.
     return this == &other;
   }
 
  private:
-  LocalDeviceAddress address_;
+  DeviceAddress address_;
   iree_hal_device_ptr hal_device_;
   int node_affinity_;
   bool node_locked_;
 };
 
-// Holds a reference to a LocalDevice* and a bitmask of queues that are being
+// Holds a reference to a Device* and a bitmask of queues that are being
 // targeted.
 class SHORTFIN_API DeviceAffinity {
  public:
   DeviceAffinity() : device_(nullptr), queue_affinity_(0) {}
-  DeviceAffinity(LocalDevice *device)
+  DeviceAffinity(Device *device)
       : device_(device),
         queue_affinity_(static_cast<iree_hal_queue_affinity_t>(1)
                         << device->address().queue_ordinal) {}
@@ -162,7 +162,7 @@ class SHORTFIN_API DeviceAffinity {
   // In that case, the queue affinity bitmask will have a bit set for the
   // added device and true will be returned.
   // If the device is not compatible in this way, then false will be returned.
-  [[nodiscard]] bool AddDevice(LocalDevice *new_device) {
+  [[nodiscard]] bool AddDevice(Device *new_device) {
     if (!new_device) return true;
     if (!device_) {
       // Empty to one device is always allowed.
@@ -194,7 +194,7 @@ class SHORTFIN_API DeviceAffinity {
     return result;
   }
 
-  LocalDevice *device() const { return device_; }
+  Device *device() const { return device_; }
   iree_hal_queue_affinity_t queue_affinity() const { return queue_affinity_; }
   // Returns the lowest queue ordinal in the affinity set. If there are no
   // affinity bits, this will return 64, which is invalid (queues can only be
@@ -209,13 +209,12 @@ class SHORTFIN_API DeviceAffinity {
   }
 
  private:
-  static void ThrowIllegalDeviceAffinity(LocalDevice *first,
-                                         LocalDevice *second);
+  static void ThrowIllegalDeviceAffinity(Device *first, Device *second);
 
-  LocalDevice *device_;
+  Device *device_;
   iree_hal_queue_affinity_t queue_affinity_;
 };
 
-}  // namespace shortfin
+}  // namespace shortfin::local
 
 #endif  // SHORTFIN_LOCAL_DEVICE_H

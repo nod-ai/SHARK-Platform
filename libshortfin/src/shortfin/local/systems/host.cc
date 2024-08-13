@@ -9,7 +9,7 @@
 #include "shortfin/support/iree_helpers.h"
 #include "shortfin/support/logging.h"
 
-namespace shortfin::systems {
+namespace shortfin::local::systems {
 
 namespace {
 const std::string_view SYSTEM_DEVICE_CLASS = "host-cpu";
@@ -41,8 +41,8 @@ void HostCPUSystemBuilder::InitializeHostCPUDefaults() {
   }
 }
 
-LocalSystemPtr HostCPUSystemBuilder::CreateLocalSystem() {
-  auto lsys = std::make_shared<LocalSystem>(host_allocator());
+SystemPtr HostCPUSystemBuilder::CreateSystem() {
+  auto lsys = std::make_shared<System>(host_allocator());
   // TODO: Real NUMA awareness.
   lsys->InitializeNodes(1);
   InitializeHostCPUDefaults();
@@ -52,8 +52,7 @@ LocalSystemPtr HostCPUSystemBuilder::CreateLocalSystem() {
   return lsys;
 }
 
-iree_hal_driver_t *HostCPUSystemBuilder::InitializeHostCPUDriver(
-    LocalSystem &lsys) {
+iree_hal_driver_t *HostCPUSystemBuilder::InitializeHostCPUDriver(System &lsys) {
   // TODO: Kill these flag variants in favor of settings on the config
   // object.
   SHORTFIN_THROW_IF_ERROR(iree_task_executor_options_initialize_from_flags(
@@ -67,7 +66,7 @@ iree_hal_driver_t *HostCPUSystemBuilder::InitializeHostCPUDriver(
                                 &host_cpu_deps_.task_topology_options,
                                 host_allocator(), &host_cpu_deps_.executor));
 
-  // Create the driver and save it in the LocalSystem.
+  // Create the driver and save it in the System.
   iree_hal_driver_ptr driver;
   iree_hal_driver_t *unowned_driver;
   SHORTFIN_THROW_IF_ERROR(iree_hal_task_driver_create(
@@ -80,7 +79,7 @@ iree_hal_driver_t *HostCPUSystemBuilder::InitializeHostCPUDriver(
   return unowned_driver;
 }
 
-void HostCPUSystemBuilder::InitializeHostCPUDevices(LocalSystem &lsys,
+void HostCPUSystemBuilder::InitializeHostCPUDevices(System &lsys,
                                                     iree_hal_driver_t *driver) {
   iree_host_size_t device_info_count = 0;
   allocated_ptr<iree_hal_device_info_t> device_infos(host_allocator());
@@ -94,7 +93,7 @@ void HostCPUSystemBuilder::InitializeHostCPUDevices(LocalSystem &lsys,
         driver, it->device_id, 0, nullptr, host_allocator(),
         device.for_output()));
     lsys.InitializeHalDevice(std::make_unique<HostCPUDevice>(
-        LocalDeviceAddress(
+        DeviceAddress(
             /*system_device_class=*/SYSTEM_DEVICE_CLASS,
             /*logical_device_class=*/LOGICAL_DEVICE_CLASS,
             /*hal_driver_prefix=*/HAL_DRIVER_PREFIX,
@@ -107,4 +106,4 @@ void HostCPUSystemBuilder::InitializeHostCPUDevices(LocalSystem &lsys,
   }
 }
 
-}  // namespace shortfin::systems
+}  // namespace shortfin::local::systems

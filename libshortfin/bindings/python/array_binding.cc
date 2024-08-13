@@ -57,13 +57,13 @@ void BindArray(py::module_ &global_m) {
   py::class_<storage>(m, "storage")
       .def_static(
           "allocate_host",
-          [](ScopedDevice &device, iree_device_size_t allocation_size) {
+          [](local::ScopedDevice &device, iree_device_size_t allocation_size) {
             return storage::AllocateHost(device, allocation_size);
           },
           py::arg("device"), py::arg("allocation_size"), py::keep_alive<0, 1>())
       .def_static(
           "allocate_device",
-          [](ScopedDevice &device, iree_device_size_t allocation_size) {
+          [](local::ScopedDevice &device, iree_device_size_t allocation_size) {
             return storage::AllocateDevice(device, allocation_size);
           },
           py::arg("device"), py::arg("allocation_size"), py::keep_alive<0, 1>())
@@ -92,7 +92,7 @@ void BindArray(py::module_ &global_m) {
                         dtype);
                   })
       .def_static("__new__",
-                  [](py::handle py_type, ScopedDevice &device,
+                  [](py::handle py_type, local::ScopedDevice &device,
                      std::span<const size_t> shape, DType dtype) {
                     return custom_new_keep_alive<device_array>(
                         py_type, /*keep_alive=*/device.scope(),
@@ -113,7 +113,7 @@ void BindArray(py::module_ &global_m) {
                         dtype);
                   })
       .def_static("__new__",
-                  [](py::handle py_type, ScopedDevice &device,
+                  [](py::handle py_type, local::ScopedDevice &device,
                      std::span<const size_t> shape, DType dtype) {
                     return custom_new_keep_alive<host_array>(
                         py_type, /*keep_alive=*/device.scope(),

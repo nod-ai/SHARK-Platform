@@ -13,18 +13,18 @@
 #include "shortfin/local/system.h"
 #include "shortfin/support/api.h"
 
-namespace shortfin::systems {
+namespace shortfin::local::systems {
 
 // CPU device subclass.
-class SHORTFIN_API HostCPUDevice : public LocalDevice {
+class SHORTFIN_API HostCPUDevice : public Device {
  public:
-  using LocalDevice::LocalDevice;
+  using Device::Device;
 };
 
-// Configuration for building a host-based LocalSystem.
-class SHORTFIN_API HostSystemBuilder : public LocalSystemBuilder {
+// Configuration for building a host-based System.
+class SHORTFIN_API HostSystemBuilder : public SystemBuilder {
  public:
-  using LocalSystemBuilder::LocalSystemBuilder;
+  using SystemBuilder::SystemBuilder;
 };
 
 // Specialization of HostSystemBuilder which has CPU executors. Accelerator
@@ -36,20 +36,20 @@ class SHORTFIN_API HostCPUSystemBuilder : public HostSystemBuilder {
   HostCPUSystemBuilder() : HostCPUSystemBuilder(iree_allocator_system()) {}
   ~HostCPUSystemBuilder() override;
 
-  // Creates a LocalSystem based purely on the CPU config. Derived classes
+  // Creates a System based purely on the CPU config. Derived classes
   // must wholly replace this method, using protected piece-wise components.
-  LocalSystemPtr CreateLocalSystem() override;
+  SystemPtr CreateSystem() override;
 
  protected:
   // Initializes any host-cpu defaults that have not been configured yet.
   void InitializeHostCPUDefaults();
-  // Initializes the host-cpu driver and registers it with a LocalSystem.
+  // Initializes the host-cpu driver and registers it with a System.
   // Returns an unowned pointer to the driver that is lifetime bound to the
-  // LocalSystem.
-  iree_hal_driver_t* InitializeHostCPUDriver(LocalSystem& lsys);
-  // Registers all eligible host-cpu devices with the LocalSystem, given
+  // System.
+  iree_hal_driver_t* InitializeHostCPUDriver(System& lsys);
+  // Registers all eligible host-cpu devices with the System, given
   // a driver created from InitializeHostCPUDriver().
-  void InitializeHostCPUDevices(LocalSystem& lsys, iree_hal_driver_t* driver);
+  void InitializeHostCPUDevices(System& lsys, iree_hal_driver_t* driver);
 
   struct {
     iree_task_topology_t task_topology_options;
@@ -63,6 +63,6 @@ class SHORTFIN_API HostCPUSystemBuilder : public HostSystemBuilder {
   } host_cpu_deps_;
 };
 
-}  // namespace shortfin::systems
+}  // namespace shortfin::local::systems
 
 #endif  // SHORTFIN_LOCAL_SYSTEMS_HOST_H

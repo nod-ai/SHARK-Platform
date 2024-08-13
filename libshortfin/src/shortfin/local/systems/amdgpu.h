@@ -15,12 +15,12 @@
 #include "shortfin/support/api.h"
 #include "shortfin/support/iree_helpers.h"
 
-namespace shortfin::systems {
+namespace shortfin::local::systems {
 
 // AMD GPU device subclass.
-class SHORTFIN_API AMDGPUDevice : public LocalDevice {
+class SHORTFIN_API AMDGPUDevice : public Device {
  public:
-  using LocalDevice::LocalDevice;
+  using Device::Device;
 };
 
 // System configuration for some subset of AMD GPUs connected to the local
@@ -38,7 +38,7 @@ class SHORTFIN_API AMDGPUSystemBuilder : public HostCPUSystemBuilder {
   // done.
   void Enumerate();
 
-  LocalSystemPtr CreateLocalSystem() override;
+  SystemPtr CreateSystem() override;
 
   // Settings.
   bool cpu_devices_enabled = false;
@@ -63,6 +63,6 @@ class SHORTFIN_API AMDGPUSystemBuilder : public HostCPUSystemBuilder {
   std::vector<iree_hal_device_info_t> visible_devices_;
 };
 
-}  // namespace shortfin::systems
+}  // namespace shortfin::local::systems
 
 #endif  // SHORTFIN_LOCAL_SYSTEMS_AMDGPU_H

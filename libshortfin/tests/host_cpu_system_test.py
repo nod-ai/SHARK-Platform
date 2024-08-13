@@ -9,7 +9,7 @@ def test_create_host_cpu_system():
     from _shortfin import lib as sfl
 
     sc = sfl.host.CPUSystemBuilder()
-    ls = sc.create_local_system()
+    ls = sc.create_system()
     print(f"LOCAL SYSTEM:", ls)
 
     print("Sleeping in Python")

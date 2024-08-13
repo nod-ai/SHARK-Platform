@@ -11,10 +11,12 @@ shortfin_cc_component(
     shortfin_local
   HDRS
     device.h
+    scheduler.h
     scope.h
     system.h
   SRCS
     device.cc
+    scheduler.cc
     scope.cc
     system.cc
   COMPONENTS

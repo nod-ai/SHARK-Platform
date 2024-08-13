@@ -109,7 +109,7 @@ class SHORTFIN_API device_array final : public base_array {
                DType dtype)
       : base_array(shape, dtype), storage_(std::move(storage)) {}
 
-  static device_array allocate(ScopedDevice &device,
+  static device_array allocate(local::ScopedDevice &device,
                                std::span<const size_t> shape, DType dtype) {
     return device_array(
         storage::AllocateDevice(device, dtype.compute_dense_nd_size(shape)),
@@ -117,7 +117,7 @@ class SHORTFIN_API device_array final : public base_array {
   }
 
   class storage &storage() { return storage_; }
-  ScopedDevice &device() { return storage_.device(); }
+  local::ScopedDevice &device() { return storage_.device(); }
   std::string to_s() const;
 
  private:
@@ -133,7 +133,7 @@ class SHORTFIN_API host_array final : public base_array {
   host_array(class storage storage, std::span<const size_t> shape, DType dtype)
       : base_array(shape, dtype), storage_(std::move(storage)) {}
 
-  static host_array allocate(ScopedDevice &device,
+  static host_array allocate(local::ScopedDevice &device,
                              std::span<const size_t> shape, DType dtype) {
     return host_array(
         storage::AllocateHost(device, dtype.compute_dense_nd_size(shape)),
@@ -147,7 +147,7 @@ class SHORTFIN_API host_array final : public base_array {
   }
 
   class storage &storage() { return storage_; }
-  ScopedDevice &device() { return storage_.device(); }
+  local::ScopedDevice &device() { return storage_.device(); }
   std::string to_s() const;
 
  private:
