@@ -4,7 +4,7 @@
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-#include "shortfin/systems/host.h"
+#include "shortfin/local/systems/host.h"
 
 #include "shortfin/support/iree_helpers.h"
 #include "shortfin/support/logging.h"

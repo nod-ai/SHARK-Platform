@@ -9,10 +9,10 @@
 #include "./utils.h"
 #include "shortfin/local/scope.h"
 #include "shortfin/local/system.h"
+#include "shortfin/local/systems/amdgpu.h"
+#include "shortfin/local/systems/host.h"
 #include "shortfin/support/globals.h"
 #include "shortfin/support/logging.h"
-#include "shortfin/systems/amdgpu.h"
-#include "shortfin/systems/host.h"
 
 namespace shortfin::python {
 

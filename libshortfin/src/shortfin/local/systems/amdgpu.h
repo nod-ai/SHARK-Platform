@@ -4,16 +4,16 @@
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-#ifndef SHORTFIN_SYSTEMS_AMDGPU_H
-#define SHORTFIN_SYSTEMS_AMDGPU_H
+#ifndef SHORTFIN_LOCAL_SYSTEMS_AMDGPU_H
+#define SHORTFIN_LOCAL_SYSTEMS_AMDGPU_H
 
 #include <vector>
 
 #include "iree/hal/drivers/hip/api.h"
 #include "shortfin/local/system.h"
+#include "shortfin/local/systems/host.h"
 #include "shortfin/support/api.h"
 #include "shortfin/support/iree_helpers.h"
-#include "shortfin/systems/host.h"
 
 namespace shortfin::systems {
 
@@ -65,4 +65,4 @@ class SHORTFIN_API AMDGPUSystemBuilder : public HostCPUSystemBuilder {
 
 }  // namespace shortfin::systems
 
-#endif  // SHORTFIN_SYSTEMS_AMDGPU_H
+#endif  // SHORTFIN_LOCAL_SYSTEMS_AMDGPU_H

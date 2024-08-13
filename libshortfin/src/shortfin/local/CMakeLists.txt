@@ -4,6 +4,8 @@
 # https://llvm.org/LICENSE.txt for license information. SPDX-License-Identifier:
 # Apache-2.0 WITH LLVM-exception
 
+add_subdirectory(systems)
+
 shortfin_cc_component(
   NAME
     shortfin_local

@@ -4,8 +4,8 @@
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-#ifndef SHORTFIN_SYSTEMS_HOST_H
-#define SHORTFIN_SYSTEMS_HOST_H
+#ifndef SHORTFIN_LOCAL_SYSTEMS_HOST_H
+#define SHORTFIN_LOCAL_SYSTEMS_HOST_H
 
 #include "iree/hal/drivers/local_task/task_driver.h"
 #include "iree/hal/local/executable_plugin_manager.h"
@@ -65,4 +65,4 @@ class SHORTFIN_API HostCPUSystemBuilder : public HostSystemBuilder {
 
 }  // namespace shortfin::systems
 
-#endif  // SHORTFIN_SYSTEMS_HOST_H
+#endif  // SHORTFIN_LOCAL_SYSTEMS_HOST_H
