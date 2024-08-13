@@ -20,7 +20,8 @@ from ..types import (
     Theta,
     UnreducedTensor,
 )
-from ._registry import unbox_tensor, AllOfType
+from ..types.tensors import unbox_tensor
+from ._registry import AllOfType
 from .signatures import *
 from .shape import broadcast_dims
 

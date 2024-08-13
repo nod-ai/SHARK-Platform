@@ -56,6 +56,26 @@ be cleared, allowing you to inspect assets and intermediates -- but delete
 manually as every run will accumulate). Filtering by test name with
 `-k test_some_name` is also useful. Names have been chosen to facilitate this.
 
+## Model Breaking Changes
+
+If the format of the model or quantization parameters changes, then an update
+must be coordinated. We are presently storing assets here:
+
+https://huggingface.co/amd-shark/sdxl-quant-models/tree/main
+
+The general procedure is:
+
+* Create a branch in sharktank and in that repository.
+* Make source changes to sharktank in the branch.
+* Commit updates params.safetensors/config.json/quant_params.json to the
+  branch in the sdxl-quant-models HF repo.
+* Update the commit hash in `sharktank/integration/models/punet/integration_test.py`
+  appropriately.
+* Run the integration test with `SHARKTANK_TEST_ASSETS_DIR=SOMEDIR`.
+* Copy built assets from the test dir to the sdxl-quant-models/unet/int8/export
+  path on the branch.
+* Commit branches in both projects.
+
 ## License
 
 Significant portions of this implementation were derived from diffusers,

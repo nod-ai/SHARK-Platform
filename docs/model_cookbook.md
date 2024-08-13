@@ -72,7 +72,7 @@ graph LR
 ## Useful tools and projects
 
 * https://huggingface.co/docs/huggingface_hub/en/guides/cli
-* https://github.com/ggerganov/llama.cpp (specifically for [`convert-hf-to-gguf.py`](https://github.com/ggerganov/llama.cpp/blob/master/convert-hf-to-gguf.py))
+* https://github.com/ggerganov/llama.cpp (specifically for [`convert_hf_to_gguf.py`](https://github.com/ggerganov/llama.cpp/blob/master/convert_hf_to_gguf.py))
 
 ## Create a quantized .irpa file
 
@@ -107,7 +107,7 @@ and use the following commands:
 ```bash
 huggingface-cli download --local-dir . NousResearch/Meta-Llama-3-8B
 
-python ~/llama.cpp/convert.py --outtype f16 --outfile Meta-Llama-3-8B-f16.gguf . --vocab-type bpe
+python ~/llama.cpp/convert_hf_to_gguf.py --outtype f16 --outfile Meta-Llama-3-8B-f16.gguf . --vocab-type bpe
 ```
 
 Another example:
@@ -115,7 +115,7 @@ Another example:
 ```bash
 huggingface-cli login
 huggingface-cli download --local-dir /tmp/mistral-7b mistralai/Mistral-7B-v0.1
-python ~/llama.cpp/convert.py --outtype f32 --outfile /tmp/mistral-7b-v0.1-f32.gguf /tmp/mistral-7b
+python ~/llama.cpp/convert_hf_to_gguf.py --outtype f32 --outfile /tmp/mistral-7b-v0.1-f32.gguf /tmp/mistral-7b
 
 # Run through reference implementation
 python -m sharktank.examples.paged_llm_v1 \
@@ -255,4 +255,15 @@ iree-run-module \
   --input=4x1xi64=0,1,2,3 \
   --input=1x2662400xf16 \
   --parameters=model=/tmp/open_llama_3b_v2/open-llama-3b-v2-f16.gguf
+```
+
+## Generating data for llama models
+
+```bash
+set TURBINE_DEBUG=log_level=info
+python -m sharktank.models.llama.tools.generate_data \
+  --tokenizer=openlm-research/open_llama_3b_v2 \
+  --config=/tmp/open_llama_3b_v2/open-llama-3b-v2-f16.json \
+  --output-dir=/tmp/open_llama_3b_v2/inputs \
+  --prompt="What is the meaning of life?"
 ```

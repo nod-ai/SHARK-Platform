@@ -34,10 +34,6 @@ from ....types import *
 # at all.
 IMPORT_SMOOTHQUANT_PRESCALE = True
 
-# Quantizing the bias can produce better fusions but puts more pressure on
-# datatype ranges.
-QUANTIZE_BIAS = True
-
 
 def _load_json(p: Path):
     print(f"Loading {p}")
@@ -63,19 +59,37 @@ def _load_theta(st_source) -> Theta:
     return Theta(tensors)
 
 
+def _dtype_str_to_dtype(dtype_str: str) -> torch.dtype:
+    prefix = "torch."
+    assert dtype_str.startswith(prefix), f"Expected 'torch.`DTYPE`', got {dtype_str}"
+    return getattr(torch, dtype_str[len(prefix) :])
+
+
 def apply_per_layer_quant(
     root_theta: Theta, layer_name: str, qp, updated_tensors: dict[str, InferenceTensor]
 ):
     layer_theta = root_theta(layer_name)
     weight = layer_theta.tensor("weight")
     weight_dtype = weight.as_torch().dtype
+    bias = layer_theta.optional_tensor("bias")
 
     # The config file has tensors as 1d and a _shape suffixed array with the
     # concrete shape.
-    def _get_json_tensor(name: str, dtype: torch.dtype) -> Optional[torch.Tensor]:
+    def _get_json_tensor(
+        name: str, dtype: Optional[torch.dtype]
+    ) -> Optional[torch.Tensor]:
         data_1d = qp.get(name)
         if data_1d is None:
             return None
+        if dtype is not None:
+            assert (
+                f"{name}_dtype" not in qp
+            ), f"Explicit dtype for {name} but json has dtype"
+        else:
+            # _dtype key must come from the dict
+            dtype_str = qp[f"{name}_dtype"]
+            dtype = _dtype_str_to_dtype(dtype_str)
+
         shape = qp[f"{name}_shape"]
         return torch.tensor(data_1d, dtype=dtype).reshape(shape)
 
@@ -91,18 +105,11 @@ def apply_per_layer_quant(
 
     input_scale = _get_json_tensor("input_scale", torch.float32)
     weight_scale = _get_json_tensor("weight_scale", torch.float32)
-    # In the JSON file, zero points are purely positive numbers representing
-    # the zero point assuming a uint8 datatype. Since we prefer to use
-    # signed arithmetic, since that is better accelerated, we offset these by
-    # -128. By decoding them as uint8, it validates our range assumption.
-    # Then we widen/cast to offset.
-    weight_zp = _get_json_tensor("weight_zp", torch.uint8)
-    if weight_zp is not None:
-        weight_zp = (weight_zp.to(dtype=torch.int32) - 128).to(torch.int8)
+    weight_zp = _get_json_tensor("weight_zp", dtype=None)
 
-    # In the current version, we assume that the input is not offset and is
-    # per-tensor quantized for signed arithmetic.
-    input_zp = _get_json_tensor("input_zp", torch.int8)
+    # In the current version, we assume that the input is per-tensor quantized
+    # for signed arithmetic.
+    input_zp = _get_json_tensor("input_zp", dtype=None)
     if input_zp is not None:
         assert torch.count_nonzero(input_zp) == 0
 
@@ -117,32 +124,40 @@ def apply_per_layer_quant(
 
     # Quantized layer must have all quantization info.
     assert (
-        weight_scale is not None and weight_zp is not None
+        weight_scale is not None
     ), f"Could not find weight scale (in {qp.keys()}) for {layer_name}"
     assert (
         input_scale is not None
     ), f"Could not find input scale (in {qp.keys()}) for {layer_name}"
 
-    # Weight scaling.
-    # There is an implicit assumption that the weight is asym (uint8) quantized.
-    # Our quantizer uses scale/offset nomenclature. The offset maps to
-    # zero-point, and the scale maps to the *dequant* scale (so terms differ
-    # by reciprocal).
-    weight_quantizer = StaticScaledQuantizer(
-        scale=1.0 / weight_scale,
-        reciprocal_scale=weight_scale,
-        offset=None if torch.count_nonzero(weight_zp) == 0 else weight_zp,
-        dtype=torch.int8,
-    )
-    weight_quant = weight_quantizer.quantize(weight, name=weight.name)
-    updated_tensors[weight_quant.name] = weight_quant
-    # Spot check that things look sane.
-    weight_dequant = weight_quant.unpack().dequant()
-    weight_diff = weight.as_torch() - weight_dequant
+    def quantize_weight(
+        weight_name: str,
+        weight: torch.Tensor,
+        weight_scale: torch.Tensor,
+        weight_zp: Optional[torch.Tensor],
+    ):
+        # Weight scaling.
+        # There is an implicit assumption that the weight is asym (uint8) quantized.
+        # Our quantizer uses scale/offset nomenclature. The offset maps to
+        # zero-point, and the scale maps to the *dequant* scale (so terms differ
+        # by reciprocal).
+        weight_quantizer = StaticScaledQuantizer(
+            scale=1.0 / weight_scale,
+            reciprocal_scale=weight_scale,
+            offset=None
+            if (weight_zp is None or torch.count_nonzero(weight_zp) == 0)
+            else weight_zp,
+            dtype=torch.int8,
+        )
+        weight_quant = weight_quantizer.quantize(weight, name=weight_name)
+        updated_tensors[weight_quant.name] = weight_quant
 
-    # Bias/output scaling.
-    bias = layer_theta.optional_tensor("bias")
-    if QUANTIZE_BIAS and bias is not None:
+    def quantize_bias(
+        bias_name: str,
+        bias: torch.Tensor,
+        input_scale: torch.Tensor,
+        weight_scale: torch.Tensor,
+    ):
         # If the bias is present, it dictates the overall output quantization
         # and will not be checked for correct parameters at runtime. It must
         # be quantized to match properly.
@@ -152,11 +167,84 @@ def apply_per_layer_quant(
             dtype=torch.int32,
             disable_saturate=True,
         )
-        bias_quant = bias_quantizer.quantize(bias, name=bias.name)
+        bias_quant = bias_quantizer.quantize(bias, name=bias_name)
         updated_tensors[bias_quant.name] = bias_quant
-        # Spot check that things look sane.
-        bias_dequant = bias_quant.unpack().dequant()
-        bias_diff = bias.as_torch() - bias_dequant
+
+    # If dealing with a fused QKV layer, then we need to split the weight as
+    # Brevitas concats it along the [n * output_dim, input_dim] axis, where
+    # n is 2 (to_kv) or 3 (to_qkv).
+    # We do this here vs in the model since it is much more efficient to
+    # operate on the weights contiguously at rest.
+    # TODO: Maybe just have Brevitas output it this way vs having us need
+    # to special case this so extensively (some special casing will be needed).
+    if layer_name.endswith(".to_kv"):
+        # MCHA fused layer.
+        weight_k, weight_v = weight.as_torch().chunk(2, dim=0)
+        weight_scale_k, weight_scale_v = weight_scale.chunk(2, dim=0)
+        if weight_zp is not None:
+            weight_zp_k, weight_zp_v = weight_zp.chunk(2, dim=0)
+        else:
+            weight_zp_k = None
+            weight_zp_v = None
+        print(
+            f"Chunk MCHA KV into {weight_k.shape}, {weight_v.shape} from {weight.shape}"
+        )
+        quantize_weight(
+            f"{layer_name}.to_k.weight", weight_k, weight_scale_k, weight_zp_k
+        )
+        quantize_weight(
+            f"{layer_name}.to_v.weight", weight_v, weight_scale_v, weight_zp_v
+        )
+        updated_tensors[weight.name] = None
+        if bias is not None:
+            bias_k, bias_v = bias.as_torch().chunk(2, dim=0)
+            quantize_bias(
+                f"{layer_name}.to_k.bias", bias_k, input_scale, weight_scale_k
+            )
+            quantize_bias(
+                f"{layer_name}.to_v.bias", bias_v, input_scale, weight_scale_v
+            )
+            updated_tensors[bias.name] = None
+    elif layer_name.endswith(".to_qkv"):
+        # MHA fused layer.
+        weight_q, weight_k, weight_v = weight.as_torch().chunk(3, dim=0)
+        weight_scale_q, weight_scale_k, weight_scale_v = weight_scale.chunk(3, dim=0)
+        if weight_zp is not None:
+            weight_zp_q, weight_zp_k, weight_zp_v = weight_zp.chunk(3, dim=0)
+        else:
+            weight_zp_q = None
+            weight_zp_k = None
+            weight_zp_v = None
+        print(
+            f"Chunk MHA QKV into {weight_q.shape}, {weight_k.shape}, {weight_v.shape} from {weight.shape}"
+        )
+        quantize_weight(
+            f"{layer_name}.to_q.weight", weight_q, weight_scale_q, weight_zp_q
+        )
+        quantize_weight(
+            f"{layer_name}.to_k.weight", weight_k, weight_scale_k, weight_zp_k
+        )
+        quantize_weight(
+            f"{layer_name}.to_v.weight", weight_v, weight_scale_v, weight_zp_v
+        )
+        updated_tensors[weight.name] = None
+        if bias is not None:
+            bias_q, bias_k, bias_v = bias.as_torch().chunk(3, dim=0)
+            quantize_bias(
+                f"{layer_name}.to_q.bias", bias_q, input_scale, weight_scale_q
+            )
+            quantize_bias(
+                f"{layer_name}.to_k.bias", bias_k, input_scale, weight_scale_k
+            )
+            quantize_bias(
+                f"{layer_name}.to_v.bias", bias_v, input_scale, weight_scale_v
+            )
+            updated_tensors[bias.name] = None
+    else:
+        # Unfused.
+        quantize_weight(weight.name, weight, weight_scale, weight_zp)
+        if bias is not None:
+            quantize_bias(bias.name, bias, input_scale, weight_scale)
 
     # Input scaling.
     # Assume per tensor scaling of input.
@@ -187,7 +275,7 @@ def main(argv):
     parser.add_argument(
         "--quant-params",
         type=Path,
-        default=Path("quant_param.json"),
+        default=Path("quant_params.json"),
         help="Quantization parameters",
     )
     parser.add_argument(

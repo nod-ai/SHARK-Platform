@@ -41,6 +41,10 @@ class LlamaHParams:
     attention_layer_norm_rms_epsilon: float
     attention_head_count_kv: int
 
+#    @staticmethod
+#    def from_hf_props(p: dict[str, Any]):
+
+
     @staticmethod
     def from_hf_props(p: dict[str, Any]):
         hp = p["hparams"]
@@ -60,6 +64,26 @@ class LlamaHParams:
 
     @staticmethod
     def from_gguf_props(p: dict[str, Any]):
+        if "hparams" in p:
+            hp = p["hparams"]
+            print("num_attention_heads: ", _int_prop(hp, "num_attention_heads"))
+            attention_head_count=_int_prop(hp, "num_attention_heads")
+            print("head_count_kv: ", _optional_int_prop(hp, "num_key_value_heads", attention_head_count))
+            attn_head_dim=int(_int_prop(hp, "hidden_size") // _int_prop(hp, "num_attention_heads"))
+            return LlamaHParams(
+                context_length=_int_prop(hp, "max_position_embeddings"),
+                embedding_length=_int_prop(hp, "hidden_size"),
+                block_count=_int_prop(hp, "num_hidden_layers"),
+                feed_forward_length=_int_prop(hp, "intermediate_size"),
+                attn_head_dim=attn_head_dim,
+                rope_dimension_count=attn_head_dim,
+                attention_head_count=attention_head_count,
+                attention_layer_norm_rms_epsilon=_float_prop(hp, "rms_norm_eps"),
+                attention_head_count_kv=_optional_int_prop(hp, "num_key_value_heads", attention_head_count),
+            )
+
+
+        
         attention_head_count = _int_prop(p, "llama.attention.head_count")
         return LlamaHParams(
             context_length=_int_prop(p, "llama.context_length"),

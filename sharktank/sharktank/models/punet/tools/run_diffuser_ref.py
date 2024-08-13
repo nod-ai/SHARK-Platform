@@ -4,8 +4,13 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
+from pathlib import Path
+
 import torch
 from diffusers import UNet2DConditionModel
+
+from ....utils.patching import SaveModuleResultTensorsPatch
+from .sample_data import get_random_inputs, load_inputs, save_outputs
 
 
 class ClassifierFreeGuidanceUnetModel(torch.nn.Module):
@@ -18,7 +23,7 @@ class ClassifierFreeGuidanceUnetModel(torch.nn.Module):
         *,
         sample: torch.Tensor,
         timestep,
-        prompt_embeds,
+        encoder_hidden_states,
         text_embeds,
         time_ids,
         guidance_scale: torch.Tensor,
@@ -31,7 +36,7 @@ class ClassifierFreeGuidanceUnetModel(torch.nn.Module):
         noise_pred, *_ = self.cond_model.forward(
             latent_model_input,
             timestep,
-            encoder_hidden_states=prompt_embeds,
+            encoder_hidden_states=encoder_hidden_states,
             cross_attention_kwargs=None,
             added_cond_kwargs=added_cond_kwargs,
             return_dict=False,
@@ -49,6 +54,21 @@ def main():
     parser = cli.create_parser()
     parser.add_argument("--device", default="cuda:0", help="Torch device to run on")
     parser.add_argument("--dtype", default="float16", help="DType to run in")
+    parser.add_argument(
+        "--inputs",
+        type=Path,
+        help="Safetensors file of inputs (or random if not given)",
+    )
+    parser.add_argument(
+        "--outputs",
+        type=Path,
+        help="Safetensors file of outputs",
+    )
+    parser.add_argument(
+        "--save-intermediates-path",
+        type=Path,
+        help="Path of safetensors file in which to save all module outputs",
+    )
     args = cli.parse(parser)
 
     device = args.device
@@ -67,28 +87,27 @@ def main():
     print("Moved to GPU")
 
     # Run a step for debugging.
-    torch.random.manual_seed(42)
-    max_length = 64
-    height = 1024
-    width = 1024
-    bs = 1
-    sample = torch.rand(bs, 4, height // 8, width // 8, dtype=dtype).to(device)
-    timestep = torch.zeros(1, dtype=torch.int32).to(device)
-    prompt_embeds = torch.rand(2 * bs, max_length, 2048, dtype=dtype).to(device)
-    text_embeds = torch.rand(2 * bs, 1280, dtype=dtype).to(device)
-    time_ids = torch.zeros(2 * bs, 6, dtype=dtype).to(device)
-    guidance_scale = torch.tensor([7.5], dtype=dtype).to(device)
+    if args.inputs:
+        inputs = load_inputs(args.inputs, dtype=dtype, device=device)
+    else:
+        inputs = get_random_inputs(dtype=dtype, device=device)
+
+    # Save intermediates.
+    intermediates_saver = None
+    if args.save_intermediates_path:
+        intermediates_saver = SaveModuleResultTensorsPatch()
+        intermediates_saver.patch_child_modules(mdl.cond_model)
 
     print("Calling forward")
-    results = mdl.forward(
-        sample=sample,
-        timestep=timestep,
-        prompt_embeds=prompt_embeds,
-        text_embeds=text_embeds,
-        time_ids=time_ids,
-        guidance_scale=guidance_scale,
-    )
+    results = mdl.forward(**inputs)
     print("1-step resutls:", results)
+    if args.outputs:
+        print(f"Saving outputs to {args.outputs}")
+        save_outputs(args.outputs, results)
+
+    if intermediates_saver:
+        print(f"Saving intermediate tensors to: {args.save_intermediates_path}")
+        intermediates_saver.save_file(args.save_intermediates_path)
 
 
 if __name__ == "__main__":

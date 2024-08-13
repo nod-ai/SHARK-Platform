@@ -90,7 +90,7 @@ def sdxl_int8_base_files():
     from huggingface_hub import hf_hub_download
 
     REPO_ID = "amd-shark/sdxl-quant-models"
-    REVISION = "82e06d6ea22ac78102a9aded69e8ddfb9fa4ae37"
+    REVISION = "942e771bf0c2657a8b33380103d04747a75dfa4a"
 
     def download(filename):
         return hf_hub_download(

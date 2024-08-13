@@ -35,7 +35,7 @@ class LlamaModelConfig:
     block_seq_stride: int = 16
 
     # Either "paged" or "direct".
-    kv_cache_type: str = "paged"
+    kv_cache_type: str = "direct"
 
     # The device on which to place intermediate state.
     device: Optional[torch.device] = None
@@ -113,7 +113,9 @@ class PagedLlamaModelV1(BaseCausalLMModel):
         self.hp = hp
         self.cache = config.create_kv_cache()
         self.activation_dtype = config.activation_dtype
-        
+        print(self.hp.block_count)
+        print("block count")
+
         key = "token_embd"
         if key not in list(theta.keys):
             self.hf = True
@@ -133,11 +135,8 @@ class PagedLlamaModelV1(BaseCausalLMModel):
         key = "output_norm" if "output_norm" in list(theta.keys) else "model.norm"
         self.add_module(
             "output_norm",
-            RMSNormLayer(
-                theta(key), epsilon=self.hp.attention_layer_norm_rms_epsilon
-            ),
+            RMSNormLayer(theta(key), epsilon=self.hp.attention_layer_norm_rms_epsilon),
         )
-        print(theta.keys)
         key = "output" if "output" in list(theta.keys) else "lm_head"
         self.add_module("output_lm_head", LinearLayer(theta(key)))
         key = "blk" if "blk" in list(theta.keys) else "model.layers"
@@ -151,7 +150,7 @@ class PagedLlamaModelV1(BaseCausalLMModel):
                     head_dim=hp.attn_head_dim,
                     head_count_kv=hp.attention_head_count_kv,
                     rms_epsilon=hp.attention_layer_norm_rms_epsilon,
-                    hf = self.hf,
+                    hf=self.hf,
                 )
                 for n in range(hp.block_count)
             ]
@@ -168,6 +167,8 @@ class PagedLlamaModelV1(BaseCausalLMModel):
         seq_block_ids: torch.Tensor,
         cache_state: list[torch.Tensor],
     ):
+        print("tokens.shape: ")
+        print(tokens.shape)
         self._assert_device(tokens)
         self._assert_device(attention_mask, dtype=self.activation_dtype)
         self._assert_device(seq_block_ids)
@@ -285,20 +286,26 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         head_dim: int,
         head_count_kv: int,
         rms_epsilon: float,
-        hf = False
-    ):  
+        hf=False,
+    ):
         super().__init__(theta)
         if hf:
-            #tensor = theta("self_attn.qkv.weight").tensor
-            #tensor = tensor.reshape(head_count_kv, head_count // head_count_kv + 2, head_dim, head_dim * head_count)
-            #print(tensor)
-            self.add_module("attn_norm", RMSNormLayer(theta("input_layernorm"), epsilon=rms_epsilon))
-            #self.add_module("attn_qkv", LinearLayer(theta("self_attn.qkv")))
+            # tensor = theta("self_attn.qkv.weight").tensor
+            # tensor = tensor.reshape(head_count_kv, head_count // head_count_kv + 2, head_dim, head_dim * head_count)
+            # print(tensor)
+            self.add_module(
+                "attn_norm", RMSNormLayer(theta("input_layernorm"), epsilon=rms_epsilon)
+            )
+            # self.add_module("attn_qkv", LinearLayer(theta("self_attn.qkv")))
             self.add_module("attn_q", LinearLayer(theta("self_attn.q_proj")))
+            print(f"self.attn_q.weightshape:  {self.attn_q.weight.shape}")
             self.add_module("attn_k", LinearLayer(theta("self_attn.k_proj")))
             self.add_module("attn_v", LinearLayer(theta("self_attn.v_proj")))
             self.add_module("attn_output", LinearLayer(theta("self_attn.o_proj")))
-            self.add_module("ffn_norm", RMSNormLayer(theta("post_attention_layernorm"), epsilon=rms_epsilon))
+            self.add_module(
+                "ffn_norm",
+                RMSNormLayer(theta("post_attention_layernorm"), epsilon=rms_epsilon),
+            )
             self.add_module("ffn_gate", LinearLayer(theta("mlp.gate_proj")))
             self.add_module("ffn_up", LinearLayer(theta("mlp.up_proj")))
             self.add_module("ffn_down", LinearLayer(theta("mlp.down_proj")))
@@ -307,8 +314,11 @@ class PagedLlamaAttentionBlock(ThetaLayer):
                 "attn_norm", RMSNormLayer(theta("attn_norm"), epsilon=rms_epsilon)
             )
             self.add_module("attn_q", LinearLayer(theta("attn_q")))
+            print(f"self.attn_q.weightshape:  {self.attn_q.weight.shape}")
             self.add_module("attn_k", LinearLayer(theta("attn_k")))
+            print(f"self.attn_k.weightshape:  {self.attn_k.weight.shape}")
             self.add_module("attn_v", LinearLayer(theta("attn_v")))
+            print(f"self.attn_v.weightshape:  {self.attn_v.weight.shape}")
             self.add_module("attn_output", LinearLayer(theta("attn_output")))
             self.add_module(
                 "ffn_norm", RMSNormLayer(theta("ffn_norm"), epsilon=rms_epsilon)
@@ -319,8 +329,7 @@ class PagedLlamaAttentionBlock(ThetaLayer):
 
         self.block_index = block_index
         self.cache = cache
-        print(head_count)
-        assert(isinstance(head_count, int))
+        assert isinstance(head_count, int)
         self.head_count = head_count
         self.head_dim = head_dim
         self.head_count_kv = head_count_kv
@@ -346,7 +355,12 @@ class PagedLlamaAttentionBlock(ThetaLayer):
 
         bs, batch_seq_len, feature_dim = x.shape
         assert feature_dim == self.head_count * self.head_dim
-
+        def qdq(inputs: torch.Tensor, scale) -> torch.Tensor:
+            inputs_type = inputs.dtype
+            inputs = torch.clamp(inputs, min=-448, max=448)
+            outputs = (inputs).to(torch.float8_e4m3fn).to(inputs_type) * scale
+            return outputs
+        #x = qdq(x, 0.0111)
         xq = self.attn_q(x)
         xk = self.attn_k(x)
         xv = self.attn_v(x)
