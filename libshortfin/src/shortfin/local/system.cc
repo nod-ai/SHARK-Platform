@@ -15,20 +15,20 @@ namespace shortfin::local {
 
 namespace {
 
-// A LocalScope with a back reference to the System from which it
+// A Scope with a back reference to the System from which it
 // originated.
-class ExtendingLocalScope : public LocalScope {
+class ExtendingScope : public Scope {
  public:
-  using LocalScope::LocalScope;
+  using Scope::Scope;
 
  private:
   std::shared_ptr<System> backref_;
   friend std::shared_ptr<System> &mutable_local_scope_backref(
-      ExtendingLocalScope &);
+      ExtendingScope &);
 };
 
 std::shared_ptr<System> &mutable_local_scope_backref(
-    ExtendingLocalScope &scope) {
+    ExtendingScope &scope) {
   return scope.backref_;
 }
 
@@ -67,9 +67,9 @@ System::~System() {
   hal_drivers_.clear();
 }
 
-std::unique_ptr<LocalScope> System::CreateScope() {
+std::unique_ptr<Scope> System::CreateScope() {
   auto new_scope =
-      std::make_unique<ExtendingLocalScope>(host_allocator(), devices());
+      std::make_unique<ExtendingScope>(host_allocator(), devices());
   mutable_local_scope_backref(*new_scope) = shared_from_this();
   return new_scope;
 }

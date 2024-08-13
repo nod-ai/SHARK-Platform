@@ -14,7 +14,7 @@ namespace shortfin::python {
 
 // Casts any of int, str, local::Device, DeviceAffinity to a DeviceAffinity.
 // If the object is a sequence, then the affinity is constructed from the union.
-inline local::ScopedDevice CastDeviceAffinity(local::LocalScope &scope,
+inline local::ScopedDevice CastDeviceAffinity(local::Scope &scope,
                                               py::handle object) {
   if (py::isinstance<local::Device>(object)) {
     return scope.device(py::cast<local::Device *>(object));

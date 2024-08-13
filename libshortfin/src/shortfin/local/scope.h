@@ -17,19 +17,19 @@
 
 namespace shortfin::local {
 
-class SHORTFIN_API LocalScope;
+class SHORTFIN_API Scope;
 
-// Wraps a LocalScope and a DeviceAffinity together. This is used in all
+// Wraps a Scope and a DeviceAffinity together. This is used in all
 // Scope based APIs as a short-hand for "device" as it contains everything
 // needed to do thing with some slice of device queues.
 class SHORTFIN_API ScopedDevice {
  public:
-  ScopedDevice(LocalScope &scope, DeviceAffinity affinity)
+  ScopedDevice(Scope &scope, DeviceAffinity affinity)
       : scope_(scope), affinity_(affinity) {}
-  ScopedDevice(LocalScope &scope, Device *device)
+  ScopedDevice(Scope &scope, Device *device)
       : scope_(scope), affinity_(device) {}
 
-  LocalScope &scope() const { return scope_; }
+  Scope &scope() const { return scope_; }
   DeviceAffinity affinity() const { return affinity_; }
   Device *raw_device() const { return affinity_.device(); }
 
@@ -40,7 +40,7 @@ class SHORTFIN_API ScopedDevice {
   }
 
  private:
-  LocalScope &scope_;
+  Scope &scope_;
   DeviceAffinity affinity_;
 };
 
@@ -60,16 +60,16 @@ class SHORTFIN_API ScopedDevice {
 // situations, this can be customized. By default, devices are added in the
 // order defined by the system and will have an `<index>` corresponding to
 // their order. It is up to the constructor to produce a sensible arrangement.
-class SHORTFIN_API LocalScope {
+class SHORTFIN_API Scope {
  public:
   // Initialize with devices using logical_device_class as the device class.
-  LocalScope(iree_allocator_t host_allocator, std::span<Device *const> devices);
+  Scope(iree_allocator_t host_allocator, std::span<Device *const> devices);
   // Initialize with devices with custom device class names.
-  LocalScope(iree_allocator_t host_allocator,
+  Scope(iree_allocator_t host_allocator,
              std::span<const std::pair<std::string_view, Device *>> devices);
-  LocalScope(const LocalScope &) = delete;
+  Scope(const Scope &) = delete;
   // Ensure polymorphic.
-  virtual ~LocalScope();
+  virtual ~Scope();
 
   // Device access.
   // Throws std::invalid_argument on lookup failure.
@@ -84,8 +84,8 @@ class SHORTFIN_API LocalScope {
 
   // Variadic helper for making a DeviceAffinity from any of:
   //  * Explicit Device*
-  //  * Device name (from a LocalScope)
-  //  * Device index (from a LocalScope)
+  //  * Device name (from a Scope)
+  //  * Device index (from a Scope)
   // If at any point during accumulation, the DeviceAffinity would be invalid,
   // then a std::invalid_argument exception is thrown. Any failure to resolve
   // a name or index will also throw a std::invalid_argument.

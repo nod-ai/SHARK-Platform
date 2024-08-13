@@ -9,7 +9,6 @@
 
 #include <string_view>
 
-#include "shortfin/local/device.h"
 #include "shortfin/local/scope.h"
 #include "shortfin/support/api.h"
 
@@ -19,9 +18,9 @@ namespace shortfin::array {
 class SHORTFIN_API storage {
  public:
   local::ScopedDevice &device() { return device_; }
-  local::LocalScope &scope() { return device_.scope(); }
+  local::Scope &scope() { return device_.scope(); }
   const local::ScopedDevice &device() const { return device_; }
-  local::LocalScope &scope() const { return device_.scope(); }
+  local::Scope &scope() const { return device_.scope(); }
 
   // Allocates device storage, compatible with the given device affinity.
   // By default, this will be IREE_HAL_MEMORY_TYPE_OPTIMAL_FOR_DEVICE.

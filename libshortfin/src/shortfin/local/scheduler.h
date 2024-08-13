@@ -15,7 +15,7 @@
 
 namespace shortfin::local {
 
-class SHORTFIN_API LocalScope;
+class SHORTFIN_API Scope;
 class SHORTFIN_API ScopedDevice;
 
 namespace detail {
@@ -65,7 +65,7 @@ enum class TransactionMode {
 // Since TimelineResources are shared (i.e. across subspan storage, etc),
 // they are modeled as reference counted (using non atomics, since this is
 // "scoped" same thread access). They must only be held in a context that
-// is keeping the containing LocalScope alive.
+// is keeping the containing Scope alive.
 //
 // Note to the future: in discussing the above, many cases were noted where
 // a more advanced programming model would be desirable in order to exercise
@@ -235,7 +235,7 @@ class SHORTFIN_API Scheduler {
   TransactionMode tx_mode_ = TransactionMode::EAGER;
   TransactionType current_tx_type_ = TransactionType::NONE;
 
-  friend class local::LocalScope;
+  friend class local::Scope;
 };
 
 }  // namespace detail

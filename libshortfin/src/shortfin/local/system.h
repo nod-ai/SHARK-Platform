@@ -21,7 +21,7 @@
 
 namespace shortfin::local {
 
-class LocalScope;
+class Scope;
 class System;
 class SystemBuilder;
 
@@ -58,10 +58,10 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
   }
 
   // Scopes.
-  // Creates a new LocalScope bound to this System (it will internally
+  // Creates a new Scope bound to this System (it will internally
   // hold a reference to this instance). All devices in system order will be
   // added to the scope.
-  std::unique_ptr<LocalScope> CreateScope();
+  std::unique_ptr<Scope> CreateScope();
 
   // Initialization APIs. Calls to these methods is only permitted between
   // construction and Initialize().

@@ -77,33 +77,33 @@ void BindLocalSystem(py::module_ &m) {
 
 void BindLocalScope(py::module_ &m) {
   struct DevicesSet {
-    DevicesSet(local::LocalScope &scope) : scope(scope) {}
-    local::LocalScope &scope;
+    DevicesSet(local::Scope &scope) : scope(scope) {}
+    local::Scope &scope;
   };
-  py::class_<local::LocalScope>(m, "LocalScope")
-      .def_prop_ro("raw_devices", &local::LocalScope::raw_devices,
+  py::class_<local::Scope>(m, "LocalScope")
+      .def_prop_ro("raw_devices", &local::Scope::raw_devices,
                    py::rv_policy::reference_internal)
       .def(
           "raw_device",
-          [](local::LocalScope &self, int index) {
+          [](local::Scope &self, int index) {
             return self.raw_device(index);
           },
           py::rv_policy::reference_internal)
       .def(
           "raw_device",
-          [](local::LocalScope &self, std::string_view name) {
+          [](local::Scope &self, std::string_view name) {
             return self.raw_device(name);
           },
           py::rv_policy::reference_internal)
       .def_prop_ro(
-          "devices", [](local::LocalScope &self) { return DevicesSet(self); },
+          "devices", [](local::Scope &self) { return DevicesSet(self); },
           py::rv_policy::reference_internal)
-      .def_prop_ro("device_names", &local::LocalScope::device_names)
-      .def_prop_ro("named_devices", &local::LocalScope::named_devices,
+      .def_prop_ro("device_names", &local::Scope::device_names)
+      .def_prop_ro("named_devices", &local::Scope::named_devices,
                    py::rv_policy::reference_internal)
       .def(
           "device",
-          [](local::LocalScope &self, py::args args) {
+          [](local::Scope &self, py::args args) {
             return CastDeviceAffinity(self, args);
           },
           py::rv_policy::reference_internal);
