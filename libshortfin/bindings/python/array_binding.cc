@@ -12,9 +12,7 @@ using namespace shortfin::array;
 
 namespace shortfin::python {
 
-void BindArray(py::module_ &global_m) {
-  auto m = global_m.def_submodule("array", "Shortfin ND arrays");
-
+void BindArray(py::module_ &m) {
   py::class_<DType>(m, "DType")
       .def_prop_ro("is_boolean", &DType::is_boolean)
       .def_prop_ro("is_integer", &DType::is_integer)

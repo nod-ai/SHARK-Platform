@@ -13,7 +13,7 @@ from _shortfin import lib as sfl
 
 @pytest.fixture
 def lsys():
-    sc = sfl.host.CPUSystemBuilder()
+    sc = sfl.local.host.CPUSystemBuilder()
     return sc.create_system()
 
 

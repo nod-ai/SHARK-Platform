@@ -18,19 +18,20 @@ namespace shortfin::python {
 
 NB_MODULE(lib, m) {
   m.def("initialize", shortfin::GlobalInitialize);
+  auto local_m = m.def_submodule("local");
+  BindLocal(local_m);
+  BindHostSystem(local_m);
+  BindAMDGPUSystem(local_m);
 
-  BindArray(m);
-  BindLocalScope(m);
-  BindLocalSystem(m);
-  BindHostSystem(m);
-  BindAMDGPUSystem(m);
+  auto array_m = m.def_submodule("array");
+  BindArray(array_m);
 }
 
-void BindLocalSystem(py::module_ &m) {
-  py::class_<local::SystemBuilder>(m, "LocalSystemBuilder")
+void BindLocal(py::module_ &m) {
+  py::class_<local::SystemBuilder>(m, "SystemBuilder")
       .def("create_system",
            [](local::SystemBuilder &self) { return self.CreateSystem(); });
-  py::class_<local::System>(m, "LocalSystem")
+  py::class_<local::System>(m, "System")
       // Access devices by list, name, or lookup.
       .def_prop_ro("device_names",
                    [](local::System &self) {
@@ -55,12 +56,12 @@ void BindLocalSystem(py::module_ &m) {
       .def("create_scope", &local::System::CreateScope);
 
   // Support classes.
-  py::class_<local::Node>(m, "LocalNode")
+  py::class_<local::Node>(m, "Node")
       .def_prop_ro("node_num", &local::Node::node_num)
       .def("__repr__", [](local::Node &self) {
         return fmt::format("local::Node({})", self.node_num());
       });
-  py::class_<local::Device>(m, "LocalDevice")
+  py::class_<local::Device>(m, "Device")
       .def("name", &local::Device::name)
       .def("node_affinity", &local::Device::node_affinity)
       .def("node_locked", &local::Device::node_locked)
@@ -73,21 +74,17 @@ void BindLocalSystem(py::module_ &m) {
       .def("add", &local::DeviceAffinity::AddDevice)
       .def("__add__", &local::DeviceAffinity::AddDevice)
       .def("__repr__", &local::DeviceAffinity::to_s);
-}
 
-void BindLocalScope(py::module_ &m) {
   struct DevicesSet {
     DevicesSet(local::Scope &scope) : scope(scope) {}
     local::Scope &scope;
   };
-  py::class_<local::Scope>(m, "LocalScope")
+  py::class_<local::Scope>(m, "Scope")
       .def_prop_ro("raw_devices", &local::Scope::raw_devices,
                    py::rv_policy::reference_internal)
       .def(
           "raw_device",
-          [](local::Scope &self, int index) {
-            return self.raw_device(index);
-          },
+          [](local::Scope &self, int index) { return self.raw_device(index); },
           py::rv_policy::reference_internal)
       .def(
           "raw_device",
@@ -117,7 +114,7 @@ void BindLocalScope(py::module_ &m) {
       .def(py::self == py::self)
       .def("__repr__", &local::ScopedDevice::to_s);
 
-  py::class_<DevicesSet>(m, "_LocalScopeDevicesSet")
+  py::class_<DevicesSet>(m, "_ScopeDevicesSet")
       .def("__len__",
            [](DevicesSet &self) { return self.scope.raw_devices().size(); })
       .def(

@@ -12,7 +12,7 @@ from _shortfin import lib as sfl
 
 @pytest.fixture
 def lsys():
-    sc = sfl.host.CPUSystemBuilder()
+    sc = sfl.local.host.CPUSystemBuilder()
     return sc.create_system()
 
 
@@ -25,7 +25,7 @@ def test_raw_device_access(scope):
     first_name = scope.device_names[0]
     assert first_name == "cpu0"
     first_device = scope.raw_device(0)  # By index
-    assert isinstance(first_device, sfl.host.HostCPUDevice)
+    assert isinstance(first_device, sfl.local.host.HostCPUDevice)
     assert first_device is scope.raw_device(first_name)  # By name
     print(first_device)
     devices = scope.raw_devices
@@ -54,10 +54,10 @@ def test_devices_collection_access(scope):
 
 def test_device_affinity_repr(scope):
     assert (
-        repr(sfl.DeviceAffinity(scope.raw_device(0)))
+        repr(sfl.local.DeviceAffinity(scope.raw_device(0)))
         == "DeviceAffinity(host-cpu:0:0@0[0x1])"
     )
-    assert repr(sfl.DeviceAffinity()) == "DeviceAffinity(ANY)"
+    assert repr(sfl.local.DeviceAffinity()) == "DeviceAffinity(ANY)"
 
 
 def test_device_affinity_resolve(scope):

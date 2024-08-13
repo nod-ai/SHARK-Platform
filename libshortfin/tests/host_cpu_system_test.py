@@ -8,7 +8,7 @@
 def test_create_host_cpu_system():
     from _shortfin import lib as sfl
 
-    sc = sfl.host.CPUSystemBuilder()
+    sc = sfl.local.host.CPUSystemBuilder()
     ls = sc.create_system()
     print(f"LOCAL SYSTEM:", ls)
 

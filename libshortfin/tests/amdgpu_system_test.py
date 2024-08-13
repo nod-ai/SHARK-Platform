@@ -8,7 +8,7 @@
 def test_create_host_cpu_system():
     from _shortfin import lib as sfl
 
-    sc = sfl.amdgpu.SystemBuilder()
+    sc = sfl.local.amdgpu.SystemBuilder()
     ls = sc.create_system()
     print(f"LOCAL SYSTEM:", ls)
     for device_name in ls.device_names:
