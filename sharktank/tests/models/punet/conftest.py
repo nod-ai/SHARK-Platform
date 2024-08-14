@@ -13,16 +13,19 @@ def pytest_addoption(parser):
     parser.addoption(
         "--mlir",
         type=Path,
+        default=None,
         help="Path to exported MLIR program. If not specified a temporary file will be used.",
     )
     parser.addoption(
         "--module",
         type=Path,
+        default=None,
         help="Path to exported IREE module. If not specified a temporary file will be used.",
     )
     parser.addoption(
         "--parameters",
         type=Path,
+        default=None,
         help="Exported model parameters. If not specified a temporary file will be used.",
     )
     parser.addoption(
