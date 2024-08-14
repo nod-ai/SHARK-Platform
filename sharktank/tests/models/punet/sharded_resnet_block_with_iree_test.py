@@ -228,7 +228,13 @@ def test_sharded_resnet_block_with_iree(
     The model is tensor sharded across 2 devices.
     """
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
+    with tempfile.TemporaryDirectory(
+        # TODO: verify hypothesis and remove ignore_cleanup_errors=True
+        # torch.export.export is spawning some processes that don't exit when the
+        # function returns, this causes some objects to not get destroyed, which
+        # in turn holds files params.rank0.irpa and params.rank1.irpa open.
+        ignore_cleanup_errors=True
+    ) as tmp_dir:
         mlir_path = Path(tmp_dir) / "model.mlir" if mlir_path is None else mlir_path
         module_path = (
             Path(tmp_dir) / "module.vmfb" if module_path is None else module_path
