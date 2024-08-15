@@ -30,7 +30,7 @@ import random
 fs = []
 total_delay = 0.0
 max_delay = 0.0
-for i in range(5):
+for i in range(20):
     delay = random.random() * 2
     total_delay += delay
     max_delay = max(max_delay, delay)

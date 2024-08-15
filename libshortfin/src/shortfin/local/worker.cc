@@ -69,28 +69,26 @@ iree_status_t Worker::TransactLoop(iree_status_t signal_status) {
   }
   next_thunks_.clear();
 
-  transacted_ = true;
+  ScheduleExternalTransactEvent();
   return iree_ok_status();
+}
+
+iree_status_t Worker::ScheduleExternalTransactEvent() {
+  return iree_loop_wait_one(
+      loop_, signal_transact_.await(), iree_infinite_timeout(),
+      +[](void* self, iree_loop_t loop, iree_status_t status) {
+        return static_cast<Worker*>(self)->TransactLoop(status);
+      },
+      this);
 }
 
 int Worker::Run() {
   auto RunLoop = [&]() -> iree_status_t {
+    IREE_RETURN_IF_ERROR(ScheduleExternalTransactEvent());
     for (;;) {
       {
         iree_slim_mutex_lock_guard guard(mu_);
         if (kill_) break;
-      }
-
-      // If our transact callback has fired, we need to reschedule on the next
-      // pass (since it is consumed).
-      if (transacted_) {
-        IREE_RETURN_IF_ERROR(iree_loop_wait_one(
-            loop_, signal_transact_.await(), iree_infinite_timeout(),
-            +[](void* self, iree_loop_t loop, iree_status_t status) {
-              return static_cast<Worker*>(self)->TransactLoop(status);
-            },
-            this));
-        transacted_ = false;
       }
       IREE_RETURN_IF_ERROR(iree_loop_drain(loop_, options_.quantum));
     }

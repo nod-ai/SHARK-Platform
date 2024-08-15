@@ -24,10 +24,11 @@ class SHORTFIN_API Worker {
     iree_allocator_t allocator;
     std::string name;
 
-    // The loop may enter uninterruptible states for up to this scheduling
-    // quantum. In these states, the loop may queue off-thread requests
-    // vs interrupting the loop to begin executing them.
-    iree_timeout_t quantum = iree_make_timeout_ms(250);
+    // Controls the maximum duration that can transpire between the loop
+    // making an outer trip where it can exit and perform other outside-world
+    // maintenance. Without this, the loop could run forever if there was
+    // an infinite/long async wait or something.
+    iree_timeout_t quantum = iree_make_timeout_ms(500);
 
     Options(iree_allocator_t allocator, std::string name)
         : allocator(allocator), name(name) {}
@@ -76,6 +77,7 @@ class SHORTFIN_API Worker {
 
  private:
   int Run();
+  iree_status_t ScheduleExternalTransactEvent();
   iree_status_t TransactLoop(iree_status_t signal_status);
 
   const Options options_;
@@ -94,7 +96,6 @@ class SHORTFIN_API Worker {
   iree_loop_sync_t *loop_sync_;
   iree_loop_t loop_;
   std::vector<std::function<void()>> next_thunks_;
-  bool transacted_ = true;
 };
 
 }  // namespace shortfin::local
