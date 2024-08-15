@@ -68,9 +68,7 @@ iree_status_t Worker::TransactLoop(iree_status_t signal_status) {
     next_thunk();
   }
   next_thunks_.clear();
-
-  ScheduleExternalTransactEvent();
-  return iree_ok_status();
+  return ScheduleExternalTransactEvent();
 }
 
 iree_status_t Worker::ScheduleExternalTransactEvent() {
