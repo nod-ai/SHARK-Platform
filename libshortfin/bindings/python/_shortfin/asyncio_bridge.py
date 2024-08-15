@@ -5,6 +5,9 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 import asyncio
+from collections.abc import Callable
+from contextvars import Context
+from typing_extensions import Unpack
 
 from . import lib as sfl
 
@@ -20,6 +23,12 @@ class PyWorkerEventLoop(asyncio.AbstractEventLoop):
     def create_task(self, coro):
         return asyncio.Task(coro, loop=self)
 
+    def create_future(self):
+        return asyncio.Future(loop=self)
+
+    def time(self) -> float:
+        return self._worker._now() / 1e9
+
     def call_soon_threadsafe(self, callback, *args, context=None) -> asyncio.Handle:
         def on_worker():
             asyncio.set_event_loop(self)
@@ -29,15 +38,37 @@ class PyWorkerEventLoop(asyncio.AbstractEventLoop):
         # TODO: Return future.
 
     def call_soon(self, callback, *args, context=None) -> asyncio.Handle:
-        if not args:
-            self._worker.call(callback)
-        else:
+        handle = _Handle(callback, args, self, context)
+        self._worker.call(handle._sf_maybe_run)
+        return handle
 
-            def trampoline():
-                callback(*args)
-
-            self._worker.call(trampoline)
+    def call_later(
+        self, delay: float, callback, *args, context=None
+    ) -> asyncio.TimerHandle:
+        w = self._worker
+        deadline = w._delay_to_deadline_ns(delay)
+        handle = _TimerHandle(deadline / 1e9, callback, args, self, context)
+        w.delay_call(deadline, handle._sf_maybe_run)
+        return handle
 
     def call_exception_handler(self, context) -> None:
         # TODO: Should route this to the central exception handler.
         raise RuntimeError(f"Async exception on {self._worker}: {context}")
+
+    def _timer_handle_cancelled(self, handle):
+        # We don't do anything special: just skip it if it comes up.
+        pass
+
+
+class _Handle(asyncio.Handle):
+    def _sf_maybe_run(self):
+        if self.cancelled():
+            return
+        self._run()
+
+
+class _TimerHandle(asyncio.TimerHandle):
+    def _sf_maybe_run(self):
+        if self.cancelled():
+            return
+        self._run()

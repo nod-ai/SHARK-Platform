@@ -17,20 +17,27 @@ worker = lsys.create_worker("main")
 print("Worker:", worker)
 
 
-@worker.call
-def print_thread_id():
-    print(f"Worker (tid={threading.get_ident()})")
+async def do_something(delay):
+    print(f"FROM ASYNC do_something (tid={threading.get_ident()})", delay)
+    print("Time:", asyncio.get_running_loop().time(), "Delay:", delay)
+    await asyncio.sleep(delay)
+    print(f"DONE", delay)
+    return delay
 
 
-async def do_something():
-    print(f"FROM ASYNC do_something (tid={threading.get_ident()})")
-    raise ValueError("Yeah, we're going to need you to come in on Saturday")
+import random
 
+fs = []
+total_delay = 0.0
+max_delay = 0.0
+for i in range(5):
+    delay = random.random() * 2
+    total_delay += delay
+    max_delay = max(max_delay, delay)
+    print("SCHEDULE", i)
+    fs.append(asyncio.run_coroutine_threadsafe(do_something(delay), worker.loop))
 
-f = asyncio.run_coroutine_threadsafe(do_something(), worker.loop)
-print("FUTURE:", f)
+for f in fs:
+    print(f.result())
 
-
-print(f"Sleeping... (tid={threading.get_ident()})")
-time.sleep(2)
-print("FUTURE NOW:", f.result())
+print("TOTAL DELAY:", total_delay, "MAX:", max_delay)

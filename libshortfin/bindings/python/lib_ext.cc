@@ -21,7 +21,8 @@ namespace {
 // Custom worker which hosts an asyncio event loop.
 class PyWorker : public local::Worker {
  public:
-  using Worker::Worker;
+  PyWorker(PyInterpreterState *interp, Options options)
+      : Worker(std::move(options)), interp_(interp) {}
 
   void WaitForShutdown() override {
     // Need to release the GIL if blocking.
@@ -30,23 +31,43 @@ class PyWorker : public local::Worker {
   }
 
   void OnThreadStart() override {
+    PyThreadState_New(interp_);
     py::gil_scoped_acquire g;
+    // Aside from set_event_loop being old and _set_running_loop being new
+    // it isn't clear to me that either can be left off.
     py::module_::import_("asyncio").attr("set_event_loop")(loop_);
+    py::module_::import_("asyncio.events").attr("_set_running_loop")(loop_);
   }
 
   void OnThreadStop() override {
-    py::gil_scoped_acquire g;
-    loop_.reset();
+    {
+      // Do Python level thread cleanup.
+      py::gil_scoped_acquire g;
+      loop_.reset();
+      PyThreadState_Clear(PyThreadState_Get());
+    }
+
+    // And destroy our thread state.
+    // TODO: PyThreadState_Delete seems like it should be used here, but I
+    // couldn't find that being done and I couldn't find a way to use it
+    // with the GIL/thread state correct.
+    PyThreadState_Swap(nullptr);
   }
 
   std::string to_s() { return fmt::format("PyWorker(name='{}')", name()); }
 
+  void SetCurrentLoop() {
+    py::module_::import_("asyncio").attr("set_event_loop")(loop_);
+  }
+
   py::object loop_;
+  PyInterpreterState *interp_;
 };
 
 PyWorker &CreatePyWorker(local::System &self, std::string name) {
+  PyInterpreterState *interp = PyInterpreterState_Get();
   PyWorker::Options options(self.host_allocator(), std::move(name));
-  auto new_worker = std::make_unique<PyWorker>(std::move(options));
+  auto new_worker = std::make_unique<PyWorker>(interp, std::move(options));
   py::object worker_obj = py::cast(*new_worker.get(), py::rv_policy::reference);
   py::detail::keep_alive(worker_obj.ptr(),
                          py::cast(self, py::rv_policy::none).ptr());
@@ -201,32 +222,60 @@ void BindLocal(py::module_ &m) {
           py::rv_policy::reference_internal);
 
   py::class_<local::Worker>(m, "_Worker", py::is_weak_referenceable())
-      .def("call_threadsafe", &local::Worker::CallThreadsafe)
-      .def(
-          "call",
-          [](local::Worker &worker, py::handle callable) {
-            callable.inc_ref();  // Stolen within the callback.
-            auto thunk = +[](void *user_data, iree_loop_t loop,
-                             iree_status_t status) noexcept -> iree_status_t {
-              py::gil_scoped_acquire g;
-              py::object user_callable =
-                  py::steal(static_cast<PyObject *>(user_data));
-              IREE_RETURN_IF_ERROR(status);
-              try {
-                user_callable();
-              } catch (std::exception &e) {
-                return iree_make_status(
-                    IREE_STATUS_UNKNOWN,
-                    "Python exception raised from async callback: %s",
-                    e.what());
-              }
-              return iree_ok_status();
-            };
-            SHORTFIN_THROW_IF_ERROR(worker.CallLowLevel(thunk, callable.ptr()));
-          })
       .def("__repr__", &local::Worker::to_s);
   py::class_<PyWorker, local::Worker>(m, "Worker")
       .def_ro("loop", &PyWorker::loop_)
+      .def("call_threadsafe", &PyWorker::CallThreadsafe)
+      .def("call",
+           [](local::Worker &self, py::handle callable) {
+             callable.inc_ref();  // Stolen within the callback.
+             auto thunk = +[](void *user_data, iree_loop_t loop,
+                              iree_status_t status) noexcept -> iree_status_t {
+               py::gil_scoped_acquire g;
+               py::object user_callable =
+                   py::steal(static_cast<PyObject *>(user_data));
+               IREE_RETURN_IF_ERROR(status);
+               try {
+                 user_callable();
+               } catch (std::exception &e) {
+                 return iree_make_status(
+                     IREE_STATUS_UNKNOWN,
+                     "Python exception raised from async callback: %s",
+                     e.what());
+               }
+               return iree_ok_status();
+             };
+             SHORTFIN_THROW_IF_ERROR(self.CallLowLevel(thunk, callable.ptr()));
+           })
+      .def("delay_call",
+           [](local::Worker &self, iree_time_t deadline_ns,
+              py::handle callable) {
+             callable.inc_ref();  // Stolen within the callback.
+             auto thunk = +[](void *user_data, iree_loop_t loop,
+                              iree_status_t status) noexcept -> iree_status_t {
+               py::gil_scoped_acquire g;
+               py::object user_callable =
+                   py::steal(static_cast<PyObject *>(user_data));
+               IREE_RETURN_IF_ERROR(status);
+               try {
+                 user_callable();
+               } catch (std::exception &e) {
+                 return iree_make_status(
+                     IREE_STATUS_UNKNOWN,
+                     "Python exception raised from async callback: %s",
+                     e.what());
+               }
+               return iree_ok_status();
+             };
+             SHORTFIN_THROW_IF_ERROR(self.WaitUntilLowLevel(
+                 iree_make_deadline(deadline_ns), thunk, callable.ptr()));
+           })
+      .def("_delay_to_deadline_ns",
+           [](local::Worker &self, double delay_seconds) {
+             return self.ConvertRelativeTimeoutToDeadlineNs(
+                 static_cast<iree_duration_t>(delay_seconds * 1e9));
+           })
+      .def("_now", [](local::Worker &self) { return self.now(); })
       .def("__repr__", &PyWorker::to_s);
 }
 

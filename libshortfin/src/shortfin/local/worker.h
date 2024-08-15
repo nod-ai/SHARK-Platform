@@ -24,6 +24,11 @@ class SHORTFIN_API Worker {
     iree_allocator_t allocator;
     std::string name;
 
+    // The loop may enter uninterruptible states for up to this scheduling
+    // quantum. In these states, the loop may queue off-thread requests
+    // vs interrupting the loop to begin executing them.
+    iree_timeout_t quantum = iree_make_timeout_ms(250);
+
     Options(iree_allocator_t allocator, std::string name)
         : allocator(allocator), name(name) {}
   };
@@ -33,6 +38,7 @@ class SHORTFIN_API Worker {
   virtual ~Worker();
 
   const std::string_view name() const { return options_.name; }
+  std::string to_s();
 
   void Start();
   void Kill();
@@ -52,7 +58,17 @@ class SHORTFIN_API Worker {
       void *user_data,
       iree_loop_priority_e priority = IREE_LOOP_PRIORITY_DEFAULT) noexcept;
 
-  std::string to_s();
+  // Calls back after a timeout.
+  iree_status_t WaitUntilLowLevel(
+      iree_timeout_t timeout,
+      iree_status_t (*callback)(void *user_data, iree_loop_t loop,
+                                iree_status_t status) noexcept,
+      void *user_data);
+
+  // Time management.
+  // Returns the current absolute time in nanoseconds.
+  iree_time_t now();
+  iree_time_t ConvertRelativeTimeoutToDeadlineNs(iree_duration_t timeout_ns);
 
  protected:
   virtual void OnThreadStart();
@@ -78,6 +94,7 @@ class SHORTFIN_API Worker {
   iree_loop_sync_t *loop_sync_;
   iree_loop_t loop_;
   std::vector<std::function<void()>> next_thunks_;
+  bool transacted_ = true;
 };
 
 }  // namespace shortfin::local

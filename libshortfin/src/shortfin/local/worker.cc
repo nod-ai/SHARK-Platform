@@ -69,6 +69,7 @@ iree_status_t Worker::TransactLoop(iree_status_t signal_status) {
   }
   next_thunks_.clear();
 
+  transacted_ = true;
   return iree_ok_status();
 }
 
@@ -80,15 +81,18 @@ int Worker::Run() {
         if (kill_) break;
       }
 
-      // Need to re-add our transact event on each cycle because it was
-      // necessarily fulfilled each time.
-      IREE_RETURN_IF_ERROR(iree_loop_wait_one(
-          loop_, signal_transact_.await(), iree_infinite_timeout(),
-          +[](void* self, iree_loop_t loop, iree_status_t status) {
-            return static_cast<Worker*>(self)->TransactLoop(status);
-          },
-          this));
-      IREE_RETURN_IF_ERROR(iree_loop_drain(loop_, iree_infinite_timeout()));
+      // If our transact callback has fired, we need to reschedule on the next
+      // pass (since it is consumed).
+      if (transacted_) {
+        IREE_RETURN_IF_ERROR(iree_loop_wait_one(
+            loop_, signal_transact_.await(), iree_infinite_timeout(),
+            +[](void* self, iree_loop_t loop, iree_status_t status) {
+              return static_cast<Worker*>(self)->TransactLoop(status);
+            },
+            this));
+        transacted_ = false;
+      }
+      IREE_RETURN_IF_ERROR(iree_loop_drain(loop_, options_.quantum));
     }
     return iree_ok_status();
   };
@@ -167,6 +171,21 @@ iree_status_t Worker::CallLowLevel(
                               iree_status_t status) noexcept,
     void* user_data, iree_loop_priority_e priority) noexcept {
   return iree_loop_call(loop_, priority, callback, user_data);
+}
+
+iree_status_t Worker::WaitUntilLowLevel(
+    iree_timeout_t timeout,
+    iree_status_t (*callback)(void* user_data, iree_loop_t loop,
+                              iree_status_t status) noexcept,
+    void* user_data) {
+  return iree_loop_wait_until(loop_, timeout, callback, user_data);
+}
+
+// Time management.
+iree_time_t Worker::now() { return iree_time_now(); }
+iree_time_t Worker::ConvertRelativeTimeoutToDeadlineNs(
+    iree_duration_t timeout_ns) {
+  return iree_relative_timeout_to_deadline_ns(timeout_ns);
 }
 
 }  // namespace shortfin::local
