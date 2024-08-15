@@ -9,10 +9,9 @@ import asyncio
 import threading
 import time
 
-from _shortfin import asyncio_bridge
-from _shortfin import lib as sfl
+import shortfin as sf
 
-lsys = sfl.local.host.CPUSystemBuilder().create_system()
+lsys = sf.host.CPUSystemBuilder().create_system()
 worker = lsys.create_worker("main")
 print("Worker:", worker)
 

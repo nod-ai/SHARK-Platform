@@ -55,8 +55,11 @@ class NoopBuildExtension(_build_ext):
         ...
 
 
+python_src_dir = rel_source_dir / "bindings" / "python"
+python_bin_dir = rel_binary_dir / "bindings" / "python"
+
 setup(
-    name="libshortfin",
+    name="shortfin",
     version="0.9",
     description="Shortfin native library implementation",
     author="SHARK Authors",
@@ -64,14 +67,14 @@ setup(
         "_shortfin",
         "_shortfin_default",
         # TODO: Conditionally map additional native library variants.
+        "shortfin",
     ],
     zip_safe=False,
     package_dir={
-        "_shortfin": str(rel_source_dir / "bindings" / "python" / "_shortfin"),
-        "_shortfin_default": str(
-            rel_binary_dir / "bindings" / "python" / "_shortfin_default"
-        ),
+        "_shortfin": str(python_src_dir / "_shortfin"),
+        "_shortfin_default": str(python_bin_dir / "_shortfin_default"),
         # TODO: Conditionally map additional native library variants.
+        "shortfin": str(python_src_dir / "shortfin"),
     },
     ext_modules=[
         BuiltExtension("_shortfin_default.lib"),
