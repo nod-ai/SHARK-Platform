@@ -17,11 +17,11 @@ worker = lsys.create_worker("main")
 print("Worker:", worker)
 
 
-async def do_something(delay):
-    print(f"FROM ASYNC do_something (tid={threading.get_ident()})", delay)
-    print("Time:", asyncio.get_running_loop().time(), "Delay:", delay)
+async def do_something(i, delay):
+    print(f"({i}): FROM ASYNC do_something (tid={threading.get_ident()})", delay)
+    print(f"({i}): Time:", asyncio.get_running_loop().time(), "Delay:", delay)
     await asyncio.sleep(delay)
-    print(f"DONE", delay)
+    print(f"({i}): DONE", delay)
     return delay
 
 
@@ -35,7 +35,7 @@ for i in range(5):
     total_delay += delay
     max_delay = max(max_delay, delay)
     print("SCHEDULE", i)
-    fs.append(asyncio.run_coroutine_threadsafe(do_something(delay), worker.loop))
+    fs.append(asyncio.run_coroutine_threadsafe(do_something(i, delay), worker.loop))
 
 for f in fs:
     print(f.result())
