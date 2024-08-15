@@ -136,13 +136,17 @@ split into 3 general groups:
 * AGPRs: Matrix accumulation vector registers (each thread holds a different
   value). Up to 256 AGPRs per thread on MI300.
 
-VGPRs and AGPRs share the same register file: 512 registers * 64 threads per
-SIMD.
+On CDNA2 and latter architectures, VGPRs and AGPRs share the same register file:
+512 registers * 64 threads per SIMD.
 
 > [!TIP]
 > Register usage affects occupancy. A kernel utilizing all 256 VGPRs can
 > launch only one or two subgroups per SIMD, depending on the number of AGPRs
 > used.
+
+When the kernel runs out of VGPRs, it may spill: first to AGPRs (through
+the `v_accvgpr_*` instructions), later to scratch (through the `scratch_score_*`
+instructions). The latter comes at a significant performance penalty.
 
 > [!TIP]
 > You can check the register usage by looking at the very end of the kernel
