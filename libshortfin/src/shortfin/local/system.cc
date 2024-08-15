@@ -44,13 +44,40 @@ System::System(iree_allocator_t host_allocator)
 }
 
 System::~System() {
+  bool needs_shutdown = false;
+  {
+    iree_slim_mutex_lock_guard guard(lock_);
+    if (initialized_ && !shutdown_) {
+      needs_shutdown = true;
+    }
+  }
+  if (needs_shutdown) {
+    logging::warn(
+        "Implicit Shutdown from System destructor. Please call Shutdown() "
+        "explicitly for maximum stability.");
+    Shutdown();
+  }
+}
+
+void System::Shutdown() {
+  // Stop workers.
+  std::vector<std::unique_ptr<Worker>> local_workers;
+  {
+    iree_slim_mutex_lock_guard guard(lock_);
+    if (!initialized_ || shutdown_) return;
+    shutdown_ = true;
+    workers_by_name_.clear();
+    local_workers.swap(workers_);
+  }
+
   // Worker drain and shutdown.
-  for (auto &worker : workers_) {
+  for (auto &worker : local_workers) {
     worker->Kill();
   }
-  for (auto &worker : workers_) {
+  for (auto &worker : local_workers) {
     worker->WaitForShutdown();
   }
+  local_workers.clear();
 
   // Orderly destruction of heavy-weight objects.
   // Shutdown order is important so we don't leave it to field ordering.
@@ -66,6 +93,7 @@ System::~System() {
 }
 
 std::unique_ptr<Scope> System::CreateScope() {
+  iree_slim_mutex_lock_guard guard(lock_);
   auto new_scope =
       std::make_unique<ExtendingScope>(host_allocator(), devices());
   mutable_local_scope_backref(*new_scope) = shared_from_this();
@@ -81,6 +109,23 @@ void System::InitializeNodes(int node_count) {
   for (int i = 0; i < node_count; ++i) {
     nodes_.emplace_back(i);
   }
+}
+
+Worker &System::StartExistingWorker(std::unique_ptr<Worker> worker) {
+  Worker *unowned_worker;
+  {
+    iree_slim_mutex_lock_guard guard(lock_);
+    std::string_view name = worker->name();
+    if (workers_by_name_.count(name) != 0) {
+      throw std::invalid_argument(
+          fmt::format("Cannot create worker with duplicate name '{}'", name));
+    }
+    workers_.push_back(std::move(worker));
+    unowned_worker = workers_.back().get();
+    workers_by_name_[name] = unowned_worker;
+  }
+  unowned_worker->Start();
+  return *unowned_worker;
 }
 
 void System::InitializeHalDriver(std::string_view moniker,
@@ -107,16 +152,8 @@ void System::InitializeHalDevice(std::unique_ptr<Device> device) {
 }
 
 void System::FinishInitialization() {
+  iree_slim_mutex_lock_guard guard(lock_);
   AssertNotInitialized();
-
-  // TODO: Remove this. Just testing.
-  // workers_.push_back(
-  //     std::make_unique<Worker>(Worker::Options(host_allocator(),
-  //     "worker:0")));
-  // workers_.back()->Start();
-  // workers_.back()->EnqueueCallback(
-  //     []() { spdlog::info("Hi from a worker callback"); });
-
   initialized_ = true;
 }
 

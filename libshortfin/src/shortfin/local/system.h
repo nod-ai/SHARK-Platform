@@ -15,9 +15,11 @@
 #include <vector>
 
 #include "shortfin/local/device.h"
-#include "shortfin/process/worker.h"
+#include "shortfin/local/worker.h"
 #include "shortfin/support/api.h"
+#include "shortfin/support/iree_concurrency.h"
 #include "shortfin/support/iree_helpers.h"
+#include "shortfin/support/stl_extras.h"
 
 namespace shortfin::local {
 
@@ -43,6 +45,9 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
   System(const System &) = delete;
   ~System();
 
+  // Explicit shutdown (vs in destructor) is encouraged.
+  void Shutdown();
+
   // Get a shared pointer from the instance.
   std::shared_ptr<System> shared_ptr() { return shared_from_this(); }
 
@@ -62,6 +67,14 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
   // hold a reference to this instance). All devices in system order will be
   // added to the scope.
   std::unique_ptr<Scope> CreateScope();
+
+  // Workers.
+  // Donates and starts a Worker. The worker name must be unique and the worker
+  // must not have been started prior. This API is intended for language
+  // bindings which may need to customize their Worker subclass. User C++ code
+  // should prefer the StartWorker() API which creates and starts a worker in
+  // one shot.
+  Worker &StartExistingWorker(std::unique_ptr<Worker> worker);
 
   // Initialization APIs. Calls to these methods is only permitted between
   // construction and Initialize().
@@ -83,6 +96,9 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
 
   const iree_allocator_t host_allocator_;
 
+  string_interner interner_;
+  iree_slim_mutex lock_;
+
   // NUMA nodes relevant to this system.
   std::vector<Node> nodes_;
 
@@ -101,10 +117,12 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
 
   // Workers.
   std::vector<std::unique_ptr<Worker>> workers_;
+  std::unordered_map<std::string_view, Worker *> workers_by_name_;
 
   // Whether initialization is complete. If true, various low level
   // mutations are disallowed.
   bool initialized_ = false;
+  bool shutdown_ = false;
 };
 using SystemPtr = std::shared_ptr<System>;
 

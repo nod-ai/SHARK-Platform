@@ -19,7 +19,6 @@ shortfin_public_library(
   COMPONENTS
     shortfin_array
     shortfin_local
-    shortfin_process
     shortfin_support
     shortfin_systems_amdgpu
     shortfin_systems_host

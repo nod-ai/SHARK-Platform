@@ -4,11 +4,11 @@
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-#include "shortfin/process/worker.h"
+#include "shortfin/local/worker.h"
 
 #include "shortfin/support/logging.h"
 
-namespace shortfin {
+namespace shortfin::local {
 
 Worker::Worker(const Options options)
     : options_(std::move(options)),
@@ -34,13 +34,18 @@ Worker::~Worker() {
   thread_.reset();
 }
 
+std::string Worker::to_s() {
+  return fmt::format("<Worker '{}'>", options_.name);
+}
+
+void Worker::OnThreadStart() {}
+void Worker::OnThreadStop() {}
+
 iree_status_t Worker::TransactLoop(iree_status_t signal_status) {
   if (!iree_status_is_ok(signal_status)) {
     // TODO: Handle failure.
     return signal_status;
   }
-
-  logging::info("Transact loop!");
 
   {
     // An outside thread cannot change the state we are managing without
@@ -88,6 +93,7 @@ int Worker::Run() {
     return iree_ok_status();
   };
 
+  OnThreadStart();
   {
     auto loop_status = RunLoop();
     if (!iree_status_is_ok(loop_status)) {
@@ -95,6 +101,7 @@ int Worker::Run() {
       iree_status_abort(loop_status);
     }
   }
+  OnThreadStop();
 
   signal_ended_.set();
   return 0;
@@ -147,7 +154,7 @@ void Worker::WaitForShutdown() {
   }
 }
 
-void Worker::EnqueueCallback(std::function<void()> callback) {
+void Worker::CallThreadsafe(std::function<void()> callback) {
   {
     iree_slim_mutex_lock_guard guard(mu_);
     pending_thunks_.push_back(std::move(callback));
@@ -155,4 +162,11 @@ void Worker::EnqueueCallback(std::function<void()> callback) {
   signal_transact_.set();
 }
 
-}  // namespace shortfin
+iree_status_t Worker::CallLowLevel(
+    iree_status_t (*callback)(void* user_data, iree_loop_t loop,
+                              iree_status_t status) noexcept,
+    void* user_data, iree_loop_priority_e priority) noexcept {
+  return iree_loop_call(loop_, priority, callback, user_data);
+}
+
+}  // namespace shortfin::local

@@ -12,12 +12,13 @@
 #include <vector>
 
 #include "iree/base/loop_sync.h"
+#include "shortfin/support/api.h"
 #include "shortfin/support/iree_concurrency.h"
 
-namespace shortfin {
+namespace shortfin::local {
 
 // Cooperative worker.
-class Worker {
+class SHORTFIN_API Worker {
  public:
   struct Options {
     iree_allocator_t allocator;
@@ -29,16 +30,33 @@ class Worker {
 
   Worker(Options options);
   Worker(const Worker &) = delete;
-  ~Worker();
+  virtual ~Worker();
 
   const std::string_view name() const { return options_.name; }
 
   void Start();
   void Kill();
-  void WaitForShutdown();
+  virtual void WaitForShutdown();
 
-  // Enqueues a callback on the worker.
-  void EnqueueCallback(std::function<void()> callback);
+  // Enqueues a callback to the worker from another thread.
+  void CallThreadsafe(std::function<void()> callback);
+
+  // Operations that can be done from on the worker.
+  // Callback to execute user code on the loop "soon". this variant must not
+  // raise exceptions and matches the underlying C API. It should not generally
+  // be used by "regular users" but can be useful for bindings that wish to
+  // reduce the tolls/hops.
+  iree_status_t CallLowLevel(
+      iree_status_t (*callback)(void *user_data, iree_loop_t loop,
+                                iree_status_t status) noexcept,
+      void *user_data,
+      iree_loop_priority_e priority = IREE_LOOP_PRIORITY_DEFAULT) noexcept;
+
+  std::string to_s();
+
+ protected:
+  virtual void OnThreadStart();
+  virtual void OnThreadStop();
 
  private:
   int Run();
@@ -62,6 +80,6 @@ class Worker {
   std::vector<std::function<void()>> next_thunks_;
 };
 
-}  // namespace shortfin
+}  // namespace shortfin::local
 
 #endif  // SHORTFIN_WORKER_H
