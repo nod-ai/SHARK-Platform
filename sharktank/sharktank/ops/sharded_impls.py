@@ -8,6 +8,7 @@ import torch
 from torch import Tensor
 from typing import List, Optional, Sequence
 import itertools
+from numbers import Number
 
 from ..types import (
     AnyTensor,
@@ -248,6 +249,22 @@ def split_elementwise_binary(
     return SplitPrimitiveTensor(shard_dim=x.shard_dim, shape=x.shape, ts=partials)
 
 
+@elementwise.override(SplitPrimitiveTensor, Number)
+def elementwise_binary_split_lhs_scalar_rhs(
+    operator, x: SplitPrimitiveTensor, y: Number
+):
+    pt_xs = [unbox_tensor(pt) for pt in x.shards]
+    partials = [operator(pt_x, y) for pt_x in pt_xs]
+    return SplitPrimitiveTensor(shard_dim=x.shard_dim, shape=x.shape, ts=partials)
+
+
+@elementwise.override(SplitPrimitiveTensor, Tensor)
+def elementwise_binary_split_lhs_tensor_rhs(
+    operator, x: SplitPrimitiveTensor, y: Tensor
+):
+    return elementwise(operator, x, replicate(y, count=x.shard_count))
+
+
 @elementwise.override(ReplicatedTensor, SplitPrimitiveTensor)
 def elementwise_binary_replicated_lhs_sharder_rhs(
     operator, x: ReplicatedTensor, y: SplitPrimitiveTensor
@@ -264,8 +281,9 @@ def elementwise_binary_replicated_lhs_sharder_rhs(
 
 @elementwise.override(SplitPrimitiveTensor, ReplicatedTensor)
 def elementwise_binary_split_lhs_replicated_rhs(
-    operator, x: ReplicatedTensor, y: SplitPrimitiveTensor
+    operator, x: SplitPrimitiveTensor, y: ReplicatedTensor
 ):
+    assert len(y.shape) > 0, "0-rank not supported"
     if x.shard_count != y.shard_count:
         raise ValueError(
             f"Operands' number of shards not equal ({x.shard_count} != {y.shard_count})"

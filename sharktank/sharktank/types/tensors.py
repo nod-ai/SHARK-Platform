@@ -284,6 +284,21 @@ class InferenceTensor(ABC):
 
         return elementwise(torch.add, self, rhs)
 
+    def __radd__(self, lhs):
+        # Assumes commutative addition due to torch.elementwise not handling numbers on
+        # the rhs.
+        return self.__add__(lhs)
+
+    def __mul__(self, rhs):
+        from ..ops import elementwise
+
+        return elementwise(torch.mul, self, rhs)
+
+    def __rmul__(self, lhs):
+        # Assumes commutative multiplication due to torch.elementwise not handling
+        # numbers on the rhs.
+        return self.__mul__(lhs)
+
 
 REGISTERED_INFERENCE_TENSOR_CLASSES: dict[str, Type[InferenceTensor]] = {}
 
