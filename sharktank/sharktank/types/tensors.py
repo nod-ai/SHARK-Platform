@@ -286,7 +286,7 @@ class InferenceTensor(ABC):
 
     def __radd__(self, lhs):
         # Assumes commutative addition due to torch.elementwise not handling numbers on
-        # the rhs.
+        # the lhs.
         return self.__add__(lhs)
 
     def __mul__(self, rhs):
@@ -296,7 +296,7 @@ class InferenceTensor(ABC):
 
     def __rmul__(self, lhs):
         # Assumes commutative multiplication due to torch.elementwise not handling
-        # numbers on the rhs.
+        # numbers on the lhs.
         return self.__mul__(lhs)
 
 
