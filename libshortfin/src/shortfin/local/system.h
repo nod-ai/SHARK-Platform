@@ -80,7 +80,6 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
   // Creates a scope bound to the init worker.
   std::shared_ptr<Scope> CreateScope();
 
-  // Workers.
   // Creates and starts a worker (if it is configured to run in a thread).
   Worker &CreateWorker(Worker::Options options);
 
