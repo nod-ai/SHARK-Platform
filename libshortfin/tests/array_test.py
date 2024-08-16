@@ -19,7 +19,9 @@ def lsys():
 
 @pytest.fixture
 def scope(lsys):
-    return lsys.create_scope()
+    # TODO: Should adopt the main thread.
+    worker = lsys.create_worker("main")
+    return lsys.create_scope(worker)
 
 
 def test_storage(scope):

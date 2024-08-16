@@ -7,6 +7,7 @@
 #include "./lib_ext.h"
 
 #include "./utils.h"
+#include "shortfin/local/process.h"
 #include "shortfin/local/scope.h"
 #include "shortfin/local/system.h"
 #include "shortfin/local/systems/amdgpu.h"
@@ -17,6 +18,12 @@
 namespace shortfin::python {
 
 namespace {
+
+class Refs {
+ public:
+  py::object asyncio_create_task =
+      py::module_::import_("asyncio").attr("create_task");
+};
 
 // Custom worker which hosts an asyncio event loop.
 class PyWorker : public local::Worker {
@@ -80,6 +87,53 @@ PyWorker &CreatePyWorker(local::System &self, std::string name) {
       self.StartExistingWorker(std::move(new_worker)));
 }
 
+class PyProcess : public local::detail::BaseProcess {
+ public:
+  PyProcess(std::shared_ptr<local::Scope> scope, std::shared_ptr<Refs> refs)
+      : BaseProcess(std::move(scope)), refs_(std::move(refs)) {}
+  using BaseProcess::Launch;
+
+  void ScheduleOnWorker() override {
+    // This is tricky: We need to retain the object reference across the
+    // thread transition, but on the receiving side, the GIL will not be
+    // held initially, so we must avoid any refcount maintenance until it
+    // is acquired. Therefore, we manually borrow a reference and steal it in
+    // the callback.
+    py::handle self_object = py::cast(this, py::rv_policy::none);
+    self_object.inc_ref();
+    scope()->worker().CallThreadsafe(
+        std::bind(&PyProcess::RunOnWorker, self_object));
+  }
+  static void RunOnWorker(py::handle self_handle) {
+    {
+      py::gil_scoped_acquire g;
+      // Steal the reference back from ScheduleOnWorker. Important: this is
+      // very likely the last reference to the process. So self must not be
+      // touched after self_object goes out of scope.
+      py::object self_object = py::steal(self_handle);
+      PyProcess *self = py::cast<PyProcess *>(self_handle);
+      // We assume that the run method either returns None (def) or a coroutine
+      // (async def).
+      auto coro = self_object.attr("run")();
+      if (!coro.is_none()) {
+        auto task = self->refs_->asyncio_create_task(coro);
+        // Capture the self object to avoid lifetime hazzard with PyProcess
+        // going away before done.
+        task.attr("add_done_callback")(
+            py::cpp_function([self_object](py::handle future) {
+              PyProcess *done_self = py::cast<PyProcess *>(self_object);
+              done_self->Terminate();
+            }));
+      } else {
+        // Synchronous termination.
+        self->Terminate();
+      }
+    }
+  }
+
+  std::shared_ptr<Refs> refs_;
+};
+
 }  // namespace
 
 NB_MODULE(lib, m) {
@@ -107,6 +161,7 @@ void BindLocal(py::module_ &m) {
                             }
                           }),
                           live_system_refs);
+  auto refs = std::make_shared<Refs>();
 
   py::class_<local::SystemBuilder>(m, "SystemBuilder")
       .def("create_system", [live_system_refs](local::SystemBuilder &self) {
@@ -138,7 +193,8 @@ void BindLocal(py::module_ &m) {
             return it->second;
           },
           py::rv_policy::reference_internal)
-      .def("create_scope", &local::System::CreateScope)
+      .def("create_scope", &local::System::CreateScope,
+           py::rv_policy::reference_internal)
       .def("create_worker", &CreatePyWorker, py::arg("name"),
            py::rv_policy::reference_internal);
 
@@ -277,6 +333,18 @@ void BindLocal(py::module_ &m) {
            })
       .def("_now", [](local::Worker &self) { return self.now(); })
       .def("__repr__", &PyWorker::to_s);
+
+  py::class_<PyProcess>(m, "Process")
+      .def("__init__", [](py::args, py::kwargs) {})
+      .def_static(
+          "__new__",
+          [refs](py::handle py_type, std::shared_ptr<local::Scope> scope,
+                 py::args, py::kwargs) {
+            return custom_new<PyProcess>(py_type, std::move(scope), refs);
+          })
+      .def_prop_ro("scope", &PyProcess::scope)
+      .def("launch", &PyProcess::Launch)
+      .def("__repr__", &PyProcess::to_s);
 }
 
 void BindHostSystem(py::module_ &global_m) {

@@ -13,25 +13,6 @@
 
 namespace shortfin::local {
 
-namespace {
-
-// A Scope with a back reference to the System from which it
-// originated.
-class ExtendingScope : public Scope {
- public:
-  using Scope::Scope;
-
- private:
-  std::shared_ptr<System> backref_;
-  friend std::shared_ptr<System> &mutable_local_scope_backref(ExtendingScope &);
-};
-
-std::shared_ptr<System> &mutable_local_scope_backref(ExtendingScope &scope) {
-  return scope.backref_;
-}
-
-}  // namespace
-
 // -------------------------------------------------------------------------- //
 // System
 // -------------------------------------------------------------------------- //
@@ -92,12 +73,9 @@ void System::Shutdown() {
   hal_drivers_.clear();
 }
 
-std::unique_ptr<Scope> System::CreateScope() {
+std::shared_ptr<Scope> System::CreateScope(Worker &worker) {
   iree_slim_mutex_lock_guard guard(lock_);
-  auto new_scope =
-      std::make_unique<ExtendingScope>(host_allocator(), devices());
-  mutable_local_scope_backref(*new_scope) = shared_from_this();
-  return new_scope;
+  return std::make_shared<Scope>(shared_ptr(), worker, devices());
 }
 
 void System::InitializeNodes(int node_count) {
@@ -155,6 +133,18 @@ void System::FinishInitialization() {
   iree_slim_mutex_lock_guard guard(lock_);
   AssertNotInitialized();
   initialized_ = true;
+}
+
+int64_t System::AllocateProcess(detail::BaseProcess *p) {
+  iree_slim_mutex_lock_guard guard(lock_);
+  int pid = next_pid_++;
+  processes_by_pid_[pid] = p;
+  return pid;
+}
+
+void System::DeallocateProcess(int64_t pid) {
+  iree_slim_mutex_lock_guard guard(lock_);
+  processes_by_pid_.erase(pid);
 }
 
 }  // namespace shortfin::local

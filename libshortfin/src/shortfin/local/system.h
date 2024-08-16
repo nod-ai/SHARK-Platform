@@ -23,6 +23,10 @@
 
 namespace shortfin::local {
 
+namespace detail {
+class BaseProcess;
+}  // namespace detail
+
 class Scope;
 class System;
 class SystemBuilder;
@@ -66,7 +70,7 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
   // Creates a new Scope bound to this System (it will internally
   // hold a reference to this instance). All devices in system order will be
   // added to the scope.
-  std::unique_ptr<Scope> CreateScope();
+  std::shared_ptr<Scope> CreateScope(Worker &worker);
 
   // Workers.
   // Donates and starts a Worker. The worker name must be unique and the worker
@@ -94,6 +98,14 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
     }
   }
 
+  // Allocates a process in the process table and returns its new pid.
+  // This is done on process construction. Note that it acquires the
+  // system lock and is non-reentrant.
+  int64_t AllocateProcess(detail::BaseProcess *);
+  // Deallocates a process by pid. This is done on process destruction. Note
+  // that is acquires the system lock and is non-reentrant.
+  void DeallocateProcess(int64_t pid);
+
   const iree_allocator_t host_allocator_;
 
   string_interner interner_;
@@ -119,10 +131,16 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
   std::vector<std::unique_ptr<Worker>> workers_;
   std::unordered_map<std::string_view, Worker *> workers_by_name_;
 
+  // Process management.
+  int next_pid_ = 1;
+  std::unordered_map<int, detail::BaseProcess *> processes_by_pid_;
+
   // Whether initialization is complete. If true, various low level
   // mutations are disallowed.
   bool initialized_ = false;
   bool shutdown_ = false;
+
+  friend class detail::BaseProcess;
 };
 using SystemPtr = std::shared_ptr<System>;
 

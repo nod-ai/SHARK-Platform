@@ -10,6 +10,7 @@ from _shortfin import lib as _sfl
 # level of the public API.
 Device = _sfl.local.Device
 Node = _sfl.local.Node
+Process = _sfl.local.Process
 Scope = _sfl.local.Scope
 ScopedDevice = _sfl.local.ScopedDevice
 System = _sfl.local.System
