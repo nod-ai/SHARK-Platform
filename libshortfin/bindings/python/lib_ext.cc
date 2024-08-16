@@ -23,13 +23,29 @@ class Refs {
  public:
   py::object asyncio_create_task =
       py::module_::import_("asyncio").attr("create_task");
+  py::object asyncio_set_event_loop =
+      py::module_::import_("asyncio").attr("set_event_loop");
+  py::object asyncio_set_running_loop =
+      py::module_::import_("asyncio.events").attr("_set_running_loop");
+
+  py::handle lazy_PyWorkerEventLoop() {
+    if (!lazy_PyWorkerEventLoop_.is_valid()) {
+      lazy_PyWorkerEventLoop_ = py::module_::import_("_shortfin.asyncio_bridge")
+                                    .attr("PyWorkerEventLoop");
+    }
+    return lazy_PyWorkerEventLoop_;
+  }
+
+ private:
+  py::object lazy_PyWorkerEventLoop_;
 };
 
 // Custom worker which hosts an asyncio event loop.
 class PyWorker : public local::Worker {
  public:
-  PyWorker(PyInterpreterState *interp, Options options)
-      : Worker(std::move(options)), interp_(interp) {}
+  PyWorker(PyInterpreterState *interp, std::shared_ptr<Refs> refs,
+           Options options)
+      : Worker(std::move(options)), interp_(interp), refs_(std::move(refs)) {}
 
   void WaitForShutdown() override {
     // Need to release the GIL if blocking.
@@ -42,8 +58,8 @@ class PyWorker : public local::Worker {
     py::gil_scoped_acquire g;
     // Aside from set_event_loop being old and _set_running_loop being new
     // it isn't clear to me that either can be left off.
-    py::module_::import_("asyncio").attr("set_event_loop")(loop_);
-    py::module_::import_("asyncio.events").attr("_set_running_loop")(loop_);
+    refs_->asyncio_set_event_loop(loop_);
+    refs_->asyncio_set_running_loop(loop_);
   }
 
   void OnThreadStop() override {
@@ -63,23 +79,21 @@ class PyWorker : public local::Worker {
 
   std::string to_s() { return fmt::format("PyWorker(name='{}')", name()); }
 
-  void SetCurrentLoop() {
-    py::module_::import_("asyncio").attr("set_event_loop")(loop_);
-  }
-
   py::object loop_;
   PyInterpreterState *interp_;
+  std::shared_ptr<Refs> refs_;
 };
 
-PyWorker &CreatePyWorker(local::System &self, std::string name) {
+PyWorker &CreatePyWorker(local::System &self, std::shared_ptr<Refs> refs,
+                         std::string name) {
   PyInterpreterState *interp = PyInterpreterState_Get();
   PyWorker::Options options(self.host_allocator(), std::move(name));
-  auto new_worker = std::make_unique<PyWorker>(interp, std::move(options));
+  auto new_worker =
+      std::make_unique<PyWorker>(interp, std::move(refs), std::move(options));
   py::object worker_obj = py::cast(*new_worker.get(), py::rv_policy::reference);
   py::detail::keep_alive(worker_obj.ptr(),
                          py::cast(self, py::rv_policy::none).ptr());
-  new_worker->loop_ = py::module_::import_("_shortfin.asyncio_bridge")
-                          .attr("PyWorkerEventLoop")(worker_obj);
+  new_worker->loop_ = new_worker->refs_->lazy_PyWorkerEventLoop()(worker_obj);
 
   // OnThreadStart could be called at any time after StartExistingWorker,
   // setup must be done above.
@@ -195,8 +209,12 @@ void BindLocal(py::module_ &m) {
           py::rv_policy::reference_internal)
       .def("create_scope", &local::System::CreateScope,
            py::rv_policy::reference_internal)
-      .def("create_worker", &CreatePyWorker, py::arg("name"),
-           py::rv_policy::reference_internal);
+      .def(
+          "create_worker",
+          [refs](local::System &self, std::string name) -> PyWorker & {
+            return CreatePyWorker(self, refs, std::move(name));
+          },
+          py::arg("name"), py::rv_policy::reference_internal);
 
   // Support classes.
   py::class_<local::Node>(m, "Node")
