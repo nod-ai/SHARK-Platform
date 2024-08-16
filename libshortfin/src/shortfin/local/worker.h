@@ -59,7 +59,7 @@ class SHORTFIN_API Worker {
   void CallThreadsafe(std::function<void()> callback);
 
   // Operations that can be done from on the worker.
-  // Callback to execute user code on the loop "soon". this variant must not
+  // Callback to execute user code on the loop "soon". This variant must not
   // raise exceptions and matches the underlying C API. It should not generally
   // be used by "regular users" but can be useful for bindings that wish to
   // reduce the tolls/hops.
