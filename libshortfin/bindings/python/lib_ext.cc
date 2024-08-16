@@ -161,8 +161,8 @@ class PyProcess : public local::detail::BaseProcess {
   std::shared_ptr<Refs> refs_;
 };
 
-py::object RunForever(std::shared_ptr<Refs> refs, local::System &self,
-                      py::object coro) {
+py::object RunInForeground(std::shared_ptr<Refs> refs, local::System &self,
+                           py::object coro) {
   bool is_main_thread =
       refs->threading_current_thread().is(refs->threading_main_thread());
 
@@ -196,7 +196,7 @@ py::object RunForever(std::shared_ptr<Refs> refs, local::System &self,
     try {
       thread.attr("join")();
     } catch (...) {
-      logging::warn("Exception caught in run_forever(). Shutting down.");
+      logging::warn("Exception caught in run(). Shutting down.");
       // Leak warnings are hopeless in exceptional termination.
       py::set_leak_warnings(false);
       // Give it a go waiting for the worker thread to exit.
@@ -296,9 +296,9 @@ void BindLocal(py::module_ &m) {
           },
           py::arg("name"), py::rv_policy::reference_internal)
       .def(
-          "run_forever",
+          "run",
           [refs](local::System &self, py::object coro) {
-            return RunForever(refs, self, std::move(coro));
+            return RunInForeground(refs, self, std::move(coro));
           },
           py::arg("coro"));
 

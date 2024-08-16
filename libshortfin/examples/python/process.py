@@ -10,9 +10,6 @@ import asyncio
 import shortfin as sf
 
 lsys = sf.host.CPUSystemBuilder().create_system()
-worker = lsys.create_worker("main")
-scope = lsys.create_scope(worker)
-print("Worker:", worker)
 
 
 class MyProcess(sf.Process):
@@ -28,6 +25,8 @@ class MyProcess(sf.Process):
 
 
 async def main():
+    worker = lsys.create_worker("main")
+    scope = lsys.create_scope(worker)
     for i in range(10):
         MyProcess(scope, i).launch()
         await asyncio.sleep(0.1)
@@ -38,4 +37,4 @@ async def main():
     return i
 
 
-print("RESULT:", lsys.run_forever(main()))
+print("RESULT:", lsys.run(main()))
