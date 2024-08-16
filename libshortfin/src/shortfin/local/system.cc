@@ -65,7 +65,9 @@ void System::Shutdown() {
     worker->Kill();
   }
   for (auto &worker : local_workers) {
-    worker->WaitForShutdown();
+    if (worker->options().owned_thread) {
+      worker->WaitForShutdown();
+    }
   }
   local_workers.clear();
 
@@ -87,6 +89,12 @@ std::shared_ptr<Scope> System::CreateScope(Worker &worker) {
   return std::make_shared<Scope>(shared_ptr(), worker, devices());
 }
 
+std::shared_ptr<Scope> System::CreateScope() {
+  Worker &w = init_worker();
+  iree_slim_mutex_lock_guard guard(lock_);
+  return std::make_shared<Scope>(shared_ptr(), w, devices());
+}
+
 void System::InitializeNodes(int node_count) {
   AssertNotInitialized();
   if (!nodes_.empty()) {
@@ -102,6 +110,10 @@ Worker &System::CreateWorker(Worker::Options options) {
   Worker *unowned_worker;
   {
     iree_slim_mutex_lock_guard guard(lock_);
+    if (options.name == std::string_view("__init__")) {
+      throw std::invalid_argument(
+          "Cannot create worker '__init__' (reserved name)");
+    }
     if (workers_by_name_.count(options.name) != 0) {
       throw std::invalid_argument(fmt::format(
           "Cannot create worker with duplicate name '{}'", options.name));
@@ -111,7 +123,26 @@ Worker &System::CreateWorker(Worker::Options options) {
     unowned_worker = workers_.back().get();
     workers_by_name_[unowned_worker->name()] = unowned_worker;
   }
-  unowned_worker->Start();
+  if (unowned_worker->options().owned_thread) {
+    unowned_worker->Start();
+  }
+  return *unowned_worker;
+}
+
+Worker &System::init_worker() {
+  iree_slim_mutex_lock_guard guard(lock_);
+  auto found_it = workers_by_name_.find("__init__");
+  if (found_it != workers_by_name_.end()) {
+    return *found_it->second;
+  }
+
+  // Create.
+  Worker::Options options(host_allocator(), "__init__");
+  options.owned_thread = false;
+  auto worker = worker_factory_(std::move(options));
+  workers_.push_back(std::move(worker));
+  Worker *unowned_worker = workers_.back().get();
+  workers_by_name_[unowned_worker->name()] = unowned_worker;
   return *unowned_worker;
 }
 

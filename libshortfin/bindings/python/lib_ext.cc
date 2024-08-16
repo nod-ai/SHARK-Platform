@@ -27,6 +27,12 @@ class Refs {
       py::module_::import_("asyncio").attr("set_event_loop");
   py::object asyncio_set_running_loop =
       py::module_::import_("asyncio.events").attr("_set_running_loop");
+  py::object threading_Thread =
+      py::module_::import_("threading").attr("Thread");
+  py::object threading_current_thread =
+      py::module_::import_("threading").attr("current_thread");
+  py::object threading_main_thread =
+      py::module_::import_("threading").attr("main_thread");
 
   py::handle lazy_PyWorkerEventLoop() {
     if (!lazy_PyWorkerEventLoop_.is_valid()) {
@@ -54,7 +60,11 @@ class PyWorker : public local::Worker {
   }
 
   void OnThreadStart() override {
-    PyThreadState_New(interp_);
+    // If our own thread, teach Python about it. Not done for donated.
+    if (options().owned_thread) {
+      PyThreadState_New(interp_);
+    }
+
     py::gil_scoped_acquire g;
     // Aside from set_event_loop being old and _set_running_loop being new
     // it isn't clear to me that either can be left off.
@@ -67,14 +77,24 @@ class PyWorker : public local::Worker {
       // Do Python level thread cleanup.
       py::gil_scoped_acquire g;
       loop_.reset();
-      PyThreadState_Clear(PyThreadState_Get());
+
+      // Scrub thread state if not donated.
+      if (options().owned_thread) {
+        PyThreadState_Clear(PyThreadState_Get());
+      } else {
+        // Otherwise, juse reset the event loop.
+        refs_->asyncio_set_event_loop(py::none());
+        refs_->asyncio_set_running_loop(py::none());
+      }
     }
 
-    // And destroy our thread state.
+    // And destroy our thread state (if not donated).
     // TODO: PyThreadState_Delete seems like it should be used here, but I
     // couldn't find that being done and I couldn't find a way to use it
     // with the GIL/thread state correct.
-    PyThreadState_Swap(nullptr);
+    if (options().owned_thread) {
+      PyThreadState_Swap(nullptr);
+    }
   }
 
   std::string to_s() { return fmt::format("PyWorker(name='{}')", name()); }
@@ -141,6 +161,58 @@ class PyProcess : public local::detail::BaseProcess {
   std::shared_ptr<Refs> refs_;
 };
 
+py::object RunForever(std::shared_ptr<Refs> refs, local::System &self,
+                      py::object coro) {
+  bool is_main_thread =
+      refs->threading_current_thread().is(refs->threading_main_thread());
+
+  PyWorker &worker = dynamic_cast<PyWorker &>(self.init_worker());
+  py::object result = py::none();
+  auto done_callback = [&](py::handle future) {
+    worker.Kill();
+    result = future.attr("result")();
+  };
+  worker.CallThreadsafe([&]() {
+    // Run within the worker we are about to donate to.
+    py::gil_scoped_acquire g;
+    auto task = refs->asyncio_create_task(coro);
+    task.attr("add_done_callback")(py::cpp_function(done_callback));
+  });
+
+  auto run = py::cpp_function([&]() {
+    // Release GIL and run until the worker exits.
+    {
+      py::gil_scoped_release g;
+      worker.RunOnCurrentThread();
+    }
+  });
+
+  // If running on the main thread, we spawn a background thread and join
+  // it because that shields it from receiving spurious KeyboardInterrupt
+  // exceptions at inopportune points.
+  if (is_main_thread) {
+    auto thread = refs->threading_Thread(/*group=*/py::none(), /*target=*/run);
+    thread.attr("start")();
+    try {
+      thread.attr("join")();
+    } catch (...) {
+      logging::warn("Exception caught in run_forever(). Shutting down.");
+      // Leak warnings are hopeless in exceptional termination.
+      py::set_leak_warnings(false);
+      // Give it a go waiting for the worker thread to exit.
+      worker.Kill();
+      thread.attr("join")();
+      self.Shutdown();
+      throw;
+    }
+  } else {
+    run();
+  }
+
+  self.Shutdown();
+  return result;
+}
+
 }  // namespace
 
 NB_MODULE(lib, m) {
@@ -205,8 +277,16 @@ void BindLocal(py::module_ &m) {
             return it->second;
           },
           py::rv_policy::reference_internal)
-      .def("create_scope", &local::System::CreateScope,
-           py::rv_policy::reference_internal)
+      .def(
+          "create_scope",
+          [](local::System &self, PyWorker &worker) {
+            return self.CreateScope(worker);
+          },
+          py::rv_policy::reference_internal)
+      .def(
+          "create_scope",
+          [](local::System &self) { return self.CreateScope(); },
+          py::rv_policy::reference_internal)
       .def(
           "create_worker",
           [refs](local::System &self, std::string name) -> PyWorker & {
@@ -214,7 +294,13 @@ void BindLocal(py::module_ &m) {
                                            std::move(name));
             return dynamic_cast<PyWorker &>(self.CreateWorker(options));
           },
-          py::arg("name"), py::rv_policy::reference_internal);
+          py::arg("name"), py::rv_policy::reference_internal)
+      .def(
+          "run_forever",
+          [refs](local::System &self, py::object coro) {
+            return RunForever(refs, self, std::move(coro));
+          },
+          py::arg("coro"));
 
   // Support classes.
   py::class_<local::Node>(m, "Node")

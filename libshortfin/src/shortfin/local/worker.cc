@@ -80,7 +80,7 @@ iree_status_t Worker::ScheduleExternalTransactEvent() {
       this);
 }
 
-int Worker::Run() {
+int Worker::RunOnThread() {
   auto RunLoop = [&]() -> iree_status_t {
     IREE_RETURN_IF_ERROR(ScheduleExternalTransactEvent());
     for (;;) {
@@ -108,12 +108,15 @@ int Worker::Run() {
 }
 
 void Worker::Start() {
+  if (!options_.owned_thread) {
+    throw std::logic_error("Cannot start worker when owned_thread=false");
+  }
   if (thread_) {
     throw std::logic_error("Cannot start Worker multiple times");
   }
 
   auto EntryFunction =
-      +[](void* self) { return static_cast<Worker*>(self)->Run(); };
+      +[](void* self) { return static_cast<Worker*>(self)->RunOnThread(); };
   iree_thread_create_params_t params = {
       .name = {options_.name.data(), options_.name.size()},
       // Need to make sure that the thread can access thread_ so need to create
@@ -126,8 +129,8 @@ void Worker::Start() {
 }
 
 void Worker::Kill() {
-  if (!thread_) {
-    throw std::logic_error("Cannot Drain a Worker that was not started");
+  if (options_.owned_thread && !thread_) {
+    throw std::logic_error("Cannot kill a Worker that was not started");
   }
   {
     iree_slim_mutex_lock_guard guard(mu_);
@@ -137,6 +140,9 @@ void Worker::Kill() {
 }
 
 void Worker::WaitForShutdown() {
+  if (!options_.owned_thread) {
+    throw std::logic_error("Cannot shutdown worker when owned_thread=false");
+  }
   if (!thread_) {
     throw std::logic_error("Cannot Shutdown a Worker that was not started");
   }
@@ -152,6 +158,21 @@ void Worker::WaitForShutdown() {
       SHORTFIN_THROW_IF_ERROR(status);
     }
   }
+}
+
+void Worker::RunOnCurrentThread() {
+  if (options_.owned_thread) {
+    throw std::logic_error(
+        "Cannot RunOnCurrentThread if worker was configured for owned_thread");
+  }
+  {
+    iree_slim_mutex_lock_guard guard(mu_);
+    if (has_run_) {
+      throw std::logic_error("Cannot RunOnCurrentThread if already finished");
+    }
+    has_run_ = true;
+  }
+  RunOnThread();
 }
 
 void Worker::CallThreadsafe(std::function<void()> callback) {

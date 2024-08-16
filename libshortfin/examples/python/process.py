@@ -6,8 +6,6 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 import asyncio
-import threading
-import time
 
 import shortfin as sf
 
@@ -15,11 +13,6 @@ lsys = sf.host.CPUSystemBuilder().create_system()
 worker = lsys.create_worker("main")
 scope = lsys.create_scope(worker)
 print("Worker:", worker)
-
-p = sf.Process(scope)
-print(p)
-
-ps = []
 
 
 class MyProcess(sf.Process):
@@ -30,14 +23,19 @@ class MyProcess(sf.Process):
     async def run(self):
         print("Hello async:", self.arg, self)
         if self.arg < 10:
-            await asyncio.sleep(0.2)
+            await asyncio.sleep(0.3)
             MyProcess(self.scope, self.arg + 1).launch()
 
 
-p2 = MyProcess(scope, 0)
-print(p2, p2.__class__)
-p2.launch()
+async def main():
+    for i in range(10):
+        MyProcess(scope, i).launch()
+        await asyncio.sleep(0.1)
+        MyProcess(scope, i * 100).launch()
+        await asyncio.sleep(0.1)
+        MyProcess(scope, i * 1000).launch()
+    await asyncio.sleep(2.5)
+    return i
 
-import time
 
-time.sleep(5)
+print("RESULT:", lsys.run_forever(main()))

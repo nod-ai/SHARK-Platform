@@ -30,6 +30,10 @@ class SHORTFIN_API Worker {
     // an infinite/long async wait or something.
     iree_timeout_t quantum = iree_make_timeout_ms(500);
 
+    // Whether to create the worker on an owned thread. If false, then the
+    // worker is set up to be adopted and a thread will not be created.
+    bool owned_thread = true;
+
     Options(iree_allocator_t allocator, std::string name)
         : allocator(allocator), name(name) {}
   };
@@ -39,12 +43,17 @@ class SHORTFIN_API Worker {
   Worker(const Worker &) = delete;
   virtual ~Worker();
 
+  const Options &options() const { return options_; }
   const std::string_view name() const { return options_.name; }
   std::string to_s();
 
   void Start();
   void Kill();
   virtual void WaitForShutdown();
+
+  // Runs on the current thread. This is used instead of Start() when
+  // owned_thread is false.
+  void RunOnCurrentThread();
 
   // Enqueues a callback to the worker from another thread.
   void CallThreadsafe(std::function<void()> callback);
@@ -77,7 +86,7 @@ class SHORTFIN_API Worker {
   virtual void OnThreadStop();
 
  private:
-  int Run();
+  int RunOnThread();
   iree_status_t ScheduleExternalTransactEvent();
   iree_status_t TransactLoop(iree_status_t signal_status);
 
@@ -89,8 +98,9 @@ class SHORTFIN_API Worker {
 
   // State management. These are all manipulated both on and off the worker
   // thread.
-  bool kill_ = false;
   std::vector<std::function<void()>> pending_thunks_;
+  bool kill_ = false;
+  bool has_run_ = false;
 
   // Loop management. This is all purely operated on the worker thread.
   iree_loop_sync_scope_t loop_scope_;

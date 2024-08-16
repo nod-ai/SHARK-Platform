@@ -77,9 +77,18 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
   // added to the scope.
   std::shared_ptr<Scope> CreateScope(Worker &worker);
 
+  // Creates a scope bound to the init worker.
+  std::shared_ptr<Scope> CreateScope();
+
   // Workers.
   // Creates and starts a worker (if it is configured to run in a thread).
   Worker &CreateWorker(Worker::Options options);
+
+  // Accesses the initialization worker that is intended to be run on the main
+  // or adopted thread to perform any async interactions with the system.
+  // Internally, this worker is called "__init__". It will be created on
+  // demand if it does not yet exist.
+  Worker &init_worker();
 
   // Initialization APIs. Calls to these methods is only permitted between
   // construction and Initialize().
