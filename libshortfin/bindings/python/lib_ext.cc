@@ -84,21 +84,14 @@ class PyWorker : public local::Worker {
   std::shared_ptr<Refs> refs_;
 };
 
-PyWorker &CreatePyWorker(local::System &self, std::shared_ptr<Refs> refs,
-                         std::string name) {
+std::unique_ptr<local::Worker> CreatePyWorker(std::shared_ptr<Refs> refs,
+                                              local::Worker::Options options) {
   PyInterpreterState *interp = PyInterpreterState_Get();
-  PyWorker::Options options(self.host_allocator(), std::move(name));
   auto new_worker =
       std::make_unique<PyWorker>(interp, std::move(refs), std::move(options));
   py::object worker_obj = py::cast(*new_worker.get(), py::rv_policy::reference);
-  py::detail::keep_alive(worker_obj.ptr(),
-                         py::cast(self, py::rv_policy::none).ptr());
   new_worker->loop_ = new_worker->refs_->lazy_PyWorkerEventLoop()(worker_obj);
-
-  // OnThreadStart could be called at any time after StartExistingWorker,
-  // setup must be done above.
-  return static_cast<PyWorker &>(
-      self.StartExistingWorker(std::move(new_worker)));
+  return new_worker;
 }
 
 class PyProcess : public local::detail::BaseProcess {
@@ -176,10 +169,15 @@ void BindLocal(py::module_ &m) {
                           }),
                           live_system_refs);
   auto refs = std::make_shared<Refs>();
+  auto worker_factory = [refs](local::Worker::Options options) {
+    return CreatePyWorker(refs, std::move(options));
+  };
 
   py::class_<local::SystemBuilder>(m, "SystemBuilder")
-      .def("create_system", [live_system_refs](local::SystemBuilder &self) {
+      .def("create_system", [live_system_refs,
+                             worker_factory](local::SystemBuilder &self) {
         auto system_ptr = self.CreateSystem();
+        system_ptr->set_worker_factory(worker_factory);
         auto system_obj = py::cast(system_ptr, py::rv_policy::take_ownership);
         live_system_refs.attr("add")(system_obj);
         return system_obj;
@@ -212,7 +210,9 @@ void BindLocal(py::module_ &m) {
       .def(
           "create_worker",
           [refs](local::System &self, std::string name) -> PyWorker & {
-            return CreatePyWorker(self, refs, std::move(name));
+            local::Worker::Options options(self.host_allocator(),
+                                           std::move(name));
+            return dynamic_cast<PyWorker &>(self.CreateWorker(options));
           },
           py::arg("name"), py::rv_policy::reference_internal);
 

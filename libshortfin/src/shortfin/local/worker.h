@@ -33,6 +33,7 @@ class SHORTFIN_API Worker {
     Options(iree_allocator_t allocator, std::string name)
         : allocator(allocator), name(name) {}
   };
+  using Factory = std::function<std::unique_ptr<Worker>(Options options)>;
 
   Worker(Options options);
   Worker(const Worker &) = delete;

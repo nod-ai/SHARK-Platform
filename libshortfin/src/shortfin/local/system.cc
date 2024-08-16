@@ -40,6 +40,15 @@ System::~System() {
   }
 }
 
+std::unique_ptr<Worker> System::DefaultWorkerFactory(Worker::Options options) {
+  return std::make_unique<Worker>(std::move(options));
+}
+
+void System::set_worker_factory(Worker::Factory factory) {
+  iree_slim_mutex_lock_guard guard(lock_);
+  worker_factory_ = std::move(factory);
+}
+
 void System::Shutdown() {
   // Stop workers.
   std::vector<std::unique_ptr<Worker>> local_workers;
@@ -89,18 +98,18 @@ void System::InitializeNodes(int node_count) {
   }
 }
 
-Worker &System::StartExistingWorker(std::unique_ptr<Worker> worker) {
+Worker &System::CreateWorker(Worker::Options options) {
   Worker *unowned_worker;
   {
     iree_slim_mutex_lock_guard guard(lock_);
-    std::string_view name = worker->name();
-    if (workers_by_name_.count(name) != 0) {
-      throw std::invalid_argument(
-          fmt::format("Cannot create worker with duplicate name '{}'", name));
+    if (workers_by_name_.count(options.name) != 0) {
+      throw std::invalid_argument(fmt::format(
+          "Cannot create worker with duplicate name '{}'", options.name));
     }
+    auto worker = worker_factory_(std::move(options));
     workers_.push_back(std::move(worker));
     unowned_worker = workers_.back().get();
-    workers_by_name_[name] = unowned_worker;
+    workers_by_name_[unowned_worker->name()] = unowned_worker;
   }
   unowned_worker->Start();
   return *unowned_worker;

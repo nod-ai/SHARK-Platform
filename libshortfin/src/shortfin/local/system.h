@@ -49,6 +49,11 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
   System(const System &) = delete;
   ~System();
 
+  // Sets a worker factory that will be used for all subsequently created
+  // Worker instances. Certain bindings and integrations may need special
+  // kinds of Worker classes, and this can customize that.
+  void set_worker_factory(Worker::Factory factory);
+
   // Explicit shutdown (vs in destructor) is encouraged.
   void Shutdown();
 
@@ -73,12 +78,8 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
   std::shared_ptr<Scope> CreateScope(Worker &worker);
 
   // Workers.
-  // Donates and starts a Worker. The worker name must be unique and the worker
-  // must not have been started prior. This API is intended for language
-  // bindings which may need to customize their Worker subclass. User C++ code
-  // should prefer the StartWorker() API which creates and starts a worker in
-  // one shot.
-  Worker &StartExistingWorker(std::unique_ptr<Worker> worker);
+  // Creates and starts a worker (if it is configured to run in a thread).
+  Worker &CreateWorker(Worker::Options options);
 
   // Initialization APIs. Calls to these methods is only permitted between
   // construction and Initialize().
@@ -90,6 +91,7 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
   void FinishInitialization();
 
  private:
+  static std::unique_ptr<Worker> DefaultWorkerFactory(Worker::Options options);
   void AssertNotInitialized() {
     if (initialized_) {
       throw std::logic_error(
@@ -128,6 +130,7 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
   iree_vm_instance_ptr vm_instance_;
 
   // Workers.
+  Worker::Factory worker_factory_ = System::DefaultWorkerFactory;
   std::vector<std::unique_ptr<Worker>> workers_;
   std::unordered_map<std::string_view, Worker *> workers_by_name_;
 
