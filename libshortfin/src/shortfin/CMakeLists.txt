@@ -6,5 +6,4 @@
 
 add_subdirectory(array)
 add_subdirectory(local)
-add_subdirectory(process)
 add_subdirectory(support)

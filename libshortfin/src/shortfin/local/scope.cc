@@ -9,6 +9,7 @@
 #include <fmt/core.h>
 #include <fmt/ranges.h>
 
+#include "shortfin/local/system.h"
 #include "shortfin/support/logging.h"
 
 namespace shortfin::local {
@@ -17,17 +18,24 @@ namespace shortfin::local {
 // Scope
 // -------------------------------------------------------------------------- //
 
-Scope::Scope(iree_allocator_t host_allocator,
+Scope::Scope(std::shared_ptr<System> system, Worker &worker,
              std::span<const std::pair<std::string_view, Device *>> devices)
-    : host_allocator_(host_allocator), scheduler_(host_allocator) {
+    : host_allocator_(system->host_allocator()),
+      scheduler_(system->host_allocator()),
+      system_(std::move(system)),
+      worker_(worker) {
   for (auto &it : devices) {
     AddDevice(it.first, it.second);
   }
   Initialize();
 }
 
-Scope::Scope(iree_allocator_t host_allocator, std::span<Device *const> devices)
-    : host_allocator_(host_allocator), scheduler_(host_allocator) {
+Scope::Scope(std::shared_ptr<System> system, Worker &worker,
+             std::span<Device *const> devices)
+    : host_allocator_(system->host_allocator()),
+      scheduler_(system->host_allocator()),
+      system_(std::move(system)),
+      worker_(worker) {
   for (auto *device : devices) {
     AddDevice(device->address().logical_device_class, device);
   }

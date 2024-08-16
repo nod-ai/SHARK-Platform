@@ -18,6 +18,8 @@
 namespace shortfin::local {
 
 class SHORTFIN_API Scope;
+class SHORTFIN_API System;
+class SHORTFIN_API Worker;
 
 // Wraps a Scope and a DeviceAffinity together. This is used in all
 // Scope based APIs as a short-hand for "device" as it contains everything
@@ -60,16 +62,26 @@ class SHORTFIN_API ScopedDevice {
 // situations, this can be customized. By default, devices are added in the
 // order defined by the system and will have an `<index>` corresponding to
 // their order. It is up to the constructor to produce a sensible arrangement.
-class SHORTFIN_API Scope {
+class SHORTFIN_API Scope : public std::enable_shared_from_this<Scope> {
  public:
   // Initialize with devices using logical_device_class as the device class.
-  Scope(iree_allocator_t host_allocator, std::span<Device *const> devices);
+  Scope(std::shared_ptr<System> system, Worker &worker,
+        std::span<Device *const> devices);
   // Initialize with devices with custom device class names.
-  Scope(iree_allocator_t host_allocator,
+  Scope(std::shared_ptr<System> system, Worker &worker,
         std::span<const std::pair<std::string_view, Device *>> devices);
   Scope(const Scope &) = delete;
   // Ensure polymorphic.
   virtual ~Scope();
+
+  // All scopes are created as shared pointers.
+  std::shared_ptr<Scope> shared_ptr() { return shared_from_this(); }
+
+  // The worker that this scope is bound to.
+  Worker &worker() { return worker_; }
+
+  // System that this scope is bound to.
+  System &system() { return *system_; }
 
   // Device access.
   // Throws std::invalid_argument on lookup failure.
@@ -116,6 +128,10 @@ class SHORTFIN_API Scope {
   // Map of `<device_class><index>` to Device.
   std::unordered_map<std::string_view, Device *> named_devices_;
   detail::Scheduler scheduler_;
+
+  // Back reference to owning system.
+  std::shared_ptr<System> system_;
+  Worker &worker_;
 };
 
 }  // namespace shortfin::local

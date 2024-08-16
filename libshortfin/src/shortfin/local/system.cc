@@ -13,25 +13,6 @@
 
 namespace shortfin::local {
 
-namespace {
-
-// A Scope with a back reference to the System from which it
-// originated.
-class ExtendingScope : public Scope {
- public:
-  using Scope::Scope;
-
- private:
-  std::shared_ptr<System> backref_;
-  friend std::shared_ptr<System> &mutable_local_scope_backref(ExtendingScope &);
-};
-
-std::shared_ptr<System> &mutable_local_scope_backref(ExtendingScope &scope) {
-  return scope.backref_;
-}
-
-}  // namespace
-
 // -------------------------------------------------------------------------- //
 // System
 // -------------------------------------------------------------------------- //
@@ -44,13 +25,51 @@ System::System(iree_allocator_t host_allocator)
 }
 
 System::~System() {
+  bool needs_shutdown = false;
+  {
+    iree_slim_mutex_lock_guard guard(lock_);
+    if (initialized_ && !shutdown_) {
+      needs_shutdown = true;
+    }
+  }
+  if (needs_shutdown) {
+    logging::warn(
+        "Implicit Shutdown from System destructor. Please call Shutdown() "
+        "explicitly for maximum stability.");
+    Shutdown();
+  }
+}
+
+std::unique_ptr<Worker> System::DefaultWorkerFactory(Worker::Options options) {
+  return std::make_unique<Worker>(std::move(options));
+}
+
+void System::set_worker_factory(Worker::Factory factory) {
+  iree_slim_mutex_lock_guard guard(lock_);
+  worker_factory_ = std::move(factory);
+}
+
+void System::Shutdown() {
+  // Stop workers.
+  std::vector<std::unique_ptr<Worker>> local_workers;
+  {
+    iree_slim_mutex_lock_guard guard(lock_);
+    if (!initialized_ || shutdown_) return;
+    shutdown_ = true;
+    workers_by_name_.clear();
+    local_workers.swap(workers_);
+  }
+
   // Worker drain and shutdown.
-  for (auto &worker : workers_) {
+  for (auto &worker : local_workers) {
     worker->Kill();
   }
-  for (auto &worker : workers_) {
-    worker->WaitForShutdown();
+  for (auto &worker : local_workers) {
+    if (worker->options().owned_thread) {
+      worker->WaitForShutdown();
+    }
   }
+  local_workers.clear();
 
   // Orderly destruction of heavy-weight objects.
   // Shutdown order is important so we don't leave it to field ordering.
@@ -65,11 +84,15 @@ System::~System() {
   hal_drivers_.clear();
 }
 
-std::unique_ptr<Scope> System::CreateScope() {
-  auto new_scope =
-      std::make_unique<ExtendingScope>(host_allocator(), devices());
-  mutable_local_scope_backref(*new_scope) = shared_from_this();
-  return new_scope;
+std::shared_ptr<Scope> System::CreateScope(Worker &worker) {
+  iree_slim_mutex_lock_guard guard(lock_);
+  return std::make_shared<Scope>(shared_ptr(), worker, devices());
+}
+
+std::shared_ptr<Scope> System::CreateScope() {
+  Worker &w = init_worker();
+  iree_slim_mutex_lock_guard guard(lock_);
+  return std::make_shared<Scope>(shared_ptr(), w, devices());
 }
 
 void System::InitializeNodes(int node_count) {
@@ -81,6 +104,46 @@ void System::InitializeNodes(int node_count) {
   for (int i = 0; i < node_count; ++i) {
     nodes_.emplace_back(i);
   }
+}
+
+Worker &System::CreateWorker(Worker::Options options) {
+  Worker *unowned_worker;
+  {
+    iree_slim_mutex_lock_guard guard(lock_);
+    if (options.name == std::string_view("__init__")) {
+      throw std::invalid_argument(
+          "Cannot create worker '__init__' (reserved name)");
+    }
+    if (workers_by_name_.count(options.name) != 0) {
+      throw std::invalid_argument(fmt::format(
+          "Cannot create worker with duplicate name '{}'", options.name));
+    }
+    auto worker = worker_factory_(std::move(options));
+    workers_.push_back(std::move(worker));
+    unowned_worker = workers_.back().get();
+    workers_by_name_[unowned_worker->name()] = unowned_worker;
+  }
+  if (unowned_worker->options().owned_thread) {
+    unowned_worker->Start();
+  }
+  return *unowned_worker;
+}
+
+Worker &System::init_worker() {
+  iree_slim_mutex_lock_guard guard(lock_);
+  auto found_it = workers_by_name_.find("__init__");
+  if (found_it != workers_by_name_.end()) {
+    return *found_it->second;
+  }
+
+  // Create.
+  Worker::Options options(host_allocator(), "__init__");
+  options.owned_thread = false;
+  auto worker = worker_factory_(std::move(options));
+  workers_.push_back(std::move(worker));
+  Worker *unowned_worker = workers_.back().get();
+  workers_by_name_[unowned_worker->name()] = unowned_worker;
+  return *unowned_worker;
 }
 
 void System::InitializeHalDriver(std::string_view moniker,
@@ -107,17 +170,21 @@ void System::InitializeHalDevice(std::unique_ptr<Device> device) {
 }
 
 void System::FinishInitialization() {
+  iree_slim_mutex_lock_guard guard(lock_);
   AssertNotInitialized();
-
-  // TODO: Remove this. Just testing.
-  // workers_.push_back(
-  //     std::make_unique<Worker>(Worker::Options(host_allocator(),
-  //     "worker:0")));
-  // workers_.back()->Start();
-  // workers_.back()->EnqueueCallback(
-  //     []() { spdlog::info("Hi from a worker callback"); });
-
   initialized_ = true;
+}
+
+int64_t System::AllocateProcess(detail::BaseProcess *p) {
+  iree_slim_mutex_lock_guard guard(lock_);
+  int pid = next_pid_++;
+  processes_by_pid_[pid] = p;
+  return pid;
+}
+
+void System::DeallocateProcess(int64_t pid) {
+  iree_slim_mutex_lock_guard guard(lock_);
+  processes_by_pid_.erase(pid);
 }
 
 }  // namespace shortfin::local

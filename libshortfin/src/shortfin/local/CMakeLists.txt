@@ -11,19 +11,23 @@ shortfin_cc_component(
     shortfin_local
   HDRS
     device.h
+    process.h
+    worker.h
     scheduler.h
     scope.h
     system.h
   SRCS
     device.cc
+    process.cc
+    worker.cc
     scheduler.cc
     scope.cc
     system.cc
   COMPONENTS
-    shortfin_process
     shortfin_support
   DEPS
     iree_base_base
+    iree_base_loop_sync
     iree_hal_hal
     iree_modules_hal_hal
     iree_vm_vm
