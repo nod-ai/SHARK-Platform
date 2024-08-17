@@ -10,6 +10,7 @@
 #include <functional>
 #include <span>
 
+#include "shortfin/local/async.h"
 #include "shortfin/local/device.h"
 #include "shortfin/support/iree_helpers.h"
 
@@ -158,6 +159,11 @@ class SHORTFIN_API Account {
   // Queue timeline.
   iree_hal_semaphore_t *timeline_sem() { return sem_; }
   uint64_t timeline_idle_timepoint() { return idle_timepoint_; }
+
+  // Returns a future that is satisfied when the timeline of this account
+  // reaches its current idle timepoint (i.e. all currently pending work
+  // is complete).
+  SingleWaitFuture OnSync();
 
  private:
   void Initialize();

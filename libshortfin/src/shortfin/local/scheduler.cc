@@ -36,6 +36,10 @@ void Account::active_deps_extend(iree_hal_semaphore_list_t sem_list) {
   }
 }
 
+SingleWaitFuture Account::OnSync() {
+  return SingleWaitFuture(sem_, idle_timepoint_);
+}
+
 // -------------------------------------------------------------------------- //
 // TimelineResource
 // -------------------------------------------------------------------------- //

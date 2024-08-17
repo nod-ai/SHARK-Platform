@@ -7,6 +7,7 @@
 #include "./lib_ext.h"
 
 #include "./utils.h"
+#include "shortfin/local/async.h"
 #include "shortfin/local/process.h"
 #include "shortfin/local/scope.h"
 #include "shortfin/local/system.h"
@@ -25,6 +26,8 @@ class Refs {
       py::module_::import_("asyncio").attr("create_task");
   py::object asyncio_set_event_loop =
       py::module_::import_("asyncio").attr("set_event_loop");
+  py::object asyncio_get_running_loop =
+      py::module_::import_("asyncio.events").attr("get_running_loop");
   py::object asyncio_set_running_loop =
       py::module_::import_("asyncio.events").attr("_set_running_loop");
   py::object threading_Thread =
@@ -52,6 +55,16 @@ class PyWorker : public local::Worker {
   PyWorker(PyInterpreterState *interp, std::shared_ptr<Refs> refs,
            Options options)
       : Worker(std::move(options)), interp_(interp), refs_(std::move(refs)) {}
+
+  static PyWorker &GetCurrent(Refs &refs) {
+    py::object loop = refs.asyncio_get_running_loop();
+    if (loop.is_none() || !loop.type().is(refs.lazy_PyWorkerEventLoop())) {
+      throw std::runtime_error(py::cast<std::string>(
+          py::str("Current loop is not a shortfin worker: {}").format(loop)));
+    }
+    py::object worker_obj = loop.attr("_worker");
+    return py::cast<PyWorker &>(worker_obj, /*convert=*/false);
+  }
 
   void WaitForShutdown() override {
     // Need to release the GIL if blocking.
@@ -359,6 +372,11 @@ void BindLocal(py::module_ &m) {
       .def_prop_ro("raw_device", &local::ScopedDevice::raw_device,
                    py::rv_policy::reference_internal)
       .def(py::self == py::self)
+      .def("__await__",
+           [](local::ScopedDevice &self) {
+             py::object future = py::cast(self.OnSync(), py::rv_policy::move);
+             return future.attr("__await__")();
+           })
       .def("__repr__", &local::ScopedDevice::to_s);
 
   py::class_<DevicesSet>(m, "_ScopeDevicesSet")
@@ -447,8 +465,54 @@ void BindLocal(py::module_ &m) {
             return custom_new<PyProcess>(py_type, std::move(scope), refs);
           })
       .def_prop_ro("scope", &PyProcess::scope)
-      .def("launch", &PyProcess::Launch)
+      .def("launch",
+           [](py::object self_obj) {
+             PyProcess &self = py::cast<PyProcess &>(self_obj);
+             self.Launch();
+             return self_obj;
+           })
+      .def("__await__",
+           [](PyProcess &self) {
+             py::object future =
+                 py::cast(local::SingleWaitFuture(self.OnTermination()),
+                          py::rv_policy::move);
+             return future.attr("__await__")();
+           })
       .def("__repr__", &PyProcess::to_s);
+
+  py::class_<local::SingleWaitFuture>(m, "SingleWaitFuture")
+      .def(py::init<>())
+      .def("__await__", [refs](local::SingleWaitFuture &self) {
+        auto &worker = PyWorker::GetCurrent(*refs);
+        struct State {
+          py::object future;
+          local::SingleWaitFuture
+              awaitable;  // Keeps the wait_source backer alive.
+        };
+        auto state = std::make_unique<State>();
+        state->future = worker.loop_.attr("create_future")();
+        state->awaitable = self;
+        py::object iter_ret = state->future.attr("__iter__")();
+
+        SHORTFIN_THROW_IF_ERROR(worker.WaitOneLowLevel(
+            self.wait_source(), iree_infinite_timeout(),
+            +[](void *user_data, iree_loop_t loop,
+                iree_status_t status) noexcept -> iree_status_t {
+              py::gil_scoped_acquire g;
+              // Must deallocate within the gil scope so must capture here.
+              std::unique_ptr<State> state(static_cast<State *>(user_data));
+              try {
+                SHORTFIN_THROW_IF_ERROR(status);
+                state->future.attr("set_result")(py::none());
+              } catch (std::exception &e) {
+                auto RuntimeError = py::handle(PyExc_RuntimeError);
+                state->future.attr("set_exception")(RuntimeError(e.what()));
+              }
+              return iree_ok_status();
+            },
+            state.release()));
+        return iter_ret;
+      });
 }
 
 void BindHostSystem(py::module_ &global_m) {

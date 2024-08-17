@@ -76,6 +76,13 @@ class SHORTFIN_API Worker {
                                 iree_status_t status) noexcept,
       void *user_data);
 
+  // Calls back once a wait_source is satisfied.
+  iree_status_t WaitOneLowLevel(
+      iree_wait_source_t wait_source, iree_timeout_t timeout,
+      iree_status_t (*callback)(void *user_data, iree_loop_t loop,
+                                iree_status_t status) noexcept,
+      void *user_data);
+
   // Time management.
   // Returns the current absolute time in nanoseconds.
   iree_time_t now();

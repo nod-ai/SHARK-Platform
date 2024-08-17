@@ -82,4 +82,16 @@ std::vector<std::string_view> Scope::device_names() const {
   return names;
 }
 
+// -------------------------------------------------------------------------- //
+// ScopedDevice
+// -------------------------------------------------------------------------- //
+
+SingleWaitFuture ScopedDevice::OnSync(bool flush) {
+  if (flush) {
+    scope().scheduler().Flush();
+  }
+  auto &default_account = scope().scheduler().GetDefaultAccount(*this);
+  return default_account.OnSync();
+}
+
 }  // namespace shortfin::local

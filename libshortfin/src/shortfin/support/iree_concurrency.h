@@ -67,6 +67,64 @@ class iree_event {
   iree_event_t event_;
 };
 
+// An event that is ref-counted.
+class iree_shared_event : private iree_event {
+ public:
+  class ref {
+   public:
+    ref() = default;
+    ref(const ref &other) : inst_(other.inst_) {
+      if (inst_) {
+        inst_->ref_count_.fetch_add(1);
+      }
+    }
+    ref &operator=(const ref &other) {
+      if (inst_ != other.inst_) {
+        reset();
+        inst_ = other.inst_;
+        if (inst_) {
+          inst_->ref_count_.fetch_add(1);
+        }
+      }
+      return *this;
+    }
+    ref(ref &&other) : inst_(other.inst_) { other.inst_ = nullptr; }
+    ~ref() { reset(); }
+
+    operator bool() { return inst_ != nullptr; }
+    iree_event *operator->() { return inst_; }
+    void reset() {
+      if (inst_) {
+        manual_release();
+        inst_ = nullptr;
+      }
+    }
+
+    // Manually retain the event. Must be matched by a call to release().
+    void manual_retain() { inst_->ref_count_.fetch_add(1); }
+    void manual_release() {
+      if (inst_->ref_count_.fetch_sub(1) == 1) {
+        delete inst_;
+      }
+    }
+
+   private:
+    explicit ref(iree_shared_event *inst) : inst_(inst) {}
+    iree_shared_event *inst_ = nullptr;
+    friend class iree_shared_event;
+  };
+
+  static ref create(bool initial_state) {
+    return ref(new iree_shared_event(initial_state));
+  }
+
+ private:
+  using iree_event::iree_event;
+  ~iree_shared_event() = default;
+
+  std::atomic<int> ref_count_{1};
+};
+
 }  // namespace shortfin
 
 #endif  // SHORTFIN_SUPPORT_IREE_THREADING_H

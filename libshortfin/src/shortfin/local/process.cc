@@ -65,12 +65,23 @@ void detail::BaseProcess::Terminate() {
     iree_slim_mutex_lock_guard g(lock_);
     deallocate_pid = pid_;
     pid_ = -1;
+    if (terminated_event_) {
+      terminated_event_->set();
+    }
   }
   if (deallocate_pid > 0) {
     scope_->system().DeallocateProcess(deallocate_pid);
   } else {
     logging::warn("Process signalled termination multiple times (ignored)");
   }
+}
+
+SingleWaitFuture detail::BaseProcess::OnTermination() {
+  iree_slim_mutex_lock_guard g(lock_);
+  if (!terminated_event_) {
+    terminated_event_ = iree_shared_event::create(pid_ < 0);
+  }
+  return SingleWaitFuture(terminated_event_);
 }
 
 }  // namespace shortfin::local

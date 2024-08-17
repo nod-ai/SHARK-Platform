@@ -20,8 +20,9 @@ Worker::Worker(const Options options)
     iree_status_fprint(stderr, status);
     iree_status_ignore(status);
   };
-  iree_loop_sync_options_t loop_options = {.max_queue_depth = 128,
-                                           .max_wait_count = 64};
+  // TODO: We need a way to dynamically resize this vs having a hard limit.
+  iree_loop_sync_options_t loop_options = {.max_queue_depth = 256,
+                                           .max_wait_count = 256};
   SHORTFIN_THROW_IF_ERROR(
       iree_loop_sync_allocate(loop_options, options_.allocator, &loop_sync_));
   iree_loop_sync_scope_initialize(loop_sync_, OnError, this, &loop_scope_);
@@ -196,6 +197,14 @@ iree_status_t Worker::WaitUntilLowLevel(
                               iree_status_t status) noexcept,
     void* user_data) {
   return iree_loop_wait_until(loop_, timeout, callback, user_data);
+}
+
+iree_status_t Worker::WaitOneLowLevel(
+    iree_wait_source_t wait_source, iree_timeout_t timeout,
+    iree_status_t (*callback)(void* user_data, iree_loop_t loop,
+                              iree_status_t status) noexcept,
+    void* user_data) {
+  return iree_loop_wait_one(loop_, wait_source, timeout, callback, user_data);
 }
 
 // Time management.
