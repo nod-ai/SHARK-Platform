@@ -108,7 +108,10 @@ class object_ptr {
   // Constructs a new object_ptr by transferring ownership of a raw
   // pointer.
   static object_ptr steal_reference(T *owned) { return object_ptr(owned); }
-
+  static object_ptr borrow_reference(T *owned) {
+    Helper::retain(owned);
+    return object_ptr(owned);
+  }
   operator T *() noexcept { return ptr; }
 
   // Releases any current reference held by this instance and returns a
@@ -200,6 +203,7 @@ struct allocated_ptr {
 // immediately thrown.
 class SHORTFIN_API error : public std::exception {
  public:
+  error(std::string message, iree_status_t failing_status);
   error(iree_status_t failing_status);
   error(const error &) = delete;
   error &operator=(const error &) = delete;

@@ -8,6 +8,10 @@
 
 namespace shortfin::iree {
 
+error::error(std::string message, iree_status_t failing_status)
+    : message_(std::move(message)), failing_status_(failing_status) {
+  message_.append(": ");
+}
 error::error(iree_status_t failing_status) : failing_status_(failing_status) {}
 
 void error::AppendStatus() const noexcept {
@@ -19,7 +23,6 @@ void error::AppendStatus() const noexcept {
   iree_host_size_t length = 0;
   if (iree_status_to_string(failing_status_, &allocator, &status_buffer,
                             &length)) {
-    message_.append(": ");
     message_.append(status_buffer, length);
     iree_allocator_free(allocator, status_buffer);
   } else {

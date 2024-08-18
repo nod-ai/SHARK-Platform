@@ -88,7 +88,7 @@ class shared_event : private event {
     ref(ref &&other) : inst_(other.inst_) { other.inst_ = nullptr; }
     ~ref() { reset(); }
 
-    operator bool() { return inst_ != nullptr; }
+    operator bool() const { return inst_ != nullptr; }
     iree::event *operator->() { return inst_; }
     void reset() {
       if (inst_) {
@@ -96,6 +96,8 @@ class shared_event : private event {
         inst_ = nullptr;
       }
     }
+
+    int ref_count() { return inst_->ref_count_.load(); }
 
     // Manually retain the event. Must be matched by a call to release().
     void manual_retain() { inst_->ref_count_.fetch_add(1); }

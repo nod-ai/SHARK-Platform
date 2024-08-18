@@ -27,3 +27,11 @@ shortfin_cc_component(
     iree_modules_hal_types
     spdlog::spdlog
 )
+
+shortfin_gtest_test(
+  NAME support_test
+  SRCS
+    iree_concurrency_test.cc
+    iree_helpers_test.cc
+    stl_extras_test.cc
+)
