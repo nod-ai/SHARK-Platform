@@ -29,6 +29,8 @@ using thread_ptr = object_ptr<iree_thread_t, detail::thread_ptr_helper>;
 class slim_mutex {
  public:
   slim_mutex() { iree_slim_mutex_initialize(&mu_); }
+  slim_mutex(const slim_mutex &) = delete;
+  slim_mutex &operator=(const slim_mutex &) = delete;
   ~slim_mutex() { iree_slim_mutex_deinitialize(&mu_); }
 
   operator iree_slim_mutex_t *() { return &mu_; }
@@ -44,7 +46,7 @@ class slim_mutex_lock_guard {
   ~slim_mutex_lock_guard() { iree_slim_mutex_unlock(mu_); }
 
  private:
-  slim_mutex mu_;
+  slim_mutex &mu_;
 };
 
 // Wrapper around an iree::event_t.
@@ -53,6 +55,8 @@ class event {
   event(bool initial_state) {
     SHORTFIN_THROW_IF_ERROR(iree_event_initialize(initial_state, &event_));
   }
+  event(const event &) = delete;
+  event &operator=(const event &) = delete;
   ~event() { iree_event_deinitialize(&event_); }
 
   void set() { iree_event_set(&event_); }
