@@ -6,6 +6,7 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 import asyncio
+import threading
 
 import shortfin as sf
 
@@ -18,7 +19,7 @@ class MyProcess(sf.Process):
         self.arg = arg
 
     async def run(self):
-        print("Hello async:", self.arg, self)
+        print(f"[{threading.get_ident()}] Hello async:", self.arg, self)
         processes = []
         if self.arg < 10:
             await asyncio.sleep(0.3)
@@ -32,10 +33,9 @@ async def main():
     processes = []
     for i in range(10):
         processes.append(MyProcess(scope, i).launch())
-        await asyncio.sleep(0.1)
         processes.append(MyProcess(scope, i * 100).launch())
-        await asyncio.sleep(0.1)
         processes.append(MyProcess(scope, i * 1000).launch())
+        await asyncio.sleep(0.1)
 
     print("<<MAIN WAITING>>")
     await asyncio.gather(*processes)

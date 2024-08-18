@@ -29,8 +29,8 @@ class SHORTFIN_API SingleWaitFuture {
   using ResourceControl = std::function<void(ResourceCommand)>;
 
   SingleWaitFuture();
-  SingleWaitFuture(iree_shared_event::ref event);
-  SingleWaitFuture(iree_hal_semaphore_ptr sem, uint64_t payload);
+  SingleWaitFuture(iree::shared_event::ref event);
+  SingleWaitFuture(iree::hal_semaphore_ptr sem, uint64_t payload);
   SingleWaitFuture(SingleWaitFuture &&other)
       : wait_source_(other.wait_source_),
         resource_control_(std::move(other.resource_control_)) {

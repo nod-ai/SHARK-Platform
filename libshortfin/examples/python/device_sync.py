@@ -29,5 +29,6 @@ async def main():
     print("--- Process terminated")
 
 
-lsys = sf.host.CPUSystemBuilder().create_system()
+# lsys = sf.host.CPUSystemBuilder().create_system()
+lsys = sf.amdgpu.SystemBuilder().create_system()
 lsys.run(main())

@@ -117,8 +117,8 @@ void Scheduler::AppendCommandBuffer(ScopedDevice &device,
     }
 
     // Set up the command buffer.
-    iree_hal_command_buffer_ptr new_cb;
-    iree_hal_fence_ptr new_active_deps;
+    iree::hal_command_buffer_ptr new_cb;
+    iree::hal_fence_ptr new_active_deps;
     SHORTFIN_THROW_IF_ERROR(iree_hal_fence_create(
         semaphore_count_, host_allocator_, new_active_deps.for_output()));
     SHORTFIN_THROW_IF_ERROR(iree_hal_command_buffer_create(

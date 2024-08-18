@@ -56,14 +56,14 @@ class SHORTFIN_API BaseProcess {
   // Process control state. Since this can be accessed by multiple threads,
   // it is protected by a lock. Most process state can only be accessed on
   // the worker thread and is unprotected.
-  mutable iree_slim_mutex lock_;
+  mutable iree::slim_mutex lock_;
   // Pid is 0 if not yet started, -1 if terminated, and a postive value if
   // running.
   int64_t pid_ = 0;
 
   // Must be accessed within a lock. Will be null if no one has called
   // Termination().
-  iree_shared_event::ref terminated_event_;
+  iree::shared_event::ref terminated_event_;
 };
 
 }  // namespace detail

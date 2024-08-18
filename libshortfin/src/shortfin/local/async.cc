@@ -11,7 +11,7 @@ namespace shortfin::local {
 SingleWaitFuture::SingleWaitFuture()
     : wait_source_(iree_wait_source_immediate()) {}
 
-SingleWaitFuture::SingleWaitFuture(iree_shared_event::ref event)
+SingleWaitFuture::SingleWaitFuture(iree::shared_event::ref event)
     : wait_source_(event->await()) {
   // It is sufficient to simply capture the event ref in the lambda. It
   // will be lifetime extended for as long as the resource control
@@ -19,7 +19,8 @@ SingleWaitFuture::SingleWaitFuture(iree_shared_event::ref event)
   resource_control_ = [event](ResourceCommand) {};
 }
 
-SingleWaitFuture::SingleWaitFuture(iree_hal_semaphore_ptr sem, uint64_t payload)
+SingleWaitFuture::SingleWaitFuture(iree::hal_semaphore_ptr sem,
+                                   uint64_t payload)
     : wait_source_(iree_hal_semaphore_await(sem, payload)) {
   resource_control_ = [sem](ResourceCommand) {};
 }

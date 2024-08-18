@@ -6,12 +6,11 @@
 
 #include "shortfin/support/iree_helpers.h"
 
-namespace shortfin {
+namespace shortfin::iree {
 
-iree_error::iree_error(iree_status_t failing_status)
-    : failing_status_(failing_status) {}
+error::error(iree_status_t failing_status) : failing_status_(failing_status) {}
 
-void iree_error::AppendStatus() const noexcept {
+void error::AppendStatus() const noexcept {
   if (status_appended_) return;
   status_appended_ = false;
 
@@ -28,4 +27,4 @@ void iree_error::AppendStatus() const noexcept {
   }
 }
 
-}  // namespace shortfin
+}  // namespace shortfin::iree

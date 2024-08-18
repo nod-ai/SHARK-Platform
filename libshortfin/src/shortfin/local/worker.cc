@@ -52,7 +52,7 @@ iree_status_t Worker::TransactLoop(iree_status_t signal_status) {
     // An outside thread cannot change the state we are managing without
     // entering this critical section, so it is safe to reset the event
     // here (it is not possible for it to be spurious reset).
-    iree_slim_mutex_lock_guard guard(mu_);
+    iree::slim_mutex_lock_guard guard(mu_);
     signal_transact_.reset();
     if (kill_) {
       // TODO: Do we want to somehow hard abort loop in flight work (vs
@@ -86,7 +86,7 @@ int Worker::RunOnThread() {
     IREE_RETURN_IF_ERROR(ScheduleExternalTransactEvent());
     for (;;) {
       {
-        iree_slim_mutex_lock_guard guard(mu_);
+        iree::slim_mutex_lock_guard guard(mu_);
         if (kill_) break;
       }
       IREE_RETURN_IF_ERROR(iree_loop_drain(loop_, options_.quantum));
@@ -134,7 +134,7 @@ void Worker::Kill() {
     throw std::logic_error("Cannot kill a Worker that was not started");
   }
   {
-    iree_slim_mutex_lock_guard guard(mu_);
+    iree::slim_mutex_lock_guard guard(mu_);
     kill_ = true;
   }
   signal_transact_.set();
@@ -167,7 +167,7 @@ void Worker::RunOnCurrentThread() {
         "Cannot RunOnCurrentThread if worker was configured for owned_thread");
   }
   {
-    iree_slim_mutex_lock_guard guard(mu_);
+    iree::slim_mutex_lock_guard guard(mu_);
     if (has_run_) {
       throw std::logic_error("Cannot RunOnCurrentThread if already finished");
     }
@@ -178,7 +178,7 @@ void Worker::RunOnCurrentThread() {
 
 void Worker::CallThreadsafe(std::function<void()> callback) {
   {
-    iree_slim_mutex_lock_guard guard(mu_);
+    iree::slim_mutex_lock_guard guard(mu_);
     pending_thunks_.push_back(std::move(callback));
   }
   signal_transact_.set();

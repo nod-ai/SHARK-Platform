@@ -18,14 +18,14 @@ detail::BaseProcess::BaseProcess(std::shared_ptr<Scope> scope)
 detail::BaseProcess::~BaseProcess() {}
 
 int64_t detail::BaseProcess::pid() const {
-  iree_slim_mutex_lock_guard g(lock_);
+  iree::slim_mutex_lock_guard g(lock_);
   return pid_;
 }
 
 std::string detail::BaseProcess::to_s() const {
   int pid;
   {
-    iree_slim_mutex_lock_guard g(lock_);
+    iree::slim_mutex_lock_guard g(lock_);
     pid = pid_;
   }
 
@@ -44,7 +44,7 @@ std::string detail::BaseProcess::to_s() const {
 void detail::BaseProcess::Launch() {
   Scope* scope = scope_.get();
   {
-    iree_slim_mutex_lock_guard g(lock_);
+    iree::slim_mutex_lock_guard g(lock_);
     if (pid_ != 0) {
       throw std::logic_error("Process can only be launched a single time");
     }
@@ -62,7 +62,7 @@ void detail::BaseProcess::ScheduleOnWorker() {
 void detail::BaseProcess::Terminate() {
   int deallocate_pid;
   {
-    iree_slim_mutex_lock_guard g(lock_);
+    iree::slim_mutex_lock_guard g(lock_);
     deallocate_pid = pid_;
     pid_ = -1;
     if (terminated_event_) {
@@ -77,9 +77,9 @@ void detail::BaseProcess::Terminate() {
 }
 
 SingleWaitFuture detail::BaseProcess::OnTermination() {
-  iree_slim_mutex_lock_guard g(lock_);
+  iree::slim_mutex_lock_guard g(lock_);
   if (!terminated_event_) {
-    terminated_event_ = iree_shared_event::create(pid_ < 0);
+    terminated_event_ = iree::shared_event::create(pid_ < 0);
   }
   return SingleWaitFuture(terminated_event_);
 }

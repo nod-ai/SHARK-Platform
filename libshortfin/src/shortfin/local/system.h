@@ -94,7 +94,7 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
   // ------------------------------------------------------------------------ //
   void InitializeNodes(int node_count);
   void InitializeHalDriver(std::string_view moniker,
-                           iree_hal_driver_ptr driver);
+                           iree::hal_driver_ptr driver);
   void InitializeHalDevice(std::unique_ptr<Device> device);
   void FinishInitialization();
 
@@ -119,7 +119,7 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
   const iree_allocator_t host_allocator_;
 
   string_interner interner_;
-  iree_slim_mutex lock_;
+  iree::slim_mutex lock_;
 
   // NUMA nodes relevant to this system.
   std::vector<Node> nodes_;
@@ -127,7 +127,7 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
   // Map of retained hal drivers. These will be released as one of the
   // last steps of destruction. There are some ancillary uses for drivers
   // after initialization, but mainly this is for keeping them alive.
-  std::unordered_map<std::string_view, iree_hal_driver_ptr> hal_drivers_;
+  std::unordered_map<std::string_view, iree::hal_driver_ptr> hal_drivers_;
 
   // Map of device name to a SystemDevice.
   std::vector<std::unique_ptr<Device>> retained_devices_;
@@ -135,7 +135,7 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
   std::vector<Device *> devices_;
 
   // VM management.
-  iree_vm_instance_ptr vm_instance_;
+  iree::vm_instance_ptr vm_instance_;
 
   // Workers.
   Worker::Factory worker_factory_ = System::DefaultWorkerFactory;

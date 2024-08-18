@@ -98,10 +98,10 @@ class SHORTFIN_API Worker {
   iree_status_t TransactLoop(iree_status_t signal_status);
 
   const Options options_;
-  iree_slim_mutex mu_;
-  iree_thread_ptr thread_;
-  iree_event signal_transact_;
-  iree_event signal_ended_;
+  iree::slim_mutex mu_;
+  iree::thread_ptr thread_;
+  iree::event signal_transact_;
+  iree::event signal_ended_;
 
   // State management. These are all manipulated both on and off the worker
   // thread.

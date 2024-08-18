@@ -27,7 +27,7 @@ System::System(iree_allocator_t host_allocator)
 System::~System() {
   bool needs_shutdown = false;
   {
-    iree_slim_mutex_lock_guard guard(lock_);
+    iree::slim_mutex_lock_guard guard(lock_);
     if (initialized_ && !shutdown_) {
       needs_shutdown = true;
     }
@@ -45,7 +45,7 @@ std::unique_ptr<Worker> System::DefaultWorkerFactory(Worker::Options options) {
 }
 
 void System::set_worker_factory(Worker::Factory factory) {
-  iree_slim_mutex_lock_guard guard(lock_);
+  iree::slim_mutex_lock_guard guard(lock_);
   worker_factory_ = std::move(factory);
 }
 
@@ -53,7 +53,7 @@ void System::Shutdown() {
   // Stop workers.
   std::vector<std::unique_ptr<Worker>> local_workers;
   {
-    iree_slim_mutex_lock_guard guard(lock_);
+    iree::slim_mutex_lock_guard guard(lock_);
     if (!initialized_ || shutdown_) return;
     shutdown_ = true;
     workers_by_name_.clear();
@@ -85,13 +85,13 @@ void System::Shutdown() {
 }
 
 std::shared_ptr<Scope> System::CreateScope(Worker &worker) {
-  iree_slim_mutex_lock_guard guard(lock_);
+  iree::slim_mutex_lock_guard guard(lock_);
   return std::make_shared<Scope>(shared_ptr(), worker, devices());
 }
 
 std::shared_ptr<Scope> System::CreateScope() {
   Worker &w = init_worker();
-  iree_slim_mutex_lock_guard guard(lock_);
+  iree::slim_mutex_lock_guard guard(lock_);
   return std::make_shared<Scope>(shared_ptr(), w, devices());
 }
 
@@ -109,7 +109,7 @@ void System::InitializeNodes(int node_count) {
 Worker &System::CreateWorker(Worker::Options options) {
   Worker *unowned_worker;
   {
-    iree_slim_mutex_lock_guard guard(lock_);
+    iree::slim_mutex_lock_guard guard(lock_);
     if (options.name == std::string_view("__init__")) {
       throw std::invalid_argument(
           "Cannot create worker '__init__' (reserved name)");
@@ -130,7 +130,7 @@ Worker &System::CreateWorker(Worker::Options options) {
 }
 
 Worker &System::init_worker() {
-  iree_slim_mutex_lock_guard guard(lock_);
+  iree::slim_mutex_lock_guard guard(lock_);
   auto found_it = workers_by_name_.find("__init__");
   if (found_it != workers_by_name_.end()) {
     return *found_it->second;
@@ -147,7 +147,7 @@ Worker &System::init_worker() {
 }
 
 void System::InitializeHalDriver(std::string_view moniker,
-                                 iree_hal_driver_ptr driver) {
+                                 iree::hal_driver_ptr driver) {
   AssertNotInitialized();
   auto &slot = hal_drivers_[moniker];
   if (slot) {
@@ -170,20 +170,20 @@ void System::InitializeHalDevice(std::unique_ptr<Device> device) {
 }
 
 void System::FinishInitialization() {
-  iree_slim_mutex_lock_guard guard(lock_);
+  iree::slim_mutex_lock_guard guard(lock_);
   AssertNotInitialized();
   initialized_ = true;
 }
 
 int64_t System::AllocateProcess(detail::BaseProcess *p) {
-  iree_slim_mutex_lock_guard guard(lock_);
+  iree::slim_mutex_lock_guard guard(lock_);
   int pid = next_pid_++;
   processes_by_pid_[pid] = p;
   return pid;
 }
 
 void System::DeallocateProcess(int64_t pid) {
-  iree_slim_mutex_lock_guard guard(lock_);
+  iree::slim_mutex_lock_guard guard(lock_);
   processes_by_pid_.erase(pid);
 }
 

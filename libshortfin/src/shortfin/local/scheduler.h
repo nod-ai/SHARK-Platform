@@ -134,7 +134,7 @@ class SHORTFIN_API TimelineResource {
 
   // Use barrier fence. The fact that this is a fence object with a fixed
   // capacity is an implementation detail.
-  iree_hal_fence_ptr use_barrier_fence_;
+  iree::hal_fence_ptr use_barrier_fence_;
   friend class Scheduler;
 };
 
@@ -171,8 +171,8 @@ class SHORTFIN_API Account {
   Device *device_;
   iree_hal_device_t *hal_device_;
   TransactionType active_tx_type_ = TransactionType::NONE;
-  iree_hal_fence_ptr active_deps_;
-  iree_hal_command_buffer_ptr active_command_buffer_;
+  iree::hal_fence_ptr active_deps_;
+  iree::hal_command_buffer_ptr active_command_buffer_;
   iree_hal_queue_affinity_t active_queue_affinity_bits_;
 
   // Timepoint at which this device is considered idle, inclusive of any
@@ -190,7 +190,7 @@ class SHORTFIN_API Account {
   // an eventual submission would submit a duplicate timepoint). This
   // timepoint is only valid for the local sem_.
   uint64_t idle_timepoint_ = 0;
-  iree_hal_semaphore_ptr sem_;
+  iree::hal_semaphore_ptr sem_;
   friend class Scheduler;
 };
 

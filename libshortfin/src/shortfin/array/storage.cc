@@ -28,7 +28,7 @@ storage storage::AllocateDevice(ScopedDevice &device,
     throw std::invalid_argument("Cannot allocate with a null device affinity");
   }
   auto allocator = iree_hal_device_allocator(device.raw_device()->hal_device());
-  iree_hal_buffer_ptr buffer;
+  iree::hal_buffer_ptr buffer;
   iree_hal_buffer_params_t params = {
       .usage = IREE_HAL_BUFFER_USAGE_DEFAULT,
       .access = IREE_HAL_MEMORY_ACCESS_ALL,
@@ -47,7 +47,7 @@ storage storage::AllocateHost(ScopedDevice &device,
     throw std::invalid_argument("Cannot allocate with a null device affinity");
   }
   auto allocator = iree_hal_device_allocator(device.raw_device()->hal_device());
-  iree_hal_buffer_ptr buffer;
+  iree::hal_buffer_ptr buffer;
   iree_hal_buffer_params_t params = {
       .usage = IREE_HAL_BUFFER_USAGE_MAPPING,
       .access = IREE_HAL_MEMORY_ACCESS_ALL,
