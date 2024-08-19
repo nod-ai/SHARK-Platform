@@ -23,7 +23,8 @@ Account::Account(Scheduler &scheduler, Device *device)
 
 void Account::Initialize() {
   SHORTFIN_THROW_IF_ERROR(iree_hal_semaphore_create(
-      hal_device(), idle_timepoint_, sem_.for_output()));
+      hal_device(), /*initial_value=*/idle_timepoint_,
+      /*flags=*/IREE_HAL_SEMAPHORE_FLAG_NONE, sem_.for_output()));
   Reset();
 }
 
