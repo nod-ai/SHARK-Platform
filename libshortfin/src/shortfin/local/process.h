@@ -36,7 +36,7 @@ class SHORTFIN_API BaseProcess {
   std::shared_ptr<Scope> &scope() { return scope_; }
 
   // Returns a future that can be waited on for termination.
-  SingleWaitFuture OnTermination();
+  CompletionEvent OnTermination();
 
  protected:
   // Launches the process.

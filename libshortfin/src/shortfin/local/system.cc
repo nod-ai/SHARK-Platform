@@ -69,6 +69,8 @@ void System::Shutdown() {
       worker->WaitForShutdown();
     }
   }
+  blocking_executor_.Kill();
+
   local_workers.clear();
 
   // Orderly destruction of heavy-weight objects.

@@ -13,7 +13,7 @@ Node = _sfl.local.Node
 Process = _sfl.local.Process
 Scope = _sfl.local.Scope
 ScopedDevice = _sfl.local.ScopedDevice
-SingleWaitFuture = _sfl.local.SingleWaitFuture
+CompletionEvent = _sfl.local.CompletionEvent
 System = _sfl.local.System
 SystemBuilder = _sfl.local.SystemBuilder
 Worker = _sfl.local.Worker
@@ -30,7 +30,7 @@ __all__ = [
     "Node",
     "Scope",
     "ScopedDevice",
-    "SingleWaitFuture",
+    "CompletionEvent",
     "System",
     "SystemBuilder",
     "Worker",

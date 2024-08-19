@@ -17,6 +17,7 @@
 #include "shortfin/local/device.h"
 #include "shortfin/local/worker.h"
 #include "shortfin/support/api.h"
+#include "shortfin/support/blocking_executor.h"
 #include "shortfin/support/iree_concurrency.h"
 #include "shortfin/support/iree_helpers.h"
 #include "shortfin/support/stl_extras.h"
@@ -70,6 +71,11 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
   const std::unordered_map<std::string_view, Device *> &named_devices() {
     return named_devices_;
   }
+
+  // Access the system wide blocking executor thread pool. This can be used
+  // to execute thunks that can block on a dedicated thread and is needed
+  // to bridge APIs that cannot be used in a non-blocking context.
+  BlockingExecutor &blocking_executor() { return blocking_executor_; }
 
   // Scopes.
   // Creates a new Scope bound to this System (it will internally
@@ -136,6 +142,9 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
 
   // VM management.
   iree::vm_instance_ptr vm_instance_;
+
+  // Global blocking executor.
+  BlockingExecutor blocking_executor_;
 
   // Workers.
   Worker::Factory worker_factory_ = System::DefaultWorkerFactory;

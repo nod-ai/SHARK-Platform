@@ -7,6 +7,7 @@
 #include "shortfin/local/scheduler.h"
 
 #include "shortfin/local/scope.h"
+#include "shortfin/local/system.h"
 #include "shortfin/support/logging.h"
 
 namespace shortfin::local::detail {
@@ -15,8 +16,10 @@ namespace shortfin::local::detail {
 // Account
 // -------------------------------------------------------------------------- //
 
-Account::Account(Device *device)
-    : device_(device), hal_device_(device->hal_device()) {}
+Account::Account(Scheduler &scheduler, Device *device)
+    : scheduler_(scheduler),
+      device_(device),
+      hal_device_(device->hal_device()) {}
 
 void Account::Initialize() {
   SHORTFIN_THROW_IF_ERROR(iree_hal_semaphore_create(
@@ -36,8 +39,27 @@ void Account::active_deps_extend(iree_hal_semaphore_list_t sem_list) {
   }
 }
 
-SingleWaitFuture Account::OnSync() {
-  return SingleWaitFuture(sem_, idle_timepoint_);
+CompletionEvent Account::OnSync() {
+  bool hack_has_working_wait_source = false;
+  if (hack_has_working_wait_source) {
+    return CompletionEvent(sem_, idle_timepoint_);
+  } else {
+    // TODO: Burn this path with fire! No attempt has been made to make this
+    // particularly good: the backend is being implemented now to export
+    // HAL semaphores via iree_hal_semaphore_await, and that should be used
+    // when supported. This is merely here so as to unblock local progress.
+    iree::shared_event::ref satisfied(false);
+    iree::hal_semaphore_ptr sem = sem_;
+    auto idle_timepoint = idle_timepoint_;
+    scheduler_.system().blocking_executor().Schedule(
+        [sem = std::move(sem), idle_timepoint, satisfied]() {
+          iree_status_t status = iree_hal_semaphore_wait(
+              sem, idle_timepoint, iree_infinite_timeout());
+          IREE_CHECK_OK(status);
+          satisfied->set();
+        });
+    return CompletionEvent(satisfied);
+  }
 }
 
 // -------------------------------------------------------------------------- //
@@ -62,7 +84,7 @@ void TimelineResource::use_barrier_insert(iree_hal_semaphore_t *sem,
 
 void Scheduler::Initialize(std::span<Device *const> devices) {
   for (Device *device : devices) {
-    accounts_.emplace_back(device);
+    accounts_.emplace_back(*this, device);
   }
 
   for (Account &account : accounts_) {
@@ -119,8 +141,9 @@ void Scheduler::AppendCommandBuffer(ScopedDevice &device,
     // Set up the command buffer.
     iree::hal_command_buffer_ptr new_cb;
     iree::hal_fence_ptr new_active_deps;
-    SHORTFIN_THROW_IF_ERROR(iree_hal_fence_create(
-        semaphore_count_, host_allocator_, new_active_deps.for_output()));
+    SHORTFIN_THROW_IF_ERROR(
+        iree_hal_fence_create(semaphore_count_, system_.host_allocator(),
+                              new_active_deps.for_output()));
     SHORTFIN_THROW_IF_ERROR(iree_hal_command_buffer_create(
         account.hal_device(),
         /*mode=*/IREE_HAL_COMMAND_BUFFER_MODE_ONE_SHOT,

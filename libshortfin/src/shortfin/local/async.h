@@ -7,6 +7,7 @@
 #ifndef SHORTFIN_LOCAL_ASYNC_H
 #define SHORTFIN_LOCAL_ASYNC_H
 
+#include <any>
 #include <functional>
 
 #include "shortfin/support/api.h"
@@ -15,46 +16,38 @@
 
 namespace shortfin::local {
 
-// Encapsulates an IREE wait source and combines it with additional plumbing
-// to support resource management. On move, the source of the move is reset
-// to an immediate wait source and it's resource controller is cleared.
-class SHORTFIN_API SingleWaitFuture {
+// CompletionEvents are the most basic form of awaitable object. They
+// encapsulate a native iree_wait_source_t (which multiplexes any supported
+// system level wait primitive) with a resource baton which keeps any needed
+// references alive for the duration of all copies.
+//
+// Depending on the system wait source used, there may be a limited exception
+// side-band (i.e. a way to signal that the wait handle has failed and have
+// that propagate to consumers). However, in general, this is a very coarse
+// mechanism. For rich result and error propagation, see the higher level
+// Promise/Future types, which can be signalled with either a result or
+// exception.
+class SHORTFIN_API CompletionEvent {
  public:
-  // The SingleWaitFuture can contain a ResourceControl function. If present,
-  // then it is called to retain/release a backing resource.
-  enum class ResourceCommand {
-    RETAIN,
-    RELEASE,
-  };
-  using ResourceControl = std::function<void(ResourceCommand)>;
-
-  SingleWaitFuture();
-  SingleWaitFuture(iree::shared_event::ref event);
-  SingleWaitFuture(iree::hal_semaphore_ptr sem, uint64_t payload);
-  SingleWaitFuture(SingleWaitFuture &&other)
+  CompletionEvent();
+  CompletionEvent(iree::shared_event::ref event);
+  CompletionEvent(iree::hal_semaphore_ptr sem, uint64_t payload);
+  CompletionEvent(CompletionEvent &&other)
       : wait_source_(other.wait_source_),
-        resource_control_(std::move(other.resource_control_)) {
+        resource_baton_(std::move(other.resource_baton_)) {
     other.wait_source_ = iree_wait_source_immediate();
   }
-  SingleWaitFuture(const SingleWaitFuture &other)
+  CompletionEvent(const CompletionEvent &other)
       : wait_source_(other.wait_source_),
-        resource_control_(other.resource_control_) {
-    resource_control_(ResourceCommand::RETAIN);
-  }
-  SingleWaitFuture &operator=(const SingleWaitFuture &other) {
-    if (other.resource_control_) {
-      other.resource_control_(ResourceCommand::RETAIN);
-    }
-    if (resource_control_) {
-      resource_control_(ResourceCommand::RELEASE);
-    }
+        resource_baton_(other.resource_baton_) {}
+  CompletionEvent &operator=(const CompletionEvent &other) {
     wait_source_ = other.wait_source_;
-    resource_control_ = other.resource_control_;
+    resource_baton_ = other.resource_baton_;
     return *this;
   }
-  ~SingleWaitFuture();
+  ~CompletionEvent();
 
-  // Returns true if this SingleWaitFuture is ready.
+  // Returns true if this CompletionEvent is ready.
   bool is_ready();
   // Block the current thread for up to |timeout|. If a non-infinite timeout
   // was given and the timeout expires while waiting, returns false. In all
@@ -67,7 +60,8 @@ class SHORTFIN_API SingleWaitFuture {
 
  private:
   iree_wait_source_t wait_source_;
-  ResourceControl resource_control_;
+  // A baton used to keep any needed backing resource alive.
+  std::any resource_baton_;
 };
 
 }  // namespace shortfin::local

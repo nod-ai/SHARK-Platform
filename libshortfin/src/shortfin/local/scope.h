@@ -45,7 +45,7 @@ class SHORTFIN_API ScopedDevice {
   // Returns a future which will be satisfied when the primary device timeline
   // of this affinity set progresses to "now". This will be true when all
   // currently queued work on the device has been completed.
-  SingleWaitFuture OnSync(bool flush = true);
+  CompletionEvent OnSync(bool flush = true);
 
  private:
   Scope &scope_;

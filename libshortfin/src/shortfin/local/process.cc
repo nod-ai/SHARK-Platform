@@ -76,12 +76,12 @@ void detail::BaseProcess::Terminate() {
   }
 }
 
-SingleWaitFuture detail::BaseProcess::OnTermination() {
+CompletionEvent detail::BaseProcess::OnTermination() {
   iree::slim_mutex_lock_guard g(lock_);
   if (!terminated_event_) {
     terminated_event_ = iree::shared_event::create(pid_ < 0);
   }
-  return SingleWaitFuture(terminated_event_);
+  return CompletionEvent(terminated_event_);
 }
 
 }  // namespace shortfin::local

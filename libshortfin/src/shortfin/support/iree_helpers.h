@@ -112,7 +112,7 @@ class object_ptr {
     Helper::retain(owned);
     return object_ptr(owned);
   }
-  operator T *() noexcept { return ptr; }
+  operator T *() const noexcept { return ptr; }
 
   // Releases any current reference held by this instance and returns a
   // pointer to the raw backing pointer. This is typically used for passing

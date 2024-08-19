@@ -474,19 +474,19 @@ void BindLocal(py::module_ &m) {
       .def("__await__",
            [](PyProcess &self) {
              py::object future =
-                 py::cast(local::SingleWaitFuture(self.OnTermination()),
+                 py::cast(local::CompletionEvent(self.OnTermination()),
                           py::rv_policy::move);
              return future.attr("__await__")();
            })
       .def("__repr__", &PyProcess::to_s);
 
-  py::class_<local::SingleWaitFuture>(m, "SingleWaitFuture")
+  py::class_<local::CompletionEvent>(m, "CompletionEvent")
       .def(py::init<>())
-      .def("__await__", [refs](local::SingleWaitFuture &self) {
+      .def("__await__", [refs](local::CompletionEvent &self) {
         auto &worker = PyWorker::GetCurrent(*refs);
         struct State {
           py::object future;
-          local::SingleWaitFuture
+          local::CompletionEvent
               awaitable;  // Keeps the wait_source backer alive.
         };
         auto state = std::make_unique<State>();
