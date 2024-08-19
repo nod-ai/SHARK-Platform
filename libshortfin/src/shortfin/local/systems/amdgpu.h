@@ -59,7 +59,7 @@ class SHORTFIN_API AMDGPUSystemBuilder : public HostCPUSystemBuilder {
   iree_hal_hip_device_params_t default_device_params_;
 
   // Valid post enumeration.
-  iree_hal_driver_ptr hip_hal_driver_;
+  iree::hal_driver_ptr hip_hal_driver_;
   std::vector<iree_hal_device_info_t> visible_devices_;
 };
 

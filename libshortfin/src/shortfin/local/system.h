@@ -17,6 +17,7 @@
 #include "shortfin/local/device.h"
 #include "shortfin/local/worker.h"
 #include "shortfin/support/api.h"
+#include "shortfin/support/blocking_executor.h"
 #include "shortfin/support/iree_concurrency.h"
 #include "shortfin/support/iree_helpers.h"
 #include "shortfin/support/stl_extras.h"
@@ -71,6 +72,11 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
     return named_devices_;
   }
 
+  // Access the system wide blocking executor thread pool. This can be used
+  // to execute thunks that can block on a dedicated thread and is needed
+  // to bridge APIs that cannot be used in a non-blocking context.
+  BlockingExecutor &blocking_executor() { return blocking_executor_; }
+
   // Scopes.
   // Creates a new Scope bound to this System (it will internally
   // hold a reference to this instance). All devices in system order will be
@@ -94,7 +100,7 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
   // ------------------------------------------------------------------------ //
   void InitializeNodes(int node_count);
   void InitializeHalDriver(std::string_view moniker,
-                           iree_hal_driver_ptr driver);
+                           iree::hal_driver_ptr driver);
   void InitializeHalDevice(std::unique_ptr<Device> device);
   void FinishInitialization();
 
@@ -119,7 +125,7 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
   const iree_allocator_t host_allocator_;
 
   string_interner interner_;
-  iree_slim_mutex lock_;
+  iree::slim_mutex lock_;
 
   // NUMA nodes relevant to this system.
   std::vector<Node> nodes_;
@@ -127,7 +133,7 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
   // Map of retained hal drivers. These will be released as one of the
   // last steps of destruction. There are some ancillary uses for drivers
   // after initialization, but mainly this is for keeping them alive.
-  std::unordered_map<std::string_view, iree_hal_driver_ptr> hal_drivers_;
+  std::unordered_map<std::string_view, iree::hal_driver_ptr> hal_drivers_;
 
   // Map of device name to a SystemDevice.
   std::vector<std::unique_ptr<Device>> retained_devices_;
@@ -135,7 +141,10 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
   std::vector<Device *> devices_;
 
   // VM management.
-  iree_vm_instance_ptr vm_instance_;
+  iree::vm_instance_ptr vm_instance_;
+
+  // Global blocking executor.
+  BlockingExecutor blocking_executor_;
 
   // Workers.
   Worker::Factory worker_factory_ = System::DefaultWorkerFactory;

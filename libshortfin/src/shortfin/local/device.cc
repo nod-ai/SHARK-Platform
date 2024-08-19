@@ -54,7 +54,7 @@ std::string DeviceAffinity::to_s() const {
 // Device
 // -------------------------------------------------------------------------- //
 
-Device::Device(DeviceAddress address, iree_hal_device_ptr hal_device,
+Device::Device(DeviceAddress address, iree::hal_device_ptr hal_device,
                int node_affinity, bool node_locked)
     : address_(std::move(address)),
       hal_device_(std::move(hal_device)),

@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "iree/base/loop_sync.h"
+#include "shortfin/local/async.h"
 #include "shortfin/support/api.h"
 #include "shortfin/support/iree_concurrency.h"
 
@@ -76,6 +77,13 @@ class SHORTFIN_API Worker {
                                 iree_status_t status) noexcept,
       void *user_data);
 
+  // Calls back once a wait_source is satisfied.
+  iree_status_t WaitOneLowLevel(
+      iree_wait_source_t wait_source, iree_timeout_t timeout,
+      iree_status_t (*callback)(void *user_data, iree_loop_t loop,
+                                iree_status_t status) noexcept,
+      void *user_data);
+
   // Time management.
   // Returns the current absolute time in nanoseconds.
   iree_time_t now();
@@ -91,10 +99,10 @@ class SHORTFIN_API Worker {
   iree_status_t TransactLoop(iree_status_t signal_status);
 
   const Options options_;
-  iree_slim_mutex mu_;
-  iree_thread_ptr thread_;
-  iree_event signal_transact_;
-  iree_event signal_ended_;
+  iree::slim_mutex mu_;
+  iree::thread_ptr thread_;
+  iree::event signal_transact_;
+  iree::event signal_ended_;
 
   // State management. These are all manipulated both on and off the worker
   // thread.

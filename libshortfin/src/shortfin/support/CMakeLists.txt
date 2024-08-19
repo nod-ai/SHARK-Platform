@@ -9,12 +9,14 @@ shortfin_cc_component(
     shortfin_support
   HDRS
     api.h
+    blocking_executor.h
     globals.h
     iree_helpers.h
     iree_concurrency.h
     logging.h
     stl_extras.h
   SRCS
+    blocking_executor.cc
     globals.cc
     iree_helpers.cc
     logging.cc
@@ -26,4 +28,14 @@ shortfin_cc_component(
     iree_hal_hal
     iree_modules_hal_types
     spdlog::spdlog
+)
+
+shortfin_gtest_test(
+  NAME support_test
+  SRCS
+    # Order is specific: lower level tests before higher level.
+    iree_helpers_test.cc
+    iree_concurrency_test.cc
+    blocking_executor_test.cc
+    stl_extras_test.cc
 )

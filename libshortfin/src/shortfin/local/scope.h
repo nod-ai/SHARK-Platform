@@ -11,6 +11,7 @@
 #include <span>
 #include <unordered_map>
 
+#include "shortfin/local/async.h"
 #include "shortfin/local/device.h"
 #include "shortfin/local/scheduler.h"
 #include "shortfin/support/stl_extras.h"
@@ -40,6 +41,11 @@ class SHORTFIN_API ScopedDevice {
   bool operator==(const ScopedDevice &other) const {
     return (&scope_ == &other.scope_) && affinity_ == other.affinity_;
   }
+
+  // Returns a future which will be satisfied when the primary device timeline
+  // of this affinity set progresses to "now". This will be true when all
+  // currently queued work on the device has been completed.
+  CompletionEvent OnSync(bool flush = true);
 
  private:
   Scope &scope_;
