@@ -36,9 +36,9 @@ async def main():
     workers = [create_worker(i) for i in range(3)]
     processes = []
     for i in range(10):
-        processes.append(MyProcess(i, scope=workers[0 % len(workers)]).launch())
-        processes.append(MyProcess(i * 100, scope=workers[1 % len(workers)]).launch())
-        processes.append(MyProcess(i * 1000, scope=workers[2 % len(workers)]).launch())
+        processes.append(MyProcess(i, scope=workers[i % len(workers)]).launch())
+        processes.append(MyProcess(i * 100, scope=workers[i % len(workers)]).launch())
+        processes.append(MyProcess(i * 1000, scope=workers[i % len(workers)]).launch())
         await asyncio.sleep(0.1)
 
     print("<<MAIN WAITING>>")
