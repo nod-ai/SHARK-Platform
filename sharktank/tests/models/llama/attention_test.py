@@ -36,6 +36,7 @@ class AttentionBlockTest(unittest.TestCase):
         block_seq_stride = 1
         rms_epsilon = 0.01
         rope_dimension_count = 100
+        rope_freq_base = 10000.0
         max_seq_len = 2048
         attention_block_theta = make_attention_block_theta(
             feature_dim=head_count * head_dim, ffn_dim=ffn_dim, dtype=torch.float32
@@ -61,6 +62,7 @@ class AttentionBlockTest(unittest.TestCase):
         )
         attention_embedding = RotaryEmbeddingLayer(
             rope_dimension_count=rope_dimension_count,
+            rope_freq_base=rope_freq_base,
             max_seqlen=max_seq_len,
             device="cpu",
             use_hf=True,
