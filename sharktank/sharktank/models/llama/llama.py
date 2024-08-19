@@ -137,6 +137,7 @@ class PagedLlamaModelV1(BaseCausalLMModel):
             "attention_embedding",
             RotaryEmbeddingLayer(
                 rope_dimension_count=hp.rope_dimension_count,
+                rope_freq_base=hp.rope_freq_base,
                 max_seqlen=hp.context_length,
                 device=self.device,
                 use_hf=self.use_hf,

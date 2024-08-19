@@ -57,6 +57,7 @@ class DirectCacheLlamaModelV1(ThetaLayer):
             "attention_embedding",
             RotaryEmbeddingLayer(
                 rope_dimension_count=hp.rope_dimension_count,
+                rope_freq_base=hp.rope_freq_base,
                 max_seqlen=hp.context_length,
             ),
         )
