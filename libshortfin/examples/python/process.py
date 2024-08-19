@@ -14,8 +14,8 @@ lsys = sf.host.CPUSystemBuilder().create_system()
 
 
 class MyProcess(sf.Process):
-    def __init__(self, scope, arg):
-        super().__init__(scope)
+    def __init__(self, arg, **kwargs):
+        super().__init__(**kwargs)
         self.arg = arg
 
     async def run(self):
@@ -23,7 +23,7 @@ class MyProcess(sf.Process):
         processes = []
         if self.arg < 10:
             await asyncio.sleep(0.3)
-            processes.append(MyProcess(self.scope, self.arg + 1).launch())
+            processes.append(MyProcess(self.arg + 1, scope=self.scope).launch())
         await asyncio.gather(*processes)
 
 
@@ -32,9 +32,9 @@ async def main():
     scope = lsys.create_scope(worker)
     processes = []
     for i in range(10):
-        processes.append(MyProcess(scope, i).launch())
-        processes.append(MyProcess(scope, i * 100).launch())
-        processes.append(MyProcess(scope, i * 1000).launch())
+        processes.append(MyProcess(i, scope=scope).launch())
+        processes.append(MyProcess(i * 100, scope=scope).launch())
+        processes.append(MyProcess(i * 1000, scope=scope).launch())
         await asyncio.sleep(0.1)
 
     print("<<MAIN WAITING>>")

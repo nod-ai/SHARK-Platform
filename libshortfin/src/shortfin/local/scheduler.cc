@@ -116,13 +116,11 @@ void Scheduler::AppendCommandBuffer(ScopedDevice &device,
                                     TransactionType tx_type,
                                     std::function<void(Account &)> callback) {
   Account &account = GetDefaultAccount(device);
-  logging::info("AppendCommandBuffer({})", static_cast<void *>(&account));
 
   auto needed_affinity_bits = device.affinity().queue_affinity();
 
   // Initialize a fresh command buffer if needed.
   if (!account.active_command_buffer_) {
-    logging::info("Create command buffer");
     // Map to a command buffer category.
     iree_hal_command_category_t category;
     switch (tx_type) {
@@ -171,7 +169,6 @@ void Scheduler::AppendCommandBuffer(ScopedDevice &device,
 }
 
 void Scheduler::Flush() {
-  logging::info("Flush");
   // This loop is optimized for a small number of accounts, where it is
   // fine to just linearly probe. If this ever becomes cumbersome, we can
   // maintain a dirty list which is appended to when an account transitions

@@ -74,7 +74,6 @@ storage storage::Subspan(iree_device_size_t byte_offset,
 void storage::Fill(const void *pattern, iree_host_size_t pattern_length) {
   device_.scope().scheduler().AppendCommandBuffer(
       device_, TransactionType::TRANSFER, [&](Account &account) {
-        logging::info("AppendCommandBuffer() CALLBACK");
         // Must depend on all of this buffer's use dependencies to avoid
         // write-after-read hazard.
         account.active_deps_extend(timeline_resource_->use_barrier());

@@ -49,6 +49,9 @@ class Refs {
   py::object lazy_PyWorkerEventLoop_;
 };
 
+class PyWorker;
+thread_local PyWorker *current_thread_worker = nullptr;
+
 // Custom worker which hosts an asyncio event loop.
 class PyWorker : public local::Worker {
  public:
@@ -56,14 +59,13 @@ class PyWorker : public local::Worker {
            Options options)
       : Worker(std::move(options)), interp_(interp), refs_(std::move(refs)) {}
 
-  static PyWorker &GetCurrent(Refs &refs) {
-    py::object loop = refs.asyncio_get_running_loop();
-    if (loop.is_none() || !loop.type().is(refs.lazy_PyWorkerEventLoop())) {
-      throw std::runtime_error(py::cast<std::string>(
-          py::str("Current loop is not a shortfin worker: {}").format(loop)));
+  static PyWorker &GetCurrent() {
+    PyWorker *local_worker = current_thread_worker;
+    if (!local_worker) {
+      throw std::logic_error(
+          "There is no shortfin worker associated with this thread.");
     }
-    py::object worker_obj = loop.attr("_worker");
-    return py::cast<PyWorker &>(worker_obj, /*convert=*/false);
+    return *local_worker;
   }
 
   void WaitForShutdown() override {
@@ -77,6 +79,7 @@ class PyWorker : public local::Worker {
     if (options().owned_thread) {
       PyThreadState_New(interp_);
     }
+    current_thread_worker = this;
 
     py::gil_scoped_acquire g;
     // Aside from set_event_loop being old and _set_running_loop being new
@@ -87,6 +90,8 @@ class PyWorker : public local::Worker {
 
   void OnThreadStop() override {
     {
+      current_thread_worker = nullptr;
+
       // Do Python level thread cleanup.
       py::gil_scoped_acquire g;
       loop_.reset();
@@ -460,10 +465,11 @@ void BindLocal(py::module_ &m) {
       .def("__init__", [](py::args, py::kwargs) {})
       .def_static(
           "__new__",
-          [refs](py::handle py_type, std::shared_ptr<local::Scope> scope,
-                 py::args, py::kwargs) {
+          [refs](py::handle py_type, py::args,
+                 std::shared_ptr<local::Scope> scope, py::kwargs) {
             return custom_new<PyProcess>(py_type, std::move(scope), refs);
-          })
+          },
+          py::arg("type"), py::arg("args"), py::arg("scope"), py::arg("kwargs"))
       .def_prop_ro("scope", &PyProcess::scope)
       .def("launch",
            [](py::object self_obj) {
@@ -482,35 +488,40 @@ void BindLocal(py::module_ &m) {
 
   py::class_<local::CompletionEvent>(m, "CompletionEvent")
       .def(py::init<>())
-      .def("__await__", [refs](local::CompletionEvent &self) {
-        auto &worker = PyWorker::GetCurrent(*refs);
-        struct State {
-          py::object future;
-          local::CompletionEvent
-              awaitable;  // Keeps the wait_source backer alive.
-        };
-        auto state = std::make_unique<State>();
-        state->future = worker.loop_.attr("create_future")();
-        state->awaitable = self;
-        py::object iter_ret = state->future.attr("__iter__")();
+      .def("__await__", [](py::handle self_obj) {
+        auto &worker = PyWorker::GetCurrent();
+        auto &self = py::cast<local::CompletionEvent &>(self_obj);
+        py::object future = worker.loop_.attr("create_future")();
+        // Stashing self as an attribute on the future, keeps us alive,
+        // which transitively means that the wait source we get from self
+        // stays alive. This can be done better later with a custom
+        // Future.
+        future.attr("_sf_event") = self_obj;
+        py::object iter_ret = future.attr("__iter__")();
 
+        // Pass the future object as void* user data to the C callback
+        // interface. This works because we release the object pointer going
+        // in and then steal it back to a py::object once the GIL has been
+        // acquired (since dec_ref'ing it must happen within the GIL).
+        // Because the self object was stashed on an attribute above, the
+        // wait_source is valid for the entire sequence.
         SHORTFIN_THROW_IF_ERROR(worker.WaitOneLowLevel(
-            self.wait_source(), iree_infinite_timeout(),
-            +[](void *user_data, iree_loop_t loop,
+            /*wait_source=*/
+            self, iree_infinite_timeout(),
+            +[](void *future_vp, iree_loop_t loop,
                 iree_status_t status) noexcept -> iree_status_t {
               py::gil_scoped_acquire g;
-              // Must deallocate within the gil scope so must capture here.
-              std::unique_ptr<State> state(static_cast<State *>(user_data));
+              py::object future = py::steal(static_cast<PyObject *>(future_vp));
               try {
                 SHORTFIN_THROW_IF_ERROR(status);
-                state->future.attr("set_result")(py::none());
+                future.attr("set_result")(py::none());
               } catch (std::exception &e) {
                 auto RuntimeError = py::handle(PyExc_RuntimeError);
-                state->future.attr("set_exception")(RuntimeError(e.what()));
+                future.attr("set_exception")(RuntimeError(e.what()));
               }
               return iree_ok_status();
             },
-            state.release()));
+            static_cast<void *>(future.release().ptr())));
         return iter_ret;
       });
 }

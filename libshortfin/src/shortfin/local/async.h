@@ -56,7 +56,7 @@ class SHORTFIN_API CompletionEvent {
   bool BlockingWait(iree_timeout_t timeout = iree_infinite_timeout());
 
   // Access the raw wait source.
-  const iree_wait_source_t &wait_source() { return wait_source_; }
+  operator const iree_wait_source_t &() { return wait_source_; }
 
  private:
   iree_wait_source_t wait_source_;
