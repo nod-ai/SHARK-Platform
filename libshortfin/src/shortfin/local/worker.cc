@@ -20,8 +20,9 @@ Worker::Worker(const Options options)
     iree_status_fprint(stderr, status);
     iree_status_ignore(status);
   };
-  iree_loop_sync_options_t loop_options = {.max_queue_depth = 128,
-                                           .max_wait_count = 64};
+  // TODO: We need a way to dynamically resize this vs having a hard limit.
+  iree_loop_sync_options_t loop_options = {.max_queue_depth = 256,
+                                           .max_wait_count = 256};
   SHORTFIN_THROW_IF_ERROR(
       iree_loop_sync_allocate(loop_options, options_.allocator, &loop_sync_));
   iree_loop_sync_scope_initialize(loop_sync_, OnError, this, &loop_scope_);
@@ -51,7 +52,7 @@ iree_status_t Worker::TransactLoop(iree_status_t signal_status) {
     // An outside thread cannot change the state we are managing without
     // entering this critical section, so it is safe to reset the event
     // here (it is not possible for it to be spurious reset).
-    iree_slim_mutex_lock_guard guard(mu_);
+    iree::slim_mutex_lock_guard guard(mu_);
     signal_transact_.reset();
     if (kill_) {
       // TODO: Do we want to somehow hard abort loop in flight work (vs
@@ -85,7 +86,7 @@ int Worker::RunOnThread() {
     IREE_RETURN_IF_ERROR(ScheduleExternalTransactEvent());
     for (;;) {
       {
-        iree_slim_mutex_lock_guard guard(mu_);
+        iree::slim_mutex_lock_guard guard(mu_);
         if (kill_) break;
       }
       IREE_RETURN_IF_ERROR(iree_loop_drain(loop_, options_.quantum));
@@ -133,7 +134,7 @@ void Worker::Kill() {
     throw std::logic_error("Cannot kill a Worker that was not started");
   }
   {
-    iree_slim_mutex_lock_guard guard(mu_);
+    iree::slim_mutex_lock_guard guard(mu_);
     kill_ = true;
   }
   signal_transact_.set();
@@ -166,7 +167,7 @@ void Worker::RunOnCurrentThread() {
         "Cannot RunOnCurrentThread if worker was configured for owned_thread");
   }
   {
-    iree_slim_mutex_lock_guard guard(mu_);
+    iree::slim_mutex_lock_guard guard(mu_);
     if (has_run_) {
       throw std::logic_error("Cannot RunOnCurrentThread if already finished");
     }
@@ -177,7 +178,7 @@ void Worker::RunOnCurrentThread() {
 
 void Worker::CallThreadsafe(std::function<void()> callback) {
   {
-    iree_slim_mutex_lock_guard guard(mu_);
+    iree::slim_mutex_lock_guard guard(mu_);
     pending_thunks_.push_back(std::move(callback));
   }
   signal_transact_.set();
@@ -196,6 +197,14 @@ iree_status_t Worker::WaitUntilLowLevel(
                               iree_status_t status) noexcept,
     void* user_data) {
   return iree_loop_wait_until(loop_, timeout, callback, user_data);
+}
+
+iree_status_t Worker::WaitOneLowLevel(
+    iree_wait_source_t wait_source, iree_timeout_t timeout,
+    iree_status_t (*callback)(void* user_data, iree_loop_t loop,
+                              iree_status_t status) noexcept,
+    void* user_data) {
+  return iree_loop_wait_one(loop_, wait_source, timeout, callback, user_data);
 }
 
 // Time management.

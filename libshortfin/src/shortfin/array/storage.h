@@ -56,12 +56,12 @@ class SHORTFIN_API storage {
   std::string to_s() const;
 
  private:
-  storage(local::ScopedDevice device, iree_hal_buffer_ptr buffer,
+  storage(local::ScopedDevice device, iree::hal_buffer_ptr buffer,
           local::detail::TimelineResource::Ref timeline_resource)
       : buffer_(std::move(buffer)),
         device_(device),
         timeline_resource_(std::move(timeline_resource)) {}
-  iree_hal_buffer_ptr buffer_;
+  iree::hal_buffer_ptr buffer_;
   local::ScopedDevice device_;
   local::detail::TimelineResource::Ref timeline_resource_;
 };

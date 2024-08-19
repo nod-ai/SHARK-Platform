@@ -105,3 +105,26 @@ function(shortfin_components_to_dynamic_libs out_dynamic_libs)
   list(TRANSFORM _LIBS APPEND ".dylib.objects")
   set(${out_dynamic_libs} "${_LIBS}" PARENT_SCOPE)
 endfunction()
+
+function(shortfin_gtest_test)
+  cmake_parse_arguments(
+    _RULE
+    ""
+    "NAME"
+    "SRCS;DEPS"
+    ${ARGN}
+  )
+
+  if(NOT SHORTFIN_BUILD_TESTS)
+    return()
+  endif()
+
+  add_executable(${_RULE_NAME} ${_RULE_SRCS})
+  target_link_libraries(${_RULE_NAME} PRIVATE
+    ${_RULE_DEPS}
+    shortfin
+    GTest::gmock
+    GTest::gtest_main
+  )
+  gtest_discover_tests(${_RULE_NAME})
+endfunction()

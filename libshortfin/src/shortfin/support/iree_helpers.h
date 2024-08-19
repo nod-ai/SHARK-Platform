@@ -19,25 +19,28 @@
 namespace shortfin {
 
 // -------------------------------------------------------------------------- //
-// Type conversion
+// Type conversion from C types.
+// These are in the global shortfin namespace.
 // -------------------------------------------------------------------------- //
 
 inline std::string_view to_string_view(iree_string_view_t isv) {
   return std::string_view(isv.data, isv.size);
 }
 
+namespace iree {
+
 // -------------------------------------------------------------------------- //
 // RAII wrappers
 // -------------------------------------------------------------------------- //
 
-namespace iree_type_detail {
+namespace detail {
 
-struct iree_hal_buffer_ptr_helper {
+struct hal_buffer_ptr_helper {
   static void retain(iree_hal_buffer_t *obj) { iree_hal_buffer_retain(obj); }
   static void release(iree_hal_buffer_t *obj) { iree_hal_buffer_release(obj); }
 };
 
-struct iree_hal_command_buffer_ptr_helper {
+struct hal_command_buffer_helper {
   static void retain(iree_hal_command_buffer_t *obj) {
     iree_hal_command_buffer_retain(obj);
   }
@@ -46,22 +49,22 @@ struct iree_hal_command_buffer_ptr_helper {
   }
 };
 
-struct iree_hal_device_ptr_helper {
+struct hal_device_ptr_helper {
   static void retain(iree_hal_device_t *obj) { iree_hal_device_retain(obj); }
   static void release(iree_hal_device_t *obj) { iree_hal_device_release(obj); }
 };
 
-struct iree_hal_driver_ptr_helper {
+struct hal_driver_ptr_helper {
   static void retain(iree_hal_driver_t *obj) { iree_hal_driver_retain(obj); }
   static void release(iree_hal_driver_t *obj) { iree_hal_driver_release(obj); }
 };
 
-struct iree_hal_fence_ptr_helper {
+struct hal_fence_ptr_helper {
   static void retain(iree_hal_fence_t *obj) { iree_hal_fence_retain(obj); }
   static void release(iree_hal_fence_t *obj) { iree_hal_fence_release(obj); }
 };
 
-struct iree_hal_semaphore_ptr_helper {
+struct hal_semaphore_ptr_helper {
   static void retain(iree_hal_semaphore_t *obj) {
     iree_hal_semaphore_retain(obj);
   }
@@ -70,47 +73,46 @@ struct iree_hal_semaphore_ptr_helper {
   }
 };
 
-struct iree_vm_instance_ptr_helper {
+struct vm_instance_ptr_helper {
   static void retain(iree_vm_instance_t *obj) { iree_vm_instance_retain(obj); }
   static void release(iree_vm_instance_t *obj) {
     iree_vm_instance_release(obj);
   }
 };
 
-};  // namespace iree_type_detail
+};  // namespace detail
 
 // Wraps an IREE retain/release style object pointer in a smart-pointer
 // like wrapper.
 template <typename T, typename Helper>
-class iree_object_ptr {
+class object_ptr {
  public:
-  iree_object_ptr() : ptr(nullptr) {}
-  iree_object_ptr(const iree_object_ptr &other) : ptr(other.ptr) {
+  object_ptr() : ptr(nullptr) {}
+  object_ptr(const object_ptr &other) : ptr(other.ptr) {
     if (ptr) {
       Helper::retain(ptr);
     }
   }
-  iree_object_ptr(iree_object_ptr &&other) : ptr(other.ptr) {
-    other.ptr = nullptr;
-  }
-  iree_object_ptr &operator=(iree_object_ptr &&other) {
+  object_ptr(object_ptr &&other) : ptr(other.ptr) { other.ptr = nullptr; }
+  object_ptr &operator=(object_ptr &&other) {
     ptr = other.ptr;
     other.ptr = nullptr;
     return *this;
   }
-  ~iree_object_ptr() {
+  ~object_ptr() {
     if (ptr) {
       Helper::release(ptr);
     }
   }
 
-  // Constructs a new iree_object_ptr by transferring ownership of a raw
+  // Constructs a new object_ptr by transferring ownership of a raw
   // pointer.
-  static iree_object_ptr steal_reference(T *owned) {
-    return iree_object_ptr(owned);
+  static object_ptr steal_reference(T *owned) { return object_ptr(owned); }
+  static object_ptr borrow_reference(T *owned) {
+    Helper::retain(owned);
+    return object_ptr(owned);
   }
-
-  operator T *() noexcept { return ptr; }
+  operator T *() const noexcept { return ptr; }
 
   // Releases any current reference held by this instance and returns a
   // pointer to the raw backing pointer. This is typically used for passing
@@ -136,31 +138,24 @@ class iree_object_ptr {
 
  private:
   // Assumes the reference count for owned_ptr.
-  iree_object_ptr(T *owned_ptr) : ptr(owned_ptr) {}
+  object_ptr(T *owned_ptr) : ptr(owned_ptr) {}
   T *ptr = nullptr;
 };
 
-using iree_hal_buffer_ptr =
-    iree_object_ptr<iree_hal_buffer_t,
-                    iree_type_detail::iree_hal_buffer_ptr_helper>;
-using iree_hal_command_buffer_ptr =
-    iree_object_ptr<iree_hal_command_buffer_t,
-                    iree_type_detail::iree_hal_command_buffer_ptr_helper>;
-using iree_hal_driver_ptr =
-    iree_object_ptr<iree_hal_driver_t,
-                    iree_type_detail::iree_hal_driver_ptr_helper>;
-using iree_hal_device_ptr =
-    iree_object_ptr<iree_hal_device_t,
-                    iree_type_detail::iree_hal_device_ptr_helper>;
-using iree_hal_fence_ptr =
-    iree_object_ptr<iree_hal_fence_t,
-                    iree_type_detail::iree_hal_fence_ptr_helper>;
-using iree_hal_semaphore_ptr =
-    iree_object_ptr<iree_hal_semaphore_t,
-                    iree_type_detail::iree_hal_semaphore_ptr_helper>;
-using iree_vm_instance_ptr =
-    iree_object_ptr<iree_vm_instance_t,
-                    iree_type_detail::iree_vm_instance_ptr_helper>;
+using hal_buffer_ptr =
+    object_ptr<iree_hal_buffer_t, detail::hal_buffer_ptr_helper>;
+using hal_command_buffer_ptr =
+    object_ptr<iree_hal_command_buffer_t, detail::hal_command_buffer_helper>;
+using hal_driver_ptr =
+    object_ptr<iree_hal_driver_t, detail::hal_driver_ptr_helper>;
+using hal_device_ptr =
+    object_ptr<iree_hal_device_t, detail::hal_device_ptr_helper>;
+using hal_fence_ptr =
+    object_ptr<iree_hal_fence_t, detail::hal_fence_ptr_helper>;
+using hal_semaphore_ptr =
+    object_ptr<iree_hal_semaphore_t, detail::hal_semaphore_ptr_helper>;
+using vm_instance_ptr =
+    object_ptr<iree_vm_instance_t, detail::vm_instance_ptr_helper>;
 
 // Holds a pointer allocated by some allocator, deleting it if still owned
 // at destruction time.
@@ -200,18 +195,19 @@ struct allocated_ptr {
 };
 
 // -------------------------------------------------------------------------- //
-// iree_error and status handling
+// error and status handling
 // -------------------------------------------------------------------------- //
 
 // Captures an iree_status_t as an exception. The intent is that this is
-// only used for failing statuses and the iree_error instance will be
+// only used for failing statuses and the error instance will be
 // immediately thrown.
-class SHORTFIN_API iree_error : public std::exception {
+class SHORTFIN_API error : public std::exception {
  public:
-  iree_error(iree_status_t failing_status);
-  iree_error(const iree_error &) = delete;
-  iree_error &operator=(const iree_error &) = delete;
-  ~iree_error() { iree_status_ignore(failing_status_); }
+  error(std::string message, iree_status_t failing_status);
+  error(iree_status_t failing_status);
+  error(const error &) = delete;
+  error &operator=(const error &) = delete;
+  ~error() { iree_status_ignore(failing_status_); }
   const char *what() const noexcept override {
     if (!status_appended_) {
       AppendStatus();
@@ -230,15 +226,17 @@ class SHORTFIN_API iree_error : public std::exception {
   iree_status_t var = (IREE_STATUS_IMPL_IDENTITY_(                           \
       IREE_STATUS_IMPL_IDENTITY_(IREE_STATUS_IMPL_GET_EXPR_)(__VA_ARGS__))); \
   if (IREE_UNLIKELY(var)) {                                                  \
-    throw iree_error(IREE_STATUS_IMPL_ANNOTATE_SWITCH_(var, __VA_ARGS__));   \
+    throw ::shortfin::iree::error(                                           \
+        IREE_STATUS_IMPL_ANNOTATE_SWITCH_(var, __VA_ARGS__));                \
   }
 
-// Similar to IREE_RETURN_IF_ERROR but throws an iree_error exception instead.
+// Similar to IREE_RETURN_IF_ERROR but throws an error exception instead.
 #define SHORTFIN_THROW_IF_ERROR(...)                    \
   SHORTFIN_IMPL_HANDLE_IF_API_ERROR(                    \
       IREE_STATUS_IMPL_CONCAT_(__status_, __COUNTER__), \
       IREE_STATUS_IMPL_IDENTITY_(IREE_STATUS_IMPL_IDENTITY_(__VA_ARGS__)))
 
+}  // namespace iree
 }  // namespace shortfin
 
 #endif  // SHORTFIN_SUPPORT_IREE_HELPERS_H

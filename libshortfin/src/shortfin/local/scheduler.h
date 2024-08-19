@@ -10,6 +10,7 @@
 #include <functional>
 #include <span>
 
+#include "shortfin/local/async.h"
 #include "shortfin/local/device.h"
 #include "shortfin/support/iree_helpers.h"
 
@@ -17,10 +18,12 @@ namespace shortfin::local {
 
 class SHORTFIN_API Scope;
 class SHORTFIN_API ScopedDevice;
+class SHORTFIN_API System;
 
 namespace detail {
 
 class SHORTFIN_API Account;
+class SHORTFIN_API Scheduler;
 
 // Transactions are accumulated into a command buffer by type and in
 // auto-flush mode, the command buffer is submitted upon a change of type.
@@ -133,7 +136,7 @@ class SHORTFIN_API TimelineResource {
 
   // Use barrier fence. The fact that this is a fence object with a fixed
   // capacity is an implementation detail.
-  iree_hal_fence_ptr use_barrier_fence_;
+  iree::hal_fence_ptr use_barrier_fence_;
   friend class Scheduler;
 };
 
@@ -141,7 +144,7 @@ class SHORTFIN_API TimelineResource {
 // means that each addressable queue gets its own Account.
 class SHORTFIN_API Account {
  public:
-  Account(Device *device);
+  Account(Scheduler &scheduler, Device *device);
   Device *device() const { return device_; }
   iree_hal_device_t *hal_device() { return hal_device_; }
   size_t semaphore_count() const { return 1; }
@@ -159,14 +162,20 @@ class SHORTFIN_API Account {
   iree_hal_semaphore_t *timeline_sem() { return sem_; }
   uint64_t timeline_idle_timepoint() { return idle_timepoint_; }
 
+  // Returns a future that is satisfied when the timeline of this account
+  // reaches its current idle timepoint (i.e. all currently pending work
+  // is complete).
+  CompletionEvent OnSync();
+
  private:
   void Initialize();
   void Reset();
+  Scheduler &scheduler_;
   Device *device_;
   iree_hal_device_t *hal_device_;
   TransactionType active_tx_type_ = TransactionType::NONE;
-  iree_hal_fence_ptr active_deps_;
-  iree_hal_command_buffer_ptr active_command_buffer_;
+  iree::hal_fence_ptr active_deps_;
+  iree::hal_command_buffer_ptr active_command_buffer_;
   iree_hal_queue_affinity_t active_queue_affinity_bits_;
 
   // Timepoint at which this device is considered idle, inclusive of any
@@ -184,15 +193,14 @@ class SHORTFIN_API Account {
   // an eventual submission would submit a duplicate timepoint). This
   // timepoint is only valid for the local sem_.
   uint64_t idle_timepoint_ = 0;
-  iree_hal_semaphore_ptr sem_;
+  iree::hal_semaphore_ptr sem_;
   friend class Scheduler;
 };
 
 // Handles scheduling state for a scope.
 class SHORTFIN_API Scheduler {
  public:
-  Scheduler(iree_allocator_t host_allocator)
-      : host_allocator_(host_allocator) {}
+  Scheduler(System &system) : system_(system) {}
 
   TransactionMode transaction_mode() const { return tx_mode_; }
 
@@ -221,9 +229,12 @@ class SHORTFIN_API Scheduler {
         new TimelineResource(host_allocator, semaphore_count_));
   }
 
+  System &system() { return system_; }
+
  private:
   void Initialize(std::span<Device *const> devices);
-  iree_allocator_t host_allocator_;
+  System &system_;
+
   // Each distinct hal device gets an account.
   std::vector<Account> accounts_;
   // Accounts indexed by DeviceAddress::device_id().

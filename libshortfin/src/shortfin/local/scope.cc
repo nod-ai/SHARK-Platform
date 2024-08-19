@@ -21,7 +21,7 @@ namespace shortfin::local {
 Scope::Scope(std::shared_ptr<System> system, Worker &worker,
              std::span<const std::pair<std::string_view, Device *>> devices)
     : host_allocator_(system->host_allocator()),
-      scheduler_(system->host_allocator()),
+      scheduler_(*system),
       system_(std::move(system)),
       worker_(worker) {
   for (auto &it : devices) {
@@ -33,7 +33,7 @@ Scope::Scope(std::shared_ptr<System> system, Worker &worker,
 Scope::Scope(std::shared_ptr<System> system, Worker &worker,
              std::span<Device *const> devices)
     : host_allocator_(system->host_allocator()),
-      scheduler_(system->host_allocator()),
+      scheduler_(*system),
       system_(std::move(system)),
       worker_(worker) {
   for (auto *device : devices) {
@@ -80,6 +80,18 @@ std::vector<std::string_view> Scope::device_names() const {
     names.push_back(it.first);
   }
   return names;
+}
+
+// -------------------------------------------------------------------------- //
+// ScopedDevice
+// -------------------------------------------------------------------------- //
+
+CompletionEvent ScopedDevice::OnSync(bool flush) {
+  if (flush) {
+    scope().scheduler().Flush();
+  }
+  auto &default_account = scope().scheduler().GetDefaultAccount(*this);
+  return default_account.OnSync();
 }
 
 }  // namespace shortfin::local
