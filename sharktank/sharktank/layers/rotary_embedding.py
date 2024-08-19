@@ -18,6 +18,7 @@ class RotaryEmbeddingLayer(BaseLayer):
         self,
         *,
         rope_dimension_count: int,
+        rope_freq_base: float,
         max_seqlen: int,
         device: Optional[torch.device] = None,
     ):
@@ -26,6 +27,7 @@ class RotaryEmbeddingLayer(BaseLayer):
         self._table = self._create_rotary_embed_table(
             max_seqlen=max_seqlen,
             dim=rope_dimension_count,
+            theta_value=rope_freq_base,
         )
 
     def forward(self, *, xq: torch.Tensor, xk: torch.Tensor, start_index: int):

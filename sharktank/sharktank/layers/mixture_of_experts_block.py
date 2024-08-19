@@ -22,21 +22,17 @@ __all__ = [
 
 class SparseMoeBlock(ThetaLayer):
     """
-    This implementation is
-    strictly equivalent to standard MoE with full capacity (no
-    dropped tokens). It's faster since it formulates MoE operations
-    in terms of block-sparse operations to accomodate imbalanced
-    assignments of tokens to experts, whereas standard MoE either
-    (1) drop tokens at the cost of reduced performance or (2) set
-    capacity factor to number of experts and thus waste computation
-    and memory on padding.
+    This implementation considers MoE operations as block-sparse
+    operations to support imbalanced token assignments to experts.
+    This enables the MoE to operate at a faster rate and in full capacity without any dropped tokens
+    (or reduced performance).
     """
 
     def __init__(
         self,
         theta: Theta,
-        num_experts: int,
-        top_k_experts: int,
+        expert_count: int,
+        expert_used_count: int,
         rms_epsilon: float,
     ):
         super().__init__(theta)
@@ -49,13 +45,13 @@ class SparseMoeBlock(ThetaLayer):
             "ffn_norm", RMSNormLayer(theta("ffn_norm"), epsilon=rms_epsilon)
         )
 
-        # Add num_experts x FFN
+        # Add expert_count x FFN
         self.experts = nn.ModuleList(
-            [FFNMOE(theta, expert_idx=i) for i in range(num_experts)]
+            [FFNMOE(theta, expert_idx=i) for i in range(expert_count)]
         )
 
-        self.num_experts = num_experts
-        self.top_k_experts = top_k_experts
+        self.expert_count = expert_count
+        self.expert_used_count = expert_used_count
 
     def forward(
         self,
@@ -65,51 +61,47 @@ class SparseMoeBlock(ThetaLayer):
         batch_size, sequence_length, feature_dim = ffn_input.shape
         ffn_input = ffn_input.view(-1, feature_dim)
 
-        # For each token, the router calculates the routing weights for all experts
-        # router_logits: (batch * sequence_length, n_experts)
+        # For each token, the router calculates the router weights for all experts
+        # router_logits: (batch_size * sequence_length, expert_count)
         router_logits = self.ffn_gate_inp(ffn_input)
-        routing_weights = F.softmax(router_logits, dim=1, dtype=torch.float)
+        router_weights = F.softmax(router_logits, dim=1, dtype=torch.float)
 
-        # Select topk experts from routing weights
-        routing_weights, selected_experts = torch.topk(
-            routing_weights, self.top_k_experts, dim=-1
+        # Select top k experts from router weights
+        router_weights, top_k_experts = torch.topk(
+            router_weights, self.expert_used_count, dim=-1
         )
-        routing_weights /= routing_weights.sum(dim=-1, keepdim=True)
-        # Cast back to the input dtype
-        routing_weights = routing_weights.to(ffn_input.dtype)
+        router_weights /= router_weights.sum(dim=-1, keepdim=True)
+        router_weights = router_weights.to(ffn_input.dtype)
 
-        final_hidden_states = torch.zeros(
+        moe_output = torch.zeros(
             (batch_size * sequence_length, feature_dim), dtype=ffn_input.dtype
         )
 
-        # Create an expert mask by one hot encoding the selected topk experts
-        # used to index which expert is to be invoked
-        expert_mask = F.one_hot(selected_experts, num_classes=self.num_experts).permute(
+        # Create an expert mask by one hot encoding the selected top k experts
+        # used to index which expert is to be invoked for each token
+        # expert_mask: (expert_count, expert_used_count, sequence_length)
+        expert_mask = F.one_hot(top_k_experts, num_classes=self.expert_count).permute(
             2, 1, 0
         )
 
-        # Iterate over all experts in the model and perform computation on each expert
-        for expert_idx in range(self.num_experts):
+        # Iterate over all experts in the model
+        for expert_idx in range(self.expert_count):
             expert_layer = self.experts[expert_idx]
-            idx, top_x = torch.where(expert_mask[expert_idx])
+            top_k_expert_idx, token_idx = torch.where(expert_mask[expert_idx])
 
-            # Index the correct hidden states and compute the expert hidden state for
-            # the current expert. We need to make sure to multiply the output hidden
-            # states by `routing_weights` on the corresponding tokens (top-1 and top-2)
-            current_state = ffn_input[None, top_x]
+            # Given the hidden states, index the tokens assigned to this expert
+            # and calculate the current expert's hidden state and weigh the
+            # output expert hidden states by the router weights, based on the
+            # appropriate tokens
+            current_expert_tokens = ffn_input[None, token_idx]
 
-            current_hidden_states = (
-                expert_layer(current_state) * routing_weights[top_x, idx, None]
+            current_expert = (
+                expert_layer(current_expert_tokens)
+                * router_weights[token_idx, top_k_expert_idx, None]
             )
 
-            current_hidden_states = current_hidden_states.reshape(-1, feature_dim)
+            current_expert = current_expert.reshape(-1, feature_dim)
 
-            # However `index_add_` only support torch tensors for indexing so we'll use
-            # the `top_x` tensor here.
-            final_hidden_states.index_add_(
-                0, top_x, current_hidden_states.to(ffn_input.dtype)
-            )
-        final_hidden_states = final_hidden_states.reshape(
-            batch_size, sequence_length, feature_dim
-        )
-        return h + final_hidden_states
+            moe_output.index_add_(0, token_idx, current_expert.to(ffn_input.dtype))
+        moe_output = moe_output.reshape(batch_size, sequence_length, feature_dim)
+        return h + moe_output

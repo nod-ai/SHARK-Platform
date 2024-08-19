@@ -233,7 +233,12 @@ def main():
         activation_dtype=activation_dtype,
         attention_dtype=activation_dtype,
     )
-    model = PagedMixtralModelV1(dataset.root_theta, config)
+
+    if config.hp.expert_count:
+        model = PagedMixtralModelV1(dataset.root_theta, config)
+    else:
+        model = PagedLlamaModelV1(dataset.root_theta, config)
+
     generator = TorchGenerator(model, tokenizer)
 
     print(f":: Prompting:")
@@ -249,8 +254,6 @@ def main():
         batch.decode()
         print(f":: Result tokens: {batch.results}")
         batch.print_current_results()
-        # if len(batch.results[0]) == 10:
-        #     break
 
 
 if __name__ == "__main__":

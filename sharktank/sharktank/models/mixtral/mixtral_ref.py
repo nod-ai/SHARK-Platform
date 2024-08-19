@@ -53,6 +53,7 @@ class DirectCacheMixtralModelV1(ThetaLayer):
             "attention_embedding",
             RotaryEmbeddingLayer(
                 rope_dimension_count=hp.rope_dimension_count,
+                rope_freq_base=hp.rope_freq_base,
                 max_seqlen=hp.context_length,
             ),
         )
@@ -80,8 +81,8 @@ class DirectCacheMixtralModelV1(ThetaLayer):
             self.attn_blocks.append(
                 SparseMoeBlock(
                     theta("blk", n),
-                    num_experts=hp.expert_count,
-                    top_k_experts=hp.expert_used_count,
+                    expert_count=hp.expert_count,
+                    expert_used_count=hp.expert_used_count,
                     rms_epsilon=hp.attention_layer_norm_rms_epsilon,
                 )
             )
