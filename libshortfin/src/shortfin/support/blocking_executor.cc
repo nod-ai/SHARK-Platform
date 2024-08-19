@@ -75,7 +75,9 @@ void BlockingExecutor::Kill(bool wait, iree_timeout_t warn_timeout) {
     }
 
     // Short spin delay to signal/wait.
-    iree_wait_until(iree_timeout_as_deadline_ns(iree_make_timeout_ms(250)));
+    // TODO: Introduce iree_thread_try_join and refactor the shutdown sequence
+    // to be based on thread joining with a warn deadline.
+    iree_wait_until(iree_timeout_as_deadline_ns(iree_make_timeout_ms(50)));
   }
 }
 
