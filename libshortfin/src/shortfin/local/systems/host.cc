@@ -68,7 +68,7 @@ iree_hal_driver_t *HostCPUSystemBuilder::InitializeHostCPUDriver(System &lsys) {
                                 host_allocator(), &host_cpu_deps_.executor));
 
   // Create the driver and save it in the System.
-  iree_hal_driver_ptr driver;
+  iree::hal_driver_ptr driver;
   iree_hal_driver_t *unowned_driver;
   SHORTFIN_THROW_IF_ERROR(iree_hal_task_driver_create(
       IREE_SV("local-task"), &host_cpu_deps_.task_params, /*queue_count=*/1,
@@ -83,12 +83,12 @@ iree_hal_driver_t *HostCPUSystemBuilder::InitializeHostCPUDriver(System &lsys) {
 void HostCPUSystemBuilder::InitializeHostCPUDevices(System &lsys,
                                                     iree_hal_driver_t *driver) {
   iree_host_size_t device_info_count = 0;
-  allocated_ptr<iree_hal_device_info_t> device_infos(host_allocator());
+  iree::allocated_ptr<iree_hal_device_info_t> device_infos(host_allocator());
   SHORTFIN_THROW_IF_ERROR(iree_hal_driver_query_available_devices(
       driver, host_allocator(), &device_info_count, &device_infos));
 
   for (iree_host_size_t i = 0; i < device_info_count; ++i) {
-    iree_hal_device_ptr device;
+    iree::hal_device_ptr device;
     iree_hal_device_info_t *it = &device_infos.get()[i];
     SHORTFIN_THROW_IF_ERROR(iree_hal_driver_create_device_by_id(
         driver, it->device_id, 0, nullptr, host_allocator(),

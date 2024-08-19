@@ -10,6 +10,7 @@
 #include <memory>
 #include <string>
 
+#include "shortfin/local/async.h"
 #include "shortfin/local/scope.h"
 #include "shortfin/local/worker.h"
 #include "shortfin/support/api.h"
@@ -34,6 +35,9 @@ class SHORTFIN_API BaseProcess {
   std::string to_s() const;
   std::shared_ptr<Scope> &scope() { return scope_; }
 
+  // Returns a future that can be waited on for termination.
+  CompletionEvent OnTermination();
+
  protected:
   // Launches the process.
   void Launch();
@@ -52,10 +56,14 @@ class SHORTFIN_API BaseProcess {
   // Process control state. Since this can be accessed by multiple threads,
   // it is protected by a lock. Most process state can only be accessed on
   // the worker thread and is unprotected.
-  mutable iree_slim_mutex lock_;
+  mutable iree::slim_mutex lock_;
   // Pid is 0 if not yet started, -1 if terminated, and a postive value if
   // running.
   int64_t pid_ = 0;
+
+  // Must be accessed within a lock. Will be null if no one has called
+  // Termination().
+  iree::shared_event::ref terminated_event_;
 };
 
 }  // namespace detail

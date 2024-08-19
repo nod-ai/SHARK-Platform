@@ -123,7 +123,7 @@ struct SHORTFIN_API DeviceAddress {
 // A device attached to the LocalSystem.
 class SHORTFIN_API Device {
  public:
-  Device(DeviceAddress address, iree_hal_device_ptr hal_device,
+  Device(DeviceAddress address, iree::hal_device_ptr hal_device,
          int node_affinity, bool node_locked);
   virtual ~Device();
 
@@ -142,7 +142,7 @@ class SHORTFIN_API Device {
 
  private:
   DeviceAddress address_;
-  iree_hal_device_ptr hal_device_;
+  iree::hal_device_ptr hal_device_;
   int node_affinity_;
   bool node_locked_;
 };

@@ -63,7 +63,8 @@ void AMDGPUSystemBuilder::Enumerate() {
 
   // Get available devices and filter into visible_devices_.
   iree_host_size_t available_devices_count = 0;
-  allocated_ptr<iree_hal_device_info_t> raw_available_devices(host_allocator());
+  iree::allocated_ptr<iree_hal_device_info_t> raw_available_devices(
+      host_allocator());
   SHORTFIN_THROW_IF_ERROR(iree_hal_driver_query_available_devices(
       hip_hal_driver_, host_allocator(), &available_devices_count,
       raw_available_devices.for_output()));
@@ -87,7 +88,7 @@ SystemPtr AMDGPUSystemBuilder::CreateSystem() {
   // Initialize all visible GPU devices.
   for (size_t i = 0; i < visible_devices_.size(); ++i) {
     auto &it = visible_devices_[i];
-    iree_hal_device_ptr device;
+    iree::hal_device_ptr device;
     SHORTFIN_THROW_IF_ERROR(iree_hal_driver_create_device_by_id(
         hip_hal_driver_, it.device_id, 0, nullptr, host_allocator(),
         device.for_output()));

@@ -10,6 +10,7 @@ shortfin_cc_component(
   NAME
     shortfin_local
   HDRS
+    async.h
     device.h
     process.h
     worker.h
@@ -17,6 +18,7 @@ shortfin_cc_component(
     scope.h
     system.h
   SRCS
+    async.cc
     device.cc
     process.cc
     worker.cc
