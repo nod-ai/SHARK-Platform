@@ -238,6 +238,7 @@ def main():
         attention_dtype=activation_dtype,
     )
 #<<<<<<< HEAD
+#<<<<<<< HEAD
 #    model = PagedLlamaModelV1(dataset.root_theta, config)
 #    if args.save_intermediates_path:
 #        from ..utils.patching import SaveModuleResultTensorsPatch
@@ -247,6 +248,14 @@ def main():
 #=======
 #    model = PagedMixtralModelV1(dataset.root_theta, config)
 #>>>>>>> 7f92421 (Add ffn_moe layers and other fixes)
+#=======
+
+    if config.hp.expert_count:
+        model = PagedMixtralModelV1(dataset.root_theta, config)
+    else:
+        model = PagedLlamaModelV1(dataset.root_theta, config)
+
+#>>>>>>> e29c591 (Cleaning up debug statements)
     generator = TorchGenerator(model, tokenizer)
 
     print(f":: Prompting:")
@@ -271,8 +280,6 @@ def main():
             )
         print(f":: Result tokens: {batch.results}")
         batch.print_current_results()
-        # if len(batch.results[0]) == 10:
-        #     break
 
 
 if __name__ == "__main__":

@@ -34,6 +34,7 @@ class LlamaHParams:
     block_count: int
     feed_forward_length: int
     rope_dimension_count: int
+    rope_freq_base: float
     attention_head_count: int
     attn_head_dim: int
     attention_layer_norm_rms_epsilon: float
@@ -45,6 +46,7 @@ class LlamaHParams:
     def from_gguf_props(p: dict[str, Any]):
         default_expert_count = 0
         default_expert_used_count = 0
+        default_rope_freq_base = 10000.0
         attention_head_count = _int_prop(p, "llama.attention.head_count")
 
         return LlamaHParams(
@@ -60,6 +62,9 @@ class LlamaHParams:
             ),
             attention_head_count_kv=_optional_int_prop(
                 p, "llama.attention.head_count_kv", attention_head_count
+            ),
+            rope_freq_base=_optional_float_prop(
+                p, "llama.rope.freq_base", default_rope_freq_base
             ),
             expert_count=_optional_int_prop(
                 p, "llama.expert_count", default_expert_count
@@ -86,6 +91,14 @@ def _int_prop(p: dict[str, Any], name: str) -> int:
         raise ValueError(f"Property '{name}' expected to be an int and was not") from e
     except KeyError:
         raise KeyError(f"Property '{name}' not found (among keys {p.keys()})")
+
+
+def _optional_float_prop(p: dict[str, Any], name: str, default_value: float) -> float:
+    value = p.get(name, default_value)
+    try:
+        return float(value)
+    except ValueError as e:
+        raise ValueError(f"Property '{name}' expected to be a float and was not") from e
 
 
 def _optional_int_prop(p: dict[str, Any], name: str, default_value: int) -> int:
