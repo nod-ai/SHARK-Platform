@@ -13,20 +13,16 @@ import shortfin.array as snp
 
 
 class MyProcess(sf.Process):
-    def __init__(self, name, **kwargs):
-        super().__init__(**kwargs)
-        self.name = name
-
     async def run(self):
         device = self.scope.device(0)
         ary1 = snp.device_array(device, [32, 1, 4], snp.int32)
         ary1.storage.fill(array.array("i", [0]))
-        print(f"[{self.name}] ARY1:", ary1)
+        print(f"[pid:{self.pid}] ARY1:", ary1)
         await device
-        print(f"[{self.name}] Device sync fill0")
+        print(f"[pid:{self.pid}] Device sync fill0")
         ary1.storage.fill(array.array("i", [1]))
         await device
-        print(f"[{self.name}] Device sync fill1")
+        print(f"[pid:{self.pid}] Device sync fill1")
 
 
 async def main():
@@ -34,8 +30,8 @@ async def main():
     scope = lsys.create_scope(worker)
     print("+++ Launching process")
     await asyncio.gather(
-        MyProcess("P0", scope=scope).launch(),
-        MyProcess("P1", scope=scope).launch(),
+        MyProcess(scope=scope).launch(),
+        MyProcess(scope=scope).launch(),
     )
     print("--- Process terminated")
 

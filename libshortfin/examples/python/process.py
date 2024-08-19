@@ -19,22 +19,26 @@ class MyProcess(sf.Process):
         self.arg = arg
 
     async def run(self):
-        print(f"[{threading.get_ident()}] Hello async:", self.arg, self)
+        print(f"[pid:{self.pid}] Hello async:", self.arg, self)
         processes = []
         if self.arg < 10:
             await asyncio.sleep(0.3)
             processes.append(MyProcess(self.arg + 1, scope=self.scope).launch())
         await asyncio.gather(*processes)
+        print(f"[pid:{self.pid}] Goodbye async:", self.arg, self)
 
 
 async def main():
-    worker = lsys.create_worker("main")
-    scope = lsys.create_scope(worker)
+    def create_worker(i):
+        worker = lsys.create_worker(f"main-{i}")
+        return lsys.create_scope(worker)
+
+    workers = [create_worker(i) for i in range(3)]
     processes = []
     for i in range(10):
-        processes.append(MyProcess(i, scope=scope).launch())
-        processes.append(MyProcess(i * 100, scope=scope).launch())
-        processes.append(MyProcess(i * 1000, scope=scope).launch())
+        processes.append(MyProcess(i, scope=workers[0 % len(workers)]).launch())
+        processes.append(MyProcess(i * 100, scope=workers[1 % len(workers)]).launch())
+        processes.append(MyProcess(i * 1000, scope=workers[2 % len(workers)]).launch())
         await asyncio.sleep(0.1)
 
     print("<<MAIN WAITING>>")

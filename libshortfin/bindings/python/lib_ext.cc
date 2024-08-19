@@ -470,6 +470,7 @@ void BindLocal(py::module_ &m) {
             return custom_new<PyProcess>(py_type, std::move(scope), refs);
           },
           py::arg("type"), py::arg("args"), py::arg("scope"), py::arg("kwargs"))
+      .def_prop_ro("pid", &PyProcess::pid)
       .def_prop_ro("scope", &PyProcess::scope)
       .def("launch",
            [](py::object self_obj) {
