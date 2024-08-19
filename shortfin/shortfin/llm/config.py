@@ -85,6 +85,9 @@ class ModelParams:
     # Dimensionality of each attention head
     attn_head_dim: int
 
+    # Position stride per attention block
+    block_seq_stride: int
+
     # Batch sizes that the prefill stage is compiled for. These are expected to be
     # functions exported from the model with suffixes of "_bs{batch_size}". Must
     # be in ascending order.

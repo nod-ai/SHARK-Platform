@@ -4,7 +4,7 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-from typing import Any, Callable, Optional, Union, Collection, Sequence
+from typing import Any, Callable, Optional, Union, Collection, Sequence, List
 
 import json
 from pathlib import Path
@@ -33,6 +33,7 @@ from .tensors import (
 
 __all__ = [
     "Dataset",
+    "flat_to_nested_dict",
     "Theta",
 ]
 
@@ -76,15 +77,15 @@ class Theta:
 
     def __init__(
         self,
-        tensors: Union[Sequence[InferenceTensor], dict[str, InferenceTensor]],
+        tensors: Union[Sequence[InferenceTensor], dict[str, dict | InferenceTensor]],
     ):
         if not isinstance(tensors, dict):
             tensors = {t.name: t for t in tensors}
-        self._tensors = _flat_to_nested_dict(tensors)
-        assert (
-            isinstance(k, str) and isinstance(v, InferenceTensor)
-            for k, v in tensors.items()
+        assert all(isinstance(k, str) for k in _all_keys(tensors))
+        assert all(
+            v is None or isinstance(v, InferenceTensor) for v in _leaf_values(tensors)
         )
+        self._tree = flat_to_nested_dict(tensors)
 
     def transform(self, *transforms: InferenceTensorTransform) -> "Theta":
         """Transforms all inference tensors by applying transform functions.
@@ -120,38 +121,59 @@ class Theta:
                 else:
                     results[new_prefix] = value
 
-        accum("", self._tensors)
+        accum("", self._tree)
         return results
 
-    def tensor(self, *name_path: Union[str, int]) -> InferenceTensor:
-        current_ts = self._tensors
+    def tensor(self, *name_path: str | int) -> InferenceTensor:
+        name_path = _norm_name_path(name_path)
+        t = self.optional_tensor(*name_path)
+        if t is None:
+            raise KeyError(
+                f"Could not find tensor {name_path[-1]} in theta {name_path[0:-1]}"
+            )
+        return t
+
+    def optional_tensor(self, *name_path: str | int) -> Optional[InferenceTensor]:
+        name_path = _norm_name_path(name_path)
         try:
+            current_ts = self._tree
             for part in name_path[0:-1]:
                 current_ts = current_ts[str(part)]
             last = name_path[-1]
-            t = current_ts[str(last)]
         except KeyError:
             raise KeyError(
                 f"Unknown parameter {name_path} (in Theta object "
                 f"containing {self.keys})"
             )
+        t = current_ts.get(str(last))
         return t
 
     @property
     def keys(self) -> Collection[str]:
-        return self._tensors.keys()
+        return self._tree.keys()
+
+    def __contains__(self, key) -> bool:
+        return key in self._tree
 
     @property
     def tensors(self) -> Collection[InferenceTensor]:
-        return [v for v in self._tensors.values() if isinstance(v, InferenceTensor)]
+        return [v for v in self._tree.values() if isinstance(v, InferenceTensor)]
 
-    def __call__(self, *name_path: Union[str, int]) -> "Theta":
-        current_ts = self._tensors
+    @property
+    def tree(self) -> dict[str, dict | InferenceTensor]:
+        """The nested structure of named tensors."""
+        return self._tree
+
+    def __call__(self, *name_path: str | int) -> Union["Theta", InferenceTensor]:
+        name_path = _norm_name_path(name_path)
+        current_ts = self._tree
         try:
             for part in name_path:
                 current_ts = current_ts[str(part)]
         except KeyError:
-            raise KeyError(f"Sub-theta {name_path} not found")
+            raise KeyError(f"Sub-theta {name_path} not found (of {self._tree.keys()})")
+        if isinstance(current_ts, InferenceTensor):
+            return current_ts
         return Theta(current_ts)
 
     def __repr__(self):
@@ -174,8 +196,36 @@ class Theta:
             meta = inference_tensor.add_to_archive(irpa)
             inference_tensor_metas[name] = meta
 
+    def rename_tensors_to_paths(self):
+        """Rename each tensor to have name equal to its path in the theta.
+        Example: name="a.b.c"
+        """
+        for path, tensor in self.flatten().items():
+            tensor.name = path
 
-def _flat_to_nested_dict(flat: dict[str, Any]) -> dict[str, Any]:
+
+def flat_to_nested_dict(flat: dict[str, Any]) -> dict[str, Any]:
+    """Nest a flat or semi-flat dictionary.
+
+    The key nesting separator is the "." symbol.
+    Example:
+    ```python
+    flat_to_nested_dict({
+        "a.b": 0,
+        "a": { "c": 1 }
+    })
+    ```
+
+    Results in:
+    ```python
+    {
+        "a": {
+            "b": 0,
+            "c": 1
+        }
+    }
+    ```
+    """
     nested: dict = {}
 
     def add_to_dict(
@@ -192,11 +242,39 @@ def _flat_to_nested_dict(flat: dict[str, Any]) -> dict[str, Any]:
             assert isinstance(
                 current, dict
             ), f"Name collision in parameter dict: {name}"
-        current[parts[-1]] = value
+        if value is not None:
+            current[parts[-1]] = value
 
     for name, value in flat.items():
         add_to_dict(name, value)
     return nested
+
+
+def _leaf_values(d: dict) -> List[Any]:
+    res = []
+    for v in d.values():
+        if isinstance(v, dict):
+            res.extend(_leaf_values(v))
+        else:
+            res.append(v)
+    return res
+
+
+def _all_keys(d: dict) -> List[Any]:
+    res = []
+    for k, v in d.items():
+        res.append(k)
+        if isinstance(v, dict):
+            res.extend(_all_keys(v))
+    return res
+
+
+def _norm_name_path(name_parts) -> list[str]:
+    accum = []
+    for part in name_parts:
+        part = str(part)
+        accum.extend(part.split("."))
+    return accum
 
 
 ################################################################################

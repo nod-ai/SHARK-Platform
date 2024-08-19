@@ -4,21 +4,34 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
+from typing import Optional
+
 import torch
 
 from .. import ops
 from .base import Theta, ThetaLayer
+from ..types.layout_utils import saturate_cast
+from ..types import (
+    DynamicScaledQuantizer,
+    QuantizedTensor,
+    QuantizerTensor,
+    StaticScaledQuantizer,
+    TensorScaledLayout,
+)
+
+__all__ = [
+    "LinearLayer",
+]
 
 
 class LinearLayer(ThetaLayer):
     """Linear layer which computes:
 
     ```
-    matmul(x, weight.T)
+    if premul_input is not None:
+      x = x * premul_input
+    matmul(x, weight.T) + bias
     ```
-
-    Whether the weight is transposed as part of the calculation can be
-    controlled with `transpose_weight=` (default true).
     """
 
     def __init__(
@@ -26,11 +39,41 @@ class LinearLayer(ThetaLayer):
         theta: Theta,
         *,
         weight_name: str = "weight",
-        transpose_weight: bool = True,
+        bias_name: str = "bias",
     ):
         super().__init__(theta)
+        self._simulate_native_quant = True
         self.weight = self.theta_tensor(weight_name)
-        self.transpose_weight = transpose_weight
+        self.bias = None
+        if bias_name in self.theta.keys:
+            self.bias = self.theta_tensor(bias_name)
 
-    def forward(self, x: torch.Tensor):
-        return ops.matmul(x, self.weight, transpose_rhs=self.transpose_weight)
+        # Input premultiplier.
+        self.premul_input = theta.optional_tensor("premul_input")
+        self.q_input: Optional[QuantizerTensor] = theta.optional_tensor("q_input")
+        self.qdq_input: Optional[QuantizedTensor] = theta.optional_tensor("qdq_input")
+        if self.q_input is not None and self.qdq_input is not None:
+            raise AssertionError(f"LinearLayer cannot have both q_input and qdq_input")
+
+    def forward(self, x):
+        weight = self.weight
+        bias = self.bias
+        q_input = self.q_input
+        qdq_input = self.qdq_input
+
+        if self.premul_input is not None:
+            x = ops.elementwise(torch.mul, x, self.premul_input)
+
+        if q_input is not None:
+            x = q_input.quantize(x)
+        elif qdq_input is not None:
+            x = qdq_input.quantize(x).unpack().dequant()
+
+        y = ops.linear(x, weight, bias)
+
+        # Unconditionally dequantize.
+        # TODO: Support a q_output specifier that signals the layer to let
+        # the QuantizedTensor escape.
+        if isinstance(y, QuantizedTensor):
+            y = y.unpack().dequant()
+        return y

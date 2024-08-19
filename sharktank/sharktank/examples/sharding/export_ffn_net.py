@@ -29,16 +29,16 @@ def create_theta(
     # Columnwise (transposed) sharding of gate and up weight.
     gate_weight = torch.rand(hidden_dim, primary_dim, dtype=torch.float16)
     up_weight = torch.rand(hidden_dim, primary_dim, dtype=torch.float16)
-    sharded_gate_weight = ShardedPrimitiveTensor(
+    sharded_gate_weight = SplitPrimitiveTensor(
         name="ffn_gate.weight", shard_dim=0, ts=gate_weight.split(split_size, dim=0)
     )
-    sharded_up_weight = ShardedPrimitiveTensor(
+    sharded_up_weight = SplitPrimitiveTensor(
         name="ffn_up.weight", shard_dim=0, ts=up_weight.split(split_size, dim=0)
     )
 
     # Rowwise (transposed) sharding of down weight.
     down_weight = torch.rand(primary_dim, hidden_dim, dtype=torch.float16)
-    sharded_down_weight = ShardedPrimitiveTensor(
+    sharded_down_weight = SplitPrimitiveTensor(
         name="ffn_down.weight", shard_dim=1, ts=down_weight.split(split_size, dim=1)
     )
 
@@ -51,10 +51,10 @@ class ShardedFFN(ThetaLayer):
         ffn_up_weight = self.theta.tensor("ffn_up", "weight")
         ffn_down_weight = self.theta.tensor("ffn_down", "weight")
         ffn_gate = ops.elementwise(
-            torch.nn.functional.silu, ops.matmul(x, ffn_gate_weight)
+            torch.nn.functional.silu, ops.linear(x, ffn_gate_weight)
         )
-        ffn_up = ops.matmul(x, ffn_up_weight)
-        ffn_down = ops.matmul(
+        ffn_up = ops.linear(x, ffn_up_weight)
+        ffn_down = ops.linear(
             ops.elementwise(torch.mul, ffn_gate, ffn_up), ffn_down_weight
         )
         summed = ops.sharded_sum(ffn_down)

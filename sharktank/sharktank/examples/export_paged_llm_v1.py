@@ -24,12 +24,12 @@ def main():
     parser = cli.create_parser()
     cli.add_input_dataset_options(parser)
     parser.add_argument(
-        "--output_mlir",
+        "--output-mlir",
         help="Output file path for exported MLIR file",
         default="/tmp/batch_llama_v1.mlir",
     )
     parser.add_argument(
-        "--output_config",
+        "--output-config",
         help="Output file path for exported config file",
         default="/tmp/batch_llama_v1.json",
     )
@@ -38,6 +38,11 @@ def main():
         help="Comma-separated batch size(s) to generate, e.g. `4` or `2,4`",
         type=lambda arg: [int(bs) for bs in arg.split(",")],
         default="4",
+    )
+    parser.add_argument(
+        "--verbose",
+        help="Include verbose logging",
+        action="store_true",
     )
 
     args = cli.parse(parser)
@@ -58,6 +63,7 @@ def main():
             "prefill_batch_sizes": prefill_bs,
             "decode_batch_sizes": decode_bs,
             "transformer_block_count": hp.block_count,
+            "block_seq_stride": llama_config.block_seq_stride,
         }
 
     # Unrolling cache updates by batch row makes dynamo sad without an
@@ -73,11 +79,15 @@ def main():
         tokens = torch.empty(bs, 64, dtype=torch.int64)
         seq_lens = torch.empty(bs, dtype=torch.int64)
         seq_block_ids = torch.empty(bs, 4, dtype=torch.int64)
-        block_dim = torch.export.Dim("block", max=2047 // 16)
-        sl_dim = 16 * block_dim
+        block_dim = torch.export.Dim(
+            "block", max=(hp.context_length - 1) // llama_config.block_seq_stride
+        )
+        sl_dim = llama_config.block_seq_stride * block_dim
 
         if model.config.kv_cache_type == "paged":
-            cache_state = model.cache.allocate(page_count=128)
+            cache_state = model.cache.allocate(
+                page_count=hp.context_length // llama_config.block_seq_stride
+            )
             page_dim = torch.export.Dim("page")
             cache_state_dynamic_shapes = [{0: page_dim}]
         elif model.config.kv_cache_type == "direct":
@@ -120,10 +130,14 @@ def main():
         seq_lens = torch.ones(bs, dtype=torch.int64)
         start_positions = torch.ones(bs, dtype=torch.int64)
         seq_block_ids = torch.zeros(bs, 4, dtype=torch.int64)
-        block_dim = torch.export.Dim("block", max=2047 // 16)
+        block_dim = torch.export.Dim(
+            "block", max=(hp.context_length - 1) // llama_config.block_seq_stride
+        )
 
         if model.config.kv_cache_type == "paged":
-            cache_state = model.cache.allocate(page_count=128)
+            cache_state = model.cache.allocate(
+                page_count=hp.context_length // llama_config.block_seq_stride
+            )
             page_dim = torch.export.Dim("page")
             cache_state_dynamic_shapes = [{0: page_dim}]
         elif model.config.kv_cache_type == "direct":
@@ -185,8 +199,9 @@ def main():
     config = generate_params_json(hp, bsizes, bsizes)
     print("GENERATED!")
 
-    for name, ep in fxb.programs.items():
-        print(f"EXPORT {name}:\n{ep}")
+    if args.verbose:
+        for name, ep in fxb.programs.items():
+            print(f"EXPORT {name}:\n{ep}")
 
     print("Exporting")
     output = export(fxb)

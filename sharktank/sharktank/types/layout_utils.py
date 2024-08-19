@@ -13,6 +13,7 @@ __all__ = [
     "promote_linear_i2_block_to_i8",
     "promote_linear_i4_block_to_i8",
     "promote_linear_i6_block_to_i8",
+    "saturate_cast",
 ]
 
 
@@ -144,3 +145,32 @@ def _view_uint8_tensor(data: torch.Tensor) -> torch.Tensor:
         return data.view(torch.uint8)
     else:
         raise AssertionError(f"Expected tensor to by uint8 or int8. Got: {dtype}")
+
+
+def saturate_cast(
+    t: torch.Tensor,
+    dtype: torch.dtype,
+    round_int: bool = True,
+    disable_saturate: bool = False,
+) -> torch.Tensor:
+    """Does a saturating cast to the given dtype. For floating point
+    values, this is a simple cast except for fp8 which is saturated.
+    For integer types, it will saturate to the min/max range.
+    An argument disable_saturate= is provided to allow
+    saturation to be disabled by flag without changing caller code. This is
+    needed if (for example, trying to saturate a high precision integer
+    type like int32) with a low precision tensor.
+    """
+    if dtype.is_floating_point:
+        finfo = torch.finfo(dtype)
+        isfp8 = finfo.bits == 8
+        if isfp8 and not disable_saturate:
+            t = t.clamp(finfo.min, finfo.max)
+        return t.to(dtype=dtype)
+
+    iinfo = torch.iinfo(dtype)
+    if round_int:
+        t = torch.round(t)
+    if not disable_saturate:
+        t = t.clamp(iinfo.min, iinfo.max)
+    return t.to(dtype=dtype)

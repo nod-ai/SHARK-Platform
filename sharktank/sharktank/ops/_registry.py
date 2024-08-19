@@ -6,7 +6,7 @@
 
 """Signatures for dynamic dispatch of ops covering our fundamental tensor types."""
 
-from typing import Any, Callable, Iterable, Optional, Union
+from typing import Any, Callable, Iterable, Optional, Union, Tuple
 
 import collections
 import inspect
@@ -14,24 +14,99 @@ import functools
 
 import torch
 from torch import Tensor
-from ..types import InferenceTensor, PrimitiveTensor
+from ..types import PrimitiveTensor, QuantizedTensor
 
 __all__ = [
-    "AnyTensor",
-    "SignatureDispatcher",
+    "AllOfType",
+    "AnyOfType",
     "overridable",
-    "unbox_tensor",
+    "SignatureDispatcher",
+    "BoolTypeExpr",
 ]
 
-AnyTensor = Union[torch.Tensor, InferenceTensor]
-
 _TargetOverride = collections.namedtuple(
-    "_TargetOverride", "salience, target, type_spec"
+    "_TargetOverride",
+    "salience, target, type_spec, auto_unbox, auto_dequant",
 )
 
 
 # When an op is dispatched, it will be stashed here for testing to verify.
+# Use _test_enable_last_op_dispatch(True) / _test_enable_last_op_dispatch(False)
+# in test cases to enable/disable tracking of the last op dispatched.
+# The last op can be queried with _test_get_last_op_dispatch().
+_ENABLE_TEST_LAST_OP_DISPATCH = False
 _TEST_LAST_OP_DISPATCH = None
+
+
+def _test_enable_last_op_dispatch(en: bool = True):
+    global _TEST_LAST_OP_DISPATCH
+    global _ENABLE_TEST_LAST_OP_DISPATCH
+    _TEST_LAST_OP_DISPATCH = None
+    _ENABLE_TEST_LAST_OP_DISPATCH = en
+
+
+def _test_get_last_op_dispatch():
+    assert (
+        _ENABLE_TEST_LAST_OP_DISPATCH
+    ), "Cannot get last op dispatched without calling _test_enable_last_op_dispatch()"
+    return _TEST_LAST_OP_DISPATCH
+
+
+class BoolTypeExpr:
+    """Expression that returns bool and accepts types as arguments."""
+
+    def __init__(self, expr: Callable[..., bool]):
+        self._expr = expr
+
+    def __call__(self, *args: type) -> bool:
+        return self._expr(*args)
+
+
+class AllOfType(BoolTypeExpr):
+    """Returns True if all of the types are from a set of types.
+
+    ```python
+    # False. str is not in (int, float).
+    AllOfType(int, float)(int, str)
+
+     # True. int is in (int, float).
+    AllOfType(int, float)(int, int)
+    ```
+    """
+
+    def __init__(self, *types: type):
+        self._types = types
+
+        def expr(*types: type):
+            return all(
+                any([issubclass(t, required) for required in self._types])
+                for t in types
+            )
+
+        super().__init__(expr)
+
+
+class AnyOfType(BoolTypeExpr):
+    """Returns True if any of the types are from a set of types.
+
+    ```python
+    # True. int is in (int, float).
+    AnyOfType(int, float)(int, str)
+
+     # False. str is not in (int, float).
+    AnyOfType(int, float)(str, str)
+    ```
+    """
+
+    def __init__(self, *types: type):
+        self._types = types
+
+        def expr(*types: type):
+            return any(
+                [issubclass(t, required) for t in types for required in self._types]
+            )
+
+        super().__init__(expr)
 
 
 class SignatureDispatcher:
@@ -60,8 +135,9 @@ class SignatureDispatcher:
         trampoline = self._trampoline
         assert trampoline is not None
         selected_override, *results = trampoline(self, *args, **kwargs)
-        global _TEST_LAST_OP_DISPATCH
-        _TEST_LAST_OP_DISPATCH = selected_override
+        if _ENABLE_TEST_LAST_OP_DISPATCH:
+            global _TEST_LAST_OP_DISPATCH
+            _TEST_LAST_OP_DISPATCH = selected_override
         arity = len(results)
         if arity == 1:
             return results[0]
@@ -70,12 +146,24 @@ class SignatureDispatcher:
         else:
             return results
 
-    def override(self, *type_spec: tuple[type, ...], salience: int = 0):
+    def override(
+        self,
+        *type_spec: tuple[type | BoolTypeExpr, ...],
+        salience: int = 0,
+        auto_unbox: bool = True,
+        auto_dequant: bool = False,
+    ):
         def decorator(f):
             if f.__name__ == "_":
                 f.__name__ = f"{self.__name__}__override"
             self._overrides.append(
-                _TargetOverride(salience=salience, target=f, type_spec=type_spec)
+                _TargetOverride(
+                    salience=salience,
+                    target=f,
+                    type_spec=type_spec,
+                    auto_unbox=auto_unbox,
+                    auto_dequant=auto_dequant,
+                )
             )
             self._overrides.sort(key=lambda v: v.salience)
             self._target_cache.clear()  # Need to recompute all targets
@@ -105,10 +193,36 @@ class SignatureDispatcher:
         assert self._trampoline is None
         self._trampoline = trampoline
 
+    def _is_type_expr_target(
+        self, override_type_spec: Tuple[type, ...], type_spec: Tuple[type, ...]
+    ) -> bool:
+        if len(override_type_spec) > 0 and isinstance(
+            override_type_spec[0], BoolTypeExpr
+        ):
+            if len(override_type_spec) > 1:
+                raise TypeError(
+                    "Override with multiple arguments not allowed when using BoolTypeExpr."
+                )
+            return True
+        return False
+
+    def _is_type_expr_target_match(
+        self, type_expr: BoolTypeExpr, type_spec: Tuple[type, ...]
+    ) -> bool:
+        return type_expr(*type_spec)
+
     def _match_targets(self, type_spec: tuple):
         targets = []
         for override in self._overrides:
             override_type_spec = override.type_spec
+
+            # Check if the override is a boolean type expression and if it is that it
+            # satisfied.
+            if self._is_type_expr_target(override_type_spec, type_spec):
+                if self._is_type_expr_target_match(override_type_spec[0], type_spec):
+                    targets.append(override.target)
+                continue
+
             if len(override_type_spec) != len(type_spec):
                 continue
             for expected, actual in zip(override.type_spec, type_spec):
@@ -118,9 +232,13 @@ class SignatureDispatcher:
                     continue
                 # We expect kernels which are parameterized on Tensor to
                 # unbox things that are isomorphic to it.
-                is_expected_unboxed_tensor = issubclass(expected, Tensor)
-                if is_expected_unboxed_tensor and issubclass(actual, PrimitiveTensor):
-                    continue
+                is_expected_tensor = issubclass(expected, Tensor)
+                if is_expected_tensor:
+                    if override.auto_unbox and issubclass(actual, PrimitiveTensor):
+                        continue
+                    # Similarly, we conditionally allow auto dequant.
+                    if override.auto_dequant and issubclass(actual, QuantizedTensor):
+                        continue
                 break
             else:
                 targets.append(override.target)
@@ -136,12 +254,3 @@ def overridable(f):
     dispatcher = SignatureDispatcher(f)
     functools.update_wrapper(dispatcher, f)
     return dispatcher
-
-
-def unbox_tensor(t: Any) -> Tensor:
-    """Unboxes a value that can be isomorphically interpreted as a Tensor."""
-    if isinstance(t, Tensor):
-        return t
-    elif isinstance(t, PrimitiveTensor):
-        return t.as_torch()
-    raise ValueError(f"Expected a Tensor or PrimitiveTensor but got {type(t)}")

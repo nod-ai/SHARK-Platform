@@ -51,6 +51,7 @@ def model_params() -> ModelParams:
         transformer_block_count=32,
         attn_head_count=32,
         attn_head_dim=128,
+        block_seq_stride=16,
         prefill_batch_sizes=[1, 4, 16],
         decode_batch_sizes=[1, 4, 16],
     )

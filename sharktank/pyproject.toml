@@ -3,9 +3,22 @@ requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]
-addopts = "-ra"
+addopts = [
+    "-ra",
+    "--import-mode=importlib",
+    "-m=unit",
+]
+markers = [
+    "expensive: tests that are very expensive",
+    "export: tests that require export from torch",
+    "golden: tests that compare to some golden values",
+    "integration: marks tests as integration, requiring access to network/models",
+    "model_punet: tests specific to the punet model",
+    "unit: unit tests requiring no out of repo resources",
+]
 testpaths = [
     "tests",
+    "integration",
 ]
 pythonpath = [
     ".",

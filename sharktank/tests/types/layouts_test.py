@@ -81,7 +81,7 @@ class SuperBlockOffsetScaled_4_6_LayoutTest(unittest.TestCase):
         bs = 32
 
         l = SuperBlockOffsetScaled_4_6_Layout(
-            [n, k],
+            shape=[n, k],
             d=torch.empty(n, sup, 1, dtype=torch.float32),
             dmin=torch.empty(n, sup, 1, dtype=torch.float32),
             sb_scales_high=torch.empty(n, sup, sub // 4, dtype=torch.uint8),
@@ -95,6 +95,34 @@ class SuperBlockOffsetScaled_4_6_LayoutTest(unittest.TestCase):
         self.assertEqual(l.shape, l_new.shape)
         self.assertEqual(l.planes, l_new.planes)
         self.assertEqual(l.metadata, l_new.metadata)
+
+
+class TensorScaledLayoutTest(unittest.TestCase):
+    def testRegistered(self):
+        self.assertIs(
+            TensorScaledLayout,
+            REGISTERED_LAYOUT_CLASSES[TensorScaledLayout.serialized_name()],
+        )
+
+    def testRoundtripWithOffset(self):
+        n = 128
+        k = 2560
+        l = TensorScaledLayout(
+            shape=[n, k],
+            d=torch.tensor(2.0, dtype=torch.float32),
+            qs=torch.tensor([2.0, 3.0, 4.0], dtype=torch.float16),
+            m=torch.tensor(5.0, dtype=torch.float32),
+        )
+        d = l.dequant()
+        torch.testing.assert_close(
+            d, torch.tensor([-6.0, -4.0, -2.0], dtype=torch.float32)
+        )
+
+        l_new = TensorScaledLayout.create(l.shape, l.metadata, l.planes)
+        d = l_new.dequant()
+        torch.testing.assert_close(
+            d, torch.tensor([-6.0, -4.0, -2.0], dtype=torch.float32)
+        )
 
 
 if __name__ == "__main__":

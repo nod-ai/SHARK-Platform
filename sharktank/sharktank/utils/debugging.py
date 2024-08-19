@@ -5,10 +5,12 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 """Tools for debugging models."""
+from typing import Dict, Optional
 
 from dataclasses import dataclass
 import re
 import os
+from pathlib import Path
 from typing import Sequence
 
 import torch
@@ -27,6 +29,15 @@ SETTING_PART_PATTERN = re.compile(r"""^([\\+\\-])?([^=]+)(=(.*))?$""")
 class DebugFlags:
     enable_tensor_trace: bool = False
     enable_nan_checks: bool = False
+    save_goldens_path: Optional[Path] = None
+    golden_sequence_value: int = 0
+
+    # Feature flags.
+    # Enables use of custom IREE kernels in lieu of PyTorch general
+    # for certain low level operations. We'd like to remove this flag but
+    # certain eager use cases are still having problems with these custom
+    # kernels, so keeping it to unblock progress.
+    use_custom_iree_kernels: bool = True
 
     def set(self, part: str):
         m = re.match(SETTING_PART_PATTERN, part)
@@ -41,6 +52,10 @@ class DebugFlags:
             self.enable_tensor_trace = logical_sense
         elif name == "enable_nan_checks":
             self.enable_nan_checks = logical_sense
+        elif name == "save_goldens_path":
+            self.save_goldens_path = Path(value)
+        elif name == "use_custom_iree_kernels":
+            self.use_custom_iree_kernels = logical_sense
         else:
             logger.warn("Unrecognized %s flag: '%s'", FLAGS_ENV_NAME, name)
 
@@ -68,8 +83,40 @@ class DebugFlags:
 flags = DebugFlags.parse_from_env()
 
 
-def trace_tensor(key: str, t: torch.Tensor, *, values: bool = True):
+def trace_tensor(
+    key: str, t: torch.Tensor, *, values: bool = True, golden: bool = False
+):
+    trace_tensors(key, {"default": t}, values=values, golden=golden)
+
+
+def trace_tensors(
+    key: str,
+    tensors: Dict[str, torch.Tensor],
+    *,
+    values: bool = True,
+    golden: bool = False,
+):
+    if golden:
+        if flags.save_goldens_path:
+            _save_goldens(key, tensors)
+        return
     if not flags.enable_tensor_trace:
         return
-    values_repr = repr(t) if values else "...elided..."
-    print(f"::: TRACE {key}({list(t.shape), t.dtype}) =\n{values_repr}")
+    for name, t in tensors.items():
+        if t is not None:
+            values_repr = repr(t) if values else "...elided..."
+            print(f"::: TRACE {key}:{name}({list(t.shape), t.dtype}) =\n{values_repr}")
+
+
+def _save_goldens(key: str, tensors: Dict[str, torch.Tensor]):
+    next_sequence = flags.golden_sequence_value
+    flags.golden_sequence_value += 1
+    # Sanitize as path.
+    key = re.sub("[" + re.escape(r"""#~!@$%^&*()[]{}:;"'""") + "]", "", key)
+    from safetensors.torch import save_file
+
+    path: Path = flags.save_goldens_path / f"{next_sequence:04d}_{key}.safetensors"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    print(f"::: SAVE GOLDEN {path}")
+    non_none_tensors = {k: v.contiguous() for k, v in tensors.items() if v is not None}
+    save_file(non_none_tensors, path)

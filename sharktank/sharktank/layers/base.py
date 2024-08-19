@@ -4,6 +4,8 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
+from typing import Dict
+
 import torch
 import torch.nn as nn
 
@@ -22,8 +24,26 @@ __all__ = [
 class BaseLayer(nn.Module):
     """Base class of all of our layers."""
 
-    def trace_tensor(self, key: str, t: torch.Tensor, *, values: bool = True):
-        debugging.trace_tensor(key, t, values=values)
+    def trace_tensor(
+        self, key: str, t: torch.Tensor, *, values: bool = True, golden: bool = False
+    ):
+        debugging.trace_tensor(key, t, values=values, golden=golden)
+
+    def trace_tensors(
+        self,
+        key: str,
+        tensors: Dict[str, torch.Tensor],
+        *,
+        values: bool = True,
+        golden: bool = False,
+    ):
+        debugging.trace_tensors(key, tensors, values=values, golden=golden)
+
+    def trace_golden(self, key: str, t: torch.Tensor):
+        debugging.trace_tensor(key, t, golden=True)
+
+    def trace_goldens(self, key: str, tensors: Dict[str, torch.Tensor]):
+        debugging.trace_tensors(key, tensors, golden=True)
 
     def assert_not_nan(self, *ts: torch.Tensor):
         """Checks whether tensors have nan values in them.

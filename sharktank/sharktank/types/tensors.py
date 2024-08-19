@@ -4,30 +4,53 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-from typing import Any, Callable, Optional, Union, TypeVar, Generic, Type
+from typing import (
+    Any,
+    Callable,
+    Optional,
+    Union,
+    TypeVar,
+    Generic,
+    Type,
+    Iterable,
+    List,
+    Tuple,
+)
+from copy import deepcopy
+from collections.abc import Collection
+from numbers import Integral
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 import torch
-
+from torch import Tensor
+from torch.utils._pytree import register_pytree_node
+from ..utils.math import ceildiv
 from shark_turbine.aot import (
     ExternalTensorTrait,
 )
+from shark_turbine.ops.iree import transfer_to_logical_device
+from ..utils import tree as tree_utils
 
 from ..utils.io import ShardedArchiveBuilder
 
 __all__ = [
-    "register_quantized_layout",
+    "AnyTensor",
+    "DefaultPrimitiveTensor",
+    "flatten_tensor_tree",
     "InferenceTensor",
     "MetaDataValueType",
-    "DefaultPrimitiveTensor",
     "PlanarQuantizedTensor",
     "PrimitiveTensor",
-    "QuantizedTensor",
     "QuantizedLayout",
+    "QuantizedTensor",
+    "register_quantized_layout",
+    "ReplicatedTensor",
     "ShardedTensor",
-    "ShardedPrimitiveTensor",
+    "SplitPrimitiveTensor",
+    "unbox_tensor",
+    "UnreducedTensor",
 ]
 
 # JSON encodable value types.
@@ -152,7 +175,7 @@ class InferenceTensor(ABC):
     """
 
     def __init__(self, *, shape: list[int], name: str = UnnamedTensorName):
-        self.name = name
+        self._name = name
         self.shape = shape
 
     @classmethod
@@ -176,6 +199,14 @@ class InferenceTensor(ABC):
         )
 
     @property
+    def name(self) -> str:
+        return self._name
+
+    @name.setter
+    def name(self, name: str):
+        self._name = name
+
+    @property
     @abstractmethod
     def globals(self) -> dict[str, torch.Tensor]:
         """Returns a mapping of global name to root tensor.
@@ -189,6 +220,11 @@ class InferenceTensor(ABC):
     def add_to_archive(self, builder: ShardedArchiveBuilder) -> InferenceTensorMetadata:
         """Adds this tensor to the global archive."""
         ...
+
+    def is_deep_equal(self, other: Any) -> bool:
+        """Deep equality including metadata and exact equality of tensor elements.
+        It is a representational equality."""
+        raise NotImplementedError()
 
     def transform_globals(
         self, *transforms: Callable[[dict[str, torch.Tensor]], dict[str, torch.Tensor]]
@@ -231,6 +267,22 @@ class InferenceTensor(ABC):
         raise NotImplementedError(
             f"InferenceTensor {type(self)} does not implement _clone_with_globals"
         )
+
+    @property
+    def T(self) -> "InferenceTensor":
+        from ..ops import permute
+
+        # Reverse the dimension range.
+        rank = len(self.shape)
+        assert rank == 2, "T will be deprecated in torch for non-2D tensors"
+        dims = [rank - 1 - i for i in range(rank)]
+
+        return permute(self, dims=dims)
+
+    def __add__(self, rhs):
+        from ..ops import elementwise
+
+        return elementwise(torch.add, self, rhs)
 
 
 REGISTERED_INFERENCE_TENSOR_CLASSES: dict[str, Type[InferenceTensor]] = {}
@@ -323,8 +375,18 @@ class DefaultPrimitiveTensor(PrimitiveTensor):
     ) -> "InferenceTensor":
         return DefaultPrimitiveTensor(name=self.name, data=new_globals[self.name])
 
+    def __getitem__(self, key):
+        return self._data[key]
+
     def __repr__(self):
         return f"PrimitiveTensor({self.name}, {self.shape}, {self._data.dtype})"
+
+    def is_deep_equal(self, other: Any) -> bool:
+        if not isinstance(other, DefaultPrimitiveTensor):
+            return False
+        if self.shape != other.shape or self.name != other.name:
+            return False
+        return torch.equal(self.as_torch(), other.as_torch())
 
 
 ########################################################################################
@@ -480,9 +542,7 @@ class PlanarQuantizedTensor(QuantizedTensor):
         )
 
     def __repr__(self):
-        return (
-            f"PlanarQuantized({self.name}, {self.shape}, planes={self.globals.keys()})"
-        )
+        return f"PlanarQuantized({self.name}, {self.shape}, layout={self.layout})"
 
 
 ########################################################################################
@@ -497,7 +557,7 @@ class ShardedTensor(InferenceTensor):
     """
 
     def __init__(
-        self, *, shape: list[int], shard_dim: int, name: str = UnnamedTensorName
+        self, *, shape: list[int], shard_dim: int | None, name: str = UnnamedTensorName
     ):
         super().__init__(name=name, shape=shape)
         self.shard_dim = shard_dim
@@ -513,10 +573,23 @@ class ShardedTensor(InferenceTensor):
         """Accesses the underlying shards"""
         ...
 
+    @property
+    @abstractmethod
+    def is_replicated(self) -> bool:
+        """Returns whether the original tensor is replicated.
+        If replicated, `shard_dim` does not make sense and is None."""
+        ...
+
+    @InferenceTensor.name.setter
+    def name(self, name: str):
+        super(ShardedTensor, self.__class__).name.__set__(self, name)
+        for i, shard in enumerate(self.shards):
+            shard.name = f"{name}.shard.{i}"
+
 
 @register_inference_tensor
-class ShardedPrimitiveTensor(ShardedTensor):
-    """Sharded tensor which contains primitive tensors.
+class ShardedTensorBase(ShardedTensor):
+    """Sharded tensor which contains tensors.
 
     The sharded tensors have names with this tensor's name as the stem and
     a suffix of f".shard.{i}" where i is from 0..shard_count-1.
@@ -525,32 +598,19 @@ class ShardedPrimitiveTensor(ShardedTensor):
     def __init__(
         self,
         *,
-        shard_dim: int,
+        shard_dim: int | None,
         ts: list[torch.Tensor],
         name: str = UnnamedTensorName,
-        shape: Optional[list[int]] = None,
+        shape: Optional[list[int]],
     ):
         assert len(ts) > 0
-        first_shape = ts[0].shape
-        assert len(first_shape) > shard_dim
-        if shape is None:
-            # Compute the shape.
-            shape = list(first_shape)
-            shape[shard_dim] *= len(ts)
-
+        assert shard_dim is None or len(ts[0].shape) > shard_dim
         super().__init__(name=name, shape=shape, shard_dim=shard_dim)
-        # Assert the shape.
-        shard_dim_size = first_shape[shard_dim]
-        for t in ts[1:]:
-            assert (
-                t.shape == first_shape
-            ), f"Shape mismatch for sharded tensors: {t.shape} vs {first_shape}"
-            shard_dim_size += t.shape[shard_dim]
-        assert (
-            shard_dim_size == shape[shard_dim]
-        ), f"Sharding mismatch: Sharded dims do not cover the whole volume {shard_dim_size} vs {shape[shard_dim]}"
         self._shards: tuple[DefaultPrimitiveTensor] = tuple(
-            DefaultPrimitiveTensor(name=f"{name}.shard.{i}", data=t)
+            DefaultPrimitiveTensor(
+                name=f"{name}.shard.{i}",
+                data=transfer_to_logical_device(f"{i}", unbox_tensor(t)),
+            )
             for i, t in enumerate(ts)
         )
 
@@ -562,9 +622,13 @@ class ShardedPrimitiveTensor(ShardedTensor):
     def shards(self) -> tuple[InferenceTensor]:
         return self._shards
 
+    @property
+    def is_replicated(self) -> bool:
+        return False
+
     @classmethod
     def serialized_name(cls) -> str:
-        return "ShardedPrimitiveTensor"
+        return cls.__name__
 
     @property
     def globals(self) -> dict[str, torch.Tensor]:
@@ -573,23 +637,26 @@ class ShardedPrimitiveTensor(ShardedTensor):
     def add_to_archive(self, builder: ShardedArchiveBuilder) -> InferenceTensorMetadata:
         for i, pt in enumerate(self._shards):
             builder.for_rank(i).add_tensor(pt.name, pt._data)
+        extra_properties = {
+            "shard_count": len(self._shards),
+            "shape": list(self.shape),
+        }
+        if self.shard_dim is not None:
+            extra_properties.update({"shard_dim": self.shard_dim})
         return InferenceTensorMetadata(
             self.serialized_name(),
             {str(i): pt.name for i, pt in enumerate(self._shards)},
-            extra_properties={
-                "shard_count": len(self._shards),
-                "shape": list(self.shape),
-                "shard_dim": self.shard_dim,
-            },
+            extra_properties=extra_properties,
         )
 
+    @classmethod
     def _clone_with_globals(
         self, new_globals: dict[str, torch.Tensor]
     ) -> "InferenceTensor":
         ts = []
         for k in self.globals.keys():
             ts.append(new_globals[ts[k]])
-        return ShardedPrimitiveTensor(
+        return self.__class__(
             name=self.name, shape=self.shape, shard_dim=self.shard_dim, ts=ts
         )
 
@@ -602,7 +669,11 @@ class ShardedPrimitiveTensor(ShardedTensor):
     ) -> "InferenceTensor":
         shard_count = int(extra_properties["shard_count"])
         shape = list(extra_properties["shape"])
-        shard_dim = int(extra_properties["shard_dim"])
+        shard_dim = (
+            int(extra_properties["shard_dim"])
+            if "shard_dim" in extra_properties
+            else None
+        )
         ts = []
         for i in range(shard_count):
             t_name = str(i)
@@ -613,11 +684,446 @@ class ShardedPrimitiveTensor(ShardedTensor):
                 raise IOError(
                     f"Missing component tensor '{t_name}' in {raw_tensors.keys()}"
                 ) from e
-        return cls(name=name, shape=shape, shard_dim=shard_dim, ts=ts)
+        if shard_dim is None:
+            return cls(name=name, shape=shape, ts=ts)
+        else:
+            return cls(name=name, shape=shape, ts=ts, shard_dim=shard_dim)
 
     def __repr__(self):
         return (
-            f"ShardedPrimitiveTensor({self.name}, {self.shape}, "
-            f"shard_dim={self.shard_dim}, shard_count={len(self._shards)} "
+            f"{self.__class__.__name__}({self.name}, {self.shape}, "
+            + ("" if self.shard_dim is None else f"shard_dim={self.shard_dim}, ")
+            + f"shard_count={len(self._shards)} "
             f"of {self.shards[0].shape})"
         )
+
+    def is_deep_equal(self, other: Any) -> bool:
+        if type(self) != type(other):
+            return False
+        if (
+            self.shard_count != other.shard_count
+            or self.shard_dim != other.shard_dim
+            or self.name != other.name
+            or self.shape != other.shape
+        ):
+            return False
+        return all(a.is_deep_equal(b) for a, b in zip(self.shards, other.shards))
+
+
+def _is_tuple_of_integral_numbers(x) -> bool:
+    if not isinstance(x, tuple):
+        return False
+    return all(isinstance(el, Integral) for el in x)
+
+
+def _is_collection_of_integral_numbers(x) -> bool:
+    if not isinstance(x, Collection):
+        return False
+    return all(isinstance(el, Integral) for el in x)
+
+
+def _is_full_slice(s: slice, dim_size: int) -> bool:
+    return (
+        (s.start is None or s.start == 0)
+        and (s.stop is None or s.stop == dim_size)
+        and (s.step is None or s.step == 1)
+    )
+
+
+@register_inference_tensor
+class SplitPrimitiveTensor(ShardedTensorBase):
+    """Sharded tensor split along a dimension into primitive tensors.
+
+    The sharded tensors have names with this tensor's name as the stem and
+    a suffix of f".shard.{i}" where i is from 0..shard_count-1.
+    """
+
+    def __init__(
+        self,
+        *,
+        shard_dim: int,
+        ts: list[torch.Tensor] | torch.Tensor,
+        shard_count: None | int = None,
+        name: str = UnnamedTensorName,
+        shape: Optional[list[int]] = None,
+    ):
+        """
+        If `ts` is a list of tensors, it is interpreted as the shards.
+        Then `shard_count` must be None.
+        If `ts` is a tensor then `shard_count` must be provided and it,
+        will be split along dimension `shard_dim` into `shard_count`
+        number of pieces.
+        """
+        if isinstance(ts, torch.Tensor):
+            assert shard_count is not None
+            ts = ts.split(ceildiv(ts.shape[shard_dim], shard_count), dim=shard_dim)
+            assert len(ts) == shard_count
+            shard_count = None
+
+        assert shard_count is None
+        assert len(ts) > 0
+        first_shape = ts[0].shape
+        assert len(first_shape) > shard_dim
+        if shape is None:
+            # Compute the shape.
+            shape = list(first_shape)
+            shape[shard_dim] *= len(ts)
+
+        # Assert the shape.
+        shard_dim_size = first_shape[shard_dim]
+        for t in ts[1:]:
+            assert (
+                t.shape == first_shape
+            ), f"Shape mismatch for split tensors: {t.shape} vs {first_shape}"
+            shard_dim_size += t.shape[shard_dim]
+        assert (
+            shard_dim_size == shape[shard_dim]
+        ), f"Sharding mismatch: Sharded dims do not cover the whole volume {shard_dim_size} vs {shape[shard_dim]}"
+
+        super().__init__(name=name, ts=ts, shape=shape, shard_dim=shard_dim)
+
+    def _is_slicing_split_dim(self, key):
+        if isinstance(
+            key,
+            (
+                slice,
+                Integral,
+            ),
+        ):
+            return self._is_slicing_split_dim([key])
+        if _is_collection_of_integral_numbers(key):
+            if isinstance(key, tuple):
+                # Index per dimension.
+                return self.shard_dim < len(key)
+            else:
+                # Any other collection is a indexing only dimension 0.
+                return self.shard_dim == 0
+        if len(key) < self.shard_dim:
+            return False
+        if not isinstance(key[self.shard_dim], slice):
+            return True
+        return not _is_full_slice(key[self.shard_dim], self.shape[self.shard_dim])
+
+    def _get_shard_slice(self, key):
+        if isinstance(
+            key,
+            (
+                slice,
+                Integral,
+            ),
+        ):
+            return self._get_shard_slice([key])
+        if _is_collection_of_integral_numbers(key) and not isinstance(key, tuple):
+            # Indexing of dimension 0 only.
+            return key
+        if len(key) <= self.shard_count:
+            return key
+        new_key = list(key)
+        new_key[self.shard_dim] = slice(None)
+        return new_key
+
+    def __getitem__(self, key):
+        # TODO: implement all cases.
+        # Only slicing of non-split dimension is supported.
+        if self._is_slicing_split_dim(key):
+            raise NotImplementedError(
+                f"Slicing of the split dimension {self.shard_dim} is not supported."
+            )
+        new_key = self._get_shard_slice(key)
+        shards = [shard[new_key] for shard in self.shards]
+        return SplitPrimitiveTensor(ts=shards, shard_dim=self.shard_dim)
+
+
+@register_inference_tensor
+class ReplicatedTensor(ShardedTensor):
+    """A tensor that is replicated across all shards."""
+
+    def __init__(
+        self,
+        *,
+        ts: list[torch.Tensor] | torch.Tensor,
+        shard_count: None | int = None,
+        name: str = UnnamedTensorName,
+    ):
+        """
+        If `ts` is a list of tensors, it is interpreted as the shards.
+        Then `shard_count` must be None.
+        If `ts` is a tensor then `shard_count` must be provided and it,
+        will be replicated that many times.
+        """
+
+        if isinstance(ts, torch.Tensor):
+            assert shard_count is not None
+            ts = [ts] * shard_count
+            shard_count = None
+
+        assert shard_count is None
+        assert len(ts) > 0
+        first_shape = ts[0].shape
+        shape = list(first_shape)
+
+        super().__init__(name=name, shape=shape, shard_dim=None)
+        for shard in ts:
+            assert shape == list(shard.shape)
+
+        self._shards: tuple[DefaultPrimitiveTensor] = tuple(
+            DefaultPrimitiveTensor(
+                name=f"{name}.shard.{i}",
+                data=transfer_to_logical_device(f"{i}", unbox_tensor(t)),
+            )
+            for i, t in enumerate(ts)
+        )
+
+    @property
+    def shard_count(self) -> int:
+        return len(self._shards)
+
+    @property
+    def shards(self) -> tuple[InferenceTensor]:
+        return self._shards
+
+    @property
+    def is_replicated(self) -> bool:
+        return True
+
+    @classmethod
+    def serialized_name(cls) -> str:
+        return "ReplicatedTensor"
+
+    @property
+    def globals(self) -> dict[str, torch.Tensor]:
+        return {pt.name: pt._data for pt in self._shards}
+
+    def add_to_archive(self, builder: ShardedArchiveBuilder) -> InferenceTensorMetadata:
+        builder.for_rank(0).add_tensor(self.name, self._shards[0]._data)
+        return InferenceTensorMetadata(
+            self.serialized_name(),
+            {"": self.name},
+            extra_properties={
+                "shard_count": len(self._shards),
+            },
+        )
+
+    def _clone_with_globals(
+        self, new_globals: dict[str, torch.Tensor]
+    ) -> "InferenceTensor":
+        ts = []
+        for k in self.globals.keys():
+            ts.append(new_globals[ts[k]])
+        return ReplicatedTensor(name=self.name, shape=self.shape, ts=ts)
+
+    @classmethod
+    def create(
+        cls,
+        name: str,
+        raw_tensors: dict[str, torch.Tensor],
+        extra_properties: dict[str, Any],
+    ) -> "InferenceTensor":
+        shard_count = int(extra_properties["shard_count"])
+        try:
+            ts = raw_tensors[""]
+        except KeyError as e:
+            raise IOError(f"Missing component tensor '' in {raw_tensors.keys()}") from e
+        return cls(name=name, ts=ts, shard_count=shard_count)
+
+    def __getitem__(self, key):
+        shards = [shard[key] for shard in self.shards]
+        return ReplicatedTensor(ts=shards)
+
+    def __repr__(self):
+        return (
+            f"ReplicatedTensor({self.name}, {self.shape}, "
+            f"shard_count={len(self._shards)} "
+            f"of {self.shards[0].shape})"
+        )
+
+    def is_deep_equal(self, other: Any) -> bool:
+        if not isinstance(other, ReplicatedTensor):
+            return False
+        if (
+            self.shard_count != other.shard_count
+            or self.name != other.name
+            or self.shape != other.shape
+        ):
+            return False
+        if self.shard_count == 0:
+            return True
+        return self.shards[0].is_deep_equal(other.shards[0])
+
+
+@register_inference_tensor
+class UnreducedTensor(ShardedTensorBase):
+    """Sharded tensor which contains primitive tensors.
+    To obtain the actual tensor a sum-reduction over the shards must be performed.
+    """
+
+    def __init__(
+        self,
+        *,
+        ts: list[torch.Tensor],
+        name: str = UnnamedTensorName,
+        shape: Optional[list[int]] = None,
+    ):
+        assert len(ts) > 0
+        shape = list(ts[0].shape if shape is None else shape)
+        assert all(shape == list(t.shape) for t in ts)
+        super().__init__(name=name, ts=ts, shape=shape, shard_dim=None)
+
+
+def flatten_tensor_tree(
+    tree: tree_utils.Tree,
+) -> Iterable[torch.Tensor | InferenceTensor]:
+    return tree_utils.flatten(
+        tree,
+        is_leaf=lambda x: isinstance(
+            x,
+            (
+                torch.Tensor,
+                InferenceTensor,
+            ),
+        ),
+    )
+
+
+def unbox_tensor(t: Any) -> Tensor:
+    """Unboxes a value that can be isomorphically interpreted as a Tensor."""
+    if isinstance(t, Tensor):
+        return t
+    elif isinstance(t, PrimitiveTensor):
+        return t.as_torch()
+    elif isinstance(t, QuantizedTensor):
+        return t.unpack().dequant()
+    raise ValueError(f"Expected a Tensor or PrimitiveTensor but got {type(t)}")
+
+
+########################################################################################
+# Serialization helpers
+########################################################################################
+
+
+def _dtype_to_serialized_name(dtype: torch.dtype) -> str:
+    try:
+        return _DTYPE_TO_NAME[dtype]
+    except KeyError as e:
+        raise KeyError(
+            f"Missing mapping for dtype {dtype}. Please add to the _NAME_TO_DTYPE dict"
+        ) from e
+
+
+def _serialized_name_to_dtype(dtype_name: str) -> torch.dtype:
+    try:
+        return _NAME_TO_DTYPE[dtype_name]
+    except KeyError as e:
+        raise KeyError(
+            f"Missing mapping for dtype '{dtype_name}'. Please add to the _NAME_TO_DTYPE dict"
+        ) from e
+
+
+_NAME_TO_DTYPE: dict[str, torch.dtype] = {
+    "float32": torch.float32,
+    "float64": torch.float64,
+    "complex64": torch.complex64,
+    "complex128": torch.complex128,
+    "float16": torch.float16,
+    "bfloat16": torch.bfloat16,
+    "uint8": torch.uint8,
+    "int8": torch.int8,
+    "int16": torch.int16,
+    "int32": torch.int32,
+    "int64": torch.int64,
+    "bool": torch.bool,
+}
+
+
+def _maybe_dtype(*names: str):
+    for name in names:
+        try:
+            cls = getattr(torch, name)
+        except AttributeError:
+            pass
+        else:
+            _NAME_TO_DTYPE[name] = cls
+
+
+_maybe_dtype(
+    "float8_e4m3fn",
+    "float8_e4m3fnuz",
+    "float8_e5m2",
+    "float8_e5m2fnuz",
+    "uint1",
+    "uint2",
+    "uint3",
+    "uint4",
+    "uint5",
+    "uint6",
+    "uint7",
+)
+
+_DTYPE_TO_NAME: dict[torch.dtype, str] = {v: k for k, v in _NAME_TO_DTYPE.items()}
+
+AnyTensor = Union[torch.Tensor, InferenceTensor]
+
+########################################################################################
+# Tensor types registration with PyTorch.
+# This enables our tensor types to be part of function signatures during exporting.
+########################################################################################
+
+
+def flatten_default_primitive_tensor(
+    t: DefaultPrimitiveTensor,
+) -> Tuple[List[Any], torch.utils._pytree.Context]:
+    return [t.as_torch()], {"name": t.name}
+
+
+def unflatten_defult_primitive_tensor(
+    values: Iterable[Any], ctx: torch.utils._pytree.Context
+) -> DefaultPrimitiveTensor:
+    values_as_list = list(values)
+    return DefaultPrimitiveTensor(data=values_as_list[0], name=ctx["name"])
+
+
+register_pytree_node(
+    DefaultPrimitiveTensor,
+    flatten_fn=flatten_default_primitive_tensor,
+    unflatten_fn=unflatten_defult_primitive_tensor,
+)
+
+
+def flatten_split_primitive_tensor(
+    t: SplitPrimitiveTensor,
+) -> Tuple[List[Any], torch.utils._pytree.Context]:
+    return t.shards, {"name": t.name, "shard_dim": t.shard_dim}
+
+
+def unflatten_split_primitive_tensor(
+    values: Iterable[Any], ctx: torch.utils._pytree.Context
+) -> SplitPrimitiveTensor:
+    return SplitPrimitiveTensor(
+        shard_dim=ctx["shard_dim"], ts=list(values), name=ctx["name"]
+    )
+
+
+register_pytree_node(
+    SplitPrimitiveTensor,
+    flatten_fn=flatten_split_primitive_tensor,
+    unflatten_fn=unflatten_split_primitive_tensor,
+)
+
+
+def flatten_replicated_tensor(
+    t: ReplicatedTensor,
+) -> Tuple[List[Any], torch.utils._pytree.Context]:
+    return list(t.shards), {"name": t.name}
+
+
+def unflatten_replicated_tensor(
+    values: Iterable[Any], ctx: torch.utils._pytree.Context
+) -> ReplicatedTensor:
+    return ReplicatedTensor(ts=list(values), name=ctx["name"])
+
+
+register_pytree_node(
+    ReplicatedTensor,
+    flatten_fn=flatten_replicated_tensor,
+    unflatten_fn=unflatten_replicated_tensor,
+)

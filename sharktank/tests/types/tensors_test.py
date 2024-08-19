@@ -7,8 +7,11 @@
 import unittest
 
 import torch
+import tempfile
+import os
 
 from sharktank.types import *
+from sharktank import ops
 
 
 def _createTestLayout():
@@ -55,6 +58,87 @@ class PlanarQuantizedTensorTest(unittest.TestCase):
         self.assertEqual(new_planes["qs"].dtype, torch.int16)
         self.assertEqual(new_planes["m"].dtype, torch.float16)
         self.assertEqual(new_planes["d"].dtype, torch.float16)
+
+
+class ShardedTensorTest(unittest.TestCase):
+    def testReplicatedTensorSaveLoad(self):
+        tensor = torch.rand([2, 3, 4], dtype=torch.float32)
+        replicated_tensor = ReplicatedTensor(
+            ts=tensor, shard_count=3, name="the_tensor"
+        )
+        theta = Theta([replicated_tensor])
+        dataset = Dataset({}, theta)
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            file_path = os.path.join(tmp_dir, "dataset.irpa")
+            dataset.save(file_path)
+            # TODO: figure out why when memory mapping (mmap=True) even when deleting
+            # the Python objects the underlying files are still open causing
+            # TemporaryDirectory cleanup to fail under Windows.
+            loaded_dataset = Dataset.load(file_path, mmap=False)
+            loaded_replicated_tensor = loaded_dataset.root_theta.tensor("the_tensor")
+            assert replicated_tensor.is_deep_equal(loaded_replicated_tensor)
+
+    def testShardedPrimitiveTensorSaveLoad(self):
+        tensor = torch.rand([2, 6, 4], dtype=torch.float32)
+        sharded_tensor = SplitPrimitiveTensor(
+            ts=tensor, shard_count=3, name="the_tensor", shard_dim=1
+        )
+        theta = Theta([sharded_tensor])
+        dataset = Dataset({}, theta)
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            file_path = os.path.join(tmp_dir, "dataset.irpa")
+            dataset.save(file_path)
+            loaded_dataset = Dataset.load(file_path, mmap=False)
+            loaded_sharded_tensor = loaded_dataset.root_theta.tensor("the_tensor")
+            assert sharded_tensor.is_deep_equal(loaded_sharded_tensor)
+
+    def testUnreducedTensorSaveLoad(self):
+        tensor = torch.rand([2, 6, 4], dtype=torch.float32)
+        sharded_tensor = UnreducedTensor(
+            ts=torch.split(tensor, 1, dim=1), name="the_tensor"
+        )
+        theta = Theta([sharded_tensor])
+        dataset = Dataset({}, theta)
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            file_path = os.path.join(tmp_dir, "dataset.irpa")
+            dataset.save(file_path)
+            loaded_dataset = Dataset.load(file_path, mmap=False)
+            loaded_sharded_tensor = loaded_dataset.root_theta.tensor("the_tensor")
+            assert sharded_tensor.is_deep_equal(loaded_sharded_tensor)
+
+    def testReplicatedTensorExtractSlice(self):
+        tensor = torch.rand([2, 3, 4], dtype=torch.float32)
+        replicated_tensor = ReplicatedTensor(ts=tensor, shard_count=3)
+        s = [slice(1, 2), slice(0, 3, 2), None]
+        expected_result = tensor[s]
+        replicated_sliced_tensor = replicated_tensor[s]
+        assert isinstance(replicated_sliced_tensor, ReplicatedTensor)
+        actual_result = ops.reshard_like(replicated_sliced_tensor, expected_result)
+        assert ops.equal(expected_result, actual_result)
+
+    def testReplicatedTensorExtractElement(self):
+        tensor = torch.rand([2, 3, 4], dtype=torch.float32)
+        replicated_tensor = ReplicatedTensor(ts=tensor, shard_count=3)
+        idx = (
+            1,
+            2,
+            3,
+        )
+        expected_result = tensor[idx]
+        replicated_result = replicated_tensor[idx]
+        assert isinstance(replicated_result, ReplicatedTensor)
+        actual_result = ops.reshard_like(replicated_result, expected_result)
+        assert ops.equal(expected_result, actual_result)
+
+    def testSplitTensorExtractSliceOfNonSplitDim(self):
+        tensor = torch.rand([5, 6], dtype=torch.float32)
+        sharded_tensor = SplitPrimitiveTensor(ts=tensor, shard_count=3, shard_dim=1)
+        s = [slice(0, 2), slice(None), None, None]
+        expected_result = tensor[s]
+        sharded_slice = sharded_tensor[s]
+        assert isinstance(sharded_slice, SplitPrimitiveTensor)
+        actual_result = ops.reshard_like(sharded_slice, expected_result)
+        assert ops.equal(expected_result, actual_result)
 
 
 if __name__ == "__main__":

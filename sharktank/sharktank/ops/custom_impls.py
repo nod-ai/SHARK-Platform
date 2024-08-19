@@ -24,23 +24,24 @@ from ..types import (
     SuperBlockOffsetScaled_4_6_Layout,
 )
 
-from ._registry import unbox_tensor
+from ..types.tensors import unbox_tensor
 from .signatures import *
 
 
 # Fused FP matmul.
-@matmul.override(Tensor, Tensor)
-def matmul_mmtfp_tensor_tensor(lhs, rhs, *, transpose_rhs: bool):
-    lhs = unbox_tensor(lhs)
-    rhs = unbox_tensor(rhs)
-    # We only accelerate matmuls with transposed RHS set up for inference
-    # ... like civilized people.
-    if not transpose_rhs:
-        return NotImplemented
-    if len(lhs.shape) > 3:
-        # Only 2d or 3d batch matmuls currently supported.
-        return NotImplemented
-    return mmtfp(lhs, rhs)
+# Disabled: See https://github.com/nod-ai/sharktank/issues/44
+# @matmul.override(Tensor, Tensor)
+# def matmul_mmtfp_tensor_tensor(lhs, rhs, *, transpose_rhs: bool):
+#     lhs = unbox_tensor(lhs)
+#     rhs = unbox_tensor(rhs)
+#     # We only accelerate matmuls with transposed RHS set up for inference
+#     # ... like civilized people.
+#     if not transpose_rhs:
+#         return NotImplemented
+#     if len(lhs.shape) > 3:
+#         # Only 2d or 3d batch matmuls currently supported.
+#         return NotImplemented
+#     return mmtfp(lhs, rhs)
 
 
 # Quantized Matmul

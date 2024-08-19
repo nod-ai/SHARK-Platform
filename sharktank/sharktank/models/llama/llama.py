@@ -15,6 +15,7 @@ import torch.nn.functional as F
 
 from ...layers import *
 from ...types import *
+from ... import ops
 
 __all__ = [
     "LlamaModelConfig",
@@ -45,6 +46,11 @@ class LlamaModelConfig:
 
     # Dtype to use for attention.
     attention_dtype: torch.dtype = torch.float16
+
+    # Indicates if running with HuggingFace implementation and ensures
+    # numerical equivalency to HuggingFace's LLaMa if true (by modifying
+    # rotary embedding).
+    use_hf: bool = False
 
     def create_kv_cache(self) -> BaseKVCache:
         hp = self.hp
@@ -112,6 +118,8 @@ class PagedLlamaModelV1(BaseCausalLMModel):
         self.hp = hp
         self.cache = config.create_kv_cache()
         self.activation_dtype = config.activation_dtype
+        self.use_hf = config.use_hf
+
         self.add_module(
             "token_embedding",
             TokenEmbeddingLayer(theta("token_embd"), dtype=config.activation_dtype),
@@ -122,6 +130,7 @@ class PagedLlamaModelV1(BaseCausalLMModel):
                 rope_dimension_count=hp.rope_dimension_count,
                 max_seqlen=hp.context_length,
                 device=self.device,
+                use_hf=self.use_hf,
             ),
         )
         self.add_module(
@@ -142,6 +151,7 @@ class PagedLlamaModelV1(BaseCausalLMModel):
                     head_dim=hp.attn_head_dim,
                     head_count_kv=hp.attention_head_count_kv,
                     rms_epsilon=hp.attention_layer_norm_rms_epsilon,
+                    use_hf=self.use_hf,
                 )
                 for n in range(hp.block_count)
             ]
@@ -275,8 +285,10 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         head_dim: int,
         head_count_kv: int,
         rms_epsilon: float,
+        use_hf: bool = False,
     ):
         super().__init__(theta)
+
         self.add_module(
             "attn_norm", RMSNormLayer(theta("attn_norm"), epsilon=rms_epsilon)
         )
@@ -293,9 +305,11 @@ class PagedLlamaAttentionBlock(ThetaLayer):
 
         self.block_index = block_index
         self.cache = cache
+        assert isinstance(head_count, int)
         self.head_count = head_count
         self.head_dim = head_dim
         self.head_count_kv = head_count_kv
+        self.use_hf = use_hf
 
     def forward(
         self,
@@ -377,7 +391,7 @@ class PagedLlamaAttentionBlock(ThetaLayer):
             xk = repeat_kv(xk)
             xv = repeat_kv(xv)
 
-        # Tranpose into [bs, heads, sl, dim]
+        # Transpose into [bs, heads, sl, dim]
         xq = xq.transpose(1, 2)
         keys = xk.transpose(1, 2)
         values = xv.transpose(1, 2)
