@@ -76,9 +76,7 @@ struct hal_semaphore_ptr_helper {
 
 struct vm_context_ptr_helper {
   static void retain(iree_vm_context_t *obj) { iree_vm_context_retain(obj); }
-  static void release(iree_vm_context_t *obj) {
-    iree_vm_context_release(obj);
-  }
+  static void release(iree_vm_context_t *obj) { iree_vm_context_release(obj); }
 };
 
 struct vm_instance_ptr_helper {
@@ -250,7 +248,7 @@ class file_contents_ptr {
 
   // Releases ownership of the contained contents.
   iree_file_contents_t *release() {
-    iree_file_contents_t* p = contents_;
+    iree_file_contents_t *p = contents_;
     contents_ = nullptr;
     return p;
   }

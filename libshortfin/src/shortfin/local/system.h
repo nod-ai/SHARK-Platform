@@ -81,7 +81,8 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
   // Creates a new Scope bound to this System (it will internally
   // hold a reference to this instance). All devices in system order will be
   // added to the scope.
-  std::shared_ptr<Scope> CreateScope(Worker &worker, std::span<Device *const> devices);
+  std::shared_ptr<Scope> CreateScope(Worker &worker,
+                                     std::span<Device *const> devices);
 
   // Creates and starts a worker (if it is configured to run in a thread).
   Worker &CreateWorker(Worker::Options options);

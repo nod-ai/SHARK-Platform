@@ -400,9 +400,9 @@ void BindLocal(py::module_ &m) {
           "load_unbound_program",
           [](local::Scope &scope, std::span<const local::ProgramModule> modules,
              bool trace_execution) {
-              local::Program::Options options;
-              options.trace_execution = trace_execution;
-              return scope.LoadUnboundProgram(modules, std::move(options));
+            local::Program::Options options;
+            options.trace_execution = trace_execution;
+            return scope.LoadUnboundProgram(modules, std::move(options));
           },
           py::arg("modules"), py::arg("trace_execution") = false);
 

@@ -36,7 +36,7 @@ echo "Converting to version 17"
 python $TD/upgrade_onnx.py $onnx_path $onnx_upgrade_path
 
 echo "Import onnx model"
-python -m iree.compiler.tools.import_onnx $onnx_upgrade_path -o $mlir_path 
+python -m iree.compiler.tools.import_onnx $onnx_upgrade_path -o $mlir_path
 
 echo "Compile onnx model"
 python -m iree.compiler.tools.scripts.ireec \
