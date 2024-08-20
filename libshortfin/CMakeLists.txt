@@ -23,21 +23,14 @@ set(CMAKE_CXX_STANDARD 20)
 # https://discourse.cmake.org/t/cmake-3-28-cmake-cxx-compiler-clang-scan-deps-notfound-not-found/9244/3
 set(CMAKE_CXX_SCAN_FOR_MODULES 0)
 
+# Problems with libfmt without fPIC
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")
+
 option(SHORTFIN_BUILD_PYTHON_BINDINGS "Builds Python Bindings" OFF)
 option(SHORTFIN_BUILD_TESTS "Builds C++ tests" ON)
 
-if(SHORTFIN_BUILD_TESTS)
-  include(FetchContent)
-  FetchContent_Declare(
-    googletest
-    URL https://github.com/google/googletest/archive/03597a01ee50ed33e9dfd640b249b4be3799d395.zip
-  )
-  # For Windows: Prevent overriding the parent project's compiler/linker settings
-  set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-  FetchContent_MakeAvailable(googletest)
-  include(GoogleTest)
-  enable_testing()
-endif()
+include(FetchContent)
 
 # Includes.
 list(APPEND CMAKE_MODULE_PATH
@@ -46,9 +39,77 @@ list(APPEND CMAKE_MODULE_PATH
 include(shortfin_library)
 
 # Dependencies.
-find_package(spdlog)
-find_package(xtensor)
-find_package(IREERuntime)
+
+## fmt
+FetchContent_Declare(
+  fmt
+  GIT_REPOSITORY https://github.com/fmtlib/fmt.git
+  GIT_TAG        e69e5f977d458f2650bb346dadf2ad30c5320281 # 10.2.1 (sync with spdlog)
+  # Do not download if package is already available
+  FIND_PACKAGE_ARGS NAMES fmt
+)
+
+## spdlog
+set(SPDLOG_FMT_EXTERNAL ON)
+FetchContent_Declare(
+  spdlog
+  GIT_REPOSITORY https://github.com/gabime/spdlog.git
+  GIT_TAG        2d4acf8cc321d7783d8f2e22e17a794c6d0e9450 # v1.14.1
+  # Do not download if package is already available
+  FIND_PACKAGE_ARGS NAMES spdlog
+)
+
+## xtl: required for xtensor
+FetchContent_Declare(
+  xtl
+  GIT_REPOSITORY https://github.com/xtensor-stack/xtl.git
+  GIT_TAG        a7c1c5444dfc57f76620391af4c94785ff82c8d6 # v0.7.7
+  # Do not download if package is already available
+  FIND_PACKAGE_ARGS NAMES xtl
+)
+
+## xtensor
+FetchContent_Declare(
+  xtensor
+  GIT_REPOSITORY https://github.com/xtensor-stack/xtensor.git
+  GIT_TAG        3634f2ded19e0cf38208c8b86cea9e1d7c8e397d # v0.25.0
+  # Do not download if package is already available
+  FIND_PACKAGE_ARGS NAMES xtensor
+)
+
+FetchContent_MakeAvailable(fmt spdlog xtl xtensor)
+
+## iree runtime
+
+set(SHORTFIN_IREE_SOURCE_DIR "" CACHE FILEPATH "Path to IREE source")
+if(SHORTFIN_IREE_SOURCE_DIR)
+  set(IREE_BUILD_COMPILER OFF)
+  set(IREE_BUILD_TESTS OFF)
+  add_subdirectory(${SHORTFIN_IREE_SOURCE_DIR} iree SYSTEM)
+else()
+  # Try to find iree using find_package
+  # TODO: Instead fetch bundled iree from releases and build using that
+  find_package(IREERuntime)
+endif()
+
+# tests
+
+if(SHORTFIN_BUILD_TESTS)
+  if (SHORTFIN_IREE_SOURCE_DIR)
+    # Kind of a bug with iree? It pulls googletest even when tests are disabled.
+    # IREE already builds googletest from source
+  else()
+    FetchContent_Declare(
+      googletest
+      URL https://github.com/google/googletest/archive/03597a01ee50ed33e9dfd640b249b4be3799d395.zip
+    )
+    # For Windows: Prevent overriding the parent project's compiler/linker settings
+    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(googletest)
+  endif()
+  include(GoogleTest)
+  enable_testing()
+endif()
 
 add_subdirectory(src)
 
