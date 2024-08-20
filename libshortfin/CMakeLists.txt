@@ -23,12 +23,17 @@ set(CMAKE_CXX_STANDARD 20)
 # https://discourse.cmake.org/t/cmake-3-28-cmake-cxx-compiler-clang-scan-deps-notfound-not-found/9244/3
 set(CMAKE_CXX_SCAN_FOR_MODULES 0)
 
-# Problems with libfmt without fPIC
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")
+# Problems with linking libfmt without PIC.
+# Turn on PIC on non windows targets.
+if(NOT WIN32)
+  set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+endif()
 
+# build options
 option(SHORTFIN_BUILD_PYTHON_BINDINGS "Builds Python Bindings" OFF)
 option(SHORTFIN_BUILD_TESTS "Builds C++ tests" ON)
+option(SHORTFIN_BUNDLE_DEPS "Download dependencies other than IREE" OFF)
+set(SHORTFIN_IREE_SOURCE_DIR "" CACHE FILEPATH "Path to IREE source")
 
 include(FetchContent)
 
@@ -40,55 +45,58 @@ include(shortfin_library)
 
 # Dependencies.
 
-## fmt
-FetchContent_Declare(
-  fmt
-  GIT_REPOSITORY https://github.com/fmtlib/fmt.git
-  GIT_TAG        e69e5f977d458f2650bb346dadf2ad30c5320281 # 10.2.1 (sync with spdlog)
-  # Do not download if package is already available
-  FIND_PACKAGE_ARGS NAMES fmt
-)
+if(SHORTFIN_BUNDLE_DEPS)
+  ## fmt
+  FetchContent_Declare(
+    fmt
+    GIT_REPOSITORY https://github.com/fmtlib/fmt.git
+    GIT_TAG        e69e5f977d458f2650bb346dadf2ad30c5320281 # 10.2.1 (sync with spdlog)
+  )
 
-## spdlog
-set(SPDLOG_FMT_EXTERNAL ON)
-FetchContent_Declare(
-  spdlog
-  GIT_REPOSITORY https://github.com/gabime/spdlog.git
-  GIT_TAG        2d4acf8cc321d7783d8f2e22e17a794c6d0e9450 # v1.14.1
-  # Do not download if package is already available
-  FIND_PACKAGE_ARGS NAMES spdlog
-)
+  ## spdlog
+  # We build fmt from source instead, because we also use fmt.
+  set(SPDLOG_FMT_EXTERNAL ON)
+  FetchContent_Declare(
+    spdlog
+    GIT_REPOSITORY https://github.com/gabime/spdlog.git
+    GIT_TAG        2d4acf8cc321d7783d8f2e22e17a794c6d0e9450 # v1.14.1
+  )
 
-## xtl: required for xtensor
-FetchContent_Declare(
-  xtl
-  GIT_REPOSITORY https://github.com/xtensor-stack/xtl.git
-  GIT_TAG        a7c1c5444dfc57f76620391af4c94785ff82c8d6 # v0.7.7
-  # Do not download if package is already available
-  FIND_PACKAGE_ARGS NAMES xtl
-)
+  ## xtl: required for xtensor
+  FetchContent_Declare(
+    xtl
+    GIT_REPOSITORY https://github.com/xtensor-stack/xtl.git
+    GIT_TAG        a7c1c5444dfc57f76620391af4c94785ff82c8d6 # v0.7.7
+  )
 
-## xtensor
-FetchContent_Declare(
-  xtensor
-  GIT_REPOSITORY https://github.com/xtensor-stack/xtensor.git
-  GIT_TAG        3634f2ded19e0cf38208c8b86cea9e1d7c8e397d # v0.25.0
-  # Do not download if package is already available
-  FIND_PACKAGE_ARGS NAMES xtensor
-)
+  ## xtensor
+  FetchContent_Declare(
+    xtensor
+    GIT_REPOSITORY https://github.com/xtensor-stack/xtensor.git
+    GIT_TAG        3634f2ded19e0cf38208c8b86cea9e1d7c8e397d # v0.25.0
+  )
 
-FetchContent_MakeAvailable(fmt spdlog xtl xtensor)
+  FetchContent_MakeAvailable(fmt spdlog xtl xtensor)
+else()
+  find_package(spdlog)
+  find_package(xtensor)
+endif()
 
 ## iree runtime
 
-set(SHORTFIN_IREE_SOURCE_DIR "" CACHE FILEPATH "Path to IREE source")
 if(SHORTFIN_IREE_SOURCE_DIR)
   set(IREE_BUILD_COMPILER OFF)
   set(IREE_BUILD_TESTS OFF)
+  # Only enable local_sync/local_task/hip drivers for now.
+  set(IREE_HAL_DRIVER_DEFAULTS OFF)
+  set(IREE_HAL_DRIVER_LOCAL_SYNC ON)
+  set(IREE_HAL_DRIVER_LOCAL_TASK ON)
+  set(IREE_HAL_DRIVER_HIP ON)
   add_subdirectory(${SHORTFIN_IREE_SOURCE_DIR} iree SYSTEM)
 else()
+  # TODO: If SHORTFIN_BUNDLE_DEPS is ON, download IREE from release and use it
+  # instead.
   # Try to find iree using find_package
-  # TODO: Instead fetch bundled iree from releases and build using that
   find_package(IREERuntime)
 endif()
 
