@@ -9,6 +9,7 @@
 #include "./utils.h"
 #include "shortfin/local/async.h"
 #include "shortfin/local/process.h"
+#include "shortfin/local/program.h"
 #include "shortfin/local/scope.h"
 #include "shortfin/local/system.h"
 #include "shortfin/local/systems/amdgpu.h"
@@ -297,14 +298,29 @@ void BindLocal(py::module_ &m) {
           py::rv_policy::reference_internal)
       .def(
           "create_scope",
-          [](local::System &self, PyWorker &worker) {
-            return self.CreateScope(worker);
+          [](local::System &self, PyWorker *worker, py::handle raw_devices) {
+            // TODO: I couldn't really figure out how to directly accept an
+            // optional kw-only arg without it just being a raw object/handle.
+            // If the passed devices is none, then we create the scope with
+            // all devices in the system. Otherwise, with those explicitly
+            // given.
+            std::vector<local::Device *> devices;
+            if (raw_devices.is_none()) {
+              devices.assign(self.devices().begin(), self.devices().end());
+            } else {
+              devices = py::cast<std::vector<local::Device *>>(raw_devices);
+            }
+
+            // If no worker, default to the init worker.
+            if (!worker) {
+              worker = dynamic_cast<PyWorker *>(&self.init_worker());
+            }
+
+            return self.CreateScope(*worker, devices);
           },
-          py::rv_policy::reference_internal)
-      .def(
-          "create_scope",
-          [](local::System &self) { return self.CreateScope(); },
-          py::rv_policy::reference_internal)
+          py::rv_policy::reference_internal,
+          py::arg("worker").none() = py::none(), py::kw_only(),
+          py::arg("devices") = py::none())
       .def(
           "create_worker",
           [refs](local::System &self, std::string name) -> PyWorker & {
@@ -318,7 +334,11 @@ void BindLocal(py::module_ &m) {
           [refs](local::System &self, py::object coro) {
             return RunInForeground(refs, self, std::move(coro));
           },
-          py::arg("coro"));
+          py::arg("coro"))
+      // Methods not on System but on child objects, taking System as an arg.
+      // Emitted here for convenience.
+      .def("load_module", &local::ProgramModule::Load, py::arg("path"),
+           py::arg("mmap") = true);
 
   // Support classes.
   py::class_<local::Node>(m, "Node")
@@ -327,9 +347,9 @@ void BindLocal(py::module_ &m) {
         return fmt::format("local::Node({})", self.node_num());
       });
   py::class_<local::Device>(m, "Device")
-      .def("name", &local::Device::name)
-      .def("node_affinity", &local::Device::node_affinity)
-      .def("node_locked", &local::Device::node_locked)
+      .def_prop_ro("name", &local::Device::name)
+      .def_prop_ro("node_affinity", &local::Device::node_affinity)
+      .def_prop_ro("node_locked", &local::Device::node_locked)
       .def(py::self == py::self)
       .def("__repr__", &local::Device::to_s);
   py::class_<local::DeviceAffinity>(m, "DeviceAffinity")
@@ -340,11 +360,18 @@ void BindLocal(py::module_ &m) {
       .def("__add__", &local::DeviceAffinity::AddDevice)
       .def("__repr__", &local::DeviceAffinity::to_s);
 
+  py::class_<local::Program>(m, "Program");
+  py::class_<local::ProgramModule>(m, "ProgramModule")
+      .def("__repr__", &local::ProgramModule::to_s)
+      .def_static("load", &local::ProgramModule::Load, py::arg("system"),
+                  py::arg("path"), py::arg("mmap") = true);
+
   struct DevicesSet {
     DevicesSet(local::Scope &scope) : scope(scope) {}
     local::Scope &scope;
   };
   py::class_<local::Scope>(m, "Scope")
+      .def("__repr__", &local::Scope::to_s)
       .def_prop_ro("raw_devices", &local::Scope::raw_devices,
                    py::rv_policy::reference_internal)
       .def(
@@ -368,7 +395,17 @@ void BindLocal(py::module_ &m) {
           [](local::Scope &self, py::args args) {
             return CastDeviceAffinity(self, args);
           },
-          py::rv_policy::reference_internal);
+          py::rv_policy::reference_internal)
+      .def(
+          "load_unbound_program",
+          [](local::Scope &scope, std::span<const local::ProgramModule> modules,
+             bool trace_execution) {
+              local::Program::Options options;
+              options.trace_execution = trace_execution;
+              return scope.LoadUnboundProgram(modules, std::move(options));
+          },
+          py::arg("modules"), py::arg("trace_execution") = false);
+
   py::class_<local::ScopedDevice>(m, "ScopedDevice")
       .def_prop_ro("scope", &local::ScopedDevice::scope,
                    py::rv_policy::reference)

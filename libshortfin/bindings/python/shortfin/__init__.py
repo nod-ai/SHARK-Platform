@@ -8,12 +8,14 @@ from _shortfin import lib as _sfl
 
 # Most classes from the native "local" namespace are aliased to the top
 # level of the public API.
+CompletionEvent = _sfl.local.CompletionEvent
 Device = _sfl.local.Device
 Node = _sfl.local.Node
 Process = _sfl.local.Process
+Program = _sfl.local.Program
+ProgramModule = _sfl.local.ProgramModule
 Scope = _sfl.local.Scope
 ScopedDevice = _sfl.local.ScopedDevice
-CompletionEvent = _sfl.local.CompletionEvent
 System = _sfl.local.System
 SystemBuilder = _sfl.local.SystemBuilder
 Worker = _sfl.local.Worker
@@ -26,11 +28,13 @@ from . import amdgpu
 from . import host
 
 __all__ = [
+    "CompletionEvent",
     "Device",
     "Node",
+    "Program",
+    "ProgramModule",
     "Scope",
     "ScopedDevice",
-    "CompletionEvent",
     "System",
     "SystemBuilder",
     "Worker",

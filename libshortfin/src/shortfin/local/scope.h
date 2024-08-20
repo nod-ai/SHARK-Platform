@@ -13,6 +13,7 @@
 
 #include "shortfin/local/async.h"
 #include "shortfin/local/device.h"
+#include "shortfin/local/program.h"
 #include "shortfin/local/scheduler.h"
 #include "shortfin/support/stl_extras.h"
 
@@ -79,6 +80,7 @@ class SHORTFIN_API Scope : public std::enable_shared_from_this<Scope> {
   Scope(const Scope &) = delete;
   // Ensure polymorphic.
   virtual ~Scope();
+  std::string to_s() const;
 
   // All scopes are created as shared pointers.
   std::shared_ptr<Scope> shared_ptr() { return shared_from_this(); }
@@ -120,6 +122,14 @@ class SHORTFIN_API Scope : public std::enable_shared_from_this<Scope> {
   detail::TimelineResource::Ref NewTimelineResource() {
     return scheduler().NewTimelineResource(host_allocator_);
   }
+
+  // Loads a program from a list of modules onto the devices managed by this
+  // scope. The resulting program is not bound to this scope and can be imported
+  // into compatible scopes for actual execution.
+  // TODO: This is temporary during API evolution: a higher level API that
+  // includes all module concepts, params, etc is needed.
+  Program LoadUnboundProgram(std::span<const ProgramModule> modules,
+                             Program::Options options = {});
 
  private:
   void AddDevice(std::string_view device_class, Device *device);

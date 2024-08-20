@@ -22,6 +22,8 @@ System::System(iree_allocator_t host_allocator)
   SHORTFIN_THROW_IF_ERROR(iree_vm_instance_create(IREE_VM_TYPE_CAPACITY_DEFAULT,
                                                   host_allocator_,
                                                   vm_instance_.for_output()));
+  // Register types for builtin modules we know we want to handle.
+  SHORTFIN_THROW_IF_ERROR(iree_hal_module_register_all_types(vm_instance_));
 }
 
 System::~System() {
@@ -86,15 +88,10 @@ void System::Shutdown() {
   hal_drivers_.clear();
 }
 
-std::shared_ptr<Scope> System::CreateScope(Worker &worker) {
+std::shared_ptr<Scope> System::CreateScope(Worker &worker,
+                                           std::span<Device *const> devices) {
   iree::slim_mutex_lock_guard guard(lock_);
-  return std::make_shared<Scope>(shared_ptr(), worker, devices());
-}
-
-std::shared_ptr<Scope> System::CreateScope() {
-  Worker &w = init_worker();
-  iree::slim_mutex_lock_guard guard(lock_);
-  return std::make_shared<Scope>(shared_ptr(), w, devices());
+  return std::make_shared<Scope>(shared_ptr(), worker, devices);
 }
 
 void System::InitializeNodes(int node_count) {
