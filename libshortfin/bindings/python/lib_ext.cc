@@ -50,37 +50,37 @@ class Refs {
   py::object lazy_PyWorkerEventLoop_;
 };
 
-class PyWorker;
-thread_local PyWorker *current_thread_worker = nullptr;
-
-// Custom worker which hosts an asyncio event loop.
-class PyWorker : public local::Worker {
+// We need a fair bit of accounting additions in order to make Workers usable
+// as asyncio loops. This extension holds that.
+class PyWorkerExtension : public local::Worker::Extension {
  public:
-  PyWorker(PyInterpreterState *interp, std::shared_ptr<Refs> refs,
-           Options options)
-      : Worker(std::move(options)), interp_(interp), refs_(std::move(refs)) {}
+  PyWorkerExtension(local::Worker &worker, PyInterpreterState *interp,
+                    std::shared_ptr<Refs> refs)
+      : Extension(worker), interp_(interp), refs_(std::move(refs)) {
+    py::object worker_obj = py::cast(worker, py::rv_policy::reference);
+    loop_ = refs_->lazy_PyWorkerEventLoop()(worker_obj);
+  }
 
-  static PyWorker &GetCurrent() {
-    PyWorker *local_worker = current_thread_worker;
-    if (!local_worker) {
+  static PyWorkerExtension &GetCurrent() {
+    PyWorkerExtension *ext =
+        local::Worker::GetCurrentExtension<PyWorkerExtension>();
+    if (!ext) {
       throw std::logic_error(
           "There is no shortfin worker associated with this thread.");
     }
-    return *local_worker;
+    return *ext;
   }
 
-  void WaitForShutdown() override {
-    // Need to release the GIL if blocking.
-    py::gil_scoped_release g;
-    Worker::WaitForShutdown();
-  }
+  bool initialized() { return interp_ != nullptr; }
 
-  void OnThreadStart() override {
+  py::handle loop() { return loop_; }
+
+  void OnThreadStart() noexcept override {
+    // Python threading initialization.
     // If our own thread, teach Python about it. Not done for donated.
-    if (options().owned_thread) {
+    if (worker().options().owned_thread) {
       PyThreadState_New(interp_);
     }
-    current_thread_worker = this;
 
     py::gil_scoped_acquire g;
     // Aside from set_event_loop being old and _set_running_loop being new
@@ -89,16 +89,14 @@ class PyWorker : public local::Worker {
     refs_->asyncio_set_running_loop(loop_);
   }
 
-  void OnThreadStop() override {
+  void OnThreadStop() noexcept override {
     {
-      current_thread_worker = nullptr;
-
       // Do Python level thread cleanup.
       py::gil_scoped_acquire g;
       loop_.reset();
 
       // Scrub thread state if not donated.
-      if (options().owned_thread) {
+      if (worker().options().owned_thread) {
         PyThreadState_Clear(PyThreadState_Get());
       } else {
         // Otherwise, juse reset the event loop.
@@ -111,27 +109,29 @@ class PyWorker : public local::Worker {
     // TODO: PyThreadState_Delete seems like it should be used here, but I
     // couldn't find that being done and I couldn't find a way to use it
     // with the GIL/thread state correct.
-    if (options().owned_thread) {
+    if (worker().options().owned_thread) {
       PyThreadState_Swap(nullptr);
     }
   }
 
-  std::string to_s() { return fmt::format("PyWorker(name='{}')", name()); }
+  // Because shutdown happens on the main thread under the purview of the
+  // GIL, we must make arrangements to release it. Otherwise shutdown can
+  // deadlock with processing.
+  void OnBeforeShutdownWait() noexcept override {
+    shutdown_wait_gil_state = PyEval_SaveThread();
+  }
+  void OnAfterShutdownWait() noexcept override {
+    PyEval_RestoreThread(shutdown_wait_gil_state);
+    shutdown_wait_gil_state = nullptr;
+  }
 
+ private:
   py::object loop_;
-  PyInterpreterState *interp_;
+  PyInterpreterState *interp_ = nullptr;
   std::shared_ptr<Refs> refs_;
-};
 
-std::unique_ptr<local::Worker> CreatePyWorker(std::shared_ptr<Refs> refs,
-                                              local::Worker::Options options) {
-  PyInterpreterState *interp = PyInterpreterState_Get();
-  auto new_worker =
-      std::make_unique<PyWorker>(interp, std::move(refs), std::move(options));
-  py::object worker_obj = py::cast(*new_worker.get(), py::rv_policy::reference);
-  new_worker->loop_ = new_worker->refs_->lazy_PyWorkerEventLoop()(worker_obj);
-  return new_worker;
-}
+  PyThreadState *shutdown_wait_gil_state = nullptr;
+};
 
 class PyProcess : public local::detail::BaseProcess {
  public:
@@ -185,7 +185,7 @@ py::object RunInForeground(std::shared_ptr<Refs> refs, local::System &self,
   bool is_main_thread =
       refs->threading_current_thread().is(refs->threading_main_thread());
 
-  PyWorker &worker = dynamic_cast<PyWorker &>(self.init_worker());
+  local::Worker &worker = self.init_worker();
   py::object result = py::none();
   auto done_callback = [&](py::handle future) {
     worker.Kill();
@@ -260,15 +260,17 @@ void BindLocal(py::module_ &m) {
                           }),
                           live_system_refs);
   auto refs = std::make_shared<Refs>();
-  auto worker_factory = [refs](local::Worker::Options options) {
-    return CreatePyWorker(refs, std::move(options));
-  };
+  auto worker_initializer =
+      [refs, interp_state = PyInterpreterState_Get()](local::Worker &worker) {
+        worker.SetExtension(
+            std::make_unique<PyWorkerExtension>(worker, interp_state, refs));
+      };
 
   py::class_<local::SystemBuilder>(m, "SystemBuilder")
       .def("create_system", [live_system_refs,
-                             worker_factory](local::SystemBuilder &self) {
+                             worker_initializer](local::SystemBuilder &self) {
         auto system_ptr = self.CreateSystem();
-        system_ptr->set_worker_factory(worker_factory);
+        system_ptr->AddWorkerInitializer(worker_initializer);
         auto system_obj = py::cast(system_ptr, py::rv_policy::take_ownership);
         live_system_refs.attr("add")(system_obj);
         return system_obj;
@@ -298,7 +300,8 @@ void BindLocal(py::module_ &m) {
           py::rv_policy::reference_internal)
       .def(
           "create_scope",
-          [](local::System &self, PyWorker *worker, py::handle raw_devices) {
+          [](local::System &self, local::Worker *worker,
+             py::handle raw_devices) {
             // TODO: I couldn't really figure out how to directly accept an
             // optional kw-only arg without it just being a raw object/handle.
             // If the passed devices is none, then we create the scope with
@@ -313,7 +316,7 @@ void BindLocal(py::module_ &m) {
 
             // If no worker, default to the init worker.
             if (!worker) {
-              worker = dynamic_cast<PyWorker *>(&self.init_worker());
+              worker = dynamic_cast<local::Worker *>(&self.init_worker());
             }
 
             return self.CreateScope(*worker, devices);
@@ -323,10 +326,10 @@ void BindLocal(py::module_ &m) {
           py::arg("devices") = py::none())
       .def(
           "create_worker",
-          [refs](local::System &self, std::string name) -> PyWorker & {
+          [refs](local::System &self, std::string name) -> local::Worker & {
             local::Worker::Options options(self.host_allocator(),
                                            std::move(name));
-            return dynamic_cast<PyWorker &>(self.CreateWorker(options));
+            return self.CreateWorker(options);
           },
           py::arg("name"), py::rv_policy::reference_internal)
       .def(
@@ -441,11 +444,17 @@ void BindLocal(py::module_ &m) {
           },
           py::rv_policy::reference_internal);
 
-  py::class_<local::Worker>(m, "_Worker", py::is_weak_referenceable())
-      .def("__repr__", &local::Worker::to_s);
-  py::class_<PyWorker, local::Worker>(m, "Worker")
-      .def_ro("loop", &PyWorker::loop_)
-      .def("call_threadsafe", &PyWorker::CallThreadsafe)
+  py::class_<local::Worker>(m, "Worker", py::is_weak_referenceable())
+      .def_prop_ro("loop",
+                   [](local::Worker &self) {
+                     auto *ext = self.GetExtension<PyWorkerExtension>();
+                     if (!ext) {
+                       throw std::logic_error(
+                           "Worker was not initialized for access from Python");
+                     }
+                     return ext->loop();
+                   })
+      .def("call_threadsafe", &local::Worker::CallThreadsafe)
       .def("call",
            [](local::Worker &self, py::handle callable) {
              callable.inc_ref();  // Stolen within the callback.
@@ -496,7 +505,7 @@ void BindLocal(py::module_ &m) {
                  static_cast<iree_duration_t>(delay_seconds * 1e9));
            })
       .def("_now", [](local::Worker &self) { return self.now(); })
-      .def("__repr__", &PyWorker::to_s);
+      .def("__repr__", &local::Worker::to_s);
 
   py::class_<PyProcess>(m, "Process")
       .def("__init__", [](py::args, py::kwargs) {})
@@ -527,9 +536,9 @@ void BindLocal(py::module_ &m) {
   py::class_<local::CompletionEvent>(m, "CompletionEvent")
       .def(py::init<>())
       .def("__await__", [](py::handle self_obj) {
-        auto &worker = PyWorker::GetCurrent();
+        auto &worker_ext = PyWorkerExtension::GetCurrent();
         auto &self = py::cast<local::CompletionEvent &>(self_obj);
-        py::object future = worker.loop_.attr("create_future")();
+        py::object future = worker_ext.loop().attr("create_future")();
         // Stashing self as an attribute on the future, keeps us alive,
         // which transitively means that the wait source we get from self
         // stays alive. This can be done better later with a custom
@@ -543,7 +552,7 @@ void BindLocal(py::module_ &m) {
         // acquired (since dec_ref'ing it must happen within the GIL).
         // Because the self object was stashed on an attribute above, the
         // wait_source is valid for the entire sequence.
-        SHORTFIN_THROW_IF_ERROR(worker.WaitOneLowLevel(
+        SHORTFIN_THROW_IF_ERROR(worker_ext.worker().WaitOneLowLevel(
             /*wait_source=*/
             self, iree_infinite_timeout(),
             +[](void *future_vp, iree_loop_t loop,

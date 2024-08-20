@@ -42,15 +42,6 @@ System::~System() {
   }
 }
 
-std::unique_ptr<Worker> System::DefaultWorkerFactory(Worker::Options options) {
-  return std::make_unique<Worker>(std::move(options));
-}
-
-void System::set_worker_factory(Worker::Factory factory) {
-  iree::slim_mutex_lock_guard guard(lock_);
-  worker_factory_ = std::move(factory);
-}
-
 void System::Shutdown() {
   // Stop workers.
   std::vector<std::unique_ptr<Worker>> local_workers;
@@ -105,6 +96,21 @@ void System::InitializeNodes(int node_count) {
   }
 }
 
+void System::AddWorkerInitializer(std::function<void(Worker &)> initializer) {
+  iree::slim_mutex_lock_guard guard(lock_);
+  if (!workers_.empty()) {
+    throw std::logic_error(
+        "AddWorkerInitializer can only be called before workers are created");
+  }
+  worker_initializers_.push_back(std::move(initializer));
+}
+
+void System::InitializeWorker(Worker &worker) {
+  for (auto &f : worker_initializers_) {
+    f(worker);
+  }
+}
+
 Worker &System::CreateWorker(Worker::Options options) {
   Worker *unowned_worker;
   {
@@ -117,11 +123,11 @@ Worker &System::CreateWorker(Worker::Options options) {
       throw std::invalid_argument(fmt::format(
           "Cannot create worker with duplicate name '{}'", options.name));
     }
-    auto worker = worker_factory_(std::move(options));
-    workers_.push_back(std::move(worker));
+    workers_.push_back(std::make_unique<Worker>(std::move(options)));
     unowned_worker = workers_.back().get();
     workers_by_name_[unowned_worker->name()] = unowned_worker;
   }
+  InitializeWorker(*unowned_worker);
   if (unowned_worker->options().owned_thread) {
     unowned_worker->Start();
   }
@@ -138,10 +144,10 @@ Worker &System::init_worker() {
   // Create.
   Worker::Options options(host_allocator(), "__init__");
   options.owned_thread = false;
-  auto worker = worker_factory_(std::move(options));
-  workers_.push_back(std::move(worker));
+  workers_.push_back(std::make_unique<Worker>(std::move(options)));
   Worker *unowned_worker = workers_.back().get();
   workers_by_name_[unowned_worker->name()] = unowned_worker;
+  InitializeWorker(*unowned_worker);
   return *unowned_worker;
 }
 

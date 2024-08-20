@@ -50,11 +50,6 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
   System(const System &) = delete;
   ~System();
 
-  // Sets a worker factory that will be used for all subsequently created
-  // Worker instances. Certain bindings and integrations may need special
-  // kinds of Worker classes, and this can customize that.
-  void set_worker_factory(Worker::Factory factory);
-
   // Explicit shutdown (vs in destructor) is encouraged.
   void Shutdown();
 
@@ -93,6 +88,10 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
   // demand if it does not yet exist.
   Worker &init_worker();
 
+  // Adds a worker initializer which will be called when each worker starts.
+  // This can only be called before any workers are created.
+  void AddWorkerInitializer(std::function<void(Worker &)> initializer);
+
   // Initialization APIs. Calls to these methods is only permitted between
   // construction and Initialize().
   // ------------------------------------------------------------------------ //
@@ -103,7 +102,6 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
   void FinishInitialization();
 
  private:
-  static std::unique_ptr<Worker> DefaultWorkerFactory(Worker::Options options);
   void AssertNotInitialized() {
     if (initialized_) {
       throw std::logic_error(
@@ -119,6 +117,9 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
   // Deallocates a process by pid. This is done on process destruction. Note
   // that is acquires the system lock and is non-reentrant.
   void DeallocateProcess(int64_t pid);
+
+  // Calls each registered worker initializer.
+  void InitializeWorker(Worker &worker);
 
   const iree_allocator_t host_allocator_;
 
@@ -145,8 +146,8 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
   BlockingExecutor blocking_executor_;
 
   // Workers.
-  Worker::Factory worker_factory_ = System::DefaultWorkerFactory;
   std::vector<std::unique_ptr<Worker>> workers_;
+  std::vector<std::function<void(Worker &)>> worker_initializers_;
   std::unordered_map<std::string_view, Worker *> workers_by_name_;
 
   // Process management.
