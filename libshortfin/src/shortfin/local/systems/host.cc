@@ -71,10 +71,14 @@ iree_hal_driver_t *HostCPUSystemBuilder::InitializeHostCPUDriver(System &lsys) {
   iree::hal_driver_ptr driver;
   iree_hal_driver_t *unowned_driver;
   SHORTFIN_THROW_IF_ERROR(iree_hal_task_driver_create(
-      IREE_SV("local-task"), &host_cpu_deps_.task_params, /*queue_count=*/1,
-      &host_cpu_deps_.executor, host_cpu_deps_.loader_count,
-      host_cpu_deps_.loaders, host_cpu_deps_.device_allocator, host_allocator(),
-      driver.for_output()));
+      /*identifier=*/
+      {
+          .data = HAL_DRIVER_PREFIX.data(),
+          .size = HAL_DRIVER_PREFIX.size(),
+      },
+      &host_cpu_deps_.task_params, /*queue_count=*/1, &host_cpu_deps_.executor,
+      host_cpu_deps_.loader_count, host_cpu_deps_.loaders,
+      host_cpu_deps_.device_allocator, host_allocator(), driver.for_output()));
   unowned_driver = driver.get();
   lsys.InitializeHalDriver(SYSTEM_DEVICE_CLASS, std::move(driver));
   return unowned_driver;
