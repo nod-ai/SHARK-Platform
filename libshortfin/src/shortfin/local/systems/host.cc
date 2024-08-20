@@ -6,6 +6,7 @@
 
 #include "shortfin/local/systems/host.h"
 
+#include "iree/hal/local/loaders/registration/init.h"
 #include "shortfin/support/iree_helpers.h"
 #include "shortfin/support/logging.h"
 
@@ -21,24 +22,47 @@ const std::string_view HAL_DRIVER_PREFIX = "local";
 // HostCPUSystemBuilder
 // -------------------------------------------------------------------------- //
 
-HostCPUSystemBuilder::HostCPUSystemBuilder(iree_allocator_t host_allocator)
-    : HostSystemBuilder(host_allocator) {
-  iree_task_executor_options_initialize(&host_cpu_deps_.task_executor_options);
-  iree_hal_task_device_params_initialize(&host_cpu_deps_.task_params);
-  iree_task_topology_initialize(&host_cpu_deps_.task_topology_options);
+HostCPUSystemBuilder::Deps::Deps(iree_allocator_t host_allocator) {
+  iree_task_executor_options_initialize(&task_executor_options);
+  iree_hal_task_device_params_initialize(&task_params);
+  iree_task_topology_initialize(&task_topology_options);
 }
 
-HostCPUSystemBuilder::~HostCPUSystemBuilder() {
-  iree_task_topology_deinitialize(&host_cpu_deps_.task_topology_options);
+HostCPUSystemBuilder::Deps::~Deps() {
+  iree_task_topology_deinitialize(&task_topology_options);
+  for (iree_host_size_t i = 0; i < loader_count; ++i) {
+    iree_hal_executable_loader_release(loaders[i]);
+  }
+  if (device_allocator) {
+    iree_hal_allocator_release(device_allocator);
+  }
+  if (executor) {
+    iree_task_executor_release(executor);
+  }
+  if (plugin_manager) {
+    iree_hal_executable_plugin_manager_release(plugin_manager);
+  }
 }
+
+HostCPUSystemBuilder::HostCPUSystemBuilder(iree_allocator_t host_allocator)
+    : HostSystemBuilder(host_allocator), host_cpu_deps_(host_allocator) {}
+
+HostCPUSystemBuilder::~HostCPUSystemBuilder() = default;
 
 void HostCPUSystemBuilder::InitializeHostCPUDefaults() {
   // Give it a default device allocator.
   if (!host_cpu_deps_.device_allocator) {
-    logging::info("Using default heap allocator for host CPU devices");
     SHORTFIN_THROW_IF_ERROR(iree_hal_allocator_create_heap(
         iree_make_cstring_view("local"), host_allocator(), host_allocator(),
         &host_cpu_deps_.device_allocator));
+  }
+
+  // And loaders.
+  if (host_cpu_deps_.loader_count == 0) {
+    SHORTFIN_THROW_IF_ERROR(iree_hal_create_all_available_executable_loaders(
+        /*plugin_manager=*/nullptr, IREE_ARRAYSIZE(host_cpu_deps_.loaders),
+        &host_cpu_deps_.loader_count, host_cpu_deps_.loaders,
+        host_allocator()));
   }
 }
 
