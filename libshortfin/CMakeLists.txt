@@ -26,6 +26,17 @@ set(CMAKE_CXX_SCAN_FOR_MODULES 0)
 option(SHORTFIN_BUILD_PYTHON_BINDINGS "Builds Python Bindings" OFF)
 option(SHORTFIN_BUILD_TESTS "Builds C++ tests" ON)
 
+option(SHORTFIN_SYSTEMS_AMDGPU "Builds for AMD GPU systems" ON)
+option(SHORTFIN_SYSTEMS_HOST "Builds for host systems" ON)
+
+message(STATUS "libshortfin supported systems:")
+if(SHORTFIN_SYSTEMS_AMDGPU)
+  message(STATUS "  - AMD GPU")
+endif()
+if(SHORTFIN_SYSTEMS_HOST)
+  message(STATUS "  - Host")
+endif()
+
 if(SHORTFIN_BUILD_TESTS)
   include(FetchContent)
   FetchContent_Declare(
