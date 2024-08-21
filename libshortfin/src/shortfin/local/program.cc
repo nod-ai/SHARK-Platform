@@ -23,7 +23,7 @@ ProgramModule ProgramModule::Load(System& system,
       path.c_str(), flags, system.host_allocator(), contents.for_output()));
 
   // Ownership hazard: iree_vm_bytecode_module_create only assumes ownership
-  // of the contents when it returns *sucessfully*. In the exceptional case, 
+  // of the contents when it returns *sucessfully*. In the exceptional case,
   // ownership remains with the caller, so we let the RAII wrapper hold on to
   // it until after success.
   iree::vm_module_ptr module;
