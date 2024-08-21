@@ -7,8 +7,12 @@
 #ifndef SHORTFIN_LOCAL_MESSAGING_H
 #define SHORTFIN_LOCAL_MESSAGING_H
 
+#include <deque>
+#include <optional>
 #include <string>
 
+#include "shortfin/local/async.h"
+#include "shortfin/local/worker.h"
 #include "shortfin/support/api.h"
 #include "shortfin/support/iree_concurrency.h"
 
@@ -56,6 +60,49 @@ class SHORTFIN_API Message {
   Message &operator=(const Message &) = delete;
   virtual ~Message();
 
+  // RAII class for holding a reference to a Message.
+  class Ref {
+   public:
+    explicit Ref(Message &msg) : msg_(&msg) { msg.Retain(); }
+    Ref() : msg_(nullptr) {}
+    ~Ref() {
+      if (msg_) {
+        msg_->Release();
+      }
+    }
+    Ref(const Ref &other) : msg_(other.msg_) {
+      if (msg_) msg_->Retain();
+    }
+    Ref(Ref &&other) : msg_(other.msg_) { other.msg_ = nullptr; }
+    Ref &operator=(const Ref &other) {
+      if (other.msg_) other.msg_->Retain();
+      reset();
+      msg_ = other.msg_;
+      return *this;
+    }
+
+    operator bool() { return msg_ != nullptr; }
+    operator Message &() { return *msg_; }
+    Message *operator->() { return msg_; }
+    Message *get() { return msg_; }
+
+    void reset() {
+      if (msg_) {
+        msg_->Release();
+        msg_ = nullptr;
+      }
+    }
+
+    Message *release() {
+      Message *ret = msg_;
+      msg_ = nullptr;
+      return ret;
+    }
+
+   private:
+    Message *msg_ = nullptr;
+  };
+
  protected:
   // Guard a scope with the fine grained lock.
   iree::slim_mutex_lock_guard lock_guard() const {
@@ -80,6 +127,10 @@ class SHORTFIN_API Message {
   friend struct detail::MessageRefOwner;
 };
 
+// Future specialization for Message::Ref.
+extern template class TypedFuture<Message::Ref>;
+using MessageFuture = TypedFuture<Message::Ref>;
+
 // -------------------------------------------------------------------------- //
 // Queue
 // -------------------------------------------------------------------------- //
@@ -93,7 +144,7 @@ class SHORTFIN_API Queue {
     // Queues are generally managed by the system with a global name.
     std::string name;
   };
-  Queue(Options options) : options_(std::move(options)) {}
+  Queue(Options options);
   Queue(const Queue &) = delete;
   Queue &operator=(const Queue &) = delete;
   Queue(Queue &&) = delete;
@@ -103,7 +154,57 @@ class SHORTFIN_API Queue {
   std::string to_s() const;
 
  private:
+  mutable iree::slim_mutex lock_;
   Options options_;
+  std::deque<Message::Ref> contents_;
+  // For now we just have simple signalling: If the queue has elements to read,
+  // then signalled.
+  iree::shared_event::ref signalled_;
+
+  friend class QueueReader;
+  friend class QueueWriter;
+};
+
+// Writes messages to a queue.
+// Writers must be unique to logical thread of execution and do not support
+// concurrency (if you need to write from multiple places, create multiple
+// writer).
+// Typically, various flow control and priority options are set per writer.
+class SHORTFIN_API QueueWriter {
+ public:
+  struct Options {};
+  QueueWriter(Queue &queue, Options options = {});
+  ~QueueWriter();
+
+  // Writes a message to the queue.
+  // The write must be awaited as it can produce backpressure and failures.
+  // TODO: This should be a Future<void> so that exceptions can propagate.
+  CompletionEvent Write(Message::Ref mr);
+
+ private:
+  Queue &queue_;
+  Options options_;
+};
+
+class SHORTFIN_API QueueReader {
+ public:
+  struct Options {};
+  QueueReader(Queue &queue, Options options = {});
+  ~QueueReader();
+
+  // Reads a message from the queue.
+  MessageFuture Read();
+
+ private:
+  iree_status_t BeginWaitPump() noexcept;
+  static iree_status_t HandleWaitResult(void *user_data, iree_loop_t loop,
+                                        iree_status_t status) noexcept;
+  Queue &queue_;
+  Options options_;
+
+  // Reader state machine.
+  Worker *worker_ = nullptr;
+  std::optional<MessageFuture> read_result_future_;
 };
 
 // -------------------------------------------------------------------------- //

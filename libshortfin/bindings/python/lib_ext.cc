@@ -599,6 +599,7 @@ void BindLocal(py::module_ &m) {
             local::detail::MessageRefOwner owner(
                 +[](local::detail::MessageRefOwner::Request req,
                     const local::Message &msg) {
+                  py::gil_scoped_acquire g;
                   PyObject *msg_object = reinterpret_cast<PyObject *>(
                       local::detail::MessageRefOwner::access_ref_data(msg));
                   if (req == local::detail::MessageRefOwner::Request::RETAIN) {
@@ -617,7 +618,87 @@ void BindLocal(py::module_ &m) {
           }))
       .def(py::init<>());
 
-  py::class_<local::Queue>(m, "Queue").def("__repr__", &local::Queue::to_s);
+  py::class_<local::Queue>(m, "Queue")
+      .def("__repr__", &local::Queue::to_s)
+      .def("writer",
+           [](local::Queue &self) {
+             return custom_new_keep_alive<local::QueueWriter>(
+                 py::type<local::QueueWriter>(),
+                 /*keep_alive=*/self, /*queue=*/self);
+           })
+      .def("reader", [](local::Queue &self) {
+        return custom_new_keep_alive<local::QueueReader>(
+            py::type<local::QueueReader>(),
+            /*keep_alive=*/self, /*queue=*/self);
+      });
+  py::class_<local::QueueWriter>(m, "QueueWriter")
+      .def("__call__", [](local::QueueWriter &self, local::Message &message) {
+        return self.Write(local::Message::Ref(message));
+      });
+  py::class_<local::QueueReader>(m, "QueueReader")
+      .def("__call__", [](local::QueueReader &self) { return self.Read(); });
+
+  // ------------------------------------------------------------------------ //
+  // Futures
+  // ------------------------------------------------------------------------ //
+  py::class_<local::Future>(m, "Future")
+      // The generic await support relies on the result override from a
+      // subclass. Here and for VoidFuture, it is always none.
+      .def("result",
+           [](local::Future &self) {
+             self.ThrowFailure();
+             return py::none();
+           })
+      .def("__await__", [](py::handle self_obj) {
+        auto &worker_ext = PyWorkerExtension::GetCurrent();
+        auto &self = py::cast<local::Future &>(self_obj);
+        py::object future = worker_ext.loop().attr("create_future")();
+        // Stashing self as an attribute on the future, keeps us alive,
+        // which transitively means that the wait source we get from self
+        // stays alive. This can be done better later with a custom
+        // Future.
+        future.attr("_sf_future") = self_obj;
+        py::object iter_ret = future.attr("__iter__")();
+
+        // TODO: Could short-circuit if already done vs waiting.
+
+        // Pass the future object as void* user data to the C callback
+        // interface. This works because we release the object pointer going
+        // in and then steal it back to a py::object once the GIL has been
+        // acquired (since dec_ref'ing it must happen within the GIL).
+        // Because the self object was stashed on an attribute above, the
+        // wait_source is valid for the entire sequence.
+        SHORTFIN_THROW_IF_ERROR(worker_ext.worker().WaitOneLowLevel(
+            /*wait_source=*/
+            self, iree_infinite_timeout(),
+            +[](void *future_vp, iree_loop_t loop,
+                iree_status_t status) noexcept -> iree_status_t {
+              py::gil_scoped_acquire g;
+              py::object future = py::steal(static_cast<PyObject *>(future_vp));
+              try {
+                SHORTFIN_THROW_IF_ERROR(status);
+                // Consult the Python level "result" on our local::Future
+                // binding as it will override properly to get the right
+                // Python casted type, allowing us to just have this one
+                // __await__ implementation for every typed future.
+                future.attr("set_result")(
+                    future.attr("_sf_future").attr("result")());
+              } catch (std::exception &e) {
+                auto RuntimeError = py::handle(PyExc_RuntimeError);
+                future.attr("set_exception")(RuntimeError(e.what()));
+              }
+              return iree_ok_status();
+            },
+            static_cast<void *>(future.release().ptr())));
+        return iter_ret;
+      });
+  py::class_<local::VoidFuture, local::Future>(m, "VoidFuture");
+  py::class_<local::MessageFuture, local::Future>(m, "MessageFuture")
+      .def("result", [](local::MessageFuture &self) {
+        // Get a raw backing msg (without an increased refcount). When cast
+        // to a py::object, it will get a new reference.
+        return py::cast(self.result().get());
+      });
 }
 
 void BindHostSystem(py::module_ &global_m) {

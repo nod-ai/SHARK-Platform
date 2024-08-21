@@ -5,25 +5,55 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 import asyncio
-import threading
 
 import shortfin as sf
 
 lsys = sf.host.CPUSystemBuilder().create_system()
 
 
-class MyProcess(sf.Process):
-    def __init__(self, **kwargs):
+class Message(sf.Message):
+    def __init__(self, payload):
+        super().__init__()
+        self.payload = payload
+
+    def __repr__(self):
+        return f"Message(payload='{self.payload}')"
+
+
+class WriterProcess(sf.Process):
+    def __init__(self, queue, **kwargs):
         super().__init__(**kwargs)
-        self.queue = lsys.create_queue("infeed")
-        print("INFEED:", self.queue)
+        self.writer = queue.writer()
 
     async def run(self):
-        print("Process")
+        print("Start writer")
+        counter = 0
+        while True:
+            await asyncio.sleep(0.01)
+            counter += 1
+            msg = Message(f"Msg#{counter}")
+            await self.writer(msg)
+            print(f"Wrote message: {counter}")
+
+
+class ReaderProcess(sf.Process):
+    def __init__(self, queue, **kwargs):
+        super().__init__(**kwargs)
+        self.reader = queue.reader()
+
+    async def run(self):
+        while True:
+            message = await self.reader()
+            print("Received message:", message)
 
 
 async def main():
-    await MyProcess(scope=lsys.create_scope()).launch()
+    queue = lsys.create_queue("infeed")
+    scope = lsys.create_scope()
+    await asyncio.gather(
+        WriterProcess(queue, scope=scope).launch(),
+        ReaderProcess(queue, scope=scope).launch(),
+    )
 
 
 lsys.run(main())

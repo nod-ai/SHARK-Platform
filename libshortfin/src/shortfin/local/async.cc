@@ -36,4 +36,6 @@ bool CompletionEvent::BlockingWait(iree_timeout_t timeout) {
   return true;
 }
 
+Future::~Future() = default;
+
 }  // namespace shortfin::local

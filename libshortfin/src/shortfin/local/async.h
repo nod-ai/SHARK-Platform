@@ -64,6 +64,105 @@ class SHORTFIN_API CompletionEvent {
   std::any resource_baton_;
 };
 
+// Object that will eventually be set to some completion state, either a result
+// value or an exception status. Like CompletionEvents, Futures are copyable,
+// and all such copies share the same state.
+class SHORTFIN_API Future {
+ public:
+  Future(const Future &other) = delete;
+  Future(Future &&other) = delete;
+  Future &operator=(const Future &other) = delete;
+  virtual ~Future();
+
+  void set_failure(iree_status_t failure_status) {
+    state_->failure_status_ = failure_status;
+    state_->done_ = true;
+    state_->done_event_.set();
+  }
+
+  // Returns whether this future is done.
+  bool is_done() { return state_->done_; }
+  bool is_failure() { return !iree_status_is_ok(state_->failure_status_); }
+  void ThrowFailure() {
+    if (!state_->done_) {
+      throw std::logic_error("Cannot get result from Future that is not done");
+    }
+    SHORTFIN_THROW_IF_ERROR(state_->failure_status_);
+  }
+
+  // Access the raw done wait source.
+  operator const iree_wait_source_t() { return state_->done_event_.await(); }
+
+ protected:
+  struct BaseState {
+    BaseState() : done_event_(false) {}
+    virtual ~BaseState() = default;
+    int ref_count_ = 1;
+    iree::event done_event_;
+    iree_status_t failure_status_ = iree_ok_status();
+    bool done_ = false;
+  };
+  Future(BaseState *state) : state_(state) {}
+  void set_success() {
+    state_->done_ = true;
+    state_->done_event_.set();
+  }
+  BaseState *state_;
+};
+
+// Future that has no done result.
+class SHORTFIN_API VoidFuture : public Future {
+ public:
+  VoidFuture() : Future(new BaseState()) {}
+  ~VoidFuture() override = default;
+  VoidFuture(const VoidFuture &other) : Future(other.state_) {
+    state_->ref_count_ += 1;
+  }
+  VoidFuture &operator=(const VoidFuture &other) {
+    other.state_->ref_count_ += 1;
+    if (--state_->ref_count_ == 0) delete state_;
+    state_ = other.state_;
+    return *this;
+  }
+
+  using Future::set_success;
+};
+
+// Value containing Future.
+template <typename ResultTy>
+class SHORTFIN_API TypedFuture : public Future {
+ public:
+  TypedFuture() : Future(new TypedState()) {}
+  ~TypedFuture() override = default;
+  TypedFuture(const TypedFuture &other) : Future(other.state_) {
+    state_->ref_count_ += 1;
+  }
+  TypedFuture &operator=(const TypedFuture &other) {
+    other.state_->ref_count_ += 1;
+    if (--state_->ref_count_ == 0) delete state_;
+    state_ = other.state_;
+    return *this;
+  }
+
+  void set_result(ResultTy result) {
+    static_cast<TypedState *>(state_)->result_ = std::move(result);
+    set_success();
+  }
+
+  ResultTy &result() {
+    if (!is_done()) {
+      throw std::logic_error("Cannot get result from Future that is not done");
+    }
+    ThrowFailure();
+    return static_cast<TypedState *>(state_)->result_;
+  }
+
+ private:
+  struct TypedState : public BaseState {
+    ResultTy result_;
+  };
+};
+
 }  // namespace shortfin::local
 
 #endif  // SHORTFIN_LOCAL_ASYNC_H

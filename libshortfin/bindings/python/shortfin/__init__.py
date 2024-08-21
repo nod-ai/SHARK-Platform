@@ -16,6 +16,8 @@ Process = _sfl.local.Process
 Program = _sfl.local.Program
 ProgramModule = _sfl.local.ProgramModule
 Queue = _sfl.local.Queue
+QueueReader = _sfl.local.QueueReader
+QueueWriter = _sfl.local.QueueWriter
 Scope = _sfl.local.Scope
 ScopedDevice = _sfl.local.ScopedDevice
 System = _sfl.local.System
@@ -37,6 +39,8 @@ __all__ = [
     "Program",
     "ProgramModule",
     "Queue",
+    "QueueReader",
+    "QueueWriter",
     "Scope",
     "ScopedDevice",
     "System",
