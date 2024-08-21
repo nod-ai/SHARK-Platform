@@ -84,6 +84,21 @@ endif()
 
 ## iree runtime
 
+if (NOT SHORTFIN_IREE_SOURCE_DIR AND SHORTFIN_BUNDLE_DEPS)
+  FetchContent_Declare(
+    iree
+    # We have to use git_repository here instead of downloading sources
+    # to make sure we get all the submodules for iree as well.
+    GIT_REPOSITORY https://github.com/iree-org/iree.git
+    GIT_TAG candidate-20240821.992
+  )
+  FetchContent_GetProperties(iree)
+  if(NOT iree_POPULATED)
+    FetchContent_Populate(iree)
+  endif()
+  set(SHORTFIN_IREE_SOURCE_DIR ${iree_SOURCE_DIR})
+endif()
+
 if(SHORTFIN_IREE_SOURCE_DIR)
   set(IREE_BUILD_COMPILER OFF)
   set(IREE_BUILD_TESTS OFF)
@@ -92,10 +107,8 @@ if(SHORTFIN_IREE_SOURCE_DIR)
   set(IREE_HAL_DRIVER_LOCAL_SYNC ON)
   set(IREE_HAL_DRIVER_LOCAL_TASK ON)
   set(IREE_HAL_DRIVER_HIP ON)
-  add_subdirectory(${SHORTFIN_IREE_SOURCE_DIR} iree SYSTEM)
+  add_subdirectory(${SHORTFIN_IREE_SOURCE_DIR} shortfin_iree SYSTEM)
 else()
-  # TODO: If SHORTFIN_BUNDLE_DEPS is ON, download IREE from release and use it
-  # instead.
   # Try to find iree using find_package
   find_package(IREERuntime)
 endif()
