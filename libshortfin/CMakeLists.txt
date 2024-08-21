@@ -87,10 +87,12 @@ endif()
 if (NOT SHORTFIN_IREE_SOURCE_DIR AND SHORTFIN_BUNDLE_DEPS)
   FetchContent_Declare(
     iree
-    # We have to use git_repository here instead of downloading sources
-    # to make sure we get all the submodules for iree as well.
     GIT_REPOSITORY https://github.com/iree-org/iree.git
     GIT_TAG candidate-20240821.992
+    # TODO: We shouldn't have to pull googletest when we are not building tests.
+    #       This needs to be fixed with IREE.
+    GIT_SUBMODULES "third_party/benchmark third_party/cpuinfo third_party/flatcc third_party/hip-build-deps third_party/googletest"
+    GIT_SHALLOW ON
   )
   FetchContent_GetProperties(iree)
   if(NOT iree_POPULATED)
@@ -102,6 +104,9 @@ endif()
 if(SHORTFIN_IREE_SOURCE_DIR)
   set(IREE_BUILD_COMPILER OFF)
   set(IREE_BUILD_TESTS OFF)
+  set(IREE_BUILD_SAMPLES OFF)
+  # Disable missing submodules error because we are only building the runtime
+  set(IREE_ERROR_ON_MISSING_SUBMODULES OFF)
   # Only enable local_sync/local_task/hip drivers for now.
   set(IREE_HAL_DRIVER_DEFAULTS OFF)
   set(IREE_HAL_DRIVER_LOCAL_SYNC ON)
@@ -116,10 +121,9 @@ endif()
 # tests
 
 if(SHORTFIN_BUILD_TESTS)
-  if (SHORTFIN_IREE_SOURCE_DIR)
-    # Kind of a bug with iree? It pulls googletest even when tests are disabled.
-    # IREE already builds googletest from source
-  else()
+  if (NOT SHORTFIN_IREE_SOURCE_DIR)
+    # Due to the above mentioned bugged with IREE CMakeLists.txt, we reuse
+    # IREE's googletest.
     FetchContent_Declare(
       googletest
       URL https://github.com/google/googletest/archive/03597a01ee50ed33e9dfd640b249b4be3799d395.zip
@@ -128,9 +132,10 @@ if(SHORTFIN_BUILD_TESTS)
     set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
     FetchContent_MakeAvailable(googletest)
   endif()
-  include(GoogleTest)
-  enable_testing()
+    include(GoogleTest)
+    enable_testing()
 endif()
+
 
 add_subdirectory(src)
 
