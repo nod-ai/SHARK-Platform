@@ -8,7 +8,9 @@
 
 #include "./utils.h"
 #include "shortfin/local/async.h"
+#include "shortfin/local/messaging.h"
 #include "shortfin/local/process.h"
+#include "shortfin/local/program.h"
 #include "shortfin/local/scope.h"
 #include "shortfin/local/system.h"
 #include "shortfin/local/systems/amdgpu.h"
@@ -49,37 +51,35 @@ class Refs {
   py::object lazy_PyWorkerEventLoop_;
 };
 
-class PyWorker;
-thread_local PyWorker *current_thread_worker = nullptr;
-
-// Custom worker which hosts an asyncio event loop.
-class PyWorker : public local::Worker {
+// We need a fair bit of accounting additions in order to make Workers usable
+// as asyncio loops. This extension holds that.
+class PyWorkerExtension : public local::Worker::Extension {
  public:
-  PyWorker(PyInterpreterState *interp, std::shared_ptr<Refs> refs,
-           Options options)
-      : Worker(std::move(options)), interp_(interp), refs_(std::move(refs)) {}
+  PyWorkerExtension(local::Worker &worker, PyInterpreterState *interp,
+                    std::shared_ptr<Refs> refs)
+      : Extension(worker), interp_(interp), refs_(std::move(refs)) {
+    py::object worker_obj = py::cast(worker, py::rv_policy::reference);
+    loop_ = refs_->lazy_PyWorkerEventLoop()(worker_obj);
+  }
 
-  static PyWorker &GetCurrent() {
-    PyWorker *local_worker = current_thread_worker;
-    if (!local_worker) {
+  static PyWorkerExtension &GetCurrent() {
+    PyWorkerExtension *ext =
+        local::Worker::GetCurrentExtension<PyWorkerExtension>();
+    if (!ext) {
       throw std::logic_error(
           "There is no shortfin worker associated with this thread.");
     }
-    return *local_worker;
+    return *ext;
   }
 
-  void WaitForShutdown() override {
-    // Need to release the GIL if blocking.
-    py::gil_scoped_release g;
-    Worker::WaitForShutdown();
-  }
+  py::handle loop() { return loop_; }
 
-  void OnThreadStart() override {
+  void OnThreadStart() noexcept override {
+    // Python threading initialization.
     // If our own thread, teach Python about it. Not done for donated.
-    if (options().owned_thread) {
+    if (worker().options().owned_thread) {
       PyThreadState_New(interp_);
     }
-    current_thread_worker = this;
 
     py::gil_scoped_acquire g;
     // Aside from set_event_loop being old and _set_running_loop being new
@@ -88,16 +88,14 @@ class PyWorker : public local::Worker {
     refs_->asyncio_set_running_loop(loop_);
   }
 
-  void OnThreadStop() override {
+  void OnThreadStop() noexcept override {
     {
-      current_thread_worker = nullptr;
-
       // Do Python level thread cleanup.
       py::gil_scoped_acquire g;
       loop_.reset();
 
       // Scrub thread state if not donated.
-      if (options().owned_thread) {
+      if (worker().options().owned_thread) {
         PyThreadState_Clear(PyThreadState_Get());
       } else {
         // Otherwise, juse reset the event loop.
@@ -110,27 +108,29 @@ class PyWorker : public local::Worker {
     // TODO: PyThreadState_Delete seems like it should be used here, but I
     // couldn't find that being done and I couldn't find a way to use it
     // with the GIL/thread state correct.
-    if (options().owned_thread) {
+    if (worker().options().owned_thread) {
       PyThreadState_Swap(nullptr);
     }
   }
 
-  std::string to_s() { return fmt::format("PyWorker(name='{}')", name()); }
+  // Because shutdown happens on the main thread under the purview of the
+  // GIL, we must make arrangements to release it. Otherwise shutdown can
+  // deadlock with processing.
+  void OnBeforeShutdownWait() noexcept override {
+    shutdown_wait_gil_state = PyEval_SaveThread();
+  }
+  void OnAfterShutdownWait() noexcept override {
+    PyEval_RestoreThread(shutdown_wait_gil_state);
+    shutdown_wait_gil_state = nullptr;
+  }
 
+ private:
   py::object loop_;
-  PyInterpreterState *interp_;
+  PyInterpreterState *interp_ = nullptr;
   std::shared_ptr<Refs> refs_;
-};
 
-std::unique_ptr<local::Worker> CreatePyWorker(std::shared_ptr<Refs> refs,
-                                              local::Worker::Options options) {
-  PyInterpreterState *interp = PyInterpreterState_Get();
-  auto new_worker =
-      std::make_unique<PyWorker>(interp, std::move(refs), std::move(options));
-  py::object worker_obj = py::cast(*new_worker.get(), py::rv_policy::reference);
-  new_worker->loop_ = new_worker->refs_->lazy_PyWorkerEventLoop()(worker_obj);
-  return new_worker;
-}
+  PyThreadState *shutdown_wait_gil_state = nullptr;
+};
 
 class PyProcess : public local::detail::BaseProcess {
  public:
@@ -184,7 +184,7 @@ py::object RunInForeground(std::shared_ptr<Refs> refs, local::System &self,
   bool is_main_thread =
       refs->threading_current_thread().is(refs->threading_main_thread());
 
-  PyWorker &worker = dynamic_cast<PyWorker &>(self.init_worker());
+  local::Worker &worker = self.init_worker();
   py::object result = py::none();
   auto done_callback = [&](py::handle future) {
     worker.Kill();
@@ -259,15 +259,17 @@ void BindLocal(py::module_ &m) {
                           }),
                           live_system_refs);
   auto refs = std::make_shared<Refs>();
-  auto worker_factory = [refs](local::Worker::Options options) {
-    return CreatePyWorker(refs, std::move(options));
-  };
+  auto worker_initializer =
+      [refs, interp_state = PyInterpreterState_Get()](local::Worker &worker) {
+        worker.SetExtension(
+            std::make_unique<PyWorkerExtension>(worker, interp_state, refs));
+      };
 
   py::class_<local::SystemBuilder>(m, "SystemBuilder")
       .def("create_system", [live_system_refs,
-                             worker_factory](local::SystemBuilder &self) {
+                             worker_initializer](local::SystemBuilder &self) {
         auto system_ptr = self.CreateSystem();
-        system_ptr->set_worker_factory(worker_factory);
+        system_ptr->AddWorkerInitializer(worker_initializer);
         auto system_obj = py::cast(system_ptr, py::rv_policy::take_ownership);
         live_system_refs.attr("add")(system_obj);
         return system_obj;
@@ -296,21 +298,47 @@ void BindLocal(py::module_ &m) {
           },
           py::rv_policy::reference_internal)
       .def(
-          "create_scope",
-          [](local::System &self, PyWorker &worker) {
-            return self.CreateScope(worker);
+          "create_queue",
+          [](local::System &self, std::string name) -> local::Queue & {
+            local::Queue::Options options;
+            options.name = std::move(name);
+            return self.CreateQueue(std::move(options));
           },
-          py::rv_policy::reference_internal)
+          py::arg("name"), py::rv_policy::reference_internal)
+      .def("named_queue", &local::System::named_queue, py::arg("name"),
+           py::rv_policy::reference_internal)
       .def(
           "create_scope",
-          [](local::System &self) { return self.CreateScope(); },
-          py::rv_policy::reference_internal)
+          [](local::System &self, local::Worker *worker,
+             py::handle raw_devices) {
+            // TODO: I couldn't really figure out how to directly accept an
+            // optional kw-only arg without it just being a raw object/handle.
+            // If the passed devices is none, then we create the scope with
+            // all devices in the system. Otherwise, with those explicitly
+            // given.
+            std::vector<local::Device *> devices;
+            if (raw_devices.is_none()) {
+              devices.assign(self.devices().begin(), self.devices().end());
+            } else {
+              devices = py::cast<std::vector<local::Device *>>(raw_devices);
+            }
+
+            // If no worker, default to the init worker.
+            if (!worker) {
+              worker = dynamic_cast<local::Worker *>(&self.init_worker());
+            }
+
+            return self.CreateScope(*worker, devices);
+          },
+          py::rv_policy::reference_internal,
+          py::arg("worker").none() = py::none(), py::kw_only(),
+          py::arg("devices") = py::none())
       .def(
           "create_worker",
-          [refs](local::System &self, std::string name) -> PyWorker & {
+          [refs](local::System &self, std::string name) -> local::Worker & {
             local::Worker::Options options(self.host_allocator(),
                                            std::move(name));
-            return dynamic_cast<PyWorker &>(self.CreateWorker(options));
+            return self.CreateWorker(options);
           },
           py::arg("name"), py::rv_policy::reference_internal)
       .def(
@@ -318,7 +346,11 @@ void BindLocal(py::module_ &m) {
           [refs](local::System &self, py::object coro) {
             return RunInForeground(refs, self, std::move(coro));
           },
-          py::arg("coro"));
+          py::arg("coro"))
+      // Methods not on System but on child objects, taking System as an arg.
+      // Emitted here for convenience.
+      .def("load_module", &local::ProgramModule::Load, py::arg("path"),
+           py::arg("mmap") = true);
 
   // Support classes.
   py::class_<local::Node>(m, "Node")
@@ -327,9 +359,9 @@ void BindLocal(py::module_ &m) {
         return fmt::format("local::Node({})", self.node_num());
       });
   py::class_<local::Device>(m, "Device")
-      .def("name", &local::Device::name)
-      .def("node_affinity", &local::Device::node_affinity)
-      .def("node_locked", &local::Device::node_locked)
+      .def_prop_ro("name", &local::Device::name)
+      .def_prop_ro("node_affinity", &local::Device::node_affinity)
+      .def_prop_ro("node_locked", &local::Device::node_locked)
       .def(py::self == py::self)
       .def("__repr__", &local::Device::to_s);
   py::class_<local::DeviceAffinity>(m, "DeviceAffinity")
@@ -340,11 +372,18 @@ void BindLocal(py::module_ &m) {
       .def("__add__", &local::DeviceAffinity::AddDevice)
       .def("__repr__", &local::DeviceAffinity::to_s);
 
+  py::class_<local::Program>(m, "Program");
+  py::class_<local::ProgramModule>(m, "ProgramModule")
+      .def("__repr__", &local::ProgramModule::to_s)
+      .def_static("load", &local::ProgramModule::Load, py::arg("system"),
+                  py::arg("path"), py::arg("mmap") = true);
+
   struct DevicesSet {
     DevicesSet(local::Scope &scope) : scope(scope) {}
     local::Scope &scope;
   };
   py::class_<local::Scope>(m, "Scope")
+      .def("__repr__", &local::Scope::to_s)
       .def_prop_ro("raw_devices", &local::Scope::raw_devices,
                    py::rv_policy::reference_internal)
       .def(
@@ -368,7 +407,17 @@ void BindLocal(py::module_ &m) {
           [](local::Scope &self, py::args args) {
             return CastDeviceAffinity(self, args);
           },
-          py::rv_policy::reference_internal);
+          py::rv_policy::reference_internal)
+      .def(
+          "load_unbound_program",
+          [](local::Scope &scope, std::span<const local::ProgramModule> modules,
+             bool trace_execution) {
+            local::Program::Options options;
+            options.trace_execution = trace_execution;
+            return scope.LoadUnboundProgram(modules, std::move(options));
+          },
+          py::arg("modules"), py::arg("trace_execution") = false);
+
   py::class_<local::ScopedDevice>(m, "ScopedDevice")
       .def_prop_ro("scope", &local::ScopedDevice::scope,
                    py::rv_policy::reference)
@@ -404,11 +453,17 @@ void BindLocal(py::module_ &m) {
           },
           py::rv_policy::reference_internal);
 
-  py::class_<local::Worker>(m, "_Worker", py::is_weak_referenceable())
-      .def("__repr__", &local::Worker::to_s);
-  py::class_<PyWorker, local::Worker>(m, "Worker")
-      .def_ro("loop", &PyWorker::loop_)
-      .def("call_threadsafe", &PyWorker::CallThreadsafe)
+  py::class_<local::Worker>(m, "Worker", py::is_weak_referenceable())
+      .def_prop_ro("loop",
+                   [](local::Worker &self) {
+                     auto *ext = self.GetExtension<PyWorkerExtension>();
+                     if (!ext) {
+                       throw std::logic_error(
+                           "Worker was not initialized for access from Python");
+                     }
+                     return ext->loop();
+                   })
+      .def("call_threadsafe", &local::Worker::CallThreadsafe)
       .def("call",
            [](local::Worker &self, py::handle callable) {
              callable.inc_ref();  // Stolen within the callback.
@@ -421,10 +476,7 @@ void BindLocal(py::module_ &m) {
                try {
                  user_callable();
                } catch (std::exception &e) {
-                 return iree_make_status(
-                     IREE_STATUS_UNKNOWN,
-                     "Python exception raised from async callback: %s",
-                     e.what());
+                 return iree::exception_to_status(e);
                }
                return iree_ok_status();
              };
@@ -459,7 +511,7 @@ void BindLocal(py::module_ &m) {
                  static_cast<iree_duration_t>(delay_seconds * 1e9));
            })
       .def("_now", [](local::Worker &self) { return self.now(); })
-      .def("__repr__", &PyWorker::to_s);
+      .def("__repr__", &local::Worker::to_s);
 
   py::class_<PyProcess>(m, "Process")
       .def("__init__", [](py::args, py::kwargs) {})
@@ -490,9 +542,9 @@ void BindLocal(py::module_ &m) {
   py::class_<local::CompletionEvent>(m, "CompletionEvent")
       .def(py::init<>())
       .def("__await__", [](py::handle self_obj) {
-        auto &worker = PyWorker::GetCurrent();
+        auto &worker_ext = PyWorkerExtension::GetCurrent();
         auto &self = py::cast<local::CompletionEvent &>(self_obj);
-        py::object future = worker.loop_.attr("create_future")();
+        py::object future = worker_ext.loop().attr("create_future")();
         // Stashing self as an attribute on the future, keeps us alive,
         // which transitively means that the wait source we get from self
         // stays alive. This can be done better later with a custom
@@ -506,7 +558,7 @@ void BindLocal(py::module_ &m) {
         // acquired (since dec_ref'ing it must happen within the GIL).
         // Because the self object was stashed on an attribute above, the
         // wait_source is valid for the entire sequence.
-        SHORTFIN_THROW_IF_ERROR(worker.WaitOneLowLevel(
+        SHORTFIN_THROW_IF_ERROR(worker_ext.worker().WaitOneLowLevel(
             /*wait_source=*/
             self, iree_infinite_timeout(),
             +[](void *future_vp, iree_loop_t loop,
@@ -524,6 +576,126 @@ void BindLocal(py::module_ &m) {
             },
             static_cast<void *>(future.release().ptr())));
         return iter_ret;
+      });
+
+  // ------------------------------------------------------------------------ //
+  // Messaging
+  // ------------------------------------------------------------------------ //
+  py::class_<local::Message>(
+      m, "Message",
+      // Message is special in that it supports vague ownership and can be
+      // transferred to the Python side, sharing one reference count and
+      // lifetime. This is done the first time a Message is seen by the Python
+      // side (either by in-place construction in a Python object or by
+      // taking ownership of an object originating on the C++ side). When this
+      // happens, the owner struct is replaced and any C++ side reference counts
+      // are turned into Python reference counts. Once transferred, only Python
+      // reference counting is used, even if referenced from the C++ side.
+      py::intrusive_ptr<local::Message>(
+          [](local::Message *self, PyObject *self_py) noexcept {
+            local::detail::MessageRefOwner owner(
+                +[](local::detail::MessageRefOwner::Request req,
+                    const local::Message &msg) {
+                  py::gil_scoped_acquire g;
+                  PyObject *msg_object = reinterpret_cast<PyObject *>(
+                      local::detail::MessageRefOwner::access_ref_data(msg));
+                  if (req == local::detail::MessageRefOwner::Request::RETAIN) {
+                    py::handle(msg_object).inc_ref();
+                  } else {
+                    py::handle(msg_object).dec_ref();
+                  }
+                });
+            intptr_t orig_ref_data =
+                owner.set_owner(*self, reinterpret_cast<intptr_t>(self_py));
+            // Transfer any prior C++ references to the Python side (less 1
+            // since we start with a live reference).
+            for (int i = 0; i < orig_ref_data - 1; ++i) {
+              py::handle(self_py).inc_ref();
+            }
+          }))
+      .def(py::init<>());
+
+  py::class_<local::Queue>(m, "Queue")
+      .def("__repr__", &local::Queue::to_s)
+      .def("close", &local::Queue::Close)
+      .def("writer",
+           [](local::Queue &self) {
+             return custom_new_keep_alive<local::QueueWriter>(
+                 py::type<local::QueueWriter>(),
+                 /*keep_alive=*/self, /*queue=*/self);
+           })
+      .def("reader", [](local::Queue &self) {
+        return custom_new_keep_alive<local::QueueReader>(
+            py::type<local::QueueReader>(),
+            /*keep_alive=*/self, /*queue=*/self);
+      });
+  py::class_<local::QueueWriter>(m, "QueueWriter")
+      .def("__call__",
+           [](local::QueueWriter &self, local::Message &message) {
+             return self.Write(local::Message::Ref(message));
+           })
+      .def("close", &local::QueueWriter::Close);
+  py::class_<local::QueueReader>(m, "QueueReader")
+      .def("__call__", [](local::QueueReader &self) { return self.Read(); });
+
+  // ------------------------------------------------------------------------ //
+  // Futures
+  // ------------------------------------------------------------------------ //
+  py::class_<local::Future>(m, "Future")
+      // The generic await support relies on the result override from a
+      // subclass. Here and for VoidFuture, it is always none.
+      .def("result",
+           [](local::Future &self) {
+             self.ThrowFailure();
+             return py::none();
+           })
+      .def("__await__", [](py::handle self_obj) {
+        // TODO: We should make our C++ future able to be used directly
+        // vs needing to bridge it like this.
+        auto &worker_ext = PyWorkerExtension::GetCurrent();
+        auto &self = py::cast<local::Future &>(self_obj);
+        py::object future = worker_ext.loop().attr("create_future")();
+        // Stashing self as an attribute on the future, keeps us alive,
+        // which transitively means that the wait source we get from self
+        // stays alive. This can be done better later with a custom
+        // Future.
+        future.attr("_sf_future") = self_obj;
+        py::object iter_ret = future.attr("__iter__")();
+
+        // Pass the future object as void* user data to the C callback
+        // interface. This works because we release the object pointer going
+        // in and then steal it back to a py::object once the GIL has been
+        // acquired (since dec_ref'ing it must happen within the GIL).
+        // Because the self object was stashed on an attribute above, the
+        // wait_source is valid for the entire sequence.
+        self.AddCallback(
+            [py_future_vp = static_cast<void *>(future.release().ptr())](
+                local::Future &sf_future) {
+              py::gil_scoped_acquire g;
+              py::object py_future =
+                  py::steal(static_cast<PyObject *>(py_future_vp));
+              try {
+                // Consult the Python level "result" on our local::Future
+                // binding as it will override properly to get the right
+                // Python casted type, allowing us to just have this one
+                // __await__ implementation for every typed future.
+                py_future.attr("set_result")(
+                    py_future.attr("_sf_future").attr("result")());
+              } catch (std::exception &e) {
+                auto RuntimeError = py::handle(PyExc_RuntimeError);
+                py_future.attr("set_exception")(RuntimeError(e.what()));
+              }
+            });
+        return iter_ret;
+      });
+  py::class_<local::VoidFuture, local::Future>(m, "VoidFuture");
+  py::class_<local::MessageFuture, local::Future>(m, "MessageFuture")
+      .def("result", [](local::MessageFuture &self) {
+        // Get a raw backing msg (without an increased refcount). When cast
+        // to a py::object, it will get a new reference.
+        local::Message::Ref &result = self.result();
+        if (!result) return py::none();
+        return py::cast(result.get());
       });
 }
 

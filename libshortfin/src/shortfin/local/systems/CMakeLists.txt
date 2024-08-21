@@ -16,10 +16,11 @@ shortfin_cc_component(
     shortfin_support
   DEPS
     iree_hal_drivers_local_task_task_driver
-    iree_hal_local_local
     iree_hal_local_executable_loader
     iree_hal_local_executable_plugin
     iree_hal_local_executable_plugin_manager
+    iree_hal_local_loaders_registration_registration
+    iree_hal_local_local
     iree_task_api
     iree_task_task
 )
