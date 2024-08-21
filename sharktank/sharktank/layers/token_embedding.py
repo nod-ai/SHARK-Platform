@@ -23,4 +23,4 @@ class TokenEmbeddingLayer(ThetaLayer):
         self.dtype = dtype
 
     def forward(self, input: torch.Tensor):
-        return ops.embedding_lookup(input, self.weight, dtype=self.dtype)
+        return ops.embedding_lookup(input, self.weight.to(device=input.device), dtype=self.dtype)

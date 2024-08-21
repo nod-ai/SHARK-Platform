@@ -188,6 +188,7 @@ def matmul_default(lhs, rhs, *, transpose_rhs: bool) -> Tensor:
     rhs = unbox_tensor(rhs)
     if transpose_rhs:
         rhs = rhs.T
+    print(f"using default torch matmul, lhs dtype: {lhs.dtype}, rhs dtype: {rhs.dtype}")
     return torch.matmul(lhs, rhs.to(lhs.dtype))
 
 
@@ -212,7 +213,7 @@ def scaled_dot_product_attention(q, k, v, a) -> Tensor:
 @rms_norm.override(Tensor, Tensor)
 def rms_norm_default(x, weight, *, epsilon: float) -> Tensor:
     x = unbox_tensor(x)
-    weight = unbox_tensor(weight)
+    weight = unbox_tensor(weight).to(device=x.device)
     variance = x.pow(2).mean(-1, keepdim=True)
     output = x * torch.rsqrt(variance + epsilon)
     output = output * weight

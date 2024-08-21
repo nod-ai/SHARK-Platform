@@ -56,8 +56,8 @@ class TorchGenerator:
         #token_ids = torch.tensor(token_ids, device=self.model.device)
         #seq_lens = torch.tensor(seq_lens, device=self.model.device)
         with safe_open("/home/nod/batch.safetensors", framework="pt", device="cpu") as st:
-            token_ids=st.get_tensor("batch")
-        seq_lens = torch.tensor([2048])
+            token_ids=st.get_tensor("batch").to(device=self.model.device)
+        seq_lens = torch.tensor([2048]).to(device=self.model.device)
         if self.shared_cache_state is not None:
             cache_state = self.shared_cache_state
         else:
@@ -223,6 +223,11 @@ def main():
         help="DType to use for activations in the model",
         default="float32",
     )
+    parser.add_argument(
+        "--use-hf",
+        action="store_true",
+        default=False,
+    )
     cli.add_input_dataset_options(parser)
     cli.add_tokenizer_options(parser)
     args = cli.parse(parser)
@@ -241,6 +246,7 @@ def main():
         device=device,
         activation_dtype=activation_dtype,
         attention_dtype=activation_dtype,
+        use_hf=args.use_hf,
     )
     model = PagedLlamaModelV1(dataset.root_theta, config)
     if args.save_intermediates_path:
@@ -249,8 +255,6 @@ def main():
         intermediates_saver = SaveModuleResultTensorsPatch()
         intermediates_saver.patch_child_modules(model)
     generator = TorchGenerator(model, tokenizer)
-    intermediates_saver = SaveModuleResultTensorsPatch()
-    intermediates_saver.patch_child_modules(model)
 
 
     print(f":: Prompting:")
@@ -269,6 +273,7 @@ def main():
             args.save_intermediates_path + "_prefill.safetensors"
         )
     counter = 0
+    exit()
     while not batch.done:
         batch.decode()
         if args.save_intermediates_path:
