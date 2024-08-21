@@ -112,7 +112,7 @@ if(SHORTFIN_IREE_SOURCE_DIR)
   set(IREE_HAL_DRIVER_LOCAL_SYNC ON)
   set(IREE_HAL_DRIVER_LOCAL_TASK ON)
   set(IREE_HAL_DRIVER_HIP ON)
-  add_subdirectory(${SHORTFIN_IREE_SOURCE_DIR} shortfin_iree SYSTEM)
+  add_subdirectory(${SHORTFIN_IREE_SOURCE_DIR} shortfin_iree SYSTEM EXCLUDE_FROM_ALL)
 else()
   # Try to find iree using find_package
   find_package(IREERuntime)
