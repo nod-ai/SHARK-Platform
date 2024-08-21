@@ -34,48 +34,11 @@ jobs:
       run: |
         sudo apt update
         sudo apt install clang lld cmake ninja-build
-        sudo apt install libspdlog-dev libxtensor-dev
 
     - name: Checkout repository
       uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
       with:
         submodules: false
-
-    - name: Checkout IREE repo
-      uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
-      with:
-        repository: iree-org/iree
-        path: ${{ env.IREE_REPO_DIR }}
-        submodules: false
-        depth: 1
-
-    - name: Initalize IREE submodules
-      run : |
-        cd ${{ env.IREE_REPO_DIR }}
-        git submodule update --init -- third_party/benchmark
-        git submodule update --init -- third_party/cpuinfo/
-        git submodule update --init -- third_party/flatcc
-        git submodule update --init -- third_party/googletest
-        git submodule update --init -- third_party/hip-build-deps/
-
-    - name: Build IREE runtime
-      run: |
-        mkdir ${{ env.IREE_REPO_DIR }}/build
-        cd ${{ env.IREE_REPO_DIR }}/build
-        cmake -GNinja \
-          -DCMAKE_C_COMPILER=clang-18 \
-          -DCMAKE_CXX_COMPILER=clang++-18 \
-          -DIREE_ENABLE_LLD=ON \
-          -DIREE_ERROR_ON_MISSING_SUBMODULES=OFF \
-          -DIREE_HAL_DRIVER_DEFAULTS=OFF \
-          -DIREE_HAL_DRIVER_LOCAL_SYNC=ON \
-          -DIREE_HAL_DRIVER_LOCAL_TASK=ON \
-          -DIREE_HAL_DRIVER_HIP=ON \
-          -DIREE_BUILD_COMPILER=OFF \
-          -DIREE_BUILD_SAMPLES=OFF \
-          -DIREE_BUILD_TESTS=OFF \
-          ..
-        cmake --build . --target all
 
     - name: Setup Python
       uses: actions/setup-python@39cd14951b08e74b54015e9e001cdefcf80e669f # v5.1.1
@@ -94,7 +57,7 @@ jobs:
           -DCMAKE_C_COMPILER=clang-18 \
           -DCMAKE_CXX_COMPILER=clang++-18 \
           -DCMAKE_LINKER_TYPE=LLD \
-          -DCMAKE_PREFIX_PATH=${{ env.IREE_REPO_DIR }}/build/lib/cmake/IREE \
+          -DSHORTFIN_BUNDLE_DEPS=ON \
           -DSHORTFIN_BUILD_PYTHON_BINDINGS=ON \
           ..
         cmake --build . --target all
