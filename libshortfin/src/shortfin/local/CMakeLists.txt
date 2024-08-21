@@ -12,6 +12,7 @@ shortfin_cc_component(
   HDRS
     async.h
     device.h
+    messaging.h
     process.h
     program.h
     worker.h
@@ -21,6 +22,7 @@ shortfin_cc_component(
   SRCS
     async.cc
     device.cc
+    messaging.cc
     process.cc
     program.cc
     worker.cc

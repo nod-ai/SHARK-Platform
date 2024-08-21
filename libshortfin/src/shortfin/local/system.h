@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "shortfin/local/device.h"
+#include "shortfin/local/messaging.h"
 #include "shortfin/local/worker.h"
 #include "shortfin/support/api.h"
 #include "shortfin/support/blocking_executor.h"
@@ -65,6 +66,13 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
   std::span<Device *const> devices() { return {devices_}; }
   const std::unordered_map<std::string_view, Device *> &named_devices() {
     return named_devices_;
+  }
+
+  // Queue access.
+  Queue &CreateQueue(Queue::Options options);
+  Queue &named_queue(std::string_view name);
+  const std::unordered_map<std::string_view, Queue *> named_queues() {
+    return queues_by_name_;
   }
 
   // Access the system wide blocking executor thread pool. This can be used
@@ -144,6 +152,10 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
 
   // Global blocking executor.
   BlockingExecutor blocking_executor_;
+
+  // Queues.
+  std::vector<std::unique_ptr<Queue>> queues_;
+  std::unordered_map<std::string_view, Queue *> queues_by_name_;
 
   // Workers.
   std::vector<std::unique_ptr<Worker>> workers_;

@@ -96,6 +96,27 @@ void System::InitializeNodes(int node_count) {
   }
 }
 
+Queue &System::CreateQueue(Queue::Options options) {
+  iree::slim_mutex_lock_guard guard(lock_);
+  if (queues_by_name_.count(options.name) != 0) {
+    throw std::invalid_argument(fmt::format(
+        "Cannot create queue with duplicate name '{}'", options.name));
+  }
+  queues_.push_back(std::make_unique<Queue>(std::move(options)));
+  Queue *unowned_queue = queues_.back().get();
+  queues_by_name_[unowned_queue->options().name] = unowned_queue;
+  return *unowned_queue;
+}
+
+Queue &System::named_queue(std::string_view name) {
+  iree::slim_mutex_lock_guard guard(lock_);
+  auto it = queues_by_name_.find(name);
+  if (it == queues_by_name_.end()) {
+    throw std::invalid_argument(fmt::format("Queue '{}' not found", name));
+  }
+  return *it->second;
+}
+
 void System::AddWorkerInitializer(std::function<void(Worker &)> initializer) {
   iree::slim_mutex_lock_guard guard(lock_);
   if (!workers_.empty()) {

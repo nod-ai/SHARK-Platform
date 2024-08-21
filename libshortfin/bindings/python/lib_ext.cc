@@ -8,6 +8,7 @@
 
 #include "./utils.h"
 #include "shortfin/local/async.h"
+#include "shortfin/local/messaging.h"
 #include "shortfin/local/process.h"
 #include "shortfin/local/program.h"
 #include "shortfin/local/scope.h"
@@ -70,8 +71,6 @@ class PyWorkerExtension : public local::Worker::Extension {
     }
     return *ext;
   }
-
-  bool initialized() { return interp_ != nullptr; }
 
   py::handle loop() { return loop_; }
 
@@ -298,6 +297,16 @@ void BindLocal(py::module_ &m) {
             return it->second;
           },
           py::rv_policy::reference_internal)
+      .def(
+          "create_queue",
+          [](local::System &self, std::string name) -> local::Queue & {
+            local::Queue::Options options;
+            options.name = std::move(name);
+            return self.CreateQueue(std::move(options));
+          },
+          py::arg("name"), py::rv_policy::reference_internal)
+      .def("named_queue", &local::System::named_queue, py::arg("name"),
+           py::rv_policy::reference_internal)
       .def(
           "create_scope",
           [](local::System &self, local::Worker *worker,
@@ -571,6 +580,44 @@ void BindLocal(py::module_ &m) {
             static_cast<void *>(future.release().ptr())));
         return iter_ret;
       });
+
+  // ------------------------------------------------------------------------ //
+  // Messaging
+  // ------------------------------------------------------------------------ //
+  py::class_<local::Message>(
+      m, "Message",
+      // Message is special in that it supports vague ownership and can be
+      // transferred to the Python side, sharing one reference count and
+      // lifetime. This is done the first time a Message is seen by the Python
+      // side (either by in-place construction in a Python object or by
+      // taking ownership of an object originating on the C++ side). When this
+      // happens, the owner struct is replaced and any C++ side reference counts
+      // are turned into Python reference counts. Once transferred, only Python
+      // reference counting is used, even if referenced from the C++ side.
+      py::intrusive_ptr<local::Message>(
+          [](local::Message *self, PyObject *self_py) noexcept {
+            local::detail::MessageRefOwner owner(
+                +[](local::detail::MessageRefOwner::Request req,
+                    const local::Message &msg) {
+                  PyObject *msg_object = reinterpret_cast<PyObject *>(
+                      local::detail::MessageRefOwner::access_ref_data(msg));
+                  if (req == local::detail::MessageRefOwner::Request::RETAIN) {
+                    py::handle(msg_object).inc_ref();
+                  } else {
+                    py::handle(msg_object).dec_ref();
+                  }
+                });
+            intptr_t orig_ref_data =
+                owner.set_owner(*self, reinterpret_cast<intptr_t>(self_py));
+            // Transfer any prior C++ references to the Python side (less 1
+            // since we start with a live reference).
+            for (int i = 0; i < orig_ref_data - 1; ++i) {
+              py::handle(self_py).inc_ref();
+            }
+          }))
+      .def(py::init<>());
+
+  py::class_<local::Queue>(m, "Queue").def("__repr__", &local::Queue::to_s);
 }
 
 void BindHostSystem(py::module_ &global_m) {
