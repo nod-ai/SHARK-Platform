@@ -10,6 +10,8 @@ import shortfin as sf
 
 lsys = sf.host.CPUSystemBuilder().create_system()
 
+received_payloads = []
+
 
 class Message(sf.Message):
     def __init__(self, payload):
@@ -28,10 +30,8 @@ class WriterProcess(sf.Process):
     async def run(self):
         print("Start writer")
         counter = 0
-        while counter < 500:
-            await asyncio.sleep(0.001)
-            counter += 1
-            msg = Message(f"Msg#{counter}")
+        while (counter := counter + 1) <= 500:
+            msg = Message(f"Msg#{counter:03}")
             await self.writer(msg)
             print(f"Wrote message: {counter}")
         self.writer.close()
@@ -43,8 +43,15 @@ class ReaderProcess(sf.Process):
         self.reader = queue.reader()
 
     async def run(self):
+        count = 0
         while message := await self.reader():
             print(f"[pid={self.pid}] Received message:", message)
+            received_payloads.append(message.payload)
+            count += 1
+            # After 100 messages, let the writer get ahead of the readers.
+            # Ensures that backlog and async close with a backlog works.
+            if count == 100:
+                await asyncio.sleep(0.25)
 
 
 async def main():
@@ -63,3 +70,14 @@ async def main():
 
 
 lsys.run(main())
+
+
+# Validate.
+# May have come in slightly out of order so sort.
+received_payloads.sort()
+expected_payloads = [f"Msg#{i:03}" for i in range(1, 501)]
+expected_payloads.sort()
+
+assert (
+    received_payloads == expected_payloads
+), f"EXPECTED: {repr(expected_payloads)}\nACTUAL:{received_payloads}"

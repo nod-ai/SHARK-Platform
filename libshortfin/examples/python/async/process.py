@@ -12,6 +12,15 @@ import shortfin as sf
 
 lsys = sf.host.CPUSystemBuilder().create_system()
 
+total_processes = 0
+lock = threading.Lock()
+
+
+def tick_total():
+    global total_processes
+    with lock:
+        total_processes += 1
+
 
 class MyProcess(sf.Process):
     def __init__(self, arg, **kwargs):
@@ -22,10 +31,11 @@ class MyProcess(sf.Process):
         print(f"[pid:{self.pid}] Hello async:", self.arg, self)
         processes = []
         if self.arg < 10:
-            await asyncio.sleep(0.3)
+            await asyncio.sleep(0.1)
             processes.append(MyProcess(self.arg + 1, scope=self.scope).launch())
         await asyncio.gather(*processes)
         print(f"[pid:{self.pid}] Goodbye async:", self.arg, self)
+        tick_total()
 
 
 async def main():
@@ -47,4 +57,6 @@ async def main():
     return i
 
 
-print("RESULT:", lsys.run(main()))
+result = lsys.run(main())
+assert result == 9, f"{result}"
+assert total_processes == 105, f"{total_processes}"

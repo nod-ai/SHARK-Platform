@@ -119,20 +119,20 @@ MessageFuture QueueReader::Read() {
     throw std::logic_error("Cannot wait on QueueReader outside of worker");
   }
 
-  // Handle close.
-  if (queue_.closed_) {
-    MessageFuture imm_future(worker_);
-    imm_future.set_result(Message::Ref());
-    worker_ = nullptr;
-    return imm_future;
-  }
-
   // See if there is a backlog that we can immediately satisfy.
   if (!queue_.backlog_.empty()) {
     // Service from the backlog.
     MessageFuture imm_future(worker_);
     imm_future.set_result(std::move(queue_.backlog_.front()));
     queue_.backlog_.pop_front();
+    worker_ = nullptr;
+    return imm_future;
+  }
+
+  // Handle close.
+  if (queue_.closed_) {
+    MessageFuture imm_future(worker_);
+    imm_future.set_result(Message::Ref());
     worker_ = nullptr;
     return imm_future;
   }
