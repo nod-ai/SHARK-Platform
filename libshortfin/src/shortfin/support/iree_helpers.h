@@ -299,6 +299,38 @@ class SHORTFIN_API error : public std::exception {
       IREE_STATUS_IMPL_CONCAT_(__status_, __COUNTER__), \
       IREE_STATUS_IMPL_IDENTITY_(IREE_STATUS_IMPL_IDENTITY_(__VA_ARGS__)))
 
+// Convert an arbitrary C++ exception to an iree_status_t.
+// WARNING: This is not to be used as flow control as it is expensive,
+// perfoming type probing and comparisons in some cases!
+inline iree_status_t exception_to_status(std::exception &e) {
+  return iree_make_status(IREE_STATUS_UNKNOWN, "Unhandled exception: %s",
+                          e.what());
+}
+
+// RAII wrapper around an iree_status_t that will ignore it when going out
+// of scope. This is needed to avoid resource leaks when statuses are being
+// used to signal a failure which may not be harvested.
+class ignorable_status {
+ public:
+  ignorable_status() : status_(iree_ok_status()) {}
+  ignorable_status(iree_status_t status) : status_(status) {}
+  ignorable_status(const ignorable_status &) = delete;
+  ignorable_status &operator=(iree_status_t status) {
+    iree_status_ignore(status_);
+    status_ = status;
+    return *this;
+  }
+  ignorable_status &operator=(const ignorable_status &) = delete;
+  ignorable_status(ignorable_status &&other) = delete;
+  ~ignorable_status() { iree_status_ignore(status_); }
+
+  operator iree_status_t() const { return status_; }
+  iree_status_t status() const { return status_; }
+
+ private:
+  iree_status_t status_;
+};
+
 }  // namespace iree
 }  // namespace shortfin
 

@@ -135,6 +135,9 @@ using MessageFuture = TypedFuture<Message::Ref>;
 // Queue
 // -------------------------------------------------------------------------- //
 
+class SHORTFIN_API QueueReader;
+class SHORTFIN_API QueueWriter;
+
 // Queues are the primary form of communication in shortfin for exchanging
 // messages. They are inherently thread safe and coupled with the async/worker
 // system for enqueue/dequeue operations.
@@ -153,13 +156,22 @@ class SHORTFIN_API Queue {
   const Options &options() const { return options_; }
   std::string to_s() const;
 
+  // Closes the queue. All readers will return with a null message from here
+  // on. Writers that attempt to write to the queue will throw an exception.
+  void Close();
+
  private:
   mutable iree::slim_mutex lock_;
   Options options_;
-  std::deque<Message::Ref> contents_;
-  // For now we just have simple signalling: If the queue has elements to read,
-  // then signalled.
-  iree::shared_event::ref signalled_;
+  // Backlog of messages not yet sent to a reader. Messages are pushed on the
+  // back and popped from the front.
+  std::deque<Message::Ref> backlog_;
+  // Deque of all readers that are waiting for messages. An attempt is made
+  // to dispatch to readers in FIFO order of having entered a wait state.
+  // Readers are pushed on the back and popped from the front.
+  std::deque<QueueReader *> pending_readers_;
+  // Whether the queue has been closed.
+  bool closed_ = false;
 
   friend class QueueReader;
   friend class QueueWriter;
@@ -181,6 +193,9 @@ class SHORTFIN_API QueueWriter {
   // TODO: This should be a Future<void> so that exceptions can propagate.
   CompletionEvent Write(Message::Ref mr);
 
+  // Calls Close() on the backing queue.
+  void Close() { queue_.Close(); }
+
  private:
   Queue &queue_;
   Options options_;
@@ -196,15 +211,16 @@ class SHORTFIN_API QueueReader {
   MessageFuture Read();
 
  private:
-  iree_status_t BeginWaitPump() noexcept;
-  static iree_status_t HandleWaitResult(void *user_data, iree_loop_t loop,
-                                        iree_status_t status) noexcept;
   Queue &queue_;
   Options options_;
 
-  // Reader state machine.
+  // Reader state machine. If worker_ is non null, then there must be a
+  // read_result_future_ of the current outstanding read.
   Worker *worker_ = nullptr;
   std::optional<MessageFuture> read_result_future_;
+
+  friend class Queue;
+  friend class QueueWriter;
 };
 
 // -------------------------------------------------------------------------- //

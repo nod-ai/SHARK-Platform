@@ -28,12 +28,13 @@ class WriterProcess(sf.Process):
     async def run(self):
         print("Start writer")
         counter = 0
-        while True:
-            await asyncio.sleep(0.01)
+        while counter < 500:
+            await asyncio.sleep(0.001)
             counter += 1
             msg = Message(f"Msg#{counter}")
             await self.writer(msg)
             print(f"Wrote message: {counter}")
+        self.writer.close()
 
 
 class ReaderProcess(sf.Process):
@@ -42,17 +43,22 @@ class ReaderProcess(sf.Process):
         self.reader = queue.reader()
 
     async def run(self):
-        while True:
-            message = await self.reader()
-            print("Received message:", message)
+        while message := await self.reader():
+            print(f"[pid={self.pid}] Received message:", message)
 
 
 async def main():
     queue = lsys.create_queue("infeed")
-    scope = lsys.create_scope()
+    main_scope = lsys.create_scope()
+    w1 = lsys.create_worker("w1")
+    w1_scope = lsys.create_scope(w1)
     await asyncio.gather(
-        WriterProcess(queue, scope=scope).launch(),
-        ReaderProcess(queue, scope=scope).launch(),
+        WriterProcess(queue, scope=main_scope).launch(),
+        # By having a reader on the main worker and a separate worker,
+        # we test both intra and inter worker future resolution, which
+        # take different paths internally.
+        ReaderProcess(queue, scope=main_scope).launch(),
+        ReaderProcess(queue, scope=w1_scope).launch(),
     )
 
 

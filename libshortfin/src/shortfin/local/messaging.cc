@@ -22,11 +22,39 @@ Message::~Message() = default;
 // Queue
 // -------------------------------------------------------------------------- //
 
-Queue::Queue(Options options)
-    : options_(std::move(options)), signalled_(false) {}
+Queue::Queue(Options options) : options_(std::move(options)) {}
 
 std::string Queue::to_s() const {
   return fmt::format("Queue(name={})", options().name);
+}
+
+void Queue::Close() {
+  std::vector<QueueReader *> async_close_readers;
+  {
+    iree::slim_mutex_lock_guard g(lock_);
+    if (closed_) return;
+    closed_ = true;
+
+    // If there is a backlog then the queue readers will handle any close action
+    // on their own.
+    if (!backlog_.empty()) {
+      assert(pending_readers_.empty() &&
+             "Attempt to close queue with backlog and pending readers");
+      return;
+    }
+
+    async_close_readers.insert(async_close_readers.end(),
+                               pending_readers_.begin(),
+                               pending_readers_.end());
+    pending_readers_.clear();
+  }
+
+  // Asynchronously resolve any pending readers with a null message.
+  for (QueueReader *reader : async_close_readers) {
+    reader->read_result_future_->set_result(Message::Ref());
+    reader->worker_ = nullptr;
+    reader->read_result_future_.reset();
+  }
 }
 
 QueueWriter::QueueWriter(Queue &queue, Options options)
@@ -35,73 +63,84 @@ QueueWriter::QueueWriter(Queue &queue, Options options)
 QueueWriter::~QueueWriter() = default;
 
 CompletionEvent QueueWriter::Write(Message::Ref mr) {
-  iree::slim_mutex_lock_guard g(queue_.lock_);
-  queue_.contents_.push_front(std::move(mr));
-  queue_.signalled_->set();
-  // TODO: Real back-pressure and not just immediate satisfaction.
+  std::optional<MessageFuture> future;
+  {
+    iree::slim_mutex_lock_guard g(queue_.lock_);
+    if (queue_.pending_readers_.empty()) {
+      // No readers. Just add to the backlog.
+      queue_.backlog_.push_back(std::move(mr));
+      return CompletionEvent();
+    } else {
+      // Signal a reader. We must do this within the queue lock to avoid
+      // a QueueReader lifetime hazard. But we defer actually setting the
+      // future until out of the lock.
+      QueueReader *reader = queue_.pending_readers_.front();
+      queue_.pending_readers_.pop_front();
+      future = *reader->read_result_future_;
+      // Reset the worker for a new read.
+      reader->worker_ = nullptr;
+      reader->read_result_future_.reset();
+    }
+  }
+
+  // Signal the future outside of our lock.
+  future->set_result(std::move(mr));
   return CompletionEvent();
 }
 
 QueueReader::QueueReader(Queue &queue, Options options)
     : queue_(queue), options_(std::move(options)) {}
 
-QueueReader::~QueueReader() = default;
+QueueReader::~QueueReader() {
+  iree::slim_mutex_lock_guard g(queue_.lock_);
+  if (read_result_future_) {
+    logging::warn("QueueReader destroyed while pending");
+    // Reader is in progress: Cancel it from the queue.
+    auto it = std::find(queue_.pending_readers_.begin(),
+                        queue_.pending_readers_.end(), this);
+    if (it != queue_.pending_readers_.end()) {
+      queue_.pending_readers_.erase(it);
+    }
+  }
+}
 
 MessageFuture QueueReader::Read() {
+  // TODO: It should be possible to further constrain the scope of this lock,
+  // but it is set here to be conservatively safe pending a full analysis.
+  iree::slim_mutex_lock_guard g(queue_.lock_);
   if (worker_) {
     throw std::logic_error(
         "Cannot read concurrently from a single QueueReader");
   }
 
-  // Prime the wait.
+  // Make reader current.
   worker_ = Worker::GetCurrent();
   if (!worker_) {
     throw std::logic_error("Cannot wait on QueueReader outside of worker");
   }
-  // TODO: Set the future.
-  read_result_future_ = MessageFuture();
-  SHORTFIN_THROW_IF_ERROR(BeginWaitPump());
-  return *read_result_future_;
-}
 
-iree_status_t QueueReader::BeginWaitPump() noexcept {
-  return worker_->WaitOneLowLevel(queue_.signalled_->await(),
-                                  iree_infinite_timeout(), &HandleWaitResult,
-                                  this);
-}
-
-iree_status_t QueueReader::HandleWaitResult(void *user_data, iree_loop_t loop,
-                                            iree_status_t status) noexcept {
-  IREE_RETURN_IF_ERROR(status);
-  auto *self = static_cast<QueueReader *>(user_data);
-  Queue &queue = self->queue_;
-  Message::Ref mr;
-  {
-    iree::slim_mutex_lock_guard g(queue.lock_);
-    if (queue.contents_.empty()) {
-      // Spurious wake up. Try again.
-      queue.signalled_->reset();
-      self->BeginWaitPump();
-      return iree_ok_status();
-    }
-
-    // Pop.
-    self->read_result_future_->set_result(std::move(queue.contents_.back()));
-    queue.contents_.pop_back();
-
-    // Update signal status.
-    if (queue.contents_.empty()) {
-      queue.signalled_->reset();
-    } else {
-      queue.signalled_->set();
-    }
+  // Handle close.
+  if (queue_.closed_) {
+    MessageFuture imm_future(worker_);
+    imm_future.set_result(Message::Ref());
+    worker_ = nullptr;
+    return imm_future;
   }
 
-  // Signal completion.
-  self->worker_ = nullptr;
-  self->read_result_future_.reset();
+  // See if there is a backlog that we can immediately satisfy.
+  if (!queue_.backlog_.empty()) {
+    // Service from the backlog.
+    MessageFuture imm_future(worker_);
+    imm_future.set_result(std::move(queue_.backlog_.front()));
+    queue_.backlog_.pop_front();
+    worker_ = nullptr;
+    return imm_future;
+  }
 
-  return iree_ok_status();
+  // Settle in for a wait.
+  queue_.pending_readers_.push_back(this);
+  read_result_future_ = MessageFuture(worker_);
+  return *read_result_future_;
 }
 
 }  // namespace shortfin::local
