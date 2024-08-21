@@ -382,10 +382,10 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         xk = xk.view(bs, batch_seq_len, self.head_count_kv, self.head_dim)
         xv = xv.view(bs, batch_seq_len, self.head_count_kv, self.head_dim)
         save_dict = {"xq": xq.detach().clone().contiguous(), "xk": xk.detach().clone().contiguous(), "xv": xv.detach().clone().contiguous()}
-        with safe_open(f"/home/nod/cuda_dumps/hf_attn_block{self.block_index}.safetensors", "pt") as f:
-            xq = f.get_tensor("xq").to("cuda:0").transpose(1,2)
-            xk = f.get_tensor("xk").to("cuda:0").transpose(1,2)
-            xv = f.get_tensor("xv").to("cuda:0").transpose(1,2)
+        #with safe_open(f"/home/nod/cuda_dumps/hf_attn_block{self.block_index}.safetensors", "pt") as f:
+        #    xq = f.get_tensor("xq").to("cuda:0").transpose(1,2)
+        #    xk = f.get_tensor("xk").to("cuda:0").transpose(1,2)
+        #    xv = f.get_tensor("xv").to("cuda:0").transpose(1,2)
 
         # Fast path to start_index based embedding lookup if available.
         # Falls back to a slower position based index lookup.
