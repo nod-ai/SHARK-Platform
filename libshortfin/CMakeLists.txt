@@ -92,7 +92,6 @@ if (NOT SHORTFIN_IREE_SOURCE_DIR AND SHORTFIN_BUNDLE_DEPS)
     # TODO: We shouldn't have to pull googletest when we are not building tests.
     #       This needs to be fixed with IREE.
     GIT_SUBMODULES "third_party/benchmark third_party/cpuinfo third_party/flatcc third_party/hip-build-deps third_party/googletest"
-    GIT_SHALLOW ON
   )
   FetchContent_GetProperties(iree)
   if(NOT iree_POPULATED)
@@ -105,7 +104,7 @@ if(SHORTFIN_IREE_SOURCE_DIR)
   set(IREE_BUILD_COMPILER OFF)
   set(IREE_BUILD_TESTS OFF)
   set(IREE_BUILD_SAMPLES OFF)
-  # Disable missing submodules error because we are only building the runtime
+  # Disable missing submodules error because we are only building the runtime.
   set(IREE_ERROR_ON_MISSING_SUBMODULES OFF)
   # Only enable local_sync/local_task/hip drivers for now.
   set(IREE_HAL_DRIVER_DEFAULTS OFF)
@@ -122,8 +121,7 @@ endif()
 
 if(SHORTFIN_BUILD_TESTS)
   if (NOT SHORTFIN_IREE_SOURCE_DIR)
-    # Due to the above mentioned bugged with IREE CMakeLists.txt, we reuse
-    # IREE's googletest.
+    # For now we use gtest shipped alongside with IREE.
     FetchContent_Declare(
       googletest
       URL https://github.com/google/googletest/archive/03597a01ee50ed33e9dfd640b249b4be3799d395.zip
@@ -132,8 +130,8 @@ if(SHORTFIN_BUILD_TESTS)
     set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
     FetchContent_MakeAvailable(googletest)
   endif()
-    include(GoogleTest)
-    enable_testing()
+  include(GoogleTest)
+  enable_testing()
 endif()
 
 
