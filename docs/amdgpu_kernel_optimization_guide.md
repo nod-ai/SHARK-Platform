@@ -193,16 +193,16 @@ LDS is split into 32 banks of DWORD-sized (4 B) entries. For example, a 128 B
 contiguous chunk of memory spans all banks. The bank index of an accessed byte
 is calculated with `(address / 4) % 32`.
 
-When LDS is accessed, the first clock cycles are spent on sending the addresses
-to LDS. It accepts up to 16 addresses per SIMD per cycle. Next, the data is
-send/received in multiple phases, depending on the exact instruction used.
-Therefore, not all threads access LDS at the same time.
+When LDS is accessed, the first clock cycles are spent on sending the addresses.
+It accepts up to 16 addresses per SIMD per cycle (up to 32 addresses per CU per
+cycle). Next, the data is sent/received in multiple phases, depending on the
+exact instruction used. Therefore, not all threads access LDS at the same time.
 
 > [!TIP]
 > LDS access is 'fast' in only two cases: when threads access the same
-> address and the value gets broadcast, or when threads accesse a
-> unique bank. Two or more threads accessing different addresses that map to the
-> same bank create an **LDS bank conflicts**.
+> address and the value gets broadcast, or when threads access a unique bank.
+> Two or more threads accessing different addresses that map to the same bank
+> create an **LDS bank conflict**.
 
 > [!TIP]
 > Make sure that workgroup memory accesses use `ds_` instructions instead
@@ -215,10 +215,10 @@ With the number of LDS banks (32) not matching the subgroup size (64) nor the
 SIMD size (16), it is not immediately obvious when bank conflicts arise.
 
 LDS is able to access all 32 banks at once. Depending on the exact LDS
-instruction used (read/write of `b32` vs. `b64` vs. `b128`), different number
-of threads within the same subgroup / wave access LDS banks. For `b32`, 32
-adjacent threads read/write from LDS (32 dwords), while for `b128` the access
-covers *all* VGPRs of a group of 8 threads (also 32 dwords total).
+instruction used (read/write of `b32` vs. `b64` vs. `b128`), a different number
+of threads within the same subgroup / wave access LDS banks concurrently. For
+`b32`, 32 adjacent threads read/write from LDS (32 dwords), while for `b128` the
+access covers *all* VGPRs of a group of 8 threads (also 32 dwords total).
 
 For `ds_read_b32`, the access happens in two phases with the following groups
 of 32 threads accessing LDS: `T0`-`T31`, then `T32`-`T64`.
@@ -227,7 +227,7 @@ For `ds_read_b64`, the access happens in four phases of 16 threads each:
 `T0`-`T15`, `T16`-`T31`, `T32`-`T47`, then `T48`-`T64`.
 
 For `ds_read2_b64`, the access happens in eight phases:
-  * First `b64` in four pahses: `T0`-`T15`, `T16`-`T31`, `T32`-`T47`,
+  * First `b64` in four phases: `T0`-`T15`, `T16`-`T31`, `T32`-`T47`,
     `T48`-`T64`.
   * Then the second `b64` in the next 4 phases, in the same groups of thread.
 
