@@ -23,3 +23,5 @@ shortfin_public_library(
     shortfin_systems_amdgpu
     shortfin_systems_host
 )
+
+set_target_properties(shortfin PROPERTIES VERSION ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR} SOVERSION ${SOVERSION})
