@@ -11,7 +11,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-project_dir = Path(__file__).resolve().parent.parent
+project_dir = Path(__file__).resolve().parent.parent.parent
 example_dir = project_dir / "examples" / "python"
 
 
