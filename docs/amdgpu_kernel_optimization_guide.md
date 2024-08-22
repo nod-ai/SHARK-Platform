@@ -4,7 +4,7 @@ Author: Jakub Kuderski @kuhar
 
 Date: 2024-06-24
 
-Last Update: 2024-08-14
+Last Update: 2024-08-22
 
 ## Introduction
 
@@ -279,6 +279,11 @@ at once.
 
 A sequence of up to 4 adjacent `global_load_dwordx4` instructions (implicitly)
 forms a *clause* that translates to a single data fabric transaction.
+
+> [!TIP]
+> To achieve peak L1 bandwidth, make sure that your memory access engages all
+> four L1 cache sets. That is, at the level of the workgroup, you should be
+> loading 4 cache lines (128 B) that each map to a different cache set.
 
 > [!TIP]
 > For data that is 'streamed' and does not need to be cached, consider
