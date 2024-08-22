@@ -10,6 +10,31 @@
 
 namespace shortfin::local {
 
+// -------------------------------------------------------------------------- //
+// Globals
+// -------------------------------------------------------------------------- //
+
+namespace {
+
+// Thread local of the current Worker.
+thread_local Worker* current_thread_worker = nullptr;
+
+}  // namespace
+
+// -------------------------------------------------------------------------- //
+// Worker::Extension
+// -------------------------------------------------------------------------- //
+
+Worker::Extension::~Extension() noexcept = default;
+void Worker::Extension::OnThreadStart() noexcept {}
+void Worker::Extension::OnThreadStop() noexcept {}
+void Worker::Extension::OnBeforeShutdownWait() noexcept {}
+void Worker::Extension::OnAfterShutdownWait() noexcept {}
+
+// -------------------------------------------------------------------------- //
+// Worker
+// -------------------------------------------------------------------------- //
+
 Worker::Worker(const Options options)
     : options_(std::move(options)),
       signal_transact_(false),
@@ -35,12 +60,30 @@ Worker::~Worker() {
   thread_.reset();
 }
 
+Worker* Worker::GetCurrent() noexcept { return current_thread_worker; }
+
 std::string Worker::to_s() {
   return fmt::format("<Worker '{}'>", options_.name);
 }
 
-void Worker::OnThreadStart() {}
-void Worker::OnThreadStop() {}
+void Worker::OnThreadStart() {
+  // It is not necessary to initialize extensions since their OnThreadStart
+  // is called when they are constructed (which necessarily comes after
+  // this call).
+  current_thread_worker = this;
+  // Start extensions.
+  for (auto& it : extensions_) {
+    it.second->OnThreadStart();
+  }
+}
+
+void Worker::OnThreadStop() {
+  // Any extensions that have been created must be stopped.
+  for (auto& it : extensions_) {
+    it.second->OnThreadStop();
+  }
+  current_thread_worker = nullptr;
+}
 
 iree_status_t Worker::TransactLoop(iree_status_t signal_status) {
   if (!iree_status_is_ok(signal_status)) {
@@ -147,6 +190,22 @@ void Worker::WaitForShutdown() {
   if (!thread_) {
     throw std::logic_error("Cannot Shutdown a Worker that was not started");
   }
+
+  // Make sure we issue before after shutdown wait callbacks.
+  struct WaitGuard {
+    WaitGuard(Worker& worker) : worker(worker) {
+      for (auto& it : worker.extensions_) {
+        it.second->OnBeforeShutdownWait();
+      }
+    }
+    ~WaitGuard() {
+      for (auto& it : worker.extensions_) {
+        it.second->OnAfterShutdownWait();
+      }
+    }
+    Worker& worker;
+  };
+  WaitGuard wait_guard(*this);
 
   for (;;) {
     auto status = iree_wait_source_wait_one(signal_ended_.await(),
