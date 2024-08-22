@@ -13,7 +13,9 @@
 #include "shortfin/local/program.h"
 #include "shortfin/local/scope.h"
 #include "shortfin/local/system.h"
+#if defined(SHORTFIN_HAVE_AMDGPU)
 #include "shortfin/local/systems/amdgpu.h"
+#endif  // SHORTFIN_HAVE_AMDGPU
 #include "shortfin/local/systems/host.h"
 #include "shortfin/support/globals.h"
 #include "shortfin/support/logging.h"
@@ -239,7 +241,9 @@ NB_MODULE(lib, m) {
   auto local_m = m.def_submodule("local");
   BindLocal(local_m);
   BindHostSystem(local_m);
+#if defined(SHORTFIN_HAVE_AMDGPU)
   BindAMDGPUSystem(local_m);
+#endif  // SHORTFIN_HAVE_AMDGPU
 
   auto array_m = m.def_submodule("array");
   BindArray(array_m);
@@ -712,6 +716,7 @@ void BindHostSystem(py::module_ &global_m) {
   py::class_<local::systems::HostCPUDevice, local::Device>(m, "HostCPUDevice");
 }
 
+#if defined(SHORTFIN_HAVE_AMDGPU)
 void BindAMDGPUSystem(py::module_ &global_m) {
   auto m = global_m.def_submodule("amdgpu", "AMDGPU system config");
   py::class_<local::systems::AMDGPUSystemBuilder,
@@ -721,5 +726,6 @@ void BindAMDGPUSystem(py::module_ &global_m) {
               &local::systems::AMDGPUSystemBuilder::cpu_devices_enabled);
   py::class_<local::systems::AMDGPUDevice, local::Device>(m, "AMDGPUDevice");
 }
+#endif  // SHORTFIN_HAVE_AMDGPU
 
 }  // namespace shortfin::python
