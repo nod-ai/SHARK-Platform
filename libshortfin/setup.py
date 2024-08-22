@@ -95,6 +95,10 @@ class CMakeBuildPy(_build_py):
                 "-DSHORTFIN_BUNDLE_DEPS=ON",
                 f"-DCMAKE_BUILD_TYPE={cfg}",
                 "-DSHORTFIN_BUILD_PYTHON_BINDINGS=ON",
+                # TODO: This shouldn't be hardcoded... but shortfin doesn't
+                # compile without it.
+                "-DCMAKE_C_COMPILER=clang",
+                "-DCMAKE_CXX_COMPILER=clang++",
             ]
             print(f"Configuring with: {cmake_args}", file=sys.stderr)
             subprocess.check_call(
@@ -108,6 +112,21 @@ class CMakeBuildPy(_build_py):
 
 PYTHON_SOURCE_DIR = REL_SOURCE_DIR / "bindings" / "python"
 PYTHON_BINARY_DIR = REL_BINARY_DIR / "bindings" / "python"
+
+# We need some directories to exist before setup.
+def populate_built_package(abs_dir):
+    """Makes sure that a directory and __init__.py exist.
+
+    This needs to unfortunately happen before any of the build process
+    takes place so that setuptools can plan what needs to be built.
+    We do this for any built packages (vs pure source packages).
+    """
+    os.makedirs(abs_dir, exist_ok=True)
+    with open(os.path.join(abs_dir, "__init__.py"), "wt"):
+        pass
+
+
+populate_built_package(os.path.join(PYTHON_BINARY_DIR / "_shortfin_default"))
 
 setup(
     name="shortfin",
