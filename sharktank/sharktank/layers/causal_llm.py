@@ -142,6 +142,5 @@ class BaseCausalLMModel(ThetaLayer):
         results = []
         for batch, seq_len in enumerate(seq_lens):
             step_logits = logits[batch, seq_len - 1]
-            # print('step_logits:', step_logits[torch.argmax(step_logits)])
             results.append(torch.argmax(step_logits))
         return results

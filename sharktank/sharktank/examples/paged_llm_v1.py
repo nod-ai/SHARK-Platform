@@ -49,7 +49,7 @@ class TorchGenerator:
 
     def begin_batch(self, prompts: list[str]):
         token_ids, seq_lens = self.tokenizer.encode(
-            prompts, pad_to_multiple_of=1  # self.model.cache.pad_sequence_stride
+            prompts, pad_to_multiple_of=self.model.cache.pad_sequence_stride
         )
         token_ids = torch.tensor(token_ids, device=self.model.device)
         seq_lens = torch.tensor(seq_lens, device=self.model.device)
@@ -81,7 +81,6 @@ class Batch:
         cache_state: list[torch.Tensor],
     ):
         self.bs = token_ids.shape[0]
-        print("bs:", self.bs)
         assert seq_lens.shape[0] == self.bs
         self.parent = parent
         self.token_ids = token_ids
@@ -229,11 +228,10 @@ def main():
     dataset = cli.get_input_dataset(args)
     tokenizer = cli.get_tokenizer(args)
     prompts = args.prompt
-    print("prompts:", prompts, type(prompts))
 
     config = LlamaModelConfig(
         hp=configs.LlamaHParams.from_gguf_props(dataset.properties),
-        block_seq_stride=1,  # 16,
+        block_seq_stride=16,
         kv_cache_type=args.kv_cache_type,
         device=device,
         activation_dtype=activation_dtype,
