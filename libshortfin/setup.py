@@ -6,6 +6,7 @@
 
 from distutils.core import setup, Extension
 import sys
+import shutil
 import subprocess
 import os
 from pathlib import Path
@@ -30,17 +31,17 @@ def is_cpp_prebuilt():
 
 
 if is_cpp_prebuilt():
-    print("setup.py running in pre-built mode:")
+    print("setup.py running in pre-built mode:", file=sys.stderr)
     SOURCE_DIR = Path(CPP_PREBUILT_SOURCE_DIR)
     BINARY_DIR = Path(CPP_PREBUILT_BINARY_DIR)
 else:
-    print("setup.py running in cmake build mode:")
+    print("setup.py running in cmake build mode:", file=sys.stderr)
     # setup.py is in the source directory.
     SOURCE_DIR = Path(SETUPPY_DIR)
     BINARY_DIR = Path(os.path.join(SETUPPY_DIR, "build", "b"))
 
-print(f"  SOURCE_DIR = {SOURCE_DIR}")
-print(f"  BINARY_DIR = {BINARY_DIR}")
+print(f"  SOURCE_DIR = {SOURCE_DIR}", file=sys.stderr)
+print(f"  BINARY_DIR = {BINARY_DIR}", file=sys.stderr)
 
 # Due to a quirk of setuptools, that package_dir map must only contain
 # paths relative to the directory containing setup.py. Why? No one knows.
@@ -65,8 +66,44 @@ class NoopBuildExtension(_build_ext):
     def build_extension(self, ext):
         ...
 
-    def copy_extensions_to_source(self) -> None:
+    def copy_extensions_to_source(self, *args, **kwargs):
         ...
+
+
+def maybe_nuke_cmake_cache(cmake_build_dir):
+    # From run to run under pip, we can end up with different paths to ninja,
+    # which isn't great and will confuse cmake. Detect if the location of
+    # ninja changes and force a cache flush.
+    ninja_path = ""
+    try:
+        import ninja
+    except ModuleNotFoundError:
+        pass
+    else:
+        ninja_path = ninja.__file__
+    expected_stamp_contents = f"{sys.executable}\n{ninja_path}"
+
+    # In order to speed things up on CI and not rebuild everything, we nuke
+    # the CMakeCache.txt file if the path to the Python interpreter changed.
+    # Ideally, CMake would let us reconfigure this dynamically... but it does
+    # not (and gets very confused).
+    PYTHON_STAMP_FILE = os.path.join(cmake_build_dir, "python_stamp.txt")
+    if os.path.exists(PYTHON_STAMP_FILE):
+        with open(PYTHON_STAMP_FILE, "rt") as f:
+            actual_stamp_contents = f.read()
+            if actual_stamp_contents == expected_stamp_contents:
+                # All good.
+                return
+
+    # Mismatch or not found. Clean it.
+    cmake_cache_file = os.path.join(cmake_build_dir, "CMakeCache.txt")
+    if os.path.exists(cmake_cache_file):
+        print("Removing CMakeCache.txt because Python version changed", file=sys.stderr)
+        os.remove(cmake_cache_file)
+
+    # And write.
+    with open(PYTHON_STAMP_FILE, "wt") as f:
+        f.write(expected_stamp_contents)
 
 
 class CMakeBuildPy(_build_py):
@@ -79,7 +116,7 @@ class CMakeBuildPy(_build_py):
 
             # Build extension using cmake.
             print("*****************************", file=sys.stderr)
-            print("* Building Shortfin         *", file=sys.stderr)
+            print("* Building libshortfin      *", file=sys.stderr)
             print("*****************************", file=sys.stderr)
 
             cfg = os.getenv("SHORTFIN_CMAKE_BUILD_TYPE", "Release")
@@ -88,6 +125,7 @@ class CMakeBuildPy(_build_py):
 
             # Configure CMake.
             os.makedirs(BINARY_DIR, exist_ok=True)
+            maybe_nuke_cmake_cache(CMAKE_BUILD_DIR)
             print(f"CMake build dir: {CMAKE_BUILD_DIR}", file=sys.stderr)
             cmake_args = [
                 "-GNinja",
@@ -100,14 +138,40 @@ class CMakeBuildPy(_build_py):
                 "-DCMAKE_C_COMPILER=clang",
                 "-DCMAKE_CXX_COMPILER=clang++",
             ]
-            print(f"Configuring with: {cmake_args}", file=sys.stderr)
-            subprocess.check_call(
-                ["cmake", SOURCE_DIR] + cmake_args, cwd=CMAKE_BUILD_DIR
-            )
+
+            # Only do a from-scratch configure if not already configured.
+            cmake_cache_file = os.path.join(CMAKE_BUILD_DIR, "CMakeCache.txt")
+            if not os.path.exists(cmake_cache_file):
+                print(f"Configuring with: {cmake_args}", file=sys.stderr)
+                subprocess.check_call(
+                    ["cmake", SOURCE_DIR] + cmake_args, cwd=CMAKE_BUILD_DIR
+                )
+            else:
+                print(f"Not re-configing (already configured)", file=sys.stderr)
 
             # Build.
             subprocess.check_call(["cmake", "--build", "."], cwd=CMAKE_BUILD_DIR)
             print("Build complete.", file=sys.stderr)
+
+            # We only take _shortfin_default from the build.
+            target_dir = os.path.join(
+                os.path.abspath(self.build_lib), "_shortfin_default"
+            )
+            print(f"Building in target: {target_dir}", file=sys.stderr)
+            os.makedirs(target_dir, exist_ok=True)
+            print("Copying build to target.", file=sys.stderr)
+            if os.path.exists(target_dir):
+                shutil.rmtree(target_dir)
+            shutil.copytree(
+                os.path.join(
+                    CMAKE_BUILD_DIR,
+                    "bindings",
+                    "python",
+                    "_shortfin_default",
+                ),
+                target_dir,
+                symlinks=False,
+            )
 
 
 PYTHON_SOURCE_DIR = REL_SOURCE_DIR / "bindings" / "python"
@@ -147,7 +211,7 @@ setup(
         "shortfin": str(PYTHON_SOURCE_DIR / "shortfin"),
     },
     ext_modules=[
-        CMakeExtension("shortfin_default.lib")
+        CMakeExtension("_shortfin_default.lib")
         # TODO: Conditionally map additional native library variants.
     ],
     cmdclass={
