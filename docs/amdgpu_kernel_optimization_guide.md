@@ -193,16 +193,16 @@ LDS is split into 32 banks of DWORD-sized (4 B) entries. For example, a 128 B
 contiguous chunk of memory spans all banks. The bank index of an accessed byte
 is calculated with `(address / 4) % 32`.
 
-When LDS is accessed, the first clock cycles are spent on pushing the addresses
-to the hardware unit called *crossbar*, which implements swizzling and
-broadcasting. LDS accepts up to 16 addresses per SIMD per cycle, with up to 32
-addresses with two SIMDs accessing LDS concurrently. Next, each bank accesses a
-DWORD per cycle, until the LDS access completes.
+When LDS is accessed, the first clock cycles are spent on sending the addresses.
+It accepts up to 16 addresses per SIMD per cycle (up to 32 addresses per CU per
+cycle). Next, the data is sent/received in multiple phases, depending on the
+exact instruction used. Therefore, not all threads access LDS at the same time.
 
 > [!TIP]
 > LDS access is 'fast' in only two cases: when threads access the same
-> address and the value gets broadcast, or when each thread accesses a
-> unique bank. Anything else results in **LDS bank conflicts**.
+> address and the value gets broadcast, or when threads access a unique bank.
+> Two or more threads accessing different addresses that map to the same bank
+> create an **LDS bank conflict**.
 
 > [!TIP]
 > Make sure that workgroup memory accesses use `ds_` instructions instead
@@ -214,13 +214,42 @@ DWORD per cycle, until the LDS access completes.
 With the number of LDS banks (32) not matching the subgroup size (64) nor the
 SIMD size (16), it is not immediately obvious when bank conflicts arise.
 
-LDS is able to access 32 banks per cycle. Depending on the exact LDS instruction
-used (read/write of `b32` vs. `b64` vs. `b128`), different number of threads
-within the same subgroup access LDS banks. The size of this group of threads is
-determined by the number of DWORDs accessed by each thread. A `b32` access
-results in two groups of threads: `T0`-`T31` and `T32`-`T63`, while `b128`
-results in 8 groups of threads: `T0`-`T7`, `T8`-`T15`, ..., `T56`-`T63`. Both
-amount to 32 VGPRs in total being accessed in each phase.
+LDS is able to access all 32 banks at once. Depending on the exact LDS
+instruction used (read/write of `b32` vs. `b64` vs. `b128`), a different number
+of threads within the same subgroup / wave access LDS banks concurrently. For
+`b32`, 32 adjacent threads read/write from LDS (32 dwords), while for `b128` the
+access covers *all* VGPRs of a group of 8 threads (also 32 dwords total).
+
+For `ds_read_b32`, the access happens in two phases with the following groups
+of 32 threads accessing LDS: `T0`-`T31`, then `T32`-`T64`.
+
+For `ds_read_b64`, the access happens in four phases of 16 threads each:
+`T0`-`T15`, `T16`-`T31`, `T32`-`T47`, then `T48`-`T64`.
+
+For `ds_read2_b64`, the access happens in eight phases:
+  * First `b64` in four phases: `T0`-`T15`, `T16`-`T31`, `T32`-`T47`,
+    `T48`-`T64`.
+  * Then the second `b64` in the next 4 phases, in the same groups of thread.
+
+For `ds_read_b128`, the access happens in eight phases:
+  1. `T0`-`T3` and `T20`-`T23`
+  2. `T32`-`T35` and `T52`-`T55`
+  3. `T4`-`T7` and `T16`-`T19`
+  4. `T36`-`T39` and `T48`-`T51`
+  5. `T8`-`T11` and `T28`-`T31`
+  6. `T40`-`T43` and `T60`-`T63`
+  7. `T12`-`T15` and `T24`-`T27`
+  8. `T44`-`T47` and `T56`-`T59`
+
+For `ds_write_b128`, the access happens in eight phases:
+  1. `T0`-`T7`
+  2. `T8`-`T15`
+  3. `T16`-`23`
+  4. `T24`-`T31`
+  5. `T32`-`T39`
+  6. `T40`-`T47`
+  7. `T48`-`T55`
+  8. `T56`-`T63`
 
 When more than one thread within a group currently being handled attempts to
 access the same bank, a bank conflict occurs. The conflict may be over one or
@@ -232,69 +261,6 @@ Bank conflicts are resolved by picking the first group of threads (by thread ID)
 that do not conflict, and then this is repeated for leftover threads. In the
 worst case where all threads access the same bank, this can turn into a *waterfall
 loop* (only one thread gets to access LDS per cycle).
-
-For example, consider the following contiguous workgroup memory access patterns,
-where `T<n>` denotes thread with ID `n`:
-
-1. 64 B, one byte per thread:
-   ```
-   T0: Addr 0, Bank 0
-   T1: Addr 1, Bank 0
-   T2: Addr 2, Bank 0
-   T3: Addr 3, Bank 0
-   T4: Addr 4, Bank 1
-   ...
-   T15: Addr 15, Bank 3
-   ...
-   T31: Addr 31, Bank 7
-   ```
-   Bank conflict rate: 4x ==> bad.
-
-2. 128 B, 2 bytes per thread:
-   ```
-   T0: Addr 0, Bank 0
-   T1: Addr 2, Bank 0
-   T2: Addr 4, Bank 1
-   T3: Addr 6, Bank 1
-   ...
-   T15: Addr 30, Bank 15
-   ...
-   T31: Addr 62, Bank 31
-   ```
-   Bank conflict rate: 2x ==> bad.
-
-3. 256 B, 4 bytes per thread (`b32`):
-   ```
-   T0: Addr 0, Bank 0
-   T1: Addr 4, Bank 1
-   ...
-   T15: Addr 60, Bank 15
-   ...
-   T31: Addr 62, Bank 31
-   ```
-   No bank conflicts ==> good.
-
-4. 512 B, 8 bytes per thread (`b64`):
-   ```
-   T0: Addr 0, Banks 0, 1
-   T1: Addr 8, Banks 2, 3
-   ...
-   T15: Addr 120, Banks 30, 31
-   ```
-   No bank conflicts ==> good.
-
-5. 1024 B, 16 bytes per thread (`b128`):
-   ```
-   T0: Addr 0, Banks 0, 1, 2, 3
-   T1: Addr 16, Banks 4, 5, 6, 7
-   ...
-   T7: Addr 112, Banks 28, 29, 30, 31
-   ```
-   No bank conflicts ==> good.
-
-
-Note that the above only shows accesses to the first group of threads. The
-remaining threads and DWORDs would follow.
 
 > [!TIP]
 > It is best to use wide 16, 8, or 4 byte-wide LDS instructions (e.g.,
