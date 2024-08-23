@@ -46,16 +46,15 @@ jobs:
         repository: iree-org/iree
         path: ${{ env.IREE_REPO_DIR }}
         submodules: false
-        depth: 1
 
     - name: Initalize IREE submodules
       run : |
         cd ${{ env.IREE_REPO_DIR }}
-        git submodule update --init -- third_party/benchmark
-        git submodule update --init -- third_party/cpuinfo/
-        git submodule update --init -- third_party/flatcc
-        git submodule update --init -- third_party/googletest
-        git submodule update --init -- third_party/hip-build-deps/
+        git submodule update --init --depth 1 -- third_party/benchmark
+        git submodule update --init --depth 1 -- third_party/cpuinfo/
+        git submodule update --init --depth 1 -- third_party/flatcc
+        git submodule update --init --depth 1 -- third_party/googletest
+        git submodule update --init --depth 1 -- third_party/hip-build-deps/
 
     - name: Build IREE runtime
       run: |
