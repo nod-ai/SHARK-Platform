@@ -420,7 +420,9 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         ffn_input = self.ffn_norm(h)
         ffn_gate = F.silu(self.ffn_gate(ffn_input))
         ffn_up = self.ffn_up(ffn_input)
+        print("ffn up:", ffn_up.shape)
         ffn_down = self.ffn_down(ffn_gate * ffn_up)
+        print("ffn down:", ffn_down.shape)
         final_output = h + ffn_down
 
         return final_output
