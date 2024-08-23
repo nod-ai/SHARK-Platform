@@ -4,12 +4,12 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-import pytest
-import candidate_gen
+"""
+Usage: python -m pytest candidate_gen_test.py
+"""
 
-"""
-Usage: python -m pytest test_tune.py
-"""
+import pytest
+from sharktank.tools.tuner import candidate_gen
 
 
 def test_get_shaped_type_element_bitwidth():
