@@ -22,7 +22,7 @@ permissions:
 
 env:
   IREE_REPO_DIR: ${{ github.workspace }}/iree
-  BUILD_DIR: ${{ github.workspace }}/libshortfin/build
+  LIBSHORTFIN_DIR: ${{ github.workspace }}/libshortfin/
 
 jobs:
   build-and-test:
@@ -86,10 +86,10 @@ jobs:
       # TODO: Switch to `pip install -r requirements.txt -e libshortfin/`.
       run: pip install nanobind typing_extensions
 
-    - name: Build libshortfin
+    - name: Build libshortfin (full)
       run: |
-        mkdir ${{ env.BUILD_DIR }}
-        cd ${{ env.BUILD_DIR }}
+        mkdir ${{ env.LIBSHORTFIN_DIR }}/build
+        cd ${{ env.LIBSHORTFIN_DIR }}/build
         cmake -GNinja \
           -DCMAKE_C_COMPILER=clang-18 \
           -DCMAKE_CXX_COMPILER=clang++-18 \
@@ -99,7 +99,21 @@ jobs:
           ..
         cmake --build . --target all
 
-    - name: Test libshortfin
+    - name: Test libshortfin (full)
       run: |
-        cd ${{ env.BUILD_DIR }}
+        cd ${{ env.LIBSHORTFIN_DIR }}/build
         cmake --build . --target test
+
+    - name: Build libshortfin (host-only)
+      run: |
+        mkdir ${{ env.LIBSHORTFIN_DIR }}/build-host-only
+        cd ${{ env.LIBSHORTFIN_DIR }}/build-host-only
+        cmake -GNinja \
+          -DCMAKE_C_COMPILER=clang-18 \
+          -DCMAKE_CXX_COMPILER=clang++-18 \
+          -DCMAKE_LINKER_TYPE=LLD \
+          -DCMAKE_PREFIX_PATH=${{ env.IREE_REPO_DIR }}/build/lib/cmake/IREE \
+          -DSHORTFIN_BUILD_PYTHON_BINDINGS=ON \
+          -DSHORTFIN_HAVE_AMDGPU=OFF \
+          ..
+        cmake --build . --target all

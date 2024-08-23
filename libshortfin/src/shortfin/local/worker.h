@@ -73,6 +73,8 @@ class SHORTFIN_API Worker {
 
   Worker(Options options);
   Worker(const Worker &) = delete;
+  Worker &operator=(const Worker &) = delete;
+  Worker(Worker &&) = delete;
   ~Worker();
 
   const Options &options() const { return options_; }

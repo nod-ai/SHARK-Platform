@@ -13,7 +13,9 @@
 #include "shortfin/local/program.h"
 #include "shortfin/local/scope.h"
 #include "shortfin/local/system.h"
+#if defined(SHORTFIN_HAVE_AMDGPU)
 #include "shortfin/local/systems/amdgpu.h"
+#endif  // SHORTFIN_HAVE_AMDGPU
 #include "shortfin/local/systems/host.h"
 #include "shortfin/support/globals.h"
 #include "shortfin/support/logging.h"
@@ -94,22 +96,19 @@ class PyWorkerExtension : public local::Worker::Extension {
       py::gil_scoped_acquire g;
       loop_.reset();
 
-      // Scrub thread state if not donated.
-      if (worker().options().owned_thread) {
-        PyThreadState_Clear(PyThreadState_Get());
-      } else {
-        // Otherwise, juse reset the event loop.
-        refs_->asyncio_set_event_loop(py::none());
-        refs_->asyncio_set_running_loop(py::none());
-      }
+      // reset the event loop.
+      refs_->asyncio_set_event_loop(py::none());
+      refs_->asyncio_set_running_loop(py::none());
     }
 
     // And destroy our thread state (if not donated).
-    // TODO: PyThreadState_Delete seems like it should be used here, but I
-    // couldn't find that being done and I couldn't find a way to use it
-    // with the GIL/thread state correct.
     if (worker().options().owned_thread) {
-      PyThreadState_Swap(nullptr);
+      // Ordinarily PyGILState_Ensure must be balanced with PyGILState_Release,
+      // by PyThreadState_DeleteCurrent() implicitly releases it as part of
+      // its cleanup process.
+      PyGILState_STATE gil_state = PyGILState_Ensure();
+      PyThreadState_Clear(PyThreadState_Get());
+      PyThreadState_DeleteCurrent();
     }
   }
 
@@ -150,29 +149,33 @@ class PyProcess : public local::detail::BaseProcess {
         std::bind(&PyProcess::RunOnWorker, self_object));
   }
   static void RunOnWorker(py::handle self_handle) {
-    {
-      py::gil_scoped_acquire g;
-      // Steal the reference back from ScheduleOnWorker. Important: this is
-      // very likely the last reference to the process. So self must not be
-      // touched after self_object goes out of scope.
-      py::object self_object = py::steal(self_handle);
-      PyProcess *self = py::cast<PyProcess *>(self_handle);
-      // We assume that the run method either returns None (def) or a coroutine
-      // (async def).
-      auto coro = self_object.attr("run")();
-      if (!coro.is_none()) {
-        auto task = self->refs_->asyncio_create_task(coro);
-        // Capture the self object to avoid lifetime hazzard with PyProcess
-        // going away before done.
-        task.attr("add_done_callback")(
-            py::cpp_function([self_object](py::handle future) {
-              PyProcess *done_self = py::cast<PyProcess *>(self_object);
-              done_self->Terminate();
-            }));
-      } else {
-        // Synchronous termination.
-        self->Terminate();
-      }
+    py::gil_scoped_acquire g;
+    // Steal the reference back from ScheduleOnWorker. Important: this is
+    // very likely the last reference to the process. So self must not be
+    // touched after self_object goes out of scope.
+    py::object self_object = py::steal(self_handle);
+    PyProcess *self = py::cast<PyProcess *>(self_handle);
+    // We assume that the run method either returns None (def) or a coroutine
+    // (async def).
+    auto coro = self_object.attr("run")();
+    if (!coro.is_none()) {
+      auto task = self->refs_->asyncio_create_task(coro);
+      // Capture the self object to avoid lifetime hazzard with PyProcess
+      // going away before done.
+      task.attr("add_done_callback")(
+          py::cpp_function([self_object](py::handle future) {
+            PyProcess *done_self = py::cast<PyProcess *>(self_object);
+            done_self->Terminate();
+            // The result of the process future doesn't matter to us, but it
+            // may be carrying an exception and this is our only chance to
+            // bubble it. If it is, this will throw and be handled by the
+            // last chance exception handler in the worker.
+            // TODO: Route process termination and exceptions to a supervisor.
+            future.attr("result")();
+          }));
+    } else {
+      // Synchronous termination.
+      self->Terminate();
     }
   }
 
@@ -238,7 +241,9 @@ NB_MODULE(lib, m) {
   auto local_m = m.def_submodule("local");
   BindLocal(local_m);
   BindHostSystem(local_m);
+#if defined(SHORTFIN_HAVE_AMDGPU)
   BindAMDGPUSystem(local_m);
+#endif  // SHORTFIN_HAVE_AMDGPU
 
   auto array_m = m.def_submodule("array");
   BindArray(array_m);
@@ -341,6 +346,8 @@ void BindLocal(py::module_ &m) {
             return self.CreateWorker(options);
           },
           py::arg("name"), py::rv_policy::reference_internal)
+      .def_prop_ro("init_worker", &local::System::init_worker,
+                   py::rv_policy::reference_internal)
       .def(
           "run",
           [refs](local::System &self, py::object coro) {
@@ -709,6 +716,7 @@ void BindHostSystem(py::module_ &global_m) {
   py::class_<local::systems::HostCPUDevice, local::Device>(m, "HostCPUDevice");
 }
 
+#if defined(SHORTFIN_HAVE_AMDGPU)
 void BindAMDGPUSystem(py::module_ &global_m) {
   auto m = global_m.def_submodule("amdgpu", "AMDGPU system config");
   py::class_<local::systems::AMDGPUSystemBuilder,
@@ -718,5 +726,6 @@ void BindAMDGPUSystem(py::module_ &global_m) {
               &local::systems::AMDGPUSystemBuilder::cpu_devices_enabled);
   py::class_<local::systems::AMDGPUDevice, local::Device>(m, "AMDGPUDevice");
 }
+#endif  // SHORTFIN_HAVE_AMDGPU
 
 }  // namespace shortfin::python
