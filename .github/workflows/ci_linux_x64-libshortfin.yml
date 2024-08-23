@@ -1,4 +1,3 @@
-#!/bin/bash
 # Copyright 2024 Advanced Micro Devices, Inc
 #
 # Licensed under the Apache License v2.0 with LLVM Exceptions.
@@ -80,11 +79,11 @@ jobs:
     - name: Setup Python
       uses: actions/setup-python@39cd14951b08e74b54015e9e001cdefcf80e669f # v5.1.1
       with:
-        python-version: "3.11"
+        python-version: "3.12"
         cache: "pip"
     - name: Install Python packages
       # TODO: Switch to `pip install -r requirements.txt -e libshortfin/`.
-      run: pip install nanobind typing_extensions
+      run: pip install nanobind pytest requests
 
     - name: Build libshortfin (full)
       run: |
@@ -98,11 +97,14 @@ jobs:
           -DSHORTFIN_BUILD_PYTHON_BINDINGS=ON \
           ..
         cmake --build . --target all
+        pip install -v -e .
 
     - name: Test libshortfin (full)
       run: |
         cd ${{ env.LIBSHORTFIN_DIR }}/build
         cmake --build . --target test
+        cd ${{ env.LIBSHORTFIN_DIR }}
+        pytest -m "not requires_amd_gpu"
 
     - name: Build libshortfin (host-only)
       run: |
