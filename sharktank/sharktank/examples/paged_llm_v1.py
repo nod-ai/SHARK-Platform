@@ -20,7 +20,6 @@ from ..types import *
 from ..models.llama.llama import *
 from ..utils.debugging import trace_tensor
 from ..utils.tokenizer import InferenceTokenizer, load_tokenizer
-from transformers import LlamaTokenizer
 
 
 class TorchGenerator:
