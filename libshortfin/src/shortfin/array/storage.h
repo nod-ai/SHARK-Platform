@@ -58,9 +58,19 @@ class SHORTFIN_API storage {
  private:
   storage(local::ScopedDevice device, iree::hal_buffer_ptr buffer,
           local::detail::TimelineResource::Ref timeline_resource)
-      : buffer_(std::move(buffer)),
+      : hal_device_ownership_baton_(iree::hal_device_ptr::borrow_reference(
+            device.raw_device()->hal_device())),
+        buffer_(std::move(buffer)),
         device_(device),
         timeline_resource_(std::move(timeline_resource)) {}
+  // TODO(ownership): Since storage is a free-standing object in the system,
+  // it needs an ownership baton that keeps the device/driver alive. Otherwise,
+  // it can outlive the backing device and then then crashes on buffer
+  // deallocation. For now, we stash an RAII hal_device_ptr, which keeps
+  // everything alive. This isn't quite what we want but keeps us going for now.
+  // When fixing, add a test that creates an array, destroys the System, and
+  // then frees the array.
+  iree::hal_device_ptr hal_device_ownership_baton_;
   iree::hal_buffer_ptr buffer_;
   local::ScopedDevice device_;
   local::detail::TimelineResource::Ref timeline_resource_;

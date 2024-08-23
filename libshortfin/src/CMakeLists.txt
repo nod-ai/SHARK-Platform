@@ -13,6 +13,11 @@ target_include_directories(
                            $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>)
 
 
+set(_INIT_INTERNAL_DEPS)
+if(SHORTFIN_SYSTEMS_AMDGPU)
+  list(APPEND _INIT_INTERNAL_DEPS shortfin_systems_amdgpu)
+endif()
+
 shortfin_public_library(
   NAME
     shortfin
@@ -20,8 +25,8 @@ shortfin_public_library(
     shortfin_array
     shortfin_local
     shortfin_support
-    shortfin_systems_amdgpu
     shortfin_systems_host
+    ${_INIT_INTERNAL_DEPS}
 )
 
 set_target_properties(shortfin PROPERTIES VERSION ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR} SOVERSION ${SOVERSION})

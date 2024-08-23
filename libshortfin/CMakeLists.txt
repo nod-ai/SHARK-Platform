@@ -35,7 +35,26 @@ endif()
 option(SHORTFIN_BUILD_PYTHON_BINDINGS "Builds Python Bindings" OFF)
 option(SHORTFIN_BUILD_TESTS "Builds C++ tests" ON)
 option(SHORTFIN_BUNDLE_DEPS "Download dependencies instead of using system libraries" OFF)
+
 set(SHORTFIN_IREE_SOURCE_DIR "" CACHE FILEPATH "Path to IREE source")
+
+# Enabling ASAN. Note that this will work best if building in a completely
+# bundled fashion and with an ASAN rigged CPython. Otherwise, various LD_PRELOAD
+# hacks are needed. This is merely a develope convenience: people are more
+# than welcome to set flags themselves.
+option(SHORTFIN_ENABLE_ASAN "Enable ASAN" OFF)
+if(SHORTFIN_ENABLE_ASAN)
+  add_compile_options(-fsanitize=address)
+  add_link_options(-fsanitize=address)
+endif()
+
+option(SHORTFIN_SYSTEMS_AMDGPU "Builds for AMD GPU systems" ON)
+message(STATUS "libshortfin supported systems:")
+if(SHORTFIN_SYSTEMS_AMDGPU)
+  message(STATUS "  - AMD GPU")
+  add_compile_definitions("SHORTFIN_HAVE_AMDGPU")
+endif()
+message(STATUS "  - Host")
 
 include(FetchContent)
 
@@ -53,6 +72,7 @@ if(SHORTFIN_BUNDLE_DEPS)
     fmt
     GIT_REPOSITORY https://github.com/fmtlib/fmt.git
     GIT_TAG        e69e5f977d458f2650bb346dadf2ad30c5320281 # 10.2.1 (sync with spdlog)
+    GIT_SHALLOW TRUE
   )
 
   ## spdlog
@@ -62,6 +82,7 @@ if(SHORTFIN_BUNDLE_DEPS)
     spdlog
     GIT_REPOSITORY https://github.com/gabime/spdlog.git
     GIT_TAG        2d4acf8cc321d7783d8f2e22e17a794c6d0e9450 # v1.14.1
+    GIT_SHALLOW TRUE
   )
 
   ## xtl: required for xtensor
@@ -69,6 +90,7 @@ if(SHORTFIN_BUNDLE_DEPS)
     xtl
     GIT_REPOSITORY https://github.com/xtensor-stack/xtl.git
     GIT_TAG        a7c1c5444dfc57f76620391af4c94785ff82c8d6 # v0.7.7
+    GIT_SHALLOW TRUE
   )
 
   ## xtensor
@@ -76,6 +98,7 @@ if(SHORTFIN_BUNDLE_DEPS)
     xtensor
     GIT_REPOSITORY https://github.com/xtensor-stack/xtensor.git
     GIT_TAG        3634f2ded19e0cf38208c8b86cea9e1d7c8e397d # v0.25.0
+    GIT_SHALLOW TRUE
   )
 
   FetchContent_MakeAvailable(fmt spdlog xtl xtensor)
@@ -94,6 +117,7 @@ if (NOT SHORTFIN_IREE_SOURCE_DIR AND SHORTFIN_BUNDLE_DEPS)
     # TODO: We shouldn't have to pull googletest when we are not building tests.
     #       This needs to be fixed with IREE.
     GIT_SUBMODULES "third_party/benchmark third_party/cpuinfo third_party/flatcc third_party/hip-build-deps third_party/googletest"
+    GIT_SHALLOW TRUE
   )
   FetchContent_GetProperties(iree)
   if(NOT iree_POPULATED)
@@ -112,7 +136,9 @@ if(SHORTFIN_IREE_SOURCE_DIR)
   set(IREE_HAL_DRIVER_DEFAULTS OFF)
   set(IREE_HAL_DRIVER_LOCAL_SYNC ON)
   set(IREE_HAL_DRIVER_LOCAL_TASK ON)
-  set(IREE_HAL_DRIVER_HIP ON)
+  if(SHORTFIN_SYSTEMS_AMDGPU)
+    set(IREE_HAL_DRIVER_HIP ON)
+  endif()
   add_subdirectory(${SHORTFIN_IREE_SOURCE_DIR} shortfin_iree SYSTEM EXCLUDE_FROM_ALL)
 else()
   # Try to find iree using find_package
