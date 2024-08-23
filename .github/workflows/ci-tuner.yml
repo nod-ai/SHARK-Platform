@@ -44,6 +44,6 @@ jobs:
             iree-compiler iree-runtime
 
       - name: Run pytest
-        working-directory: sharktank/sharktank/tests/tuner
+        working-directory: sharktank/tests/tuner
         run: |
           python -m pytest
