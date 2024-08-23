@@ -18,6 +18,8 @@ project(
   VERSION 0.9
   LANGUAGES C CXX)
 
+set(SOVERSION 1)
+
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 20)
 # https://discourse.cmake.org/t/cmake-3-28-cmake-cxx-compiler-clang-scan-deps-notfound-not-found/9244/3

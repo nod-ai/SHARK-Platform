@@ -28,3 +28,5 @@ shortfin_public_library(
     shortfin_systems_host
     ${_INIT_INTERNAL_DEPS}
 )
+
+set_target_properties(shortfin PROPERTIES VERSION ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR} SOVERSION ${SOVERSION})
