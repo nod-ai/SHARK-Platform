@@ -27,8 +27,9 @@ import z3
 from dataclasses import asdict, dataclass
 from enum import Enum
 from os import mkdir, path, makedirs
-from typing import Callable
+from typing import Callable, Optional
 from textwrap import indent
+from abc import ABC, abstractmethod
 
 import iree.compiler as ireec
 from iree.compiler import ir
@@ -1126,46 +1127,137 @@ def parse_mlir(mlir_text: str) -> ir.Module:
     return mlir_module
 
 
-def walk_callback_detect_type(
-    op: ir.Operation, walk_result: OpWalkResult
-) -> ir.WalkResult:
-    if op.name == "linalg.conv_2d_nhwc_hwcf":
-        walk_result.was_interrupted = True
-        walk_result.dispatch_kind = DispatchKind.conv
-        return ir.WalkResult.INTERRUPT
+@dataclass
+class CandidateGenFn:
+    get_shapes_fn: Optional[Callable[[list[str]], ProblemSize]] = None
+    apply_params_fn: Optional[
+        Callable[[ProblemSize, list[str], Configuration], tuple[str, str]]
+    ] = None
 
+
+class DispatchTuner(ABC):
+    @abstractmethod
+    def supports(self, mlir: str) -> bool:
+        pass
+
+    @abstractmethod
+    def get_candidate_gen_fn(self) -> CandidateGenFn:
+        pass
+
+
+class DispatchTunerRegistry:
+    def __init__(self):
+        self.registry = set()
+
+    def register(self, dispatch_tuners: list[DispatchTuner]) -> None:
+        for dispatch_tuner in dispatch_tuners:
+            self.registry.add(dispatch_tuner)
+
+    def get_candidate_gen_fn(self, mlir: str) -> CandidateGenFn:
+        for dispatch_tuner in self.registry:
+            if dispatch_tuner.supports(mlir):
+                return dispatch_tuner.get_candidate_gen_fn()
+
+        assert False, "Not supported"
+
+
+class MmtTuner(DispatchTuner):
+    def supports(self, mlir: str) -> bool:
+        return "matmul_transpose_b" in mlir
+
+    def get_candidate_gen_fn(self) -> CandidateGenFn:
+        return CandidateGenFn(get_shapes_mmt, apply_params_mmt)
+
+
+class ConvTuner(DispatchTuner):
+    def supports(self, mlir: str) -> bool:
+        return "conv_2d_nhwc_hwcf" in mlir
+
+    def get_candidate_gen_fn(self) -> CandidateGenFn:
+        return CandidateGenFn(get_shapes_conv, apply_params_conv)
+
+
+class ContractionTuner(DispatchTuner):
+    def __init__(
+        self, lhs_dims: str, rhs_dims: str, tile_dims: str, mlir_template: str
+    ):
+        self.lhs_dims = lhs_dims
+        self.rhs_dims = rhs_dims
+        self.tile_dims = tile_dims
+        self.mlir_template = mlir_template
+
+    def supports(self, mlir: str) -> bool:
+        return "matmul_like" in mlir
+
+    def get_candidate_gen_fn(self) -> CandidateGenFn:
+        if is_broadcast_rhs_mmt(self.mlir_template):
+            get_shapes_fn = get_shapes_broadcast_rhs_mmt
+            apply_params_fn = apply_params_broadcast_rhs_mmt
+        else:
+            get_shapes_fn = lambda template: get_shapes_contract(
+                template, self.lhs_dims, self.rhs_dims
+            )
+            apply_params_fn = lambda ps, template, config: apply_params_contract(
+                ps, self.tile_dims, template, config
+            )
+        return CandidateGenFn(get_shapes_fn, apply_params_fn)
+
+
+class BatchMmtTuner(DispatchTuner):
+    def supports(self, mlir: str) -> bool:
+        return "batch_matmul_transpose_b" in mlir
+
+    def get_candidate_gen_fn(self) -> CandidateGenFn:
+        return CandidateGenFn(get_shapes_batch_mmt, apply_params_batch_mmt)
+
+
+class BatchMatmulTuner(DispatchTuner):
+    def __init__(self, lhs_dims: str, rhs_dims: str):
+        self.lhs_dims = lhs_dims
+        self.rhs_dims = rhs_dims
+
+    def supports(self, mlir: str) -> bool:
+        return "batch_matmul" in mlir
+
+    def get_candidate_gen_fn(self) -> CandidateGenFn:
+        get_shapes_fn = lambda template: get_shapes_batch_matmul(
+            template, self.lhs_dims, self.rhs_dims
+        )
+        apply_params_fn = lambda ps, template, config: apply_params_batch_matmul(
+            ps, self.tile_dims, template, config
+        )
+        return CandidateGenFn(get_shapes_fn, apply_params_fn)
+
+
+def walk_callback_get_fn(
+    op: ir.Operation,
+    candidate_gen_fn: CandidateGenFn,
+    dispatch_tuner_registry: DispatchTunerRegistry,
+) -> ir.WalkResult:
     if op.name == "util.func":
         func_name = str(op.opview.sym_name)
-        if "batch_matmul_transpose_b" in func_name:
-            walk_result.was_interrupted = True
-            walk_result.dispatch_kind = DispatchKind.batch_mmt
-            return ir.WalkResult.INTERRUPT
-        if "batch_matmul" in func_name:
-            walk_result.was_interrupted = True
-            walk_result.dispatch_kind = DispatchKind.batch_matmul
-            return ir.WalkResult.INTERRUPT
-        if "matmul_transpose_b" in func_name:
-            walk_result.was_interrupted = True
-            walk_result.dispatch_kind = DispatchKind.mmt
-            return ir.WalkResult.INTERRUPT
-        if "matmul_like" in func_name:
-            walk_result.was_interrupted = True
-            walk_result.dispatch_kind = DispatchKind.contraction
+        searched_fn = dispatch_tuner_registry.get_candidate_gen_fn(func_name)
+        candidate_gen_fn.get_shapes_fn = searched_fn.get_shapes_fn
+        candidate_gen_fn.apply_params_fn = searched_fn.apply_params_fn
+        if candidate_gen_fn.apply_params_fn and candidate_gen_fn.get_shapes_fn:
             return ir.WalkResult.INTERRUPT
     return ir.WalkResult.ADVANCE
 
 
-def walk_mlir_op(mlir_module: ir.Module) -> OpWalkResult:
-    walk_result = OpWalkResult()
+def walk_mlir_op(
+    mlir_module: ir.Module,
+    candidate_gen_fn: CandidateGenFn,
+    dispatch_tuner_registry: DispatchTunerRegistry,
+):
     for op in mlir_module.body.operations:
         op.walk(
-            lambda op: walk_callback_detect_type(op, walk_result),
+            lambda op: walk_callback_get_fn(
+                op, candidate_gen_fn, dispatch_tuner_registry
+            ),
             ir.WalkOrder.POST_ORDER,
         )
-        if walk_result.was_interrupted:
+        if candidate_gen_fn.apply_params_fn and candidate_gen_fn.get_shapes_fn:
             break
-
-    return walk_result
 
 
 def tune(
@@ -1191,46 +1283,26 @@ def tune(
     mlir_text = "".join(mlir_template)
 
     mlir_module = parse_mlir(mlir_text)
-    walk_result = walk_mlir_op(mlir_module)
-    assert walk_result.dispatch_kind != None
-
     # Save the input file as the first candidate.
     with open(path.join(output, f"0.mlir"), "w") as f:
         f.write(mlir_text)
 
-    get_shapes_fn: Callable[[list[str]], ProblemSize] | None = None
-    apply_params_fn: (
-        Callable[[ProblemSize, list[str], Configuration], tuple[str, str]] | None
-    ) = None
-    if walk_result.dispatch_kind == DispatchKind.conv:
-        get_shapes_fn = get_shapes_conv
-        apply_params_fn = apply_params_conv
-    elif walk_result.dispatch_kind == DispatchKind.mmt:
-        get_shapes_fn = get_shapes_mmt
-        apply_params_fn = apply_params_mmt
-    elif walk_result.dispatch_kind == DispatchKind.contraction:
-        if is_broadcast_rhs_mmt(mlir_template):
-            get_shapes_fn = get_shapes_broadcast_rhs_mmt
-            apply_params_fn = apply_params_broadcast_rhs_mmt
-        else:
-            get_shapes_fn = lambda template: get_shapes_contract(
-                template, lhs_dims, rhs_dims
-            )
-            apply_params_fn = lambda ps, template, config: apply_params_contract(
-                ps, tile_dims, template, config
-            )
-    elif walk_result.dispatch_kind == DispatchKind.batch_matmul:
-        get_shapes_fn = lambda template: get_shapes_batch_matmul(
-            template, lhs_dims, rhs_dims
-        )
-        apply_params_fn = lambda ps, template, config: apply_params_batch_matmul(
-            ps, tile_dims, template, config
-        )
-    elif walk_result.dispatch_kind == DispatchKind.batch_mmt:
-        get_shapes_fn = get_shapes_batch_mmt
-        apply_params_fn = apply_params_batch_mmt
-    else:
-        assert False, f"Unhandled dispatch kind: {walk_result.dispatch_kind}"
+    candidate_gen_fn = CandidateGenFn()
+    dispatch_tuner_registry = DispatchTunerRegistry()
+    dispatch_tuner_registry.register(
+        [
+            MmtTuner(),
+            ConvTuner(),
+            ContractionTuner(lhs_dims, rhs_dims, tile_dims, mlir_template),
+            BatchMmtTuner(),
+            BatchMatmulTuner(lhs_dims, rhs_dims),
+        ]
+    )
+
+    walk_mlir_op(mlir_module, candidate_gen_fn, dispatch_tuner_registry)
+
+    get_shapes_fn = candidate_gen_fn.get_shapes_fn
+    apply_params_fn = candidate_gen_fn.apply_params_fn
 
     problem_size = get_shapes_fn(mlir_template)
     tune_logger.debug(str(problem_size))
