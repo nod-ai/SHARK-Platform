@@ -15,7 +15,7 @@ permissions:
   contents: read
 
 jobs:
-  pre-commit-and-test:
+  test:
     runs-on: ubuntu-latest
 
     steps:
@@ -32,9 +32,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r sharktank/sharktank/tools/tuner/requirements-dev.txt
 
-      - name: Run pre-commit test
-        run: pre-commit run --all-files --show-diff-on-failure --color=always
-
       - name: Install tuner dependencies
         run: |
           pip install -r sharktank/sharktank/tools/tuner/requirements-tuner.txt
@@ -43,7 +40,5 @@ jobs:
             --upgrade \
             iree-compiler iree-runtime
 
-      - name: Run pytest
-        working-directory: sharktank/tests/tuner
-        run: |
-          python -m pytest
+      - name: Run tuner tests
+        run: pytest sharktank/tests/tuner/
