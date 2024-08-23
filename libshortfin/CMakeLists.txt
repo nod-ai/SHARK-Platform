@@ -33,6 +33,7 @@ endif()
 option(SHORTFIN_BUILD_PYTHON_BINDINGS "Builds Python Bindings" OFF)
 option(SHORTFIN_BUILD_TESTS "Builds C++ tests" ON)
 option(SHORTFIN_BUNDLE_DEPS "Download dependencies instead of using system libraries" OFF)
+
 set(SHORTFIN_IREE_SOURCE_DIR "" CACHE FILEPATH "Path to IREE source")
 
 # Enabling ASAN. Note that this will work best if building in a completely
@@ -44,6 +45,14 @@ if(SHORTFIN_ENABLE_ASAN)
   add_compile_options(-fsanitize=address)
   add_link_options(-fsanitize=address)
 endif()
+
+option(SHORTFIN_SYSTEMS_AMDGPU "Builds for AMD GPU systems" ON)
+message(STATUS "libshortfin supported systems:")
+if(SHORTFIN_SYSTEMS_AMDGPU)
+  message(STATUS "  - AMD GPU")
+  add_compile_definitions("SHORTFIN_HAVE_AMDGPU")
+endif()
+message(STATUS "  - Host")
 
 include(FetchContent)
 
@@ -120,7 +129,9 @@ if(SHORTFIN_IREE_SOURCE_DIR)
   set(IREE_HAL_DRIVER_DEFAULTS OFF)
   set(IREE_HAL_DRIVER_LOCAL_SYNC ON)
   set(IREE_HAL_DRIVER_LOCAL_TASK ON)
-  set(IREE_HAL_DRIVER_HIP ON)
+  if(SHORTFIN_SYSTEMS_AMDGPU)
+    set(IREE_HAL_DRIVER_HIP ON)
+  endif()
   add_subdirectory(${SHORTFIN_IREE_SOURCE_DIR} shortfin_iree SYSTEM EXCLUDE_FROM_ALL)
 else()
   # Try to find iree using find_package
