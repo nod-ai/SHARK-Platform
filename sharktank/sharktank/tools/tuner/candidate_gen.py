@@ -48,12 +48,6 @@ class DispatchKind(Enum):
     broadcast_rhs_mmt = 6
 
 
-@dataclass
-class OpWalkResult:
-    was_interrupted: bool = False
-    dispatch_kind: DispatchKind | None = None
-
-
 class ElementType(Enum):
     i8 = 1
     i32 = 2
