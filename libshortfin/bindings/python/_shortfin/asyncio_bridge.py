@@ -5,9 +5,6 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 import asyncio
-from collections.abc import Callable
-from contextvars import Context
-from typing_extensions import Unpack
 
 from . import lib as sfl
 

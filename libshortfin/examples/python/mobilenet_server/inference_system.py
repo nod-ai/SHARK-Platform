@@ -7,35 +7,59 @@
 
 import asyncio
 from pathlib import Path
+import sys
 
 import shortfin as sf
+import shortfin.array as sfnp
+
+MAX_BATCH = 8
+
+
+class InferenceRequest(sf.Message):
+    def __init__(self, raw_image_data):
+        super().__init__()
+        self.raw_image_data = raw_image_data
 
 
 class InferenceProcess(sf.Process):
-    def __init__(self, program, **kwargs):
+    def __init__(self, program, request_queue, **kwargs):
         super().__init__(**kwargs)
         self.program = program
+        self.request_reader = request_queue.reader()
+        self.device = self.scope.device(0)
+        self.host_staging = sfnp.host_array(
+            self.device, [MAX_BATCH, 3, 224, 224], sfnp.float32
+        )
+        self.device_input = sfnp.device_array(
+            self.device, [MAX_BATCH, 3, 224, 224], sfnp.float32
+        )
 
     async def run(self):
         print(f"Inference process: {self.pid}")
+        while request := await self.request_reader():
+            print(f"[{self.pid}] Got request {request}")
+            # self.host_staging.data = self.raw_image_data
 
 
 class Main:
     def __init__(self, lsys: sf.System, home_dir: Path):
-        self.processes_per_worker = 4
+        self.processes_per_worker = 1
         self.lsys = lsys
         self.home_dir = home_dir
+        self.request_queue = lsys.create_queue("request")
         self.program_module = self.lsys.load_module(home_dir / "model.vmfb")
         print(f"Loaded: {self.program_module}")
         self.processes = []
 
-    async def initialize(self, scope):
+    async def start_scope(self, scope):
         # Note that currently, program load is synchronous. But we do it
         # in a task so we can await it in the future and let program loads
         # overlap.
         program = scope.load_unbound_program([self.program_module])
         for _ in range(self.processes_per_worker):
-            self.processes.append(InferenceProcess(program, scope=scope).launch())
+            self.processes.append(
+                InferenceProcess(program, self.request_queue, scope=scope).launch()
+            )
 
     async def main(self):
         devices = self.lsys.devices
@@ -50,21 +74,40 @@ class Main:
         for device in devices:
             worker = self.lsys.create_worker(f"device-{device.name}")
             scope = self.lsys.create_scope(worker, devices=[device])
-            initializers.append(self.initialize(scope))
+            initializers.append(self.start_scope(scope))
 
         # Run all initializers in parallel. These launch inference processes.
+        print("Waiting for initializers")
         await asyncio.gather(*initializers)
 
         # Wait for inference processes to end.
+        print(f"Running {len(self.processes)} inference processes")
         await asyncio.gather(*self.processes)
+        print("Inference processors completed")
 
 
-def run_server(home_dir: Path):
+def run_cli(home_dir: Path, argv):
+    def client():
+        # Create a random image.
+        print("Preparing requests...")
+        writer = main.request_queue.writer()
+
+        # Dumb way to prepare some data to feed [1, 3, 224, 224] f32.
+        import array
+
+        dummy_data = array.array("f", [0.2] * (3 * 224 * 224))
+        message = InferenceRequest(dummy_data)
+        writer(message)
+
+        # Done.
+        writer.close()
+
     lsys = sf.host.CPUSystemBuilder().create_system()
     main = Main(lsys, home_dir)
+    lsys.init_worker.call_threadsafe(client)
     lsys.run(main.main())
 
 
 if __name__ == "__main__":
     home_dir = Path(__file__).resolve().parent
-    run_server(home_dir)
+    run_cli(home_dir, sys.argv[1:])

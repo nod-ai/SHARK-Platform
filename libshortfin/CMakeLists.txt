@@ -35,6 +35,16 @@ option(SHORTFIN_BUILD_TESTS "Builds C++ tests" ON)
 option(SHORTFIN_BUNDLE_DEPS "Download dependencies instead of using system libraries" OFF)
 set(SHORTFIN_IREE_SOURCE_DIR "" CACHE FILEPATH "Path to IREE source")
 
+# Enabling ASAN. Note that this will work best if building in a completely
+# bundled fashion and with an ASAN rigged CPython. Otherwise, various LD_PRELOAD
+# hacks are needed. This is merely a develope convenience: people are more
+# than welcome to set flags themselves.
+option(SHORTFIN_ENABLE_ASAN "Enable ASAN" OFF)
+if(SHORTFIN_ENABLE_ASAN)
+  add_compile_options(-fsanitize=address)
+  add_link_options(-fsanitize=address)
+endif()
+
 include(FetchContent)
 
 # Includes.
