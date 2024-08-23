@@ -7,6 +7,17 @@
 # Given an input dispatch, this code modifies the hyperparameters
 # in the code and runs it.
 
+"""
+Generate candidates by tweaking op configuration for tuning.
+
+It can be invoked in two ways:
+    1. From another python script, import and call `tune()`
+    2. Run this script directly from the command
+
+Usage: ./candidate_gen.py 121.mlir -o "tuning/candidates" -l 1024 --lhs-dims=mk --rhs-dims=nk --tile-dims=mnk
+
+"""
+
 import argparse
 import logging
 import math
@@ -23,9 +34,6 @@ import iree.compiler as ireec
 from iree.compiler import ir
 from iree.compiler.dialects import _linalg_ops_gen, _util_ops_gen
 
-"""
-Usage: ./candidate_gen.py 121.mlir -o "tuning/candidates" -l 1024 --lhs-dims=mk --rhs-dims=nk --tile-dims=mnk
-"""
 
 tune_logger = logging.getLogger("tune")
 
