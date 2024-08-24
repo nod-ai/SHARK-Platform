@@ -113,8 +113,7 @@ bool storage::is_mappable_for_read() const {
           IREE_HAL_MEMORY_ACCESS_READ);
 }
 
-void storage::MapExplicit(mapping &mapping,
-                          iree_hal_memory_access_bits_t access) {
+void storage::MapExplicit(mapping &mapping, iree_hal_memory_access_t access) {
   assert(access != IREE_HAL_MEMORY_ACCESS_NONE);
   mapping.reset();
   SHORTFIN_THROW_IF_ERROR(iree_hal_buffer_map_range(
@@ -123,6 +122,35 @@ void storage::MapExplicit(mapping &mapping,
   mapping.access_ = access;
   mapping.hal_device_ownership_baton_ =
       iree::hal_device_ptr::borrow_reference(hal_device_ownership_baton_);
+}
+
+iree_hal_memory_type_t storage::memory_type() const {
+  return iree_hal_buffer_memory_type(buffer_);
+}
+iree_hal_memory_access_t storage::memory_access() const {
+  return iree_hal_buffer_allowed_access(buffer_);
+}
+iree_hal_buffer_usage_t storage::buffer_usage() const {
+  return iree_hal_buffer_allowed_usage(buffer_);
+}
+
+// Formatted type and access.
+std::string storage::formatted_memory_type() const {
+  iree_bitfield_string_temp_t temp;
+  auto sv = iree_hal_memory_type_format(memory_type(), &temp);
+  return std::string(sv.data, sv.size);
+}
+
+std::string storage::formatted_memory_access() const {
+  iree_bitfield_string_temp_t temp;
+  auto sv = iree_hal_memory_access_format(memory_access(), &temp);
+  return std::string(sv.data, sv.size);
+}
+
+std::string storage::formatted_buffer_usage() const {
+  iree_bitfield_string_temp_t temp;
+  auto sv = iree_hal_buffer_usage_format(buffer_usage(), &temp);
+  return std::string(sv.data, sv.size);
 }
 
 std::string storage::to_s() const {

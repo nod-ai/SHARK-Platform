@@ -51,13 +51,37 @@ class SHORTFIN_API base_array {
   Dims shape_;
 };
 
-class SHORTFIN_API hal_array : public base_array {
+class SHORTFIN_API device_array : public base_array {
  public:
-  hal_array(class storage storage, std::span<const size_t> shape, DType dtype)
+  device_array(class storage storage, std::span<const size_t> shape,
+               DType dtype)
       : base_array(shape, dtype), storage_(std::move(storage)) {}
 
   class storage &storage() { return storage_; }
   local::ScopedDevice &device() { return storage_.device(); }
+
+  // Allocate an array on the device.
+  static device_array for_device(local::ScopedDevice &device,
+                                 std::span<const size_t> shape, DType dtype) {
+    return device_array(
+        storage::AllocateDevice(device, dtype.compute_dense_nd_size(shape)),
+        shape, dtype);
+  }
+
+  // Allocates a host array that is registered by the device. This can include
+  // arrays that are visible from different combinations of host/device.
+  static device_array for_host(local::ScopedDevice &device,
+                               std::span<const size_t> shape, DType dtype) {
+    return device_array(
+        storage::AllocateHost(device, dtype.compute_dense_nd_size(shape)),
+        shape, dtype);
+  }
+
+  // Allocates a host array for transfer to/from the given device array.
+  static device_array for_transfer(device_array &with_device_array) {
+    return for_host(with_device_array.storage().device(),
+                    with_device_array.shape(), with_device_array.dtype());
+  }
 
   // Untyped access to the backing data. The array must be mappable. Specific
   // access modes:
@@ -94,44 +118,6 @@ class SHORTFIN_API hal_array : public base_array {
 
  protected:
   class storage storage_;
-};
-
-// View over some device allocation, modeled as a dense C-order nd array.
-class SHORTFIN_API device_array final : public hal_array {
- public:
-  device_array(class storage storage, std::span<const size_t> shape,
-               DType dtype)
-      : hal_array(std::move(storage), shape, dtype) {}
-
-  static device_array allocate(local::ScopedDevice &device,
-                               std::span<const size_t> shape, DType dtype) {
-    return device_array(
-        storage::AllocateDevice(device, dtype.compute_dense_nd_size(shape)),
-        shape, dtype);
-  }
-};
-
-// View over some host allocation, registered for transfer to/from the
-// device.
-// These arrays can either be allocated directly or ::for_transfer with
-// a corresponding device_array.
-class SHORTFIN_API host_array final : public hal_array {
- public:
-  host_array(class storage storage, std::span<const size_t> shape, DType dtype)
-      : hal_array(std::move(storage), shape, dtype) {}
-
-  static host_array allocate(local::ScopedDevice &device,
-                             std::span<const size_t> shape, DType dtype) {
-    return host_array(
-        storage::AllocateHost(device, dtype.compute_dense_nd_size(shape)),
-        shape, dtype);
-  }
-
-  // Allocates a host array for transfer to/from the given device array.
-  static host_array for_transfer(device_array &with_device_array) {
-    return allocate(with_device_array.storage().device(),
-                    with_device_array.shape(), with_device_array.dtype());
-  }
 };
 
 }  // namespace shortfin::array

@@ -29,7 +29,7 @@ def scope(lsys):
 def test_storage(scope):
     storage = sfl.array.storage.allocate_host(scope.device(0), 32)
     print(storage)
-    ary = sfl.array.host_array(storage, [2, 4], sfl.array.float32)
+    ary = sfl.array.device_array(storage, [2, 4], sfl.array.float32)
     print(ary)
     print(ary.shape)
     assert ary.shape == [2, 4]
@@ -58,9 +58,9 @@ def test_device_array(scope):
     assert ary1.dtype == sfl.array.float32
     assert scope.device(0) == ary1.device
 
-    hary1 = sfl.array.host_array(ary1)
+    hary1 = sfl.array.device_array.for_transfer(ary1)
     print(hary1)
-    assert isinstance(hary1, sfl.array.host_array)
+    assert isinstance(hary1, sfl.array.device_array)
     assert hary1.shape == ary1.shape
     assert hary1.dtype == ary1.dtype
     assert hary1.device == ary1.device

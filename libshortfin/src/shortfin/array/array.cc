@@ -17,24 +17,18 @@ namespace shortfin::array {
 template class InlinedDims<std::size_t>;
 
 // -------------------------------------------------------------------------- //
-// base_array
+// device_array
 // -------------------------------------------------------------------------- //
 
-const mapping hal_array::data() const { return storage_.MapRead(); }
+const mapping device_array::data() const { return storage_.MapRead(); }
 
-mapping hal_array::data() { return storage_.MapRead(); }
+mapping device_array::data() { return storage_.MapRead(); }
 
-mapping hal_array::data_rw() { return storage_.MapReadWrite(); }
+mapping device_array::data_rw() { return storage_.MapReadWrite(); }
 
-mapping hal_array::data_w() { return storage_.MapWriteDiscard(); }
+mapping device_array::data_w() { return storage_.MapWriteDiscard(); }
 
-std::string hal_array::to_s() const {
-  std::string_view class_name = "base_array";
-  if (dynamic_cast<const host_array*>(this)) {
-    class_name = "host_array";
-  } else if (dynamic_cast<const device_array*>(this)) {
-    class_name = "device_array";
-  }
+std::string device_array::to_s() const {
   std::string contents;
   if (!storage_.is_mappable_for_read()) {
     contents = "<unmappable for host read>";
@@ -49,9 +43,10 @@ std::string hal_array::to_s() const {
     contents = "<unrepresented dtype>";
   }
 
-  return fmt::format("{}([{}], dtype='{}', {}) = {}", class_name,
+  return fmt::format("device_array([{}], dtype='{}', device={}({})) = {}",
                      fmt::join(shape(), ", "), dtype().name(),
-                     storage_.device().to_s(), contents);
+                     storage_.device().to_s(), storage_.formatted_memory_type(),
+                     contents);
 }
 
 }  // namespace shortfin::array

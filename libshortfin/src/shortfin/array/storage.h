@@ -63,7 +63,7 @@ class SHORTFIN_API mapping {
   bool writable() const { return access_ & IREE_HAL_MEMORY_ACCESS_WRITE; }
 
  private:
-  iree_hal_memory_access_bits_t access_ = IREE_HAL_MEMORY_ACCESS_NONE;
+  iree_hal_memory_access_t access_ = IREE_HAL_MEMORY_ACCESS_NONE;
   iree_hal_buffer_mapping_t mapping_;
   iree::hal_device_ptr hal_device_ownership_baton_;
   friend class storage;
@@ -108,18 +108,26 @@ class SHORTFIN_API storage {
     return iree_hal_buffer_byte_length(buffer_.get());
   }
 
+  // Memory type and access.
+  iree_hal_memory_type_t memory_type() const;
+  iree_hal_memory_access_t memory_access() const;
+  iree_hal_buffer_usage_t buffer_usage() const;
+
+  // Formatted type and access.
+  std::string formatted_memory_type() const;
+  std::string formatted_memory_access() const;
+  std::string formatted_buffer_usage() const;
+
   // Whether the buffer supports host mappable memory.
   bool is_mappable_for_read() const;
 
   // Maps the memory for access from a host pointer using a scoped mapping.
-  void MapExplicit(mapping &mapping, iree_hal_memory_access_bits_t access);
+  void MapExplicit(mapping &mapping, iree_hal_memory_access_t access);
 
   // Maps the memory for read/write access, preserving any contents.
   mapping MapReadWrite() {
     mapping m;
-    MapExplicit(
-        m, static_cast<iree_hal_memory_access_bits_t>(
-               IREE_HAL_MEMORY_ACCESS_READ | IREE_HAL_MEMORY_ACCESS_WRITE));
+    MapExplicit(m, IREE_HAL_MEMORY_ACCESS_READ | IREE_HAL_MEMORY_ACCESS_WRITE);
     return m;
   }
 
@@ -127,24 +135,20 @@ class SHORTFIN_API storage {
   // buffer.
   mapping MapWriteDiscard() {
     mapping m;
-    MapExplicit(m, static_cast<iree_hal_memory_access_bits_t>(
-                       IREE_HAL_MEMORY_ACCESS_DISCARD_WRITE));
+    MapExplicit(m, IREE_HAL_MEMORY_ACCESS_DISCARD_WRITE);
     return m;
   }
 
   // Maps the memory for read-only access.
   mapping MapRead() {
     mapping m;
-    MapExplicit(m, static_cast<iree_hal_memory_access_bits_t>(
-                       IREE_HAL_MEMORY_ACCESS_READ));
+    MapExplicit(m, IREE_HAL_MEMORY_ACCESS_READ);
     return m;
   }
 
   const mapping MapRead() const {
     mapping m;
-    const_cast<storage *>(this)->MapExplicit(
-        m, static_cast<iree_hal_memory_access_bits_t>(
-               IREE_HAL_MEMORY_ACCESS_READ));
+    const_cast<storage *>(this)->MapExplicit(m, IREE_HAL_MEMORY_ACCESS_READ);
     return m;
   }
 
