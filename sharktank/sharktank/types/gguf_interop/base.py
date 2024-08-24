@@ -125,9 +125,10 @@ def load_file(gguf_path: Union[str, os.PathLike]) -> Dataset:
     # Extract tensors.
     tensors: dict[str, InferenceTensor] = {}
     for tensor in reader.tensors:
+        shape = [int(d) for d in tensor.shape]
         gguf_tensor = _wrap_tensor(
             name=tensor.name,
-            logical_shape=list(tensor.shape),
+            logical_shape=list(shape),
             type_name=tensor.tensor_type.name,
             data=tensor.data,  # type: ignore
         )
