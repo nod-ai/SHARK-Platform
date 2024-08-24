@@ -14,7 +14,9 @@ from _shortfin import lib as sfl
 @pytest.fixture
 def lsys():
     sc = sfl.local.host.CPUSystemBuilder()
-    return sc.create_system()
+    lsys = sc.create_system()
+    yield lsys
+    lsys.shutdown()
 
 
 @pytest.fixture
@@ -25,14 +27,28 @@ def scope(lsys):
 
 
 def test_storage(scope):
-    storage = sfl.array.storage.allocate_device(scope.device(0), 32)
+    storage = sfl.array.storage.allocate_host(scope.device(0), 32)
     print(storage)
-    ary = sfl.array.device_array(storage, [2, 4], sfl.array.float32)
+    ary = sfl.array.host_array(storage, [2, 4], sfl.array.float32)
     print(ary)
     print(ary.shape)
     assert ary.shape == [2, 4]
     assert ary.dtype == sfl.array.float32
     assert ary.device == scope.device(0)
+
+    # Mapping API contract.
+    with storage.map(read=True) as m:
+        assert m.valid
+        mv = memoryview(m)
+        assert len(mv) == 32
+    assert not m.valid
+
+    storage.data = array.array("f", [1.234534523] * 8)
+    print("WRITTEN:", ary)
+
+    read_back = array.array("f")
+    read_back.frombytes(storage.data)
+    print("READ BACK:", read_back)
 
 
 def test_device_array(scope):
@@ -51,6 +67,6 @@ def test_device_array(scope):
 
 
 def test_device_array_fill(scope):
-    ary1 = sfl.array.device_array(scope.device(0), [32, 1, 4], sfl.array.int32)
-    ary1.storage.fill(array.array("i", [0]))
+    ary1 = sfl.array.device_array(scope.device(0), [32, 1, 4], sfl.array.float32)
+    ary1.storage.fill(array.array("f", [1.0]))
     # TODO: Transfer to host and verify.

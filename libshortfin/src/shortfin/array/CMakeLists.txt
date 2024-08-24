@@ -10,6 +10,7 @@ shortfin_cc_component(
   HDRS
     array.h
     api.h
+    dims.h
     dtype.h
     storage.h
   SRCS

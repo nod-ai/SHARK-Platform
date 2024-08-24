@@ -14,6 +14,10 @@ namespace shortfin::array {
 using namespace local;
 using namespace local::detail;
 
+// -------------------------------------------------------------------------- //
+// storage
+// -------------------------------------------------------------------------- //
+
 namespace detail {
 void ThrowIllegalDeviceAffinity(Device *first, Device *second) {
   throw std::invalid_argument(fmt::format(
@@ -99,12 +103,48 @@ void storage::Fill(const void *pattern, iree_host_size_t pattern_length) {
 }
 
 void storage::CopyFrom(storage &source_storage) {
-  // TODO
+  throw std::logic_error("CopyFrom NYI");
+}
+
+bool storage::is_mappable_for_read() const {
+  return (iree_hal_buffer_allowed_usage(buffer_) &
+          IREE_HAL_MEMORY_TYPE_HOST_VISIBLE) &&
+         (iree_hal_buffer_allowed_access(buffer_) &
+          IREE_HAL_MEMORY_ACCESS_READ);
+}
+
+void storage::MapExplicit(mapping &mapping,
+                          iree_hal_memory_access_bits_t access) {
+  assert(access != IREE_HAL_MEMORY_ACCESS_NONE);
+  mapping.reset();
+  SHORTFIN_THROW_IF_ERROR(iree_hal_buffer_map_range(
+      buffer_, IREE_HAL_MAPPING_MODE_SCOPED, access,
+      /*byte_offset=*/0, byte_length(), &mapping.mapping_));
+  mapping.access_ = access;
+  mapping.hal_device_ownership_baton_ =
+      iree::hal_device_ptr::borrow_reference(hal_device_ownership_baton_);
 }
 
 std::string storage::to_s() const {
   return fmt::format("<storage {} size {}>", static_cast<void *>(buffer_.get()),
                      byte_length());
+}
+
+// -------------------------------------------------------------------------- //
+// mapping
+// -------------------------------------------------------------------------- //
+
+mapping::mapping() { std::memset(&mapping_, 0, sizeof(mapping_)); }
+
+mapping::~mapping() noexcept { reset(); }
+
+void mapping::reset() noexcept {
+  if (*this) {
+    // Crash the process on failure to unmap. We don't have a good mitigation,
+    IREE_CHECK_OK(iree_hal_buffer_unmap_range(&mapping_));
+    access_ = IREE_HAL_MEMORY_ACCESS_NONE;
+    hal_device_ownership_baton_.reset();
+  }
 }
 
 }  // namespace shortfin::array
