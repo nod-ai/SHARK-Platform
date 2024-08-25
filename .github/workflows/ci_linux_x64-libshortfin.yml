@@ -82,7 +82,9 @@ jobs:
         cache: "pip"
     - name: Install Python packages
       # TODO: Switch to `pip install -r requirements.txt -e libshortfin/`.
-      run: pip install nanobind pytest requests
+      run: |
+        pip install nanobind
+        pip install -r ${{ env.LIBSHORTFIN_DIR }}/requirements-tests.txt
 
     - name: Build libshortfin (full)
       run: |
