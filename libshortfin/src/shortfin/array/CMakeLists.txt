@@ -28,6 +28,7 @@ shortfin_cc_component(
 shortfin_gtest_test(
   NAME shortfin_array_test
   SRCS
+    array_test.cc
     dims_test.cc
     dtype_test.cc
 )

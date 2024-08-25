@@ -22,7 +22,7 @@ namespace shortfin::array {
 
 // Polymorphic trampoline methods to a backing typed, xarray adaptor. This
 // allows xtensor facilities to be used in a dtype agnostic fashion.
-class poly_xt_methods {
+class SHORTFIN_API poly_xt_methods {
  public:
   // Prints the contents of the array.
   virtual std::string contents_to_s() = 0;
@@ -69,7 +69,7 @@ class poly_xt_methods {
 // on the base_array instance if the xtensor bridge is not used is one pointer.
 // On first use, it is a heap allocation and a switch on dtype.
 template <typename DerivedArrayTy, typename MemoryTy>
-class poly_xt_mixin {
+class SHORTFIN_API poly_xt_mixin {
  public:
   poly_xt_mixin() = default;
   // Don't copy the poly instance: if it is needed on the copy, it will be

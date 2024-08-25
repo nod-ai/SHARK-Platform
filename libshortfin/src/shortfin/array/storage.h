@@ -185,6 +185,9 @@ class SHORTFIN_API storage {
 template <typename EltTy>
 class typed_mapping {
  public:
+  using span_type = std::span<EltTy>;
+  using const_span_type = std::span<const EltTy>;
+
   typed_mapping(mapping untyped_mapping)
       : untyped_mapping_(std::move(untyped_mapping)) {}
   typed_mapping(const typed_mapping &) = delete;
@@ -194,9 +197,24 @@ class typed_mapping {
     return untyped_mapping_.size() / sizeof(EltTy);
   }
   bool empty() const noexcept { return size() == 0; }
-  EltTy *data() const noexcept {
+  EltTy *data() noexcept {
     return reinterpret_cast<EltTy *>(untyped_mapping_.data());
   }
+  EltTy *data() const noexcept {
+    return reinterpret_cast<const EltTy *>(untyped_mapping_.data());
+  }
+
+  span_type span() { return span_type(data(), size()); }
+  const_span_type span() const { return const_span_type(data(), size()); }
+
+  span_type::iterator begin() { return span().begin(); }
+  span_type::iterator end() { return span().end(); }
+
+  const_span_type::iterator begin() const { return span().begin(); }
+  const_span_type::iterator end() const { return span().end(); }
+
+  const_span_type::iterator cbegin() const { return span().begin(); }
+  const_span_type::iterator cend() const { return span().end(); }
 
  private:
   mapping untyped_mapping_;
