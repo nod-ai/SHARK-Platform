@@ -17,7 +17,6 @@
 #include "shortfin/array/dims.h"
 #include "shortfin/array/dtype.h"
 #include "shortfin/array/storage.h"
-#include "shortfin/support/logging.h"  // DO NOT SUBMIT
 
 namespace shortfin::array {
 

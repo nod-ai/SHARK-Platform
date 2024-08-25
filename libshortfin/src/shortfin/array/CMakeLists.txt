@@ -21,4 +21,6 @@ shortfin_cc_component(
   COMPONENTS
     shortfin_local
     shortfin_support
+  DEPS
+    xtensor
 )
