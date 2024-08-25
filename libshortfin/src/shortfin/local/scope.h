@@ -46,7 +46,7 @@ class SHORTFIN_API ScopedDevice {
   std::string to_s() const { return affinity().to_s(); }
 
   bool operator==(const ScopedDevice &other) const {
-    return (&scope_ == &other.scope_) && affinity_ == other.affinity_;
+    return (scope_ == other.scope_) && affinity_ == other.affinity_;
   }
 
   // Returns a future which will be satisfied when the primary device timeline

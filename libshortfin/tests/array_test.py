@@ -34,6 +34,11 @@ def test_storage(scope):
     print(ary.shape)
     assert ary.shape == [2, 4]
     assert ary.dtype == sf.array.float32
+
+    print("ARY.DEVICE=", ary.device, ary.device.__class__)
+    print("SCOPE.DEVICE=", scope.device(0))
+    print("EQ:", ary.device == scope.device(0))
+
     assert ary.device == scope.device(0)
 
     # Mapping API contract.
