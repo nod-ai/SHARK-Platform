@@ -25,7 +25,7 @@ class typed_xt_methods final : public poly_xt_methods {
     return *reinterpret_cast<xt_specific_t *>(adaptor_storage);
   }
 
-  static void concrete_inplace_new(char *inst_storage, void *array_memory,
+  static void concrete_inplace_new(uint8_t *inst_storage, void *array_memory,
                                    size_t array_memory_size, Dims &dims) {
     // We rely on the fact that the typed_xt_methods specialization has the
     // exact same memory layout as the base class.
@@ -51,7 +51,7 @@ class typed_xt_methods final : public poly_xt_methods {
 };
 }  // namespace
 
-bool poly_xt_methods::inplace_new(char *inst_storage, DType dtype,
+bool poly_xt_methods::inplace_new(uint8_t *inst_storage, DType dtype,
                                   void *array_memory, size_t array_memory_size,
                                   Dims &dims) {
 #define POLY_XT_CASE(et, cpp_type)                            \

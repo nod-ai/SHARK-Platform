@@ -41,14 +41,15 @@ class poly_xt_methods {
   // storage area reserved.
   // Returns true if an appropriate instance is instantiated. False if no
   // implementation for the dtype exists.
-  static bool inplace_new(char *inst_storage, DType dtype, void *array_memory,
-                          size_t array_memory_size, Dims &dims);
+  static bool inplace_new(uint8_t *inst_storage, DType dtype,
+                          void *array_memory, size_t array_memory_size,
+                          Dims &dims);
 
   // When instantiated via inplace_new, destorys the instance, calling both
   // the type specific adaptor destructor and the subclass destructor.
   virtual void inplace_destruct_this() = 0;
 
-  char adaptor_storage[sizeof(xt_generic_t)];
+  uint8_t adaptor_storage[sizeof(xt_generic_t)];
 
   template <typename DerivedArrayTy, typename MemoryTy>
   friend class poly_xt_mixin;
@@ -138,7 +139,7 @@ class poly_xt_mixin {
  private:
   struct PolyInstance {
     MemoryTy memory;
-    char methods_storage[sizeof(poly_xt_methods)];
+    uint8_t methods_storage[sizeof(poly_xt_methods)];
     poly_xt_methods *methods() {
       return reinterpret_cast<poly_xt_methods *>(methods_storage);
     }
