@@ -105,7 +105,7 @@ jobs:
         cd ${{ env.LIBSHORTFIN_DIR }}/build
         cmake --build . --target test
         cd ${{ env.LIBSHORTFIN_DIR }}
-        pytest -m "not requires_amd_gpu"
+        pytest -s -v -m "not requires_amd_gpu"
 
     - name: Build libshortfin (host-only)
       run: |

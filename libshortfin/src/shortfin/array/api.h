@@ -8,7 +8,9 @@
 #define SHORTFIN_ARRAY_API_H
 
 #include "shortfin/array/array.h"
+#include "shortfin/array/dims.h"
 #include "shortfin/array/dtype.h"
 #include "shortfin/array/storage.h"
+#include "shortfin/array/xtensor_bridge.h"
 
 #endif  // SHORTFIN_ARRAY_API_H

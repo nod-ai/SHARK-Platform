@@ -28,19 +28,25 @@ class SHORTFIN_API Worker;
 // needed to do thing with some slice of device queues.
 class SHORTFIN_API ScopedDevice {
  public:
+  ScopedDevice() = default;
   ScopedDevice(Scope &scope, DeviceAffinity affinity)
-      : scope_(scope), affinity_(affinity) {}
+      : scope_(&scope), affinity_(affinity) {}
   ScopedDevice(Scope &scope, Device *device)
-      : scope_(scope), affinity_(device) {}
+      : scope_(&scope), affinity_(device) {}
+  ScopedDevice(const ScopedDevice &other)
+      : scope_(other.scope_), affinity_(other.affinity_) {}
 
-  Scope &scope() const { return scope_; }
+  Scope &scope() const {
+    assert(scope_ && "scope must not be null");
+    return *scope_;
+  }
   DeviceAffinity affinity() const { return affinity_; }
   Device *raw_device() const { return affinity_.device(); }
 
   std::string to_s() const { return affinity().to_s(); }
 
   bool operator==(const ScopedDevice &other) const {
-    return (&scope_ == &other.scope_) && affinity_ == other.affinity_;
+    return (scope_ == other.scope_) && affinity_ == other.affinity_;
   }
 
   // Returns a future which will be satisfied when the primary device timeline
@@ -49,7 +55,7 @@ class SHORTFIN_API ScopedDevice {
   CompletionEvent OnSync(bool flush = true);
 
  private:
-  Scope &scope_;
+  Scope *scope_ = nullptr;
   DeviceAffinity affinity_;
 };
 

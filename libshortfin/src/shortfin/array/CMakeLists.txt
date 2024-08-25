@@ -10,13 +10,25 @@ shortfin_cc_component(
   HDRS
     array.h
     api.h
+    dims.h
     dtype.h
     storage.h
   SRCS
     array.cc
     dtype.cc
     storage.cc
+    xtensor_bridge.cc
   COMPONENTS
     shortfin_local
     shortfin_support
+  DEPS
+    xtensor
+)
+
+shortfin_gtest_test(
+  NAME shortfin_array_test
+  SRCS
+    array_test.cc
+    dims_test.cc
+    dtype_test.cc
 )
