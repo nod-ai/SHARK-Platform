@@ -24,3 +24,10 @@ shortfin_cc_component(
   DEPS
     xtensor
 )
+
+shortfin_gtest_test(
+  NAME shortfin_array_test
+  SRCS
+    dims_test.cc
+    dtype_test.cc
+)

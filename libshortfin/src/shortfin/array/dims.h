@@ -133,6 +133,7 @@ class SHORTFIN_API InlinedDims {
     }
   }
   std::size_t size() const { return size_; }
+  bool empty() const { return size_ == 0; }
 
   // Clears shape, setting the rank to zero and deleting any non-inline
   // dimension storage.
@@ -224,7 +225,7 @@ class SHORTFIN_API InlinedDims {
         // Need to switch to dynamic size.
         DynamicTy new_array(new element_type[count]);
         for (std::size_t i = 0; i < size_; ++i)
-          new_array[i] = dims_.dynamic_dims[i];
+          new_array[i] = dims_.inline_dims[i];
         for (std::size_t i = size_; i < count; ++i) new_array[i] = value;
         dims_.inline_dims.~array();
         new (&dims_.dynamic_dims) DynamicTy(std::move(new_array));
