@@ -120,6 +120,7 @@ class SHORTFIN_API storage {
 
   // Whether the buffer supports host mappable memory.
   bool is_mappable_for_read() const;
+  bool is_mappable_for_read_write() const;
 
   // Maps the memory for access from a host pointer using a scoped mapping.
   void MapExplicit(mapping &mapping, iree_hal_memory_access_t access);

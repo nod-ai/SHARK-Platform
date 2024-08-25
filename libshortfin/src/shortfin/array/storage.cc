@@ -113,6 +113,13 @@ bool storage::is_mappable_for_read() const {
           IREE_HAL_MEMORY_ACCESS_READ);
 }
 
+bool storage::is_mappable_for_read_write() const {
+  return (iree_hal_buffer_allowed_usage(buffer_) &
+          IREE_HAL_MEMORY_TYPE_HOST_VISIBLE) &&
+         (iree_hal_buffer_allowed_access(buffer_) &
+          (IREE_HAL_MEMORY_ACCESS_READ | IREE_HAL_MEMORY_ACCESS_WRITE));
+}
+
 void storage::MapExplicit(mapping &mapping, iree_hal_memory_access_t access) {
   assert(access != IREE_HAL_MEMORY_ACCESS_NONE);
   mapping.reset();

@@ -17,6 +17,7 @@ shortfin_cc_component(
     array.cc
     dtype.cc
     storage.cc
+    xtensor_bridge.cc
   COMPONENTS
     shortfin_local
     shortfin_support

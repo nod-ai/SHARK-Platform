@@ -15,6 +15,7 @@
 #include "shortfin/array/dims.h"
 #include "shortfin/array/dtype.h"
 #include "shortfin/array/storage.h"
+#include "shortfin/array/xtensor_bridge.h"
 #include "shortfin/support/api.h"
 
 namespace shortfin::array {
@@ -51,7 +52,9 @@ class SHORTFIN_API base_array {
   Dims shape_;
 };
 
-class SHORTFIN_API device_array : public base_array {
+class SHORTFIN_API device_array
+    : public base_array,
+      public poly_xt_mixin<device_array, class mapping> {
  public:
   device_array(class storage storage, std::span<const size_t> shape,
                DType dtype)
@@ -95,6 +98,9 @@ class SHORTFIN_API device_array : public base_array {
   mapping data_rw();
   // Map the array's data for write-only untyped access.
   mapping data_w();
+
+  // Maps memory for bridging to xtensor. If mapping is unsupported, return {}.
+  std::optional<mapping> map_memory_for_xtensor();
 
   // Typed access to the backing data.
   template <typename EltTy>

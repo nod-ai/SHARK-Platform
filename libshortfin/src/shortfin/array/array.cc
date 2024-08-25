@@ -28,25 +28,34 @@ mapping device_array::data_rw() { return storage_.MapReadWrite(); }
 
 mapping device_array::data_w() { return storage_.MapWriteDiscard(); }
 
+std::optional<mapping> device_array::map_memory_for_xtensor() {
+  if (storage_.is_mappable_for_read_write()) {
+    return storage_.MapReadWrite();
+  } else if (storage_.is_mappable_for_read()) {
+    return storage_.MapRead();
+  }
+  return {};
+}
+
 std::string device_array::to_s() const {
   std::string contents;
+  const char *contents_prefix = " ";
   if (!storage_.is_mappable_for_read()) {
     contents = "<unmappable for host read>";
-  } else if (dtype() == DType::float32()) {
-    auto flat = typed_data<float>();
-    // std::vector<size_t> dims(shape().begin(), shape().end());
-    auto a = xt::adapt(flat.data(), shape_container());
-    std::stringstream out;
-    out << "\n" << a;
-    contents = out.str();
   } else {
-    contents = "<unrepresented dtype>";
+    auto maybe_contents = contents_to_s();
+    if (maybe_contents) {
+      contents = std::move(*maybe_contents);
+      contents_prefix = "\n";
+    } else {
+      contents = "<unsupported dtype or unmappable storage>";
+    }
   }
 
-  return fmt::format("device_array([{}], dtype='{}', device={}({})) = {}",
+  return fmt::format("device_array([{}], dtype='{}', device={}({})) ={}{}",
                      fmt::join(shape(), ", "), dtype().name(),
                      storage_.device().to_s(), storage_.formatted_memory_type(),
-                     contents);
+                     contents_prefix, contents);
 }
 
 }  // namespace shortfin::array
