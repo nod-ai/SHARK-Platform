@@ -63,7 +63,12 @@ def test_storage(scope):
             42.0,
             "{{ 42.,  42.,  42.,  42.},\n { 42.,  42.,  42.,  42.}}",
         ),
-        (sf.array.float64, "d", 42.0, ""),
+        (
+            sf.array.float64,
+            "d",
+            42.0,
+            "{{ 42.,  42.,  42.,  42.},\n { 42.,  42.,  42.,  42.}}",
+        ),
     ],
 )
 def test_xtensor_types(scope, dtype, code, py_value, expected_repr):
