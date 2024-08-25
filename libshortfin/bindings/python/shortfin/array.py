@@ -72,7 +72,6 @@ __all__ = [
     # Classes.
     "base_array",
     "device_array",
-    "host_array",
     "storage",
     "DType",
 ]
