@@ -31,10 +31,19 @@ struct poly_xt_methods {
   using xt_generic_t =
       decltype(xt::adapt(static_cast<double *>(nullptr), Dims()));
 
-  // Placement new an appropriate xt::adapt() into the untyped storage area.
-  // If the storage area is not big enough, throw a logic_error.
+  // Placement new an appropriate subclass into the provided storage area,
+  // which must be sized to hold the base class (subclasses are statically
+  // asserted to be the same size). The appropriate subclass will also placement
+  // new an appropriate xtensor adaptor into the adaptor_storage field. It is
+  // statically asserted that the type specific adaptor will fit into the
+  // storage area reserved.
+  // Returns true if an appropriate instance is instantiated. False if no
+  // implementation for the dtype exists.
   static bool inplace_new(char *inst_storage, DType dtype, void *array_memory,
                           size_t array_memory_size, Dims &dims);
+
+  // When instantiated via inplace_new, destorys the instance, calling both
+  // the type specific adaptor destructor and the subclass destructor.
   virtual void inplace_destruct_this() = 0;
 
   char adaptor_storage[sizeof(xt_generic_t)];
