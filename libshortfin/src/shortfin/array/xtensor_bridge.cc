@@ -10,11 +10,11 @@
 
 namespace shortfin::array {
 
-namespace detail {
 namespace {
 
 template <typename ElementTy>
-struct typed_xt_methods final : public poly_xt_methods {
+class typed_xt_methods final : public poly_xt_methods {
+ public:
   using xt_specific_t =
       decltype(xt::adapt(static_cast<ElementTy *>(nullptr), Dims()));
   // Our specific adaptor type must fit within the memory allocation of the
@@ -89,6 +89,5 @@ bool poly_xt_methods::inplace_new(char *inst_storage, DType dtype,
 
   return false;
 }
-}  // namespace detail
 
 }  // namespace shortfin::array

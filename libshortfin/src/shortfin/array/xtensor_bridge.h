@@ -20,12 +20,14 @@
 
 namespace shortfin::array {
 
-namespace detail {
-
-struct poly_xt_methods {
+// Polymorphic trampoline methods to a backing typed, xarray adaptor. This
+// allows xtensor facilities to be used in a dtype agnostic fashion.
+class poly_xt_methods {
+ public:
   // Prints the contents of the array.
   virtual std::string contents_to_s() = 0;
 
+ protected:
   // Since we adapt from a pointer-based container with Dims, just pick one
   // as a generic version so that we can reserve space in the class for it.
   using xt_generic_t =
@@ -47,9 +49,10 @@ struct poly_xt_methods {
   virtual void inplace_destruct_this() = 0;
 
   char adaptor_storage[sizeof(xt_generic_t)];
-};
 
-}  // namespace detail
+  template <typename DerivedArrayTy, typename MemoryTy>
+  friend class poly_xt_mixin;
+};
 
 // Polymorphic xtensor array mixin. Since xt::array is static on element type,
 // this class provides a bridge that will polymorphically manage a specialized
@@ -82,8 +85,11 @@ class poly_xt_mixin {
     return const_cast<poly_xt_mixin *>(this)->contents_to_s();
   }
 
- protected:
-  detail::poly_xt_methods *optional_xt_methods() {
+  // Access (potentially instantiating) the polymorphic xt methods trampoline
+  // for this array. If no xtensor adaptor can be created or if the memory
+  // is not accessible to the host, returns nullptr. The returned pointer
+  // must not outlive the creating array.
+  poly_xt_methods *optional_xt_methods() {
     if (poly_) {
       return poly_->methods();
     }
@@ -99,16 +105,19 @@ class poly_xt_mixin {
     inst->memory = std::move(*mapping);
     void *data = static_cast<void *>(inst->memory.data());
     size_t data_size = inst->memory.size();
-    if (!detail::poly_xt_methods::inplace_new(
-            inst->methods_storage, dtype, data, data_size,
-            derived_this()->shape_container())) {
+    if (!poly_xt_methods::inplace_new(inst->methods_storage, dtype, data,
+                                      data_size,
+                                      derived_this()->shape_container())) {
       return nullptr;
     }
     poly_ = std::move(inst);
     return poly_.get()->methods();
   }
 
-  detail::poly_xt_methods &xt_methods() {
+  // Accesses (potentially instantiating) the polymorphic xt methods trampoline.
+  // If it cannot be created, throws a std::logic_error. The returned reference
+  // must not outlive the creating array.
+  poly_xt_methods &xt_methods() {
     auto m = optional_xt_methods();
     if (!m) {
       throw std::logic_error(fmt::format(
@@ -118,6 +127,7 @@ class poly_xt_mixin {
     return *m;
   }
 
+ protected:
   ~poly_xt_mixin() {
     if (poly_) {
       // Need to in-place destruct the adaptor and then the methods itself.
@@ -128,9 +138,9 @@ class poly_xt_mixin {
  private:
   struct PolyInstance {
     MemoryTy memory;
-    char methods_storage[sizeof(detail::poly_xt_methods)];
-    detail::poly_xt_methods *methods() {
-      return reinterpret_cast<detail::poly_xt_methods *>(methods_storage);
+    char methods_storage[sizeof(poly_xt_methods)];
+    poly_xt_methods *methods() {
+      return reinterpret_cast<poly_xt_methods *>(methods_storage);
     }
   };
 
