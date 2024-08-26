@@ -90,6 +90,18 @@ class EmbeddingLookupTest(unittest.TestCase):
         ...
 
 
+class GemmTest(unittest.TestCase):
+    def testGemm(self):
+        a = torch.tensor([[1, 2], [3, 4]])
+        b = torch.tensor([[5, 6], [7, 8]])
+        c = torch.tensor([[9, 10], [11, 12]])
+        alpha = 2
+        beta = 3
+        expected = alpha * a @ b.T + beta * c
+        result = ops.gemm(a, b, c, alpha, beta, False, True)
+        torch.testing.assert_close(result, expected)
+
+
 class MatmulTest(unittest.TestCase):
     def tearDown(self):
         ops._registry._test_enable_last_op_dispatch(False)
