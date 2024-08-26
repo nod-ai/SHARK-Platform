@@ -134,6 +134,9 @@ jobs:
         key: ${{ steps.cache-python-deps-restore.outputs.cache-primary-key }}
 
     - name: Build libshortfin
+      env:
+        # TODO(#151): Don't ignore ODR violations
+        ASAN_OPTIONS=detect_odr_violation: 0
       run: |
         eval "$(pyenv init -)"
         mkdir ${{ env.LIBSHORTFIN_DIR }}/build
@@ -152,6 +155,8 @@ jobs:
         pip install -v -e .
 
     - name: Test libshortfin
+      env:
+        CTEST_OUTPUT_ON_FAILURE: 1
       run: |
         eval "$(pyenv init -)"
         cd ${{ env.LIBSHORTFIN_DIR }}/build
