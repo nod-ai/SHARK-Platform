@@ -154,12 +154,17 @@ jobs:
         cmake --build . --target all
         pip install -v -e .
 
-    - name: Test libshortfin
+    - name: Run ctest
+      if: ${{ !cancelled() }}
       env:
         CTEST_OUTPUT_ON_FAILURE: 1
       run: |
-        eval "$(pyenv init -)"
         cd ${{ env.LIBSHORTFIN_DIR }}/build
         cmake --build . --target test
+
+    - name: Run pytest
+      if: ${{ !cancelled() }}
+      run: |
+        eval "$(pyenv init -)"
         cd ${{ env.LIBSHORTFIN_DIR }}
         pytest -m "not requires_amd_gpu"
