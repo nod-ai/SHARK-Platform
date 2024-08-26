@@ -144,6 +144,10 @@ class KVCacheTest(unittest.TestCase):
             )
         page_table = self.paged_kv_cache.unflatten_page_table(self.paged_cache_state)
         index_written = self.start_positions.item()
+        """
+            Getting the value of the paged_seq_block_ids, which is the page id we are writing
+            the K/V cache into.
+        """
         page_id = self.paged_seq_block_ids[0][0].item()
         """
             direct_cache_state is a list of num_transformer_blocks * 2 (one for K and one for V),
