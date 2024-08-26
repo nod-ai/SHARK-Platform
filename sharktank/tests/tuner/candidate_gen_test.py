@@ -82,7 +82,15 @@ def test_get_conv_tile_sizes():
         subgroup_n_count=4,
         waves_per_eu=1,
     )
-    assert candidate_gen.get_conv_tile_sizes(config) == [1, 1, 464, 320, 1, 1, 16]
+    assert candidate_gen.ConvTuner().get_conv_tile_sizes(config) == [
+        1,
+        1,
+        464,
+        320,
+        1,
+        1,
+        16,
+    ]
 
 
 def test_get_contract_tile_sizes():
@@ -138,7 +146,7 @@ def test_get_shapes_mmt():
         r'%20 = linalg.generic {indexing_maps = [affine_map<(d0, d1, d2) -> (d0, d2)>, affine_map<(d0, d1, d2) -> (d1, d2)>, affine_map<(d0, d1, d2) -> (d0, d1)>], iterator_types = ["parallel", "parallel", "reduction"]} ins(%13, %14 : tensor<2048x1280xf16>, tensor<1280x1280xf16>) outs(%19 : tensor<2048x1280xf32>) attrs =  {lowering_config = #iree_codegen.lowering_config<tile_sizes = [[64, 128, 64]]>} {',
         r"^bb0(%in: f16, %in_0: f16, %out: f32):",
     ]
-    assert candidate_gen.get_shapes_mmt(template) == candidate_gen.ProblemSize(
+    assert candidate_gen.MmtTuner().get_shapes(template) == candidate_gen.ProblemSize(
         candidate_gen.MatmulSize(2048, 1280, 1280),
         candidate_gen.ShapedType([2048, 1280], candidate_gen.ElementType.f16),
         candidate_gen.ShapedType([1280, 1280], candidate_gen.ElementType.f16),
@@ -153,7 +161,7 @@ def test_get_shapes_conv():
         r"%8 = linalg.conv_2d_nhwc_hwcf {dilations = dense<1> : vector<2xi64>, lowering_config = #iree_codegen.lowering_config<tile_sizes = [[1, 1, 32, 256, 1, 1, 32]]>, strides = dense<1> : vector<2xi64>} ins(%5, %6 : tensor<1x3x34x1280xf16>, tensor<3x3x1280x256xf16>) outs(%7 : tensor<1x1x32x256xf32>) -> tensor<1x1x32x256xf32>",
         r"flow.dispatch.tensor.store %8, %2, offsets = [%workgroup_id_z, %workgroup_id_y, 0, %3], sizes = [1, 1, 32, 256], strides = [1, 1, 1, 1] : tensor<1x1x32x256xf32> -> !flow.dispatch.tensor<writeonly:tensor<2x32x32x1280xf32>>",
     ]
-    assert candidate_gen.get_shapes_conv(template) == candidate_gen.ProblemSize(
+    assert candidate_gen.ConvTuner().get_shapes(template) == candidate_gen.ProblemSize(
         candidate_gen.MatmulSize(32, 256, 11520),
         candidate_gen.ShapedType([1, 3, 34, 1280], candidate_gen.ElementType.f16),
         candidate_gen.ShapedType([3, 3, 1280, 256], candidate_gen.ElementType.f16),
@@ -169,8 +177,8 @@ def test_get_shapes_contract():
         r'%20 = linalg.generic {indexing_maps = [affine_map<(d0, d1, d2) -> (d0, d2)>, affine_map<(d0, d1, d2) -> (d1, d2)>, affine_map<(d0, d1, d2) -> (d0, d1)>], iterator_types = ["parallel", "parallel", "reduction"]} ins(%13, %14 : tensor<2048x1280xf16>, tensor<1280x1280xf16>) outs(%19 : tensor<2048x1280xf32>) attrs =  {lowering_config = #iree_codegen.lowering_config<tile_sizes = [[64, 128, 64]]>} {',
         r"^bb0(%in: f16, %in_0: f16, %out: f32):",
     ]
-    assert candidate_gen.get_shapes_contract(
-        template, "mk", "nk"
+    assert candidate_gen.ContractionTuner("mk", "nk", "mnk").get_shapes(
+        template
     ) == candidate_gen.ProblemSize(
         candidate_gen.MatmulSize(2048, 1280, 1280),
         candidate_gen.ShapedType([2048, 1280], candidate_gen.ElementType.f16),
@@ -186,8 +194,8 @@ def test_get_shapes_batch_matmul():
         "%11 = linalg.batch_matmul ins(%8, %9 : tensor<1x32x1024xf32>, tensor<1x1024x32xf32>) outs(%10 : tensor<1x32x32xf32>) -> tensor<1x32x32xf32>",
         "flow.dispatch.tensor.store %11, %2, offsets = [%arg0, %arg1, %arg2], sizes = [1, 32, 32], strides = [1, 1, 1] : tensor<1x32x32xf32> -> !flow.dispatch.tensor<writeonly:tensor<4x32x64xf32>>",
     ]
-    assert candidate_gen.get_shapes_batch_matmul(
-        template, "bmk", "bkn"
+    assert candidate_gen.BatchMatmulTuner("bmk", "bkn", "mnk").get_shapes(
+        template
     ) == candidate_gen.ProblemSize(
         candidate_gen.MatmulSize(32, 32, 1024, 1),
         candidate_gen.ShapedType([1, 32, 1024], candidate_gen.ElementType.f32),
@@ -203,7 +211,9 @@ def test_get_shapes_batch_mmt():
         r'%20 = linalg.generic {indexing_maps = [affine_map<(d0, d1, d2, d3) -> (d0, d1, d3)>, affine_map<(d0, d1, d2, d3) -> (d0, d2, d3)>, affine_map<(d0, d1, d2, d3) -> (d0, d1, d2)>], iterator_types = ["parallel", "parallel", "parallel", "reduction"]} ins(%11, %12 : tensor<2x4096x640xi8>, tensor<2x640x640xi8>) outs(%19 : tensor<2x4096x640xi32>) attrs =  {lowering_config = #iree_codegen.lowering_config<tile_sizes = [[1, 64, 128, 128]]>} {',
         r"flow.dispatch.tensor.store %21, %10, offsets = [0, 0, 0], sizes = [2, 4096, 640], strides = [1, 1, 1] : tensor<2x4096x640xf16> -> !flow.dispatch.tensor<writeonly:tensor<2x4096x640xf16>>",
     ]
-    assert candidate_gen.get_shapes_batch_mmt(template) == candidate_gen.ProblemSize(
+    assert candidate_gen.BatchMmtTuner().get_shapes(
+        template
+    ) == candidate_gen.ProblemSize(
         candidate_gen.MatmulSize(4096, 640, 640, 2),
         candidate_gen.ShapedType([2, 4096, 640], candidate_gen.ElementType.i8),
         candidate_gen.ShapedType([2, 640, 640], candidate_gen.ElementType.i8),
@@ -426,9 +436,10 @@ def test_apply_params_mmt():
         candidate_gen.ShapedType([M, N], candidate_gen.ElementType.f32),
         candidate_gen.DispatchKind.mmt,
     )
-    modified, embeddable = candidate_gen.apply_params_mmt(
-        problem_size, mlir_template, config
-    )
+    tf_mlir = candidate_gen.MmtTuner().apply_params(problem_size, mlir_template, config)
+
+    modified = tf_mlir.modified
+    embeddable = tf_mlir.embeddable
 
     assert modified
     assert embeddable
@@ -473,9 +484,12 @@ def test_apply_params_conv():
         candidate_gen.ShapedType([n, oh, ow, oc], candidate_gen.ElementType.f32),
         candidate_gen.DispatchKind.conv,
     )
-    modified, embeddable = candidate_gen.apply_params_conv(
+    tf_mlir = candidate_gen.ConvTuner().apply_params(
         problem_size, mlir_template, config
     )
+
+    modified = tf_mlir.modified
+    embeddable = tf_mlir.embeddable
 
     assert modified
     assert embeddable
@@ -518,9 +532,11 @@ def test_apply_params_contract():
         waves_per_eu=2,
     )
 
-    new_mlir, _embeddable = candidate_gen.apply_params_contract(
-        problem_size, tile_dims, mlir_template, config
+    tf_mlir = candidate_gen.ContractionTuner("mk", "nk", tile_dims).apply_params(
+        problem_size, mlir_template, config
     )
+
+    new_mlir = tf_mlir.modified
 
     assert new_mlir
     assert (
@@ -562,9 +578,12 @@ def test_apply_params_batch_matmul():
         waves_per_eu=2,
     )
 
-    modified, embeddable = candidate_gen.apply_params_batch_matmul(
-        problem_size, tile_dims, mlir_template, config
+    tf_mlir = candidate_gen.BatchMatmulTuner("mk", "nk", tile_dims).apply_params(
+        problem_size, mlir_template, config
     )
+
+    modified = tf_mlir.modified
+    embeddable = tf_mlir.embeddable
 
     assert modified
     assert embeddable
@@ -606,9 +625,12 @@ def test_apply_params_batch_mmt_float():
         waves_per_eu=2,
     )
 
-    modified, embeddable = candidate_gen.apply_params_batch_mmt(
+    tf_mlir = candidate_gen.BatchMmtTuner().apply_params(
         problem_size, mlir_template, config
     )
+
+    modified = tf_mlir.modified
+    embeddable = tf_mlir.embeddable
 
     assert embeddable
     assert modified
@@ -650,9 +672,12 @@ def test_apply_params_batch_mmt_int():
         waves_per_eu=4,
     )
 
-    modified, embeddable = candidate_gen.apply_params_batch_mmt(
+    tf_mlir = candidate_gen.BatchMmtTuner().apply_params(
         problem_size, mlir_template, config
     )
+
+    modified = tf_mlir.modified
+    embeddable = tf_mlir.embeddable
 
     assert modified
     assert "//   transform.named_sequence @match_batch_mmt_2x4096x640x640(" in modified
@@ -715,9 +740,12 @@ def test_apply_params_broadcast_rhs_mmt():
         waves_per_eu=4,
     )
 
-    modified, embeddable = candidate_gen.apply_params_broadcast_rhs_mmt(
-        problem_size, mlir_template, config
-    )
+    tf_mlir = candidate_gen.ContractionTuner(
+        "mk", "nk", "mnk"
+    ).apply_params_broadcast_rhs_mmt(problem_size, mlir_template, config)
+
+    modified = tf_mlir.modified
+    embeddable = tf_mlir.embeddable
 
     assert modified
     assert (
@@ -764,7 +792,9 @@ def test_detect_broadcast_rhs_mmt():
         r"%19 = linalg.fill {lowering_config = #iree_codegen.lowering_config<tile_sizes = [[1, 64, 128, 128]]>} ins(%c0_i32 : i32) outs(%18 : tensor<2x1024x10240xi32>) -> tensor<2x1024x10240xi32>",
         r'%20 = linalg.generic {indexing_maps = [affine_map<(d0, d1, d2, d3) -> (d0, d1, d3)>, affine_map<(d0, d1, d2, d3) -> (d2, d3)>, affine_map<(d0, d1, d2, d3) -> (d0, d1, d2)>], iterator_types = ["parallel", "parallel", "parallel", "reduction"]} ins(%11, %12 : tensor<2x1024x1280xi8>, tensor<10240x1280xi8>) outs(%19 : tensor<2x1024x10240xi32>) attrs =  {lowering_config = #iree_codegen.lowering_config<tile_sizes = [[1, 64, 128, 128]]>} {',
     ]
-    assert candidate_gen.is_broadcast_rhs_mmt(mlir_lines)
+    assert candidate_gen.ContractionTuner("mk", "nk", "mnk").is_broadcast_rhs_mmt(
+        mlir_lines
+    )
 
 
 def test_parse_mlir():

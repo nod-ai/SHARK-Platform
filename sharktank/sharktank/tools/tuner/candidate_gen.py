@@ -923,31 +923,31 @@ class ContractionTuner(DispatchTuner):
         lhs_dynamic_batch.shape[0] = -1
 
         return f"""
-    transform.named_sequence @{functionName}(%generic: !transform.any_op {{transform.readonly}}) -> (!transform.any_op, !transform.any_param) {{
-    %mmt = transform.include @match_broadcast_rhs_mmt_i8_i8_i32 failures(propagate) (%generic) : (!transform.any_op) -> !transform.any_op
-    %lhs = transform.get_operand %generic[0] : (!transform.any_op) -> !transform.any_value
-    %rhs = transform.get_operand %generic[1] : (!transform.any_op) -> !transform.any_value
-    transform.iree.match.cast_compatible_type %lhs = tensor<{lhs_dynamic_batch}> : !transform.any_value
-    transform.iree.match.cast_compatible_type %rhs = tensor<{problem_size.rhs_type}> : !transform.any_value
-    %config = transform.param.constant #iree_codegen.compilation_info<
-        lowering_config = #iree_codegen.lowering_config<tile_sizes = [[{tile_sizes}]]>,
-        translation_info = #iree_codegen.translation_info<LLVMGPUVectorDistribute
-        workgroup_size = [{wg_x}, {wg_y}, {wg_z}] subgroup_size = {configuration.subgroup_size},
-        {{mma_schedule = #iree_gpu.mma_schedule<
-            intrinsic = #iree_gpu.mma_layout<{configuration.intrinsic}>,
-            subgroup_m_count = {configuration.subgroup_m_count}, subgroup_n_count = {configuration.subgroup_n_count}>
-        {extra_config}}}>
-        > -> !transform.any_param
-    transform.yield %generic, %config : !transform.any_op, !transform.any_param
-    }}
-    """
+transform.named_sequence @{functionName}(%generic: !transform.any_op {{transform.readonly}}) -> (!transform.any_op, !transform.any_param) {{
+%mmt = transform.include @match_broadcast_rhs_mmt_i8_i8_i32 failures(propagate) (%generic) : (!transform.any_op) -> !transform.any_op
+%lhs = transform.get_operand %generic[0] : (!transform.any_op) -> !transform.any_value
+%rhs = transform.get_operand %generic[1] : (!transform.any_op) -> !transform.any_value
+transform.iree.match.cast_compatible_type %lhs = tensor<{lhs_dynamic_batch}> : !transform.any_value
+transform.iree.match.cast_compatible_type %rhs = tensor<{problem_size.rhs_type}> : !transform.any_value
+%config = transform.param.constant #iree_codegen.compilation_info<
+    lowering_config = #iree_codegen.lowering_config<tile_sizes = [[{tile_sizes}]]>,
+    translation_info = #iree_codegen.translation_info<LLVMGPUVectorDistribute
+    workgroup_size = [{wg_x}, {wg_y}, {wg_z}] subgroup_size = {configuration.subgroup_size},
+    {{mma_schedule = #iree_gpu.mma_schedule<
+        intrinsic = #iree_gpu.mma_layout<{configuration.intrinsic}>,
+        subgroup_m_count = {configuration.subgroup_m_count}, subgroup_n_count = {configuration.subgroup_n_count}>
+    {extra_config}}}>
+    > -> !transform.any_param
+transform.yield %generic, %config : !transform.any_op, !transform.any_param
+}}
+"""
 
     def apply_params_broadcast_rhs_mmt(
         self,
         problem_size: ProblemSize,
         template: list[str],
         configuration: Configuration,
-    ) -> tuple[str, str]:
+    ) -> TFMLIR:
         M, N, K = problem_size.MNK
         modified = indent(
             self.get_transform_function_broadcast_rhs_mmt(
@@ -1053,24 +1053,24 @@ class BatchMmtTuner(DispatchTuner):
         extra_config = get_pipeline_config(configuration)
 
         return f"""
-    transform.named_sequence @{functionName}(%generic: !transform.any_op {{transform.readonly}}) -> (!transform.any_op, !transform.any_param) {{
-    %mmt = transform.include @match_batch_mmt_i8_i8_i32 failures(propagate) (%generic) : (!transform.any_op) -> !transform.any_op
-    %lhs = transform.get_operand %generic[0] : (!transform.any_op) -> !transform.any_value
-    %rhs = transform.get_operand %generic[1] : (!transform.any_op) -> !transform.any_value
-    transform.iree.match.cast_compatible_type %lhs = tensor<{problem_size.lhs_type}> : !transform.any_value
-    transform.iree.match.cast_compatible_type %rhs = tensor<{problem_size.rhs_type}> : !transform.any_value
-    %config = transform.param.constant #iree_codegen.compilation_info<
-        lowering_config = #iree_codegen.lowering_config<tile_sizes = [[{tile_sizes}]]>,
-        translation_info = #iree_codegen.translation_info<LLVMGPUVectorDistribute
-        workgroup_size = [{wg_x}, {wg_y}, {wg_z}] subgroup_size = {configuration.subgroup_size},
-        {{mma_schedule = #iree_gpu.mma_schedule<
-            intrinsic = #iree_gpu.mma_layout<{configuration.intrinsic}>,
-            subgroup_m_count = {configuration.subgroup_m_count}, subgroup_n_count = {configuration.subgroup_n_count}>
-        {extra_config}}}>
-        > -> !transform.any_param
-    transform.yield %generic, %config : !transform.any_op, !transform.any_param
-    }}
-    """
+transform.named_sequence @{functionName}(%generic: !transform.any_op {{transform.readonly}}) -> (!transform.any_op, !transform.any_param) {{
+%mmt = transform.include @match_batch_mmt_i8_i8_i32 failures(propagate) (%generic) : (!transform.any_op) -> !transform.any_op
+%lhs = transform.get_operand %generic[0] : (!transform.any_op) -> !transform.any_value
+%rhs = transform.get_operand %generic[1] : (!transform.any_op) -> !transform.any_value
+transform.iree.match.cast_compatible_type %lhs = tensor<{problem_size.lhs_type}> : !transform.any_value
+transform.iree.match.cast_compatible_type %rhs = tensor<{problem_size.rhs_type}> : !transform.any_value
+%config = transform.param.constant #iree_codegen.compilation_info<
+    lowering_config = #iree_codegen.lowering_config<tile_sizes = [[{tile_sizes}]]>,
+    translation_info = #iree_codegen.translation_info<LLVMGPUVectorDistribute
+    workgroup_size = [{wg_x}, {wg_y}, {wg_z}] subgroup_size = {configuration.subgroup_size},
+    {{mma_schedule = #iree_gpu.mma_schedule<
+        intrinsic = #iree_gpu.mma_layout<{configuration.intrinsic}>,
+        subgroup_m_count = {configuration.subgroup_m_count}, subgroup_n_count = {configuration.subgroup_n_count}>
+    {extra_config}}}>
+    > -> !transform.any_param
+transform.yield %generic, %config : !transform.any_op, !transform.any_param
+}}
+"""
 
     def apply_params(
         self,
