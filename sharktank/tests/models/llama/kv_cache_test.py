@@ -162,7 +162,7 @@ class KVCacheTest(unittest.TestCase):
         torch.set_default_dtype(torch.float32)
         self.start_positions.add_(1)
         assert self.direct_seq_block_ids.shape[1] == self.paged_seq_block_ids.shape[1]
-        self.decode_attention_mask = self.model.decode_attention_mask(
+        decode_attention_mask = self.model.decode_attention_mask(
             self.model.input_mask(
                 self.start_positions, self.direct_seq_block_ids.shape[1] * self.seq_len
             )
@@ -201,7 +201,7 @@ class KVCacheTest(unittest.TestCase):
                 start_positions=self.start_positions,
                 embedding=self.attention_embedding,
                 embedding_batch_mask=self.embedding_batch_mask,
-                attention_mask=self.decode_attention_mask,
+                attention_mask=decode_attention_mask,
                 cache_state=self.paged_cache_state,
                 seq_block_ids=self.paged_seq_block_ids,
                 xk_temp=xk_temp,
@@ -215,7 +215,7 @@ class KVCacheTest(unittest.TestCase):
                 start_positions=self.start_positions,
                 embedding=self.attention_embedding,
                 embedding_batch_mask=self.embedding_batch_mask,
-                attention_mask=self.decode_attention_mask,
+                attention_mask=decode_attention_mask,
                 cache_state=self.direct_cache_state,
                 seq_block_ids=self.direct_seq_block_ids,
                 xk_temp=xk_temp,
