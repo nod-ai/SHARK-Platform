@@ -31,7 +31,7 @@ def main():
     parser.add_argument(
         "--output-config",
         help="Output file path for exported config file",
-        default="/tmp/batch_llama_v1.json",
+        default="tmp/batch_llama_v1.json",
     )
     parser.add_argument(
         "--bs",
