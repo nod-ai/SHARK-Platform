@@ -9,6 +9,10 @@
 
 #include "spdlog/spdlog.h"
 
+#if !defined(SHORTFIN_LOG_LIFETIMES)
+#define SHORTFIN_LOG_LIFETIMES 0
+#endif
+
 namespace shortfin::logging {
 
 // TODO: Re-export doesn't really work like this. Need to define API
@@ -17,6 +21,22 @@ using spdlog::debug;
 using spdlog::error;
 using spdlog::info;
 using spdlog::warn;
+
+#if SHORTFIN_LOG_LIFETIMES
+template <typename T>
+inline void construct(const char* type_name, T* inst) {
+  info("new {}({})", type_name, static_cast<void*>(inst));
+}
+template <typename T>
+inline void destruct(const char* type_name, T* inst) {
+  info("delete {}({})", type_name, static_cast<void*>(inst));
+}
+#else
+template <typename T>
+inline void construct(const char *type_name, T *) {}
+template <typename T>
+inline void destruct(const char *type_name, T *) {}
+#endif
 
 }  // namespace shortfin::logging
 

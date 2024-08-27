@@ -23,18 +23,17 @@ class SHORTFIN_API mapping {
   mapping(const mapping &) = delete;
   mapping &operator=(const mapping &) = delete;
   mapping &operator=(mapping &&other) {
+    timeline_resource_ = std::move(other.timeline_resource_);
     access_ = other.access_;
     mapping_ = other.mapping_;
-    hal_device_ownership_baton_ = std::move(other.hal_device_ownership_baton_);
     other.access_ = IREE_HAL_MEMORY_ACCESS_NONE;
     std::memset(&other.mapping_, 0, sizeof(other.mapping_));
     return *this;
   }
   mapping(mapping &&other)
-      : access_(other.access_),
-        mapping_(other.mapping_),
-        hal_device_ownership_baton_(
-            std::move(other.hal_device_ownership_baton_)) {
+      : timeline_resource_(std::move(other.timeline_resource_)),
+        access_(other.access_),
+        mapping_(other.mapping_) {
     other.access_ = IREE_HAL_MEMORY_ACCESS_NONE;
     std::memset(&other.mapping_, 0, sizeof(other.mapping_));
   }
@@ -63,15 +62,17 @@ class SHORTFIN_API mapping {
   bool writable() const { return access_ & IREE_HAL_MEMORY_ACCESS_WRITE; }
 
  private:
+  // See note on storage::timeline_resource_. Must be declared first.
+  local::detail::TimelineResource::Ref timeline_resource_;
   iree_hal_memory_access_t access_ = IREE_HAL_MEMORY_ACCESS_NONE;
   iree_hal_buffer_mapping_t mapping_;
-  iree::hal_device_ptr hal_device_ownership_baton_;
   friend class storage;
 };
 
 // Array storage backed by an IREE buffer of some form.
 class SHORTFIN_API storage {
  public:
+  ~storage();
   local::ScopedDevice &device() { return device_; }
   local::Scope &scope() { return device_.scope(); }
   const local::ScopedDevice &device() const { return device_; }
@@ -162,23 +163,13 @@ class SHORTFIN_API storage {
 
  private:
   storage(local::ScopedDevice device, iree::hal_buffer_ptr buffer,
-          local::detail::TimelineResource::Ref timeline_resource)
-      : hal_device_ownership_baton_(iree::hal_device_ptr::borrow_reference(
-            device.raw_device()->hal_device())),
-        buffer_(std::move(buffer)),
-        device_(device),
-        timeline_resource_(std::move(timeline_resource)) {}
-  // TODO(ownership): Since storage is a free-standing object in the system,
-  // it needs an ownership baton that keeps the device/driver alive.
-  // Otherwise, it can outlive the backing device and then then crashes on
-  // buffer deallocation. For now, we stash an RAII hal_device_ptr, which
-  // keeps everything alive. This isn't quite what we want but keeps us going
-  // for now. When fixing, add a test that creates an array, destroys the
-  // System, and then frees the array.
-  iree::hal_device_ptr hal_device_ownership_baton_;
+          local::detail::TimelineResource::Ref timeline_resource);
+  // The timeline resource holds the back reference to the owning scope,
+  // which keeps all devices alive. Buffers must be destroyed before devices,
+  // so this must be declared first.
+  local::detail::TimelineResource::Ref timeline_resource_;
   iree::hal_buffer_ptr buffer_;
   local::ScopedDevice device_;
-  local::detail::TimelineResource::Ref timeline_resource_;
 };
 
 // Wraps an untyped mapping, providing typed access.

@@ -18,8 +18,15 @@ namespace shortfin::iree {
 
 namespace detail {
 struct thread_ptr_helper {
-  static void retain(iree_thread_t *obj) { iree_thread_retain(obj); }
-  static void release(iree_thread_t *obj) { iree_thread_release(obj); }
+  static void steal(iree_thread_t *obj) { LogIREESteal("iree_thread_t", obj); }
+  static void retain(iree_thread_t *obj) {
+    LogIREERetain("iree_thread_t", obj);
+    iree_thread_retain(obj);
+  }
+  static void release(iree_thread_t *obj) {
+    LogIREERelease("iree_thread_t", obj);
+    iree_thread_release(obj);
+  }
 };
 };  // namespace detail
 

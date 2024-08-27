@@ -103,7 +103,7 @@ jobs:
     - name: Test libshortfin (full)
       run: |
         cd ${{ env.LIBSHORTFIN_DIR }}/build
-        cmake --build . --target test
+        ctest --timeout 30 --output-on-failure
         cd ${{ env.LIBSHORTFIN_DIR }}
         pytest -s -v -m "not requires_amd_gpu"
 

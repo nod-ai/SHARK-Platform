@@ -29,6 +29,7 @@ struct iree_dummy_t {
 };
 
 struct dummy_ptr_helper {
+  static void steal(iree_dummy_t *obj) {}
   static void retain(iree_dummy_t *obj) { obj->retain_count++; }
   static void release(iree_dummy_t *obj) { obj->release_count++; }
 };

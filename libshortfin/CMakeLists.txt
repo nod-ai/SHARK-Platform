@@ -46,6 +46,9 @@ option(SHORTFIN_ENABLE_ASAN "Enable ASAN" OFF)
 if(SHORTFIN_ENABLE_ASAN)
   add_compile_options(-fsanitize=address)
   add_link_options(-fsanitize=address)
+
+  # Enable more ASAN checks.
+  add_compile_definitions(IREE_SANITIZER_ADDRESS)
 endif()
 
 option(SHORTFIN_SYSTEMS_AMDGPU "Builds for AMD GPU systems" ON)

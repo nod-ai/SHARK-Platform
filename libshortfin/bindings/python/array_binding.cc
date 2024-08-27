@@ -123,6 +123,7 @@ void BindArray(py::module_ &m) {
              PyBufferReleaser py_view_releaser(py_view);
              self.Fill(py_view.buf, py_view.len);
            })
+      .def("copy_from", [](storage &self, storage &src) { self.CopyFrom(src); })
       .def(
           "map",
           [](storage &self, bool read, bool write, bool discard) {
@@ -232,13 +233,12 @@ void BindArray(py::module_ &m) {
                         py::type<device_array>(), /*keep_alive=*/device.scope(),
                         device_array::for_host(device, shape, dtype));
                   })
-      .def_static("for_transfer",
-                  [](device_array &existing) {
-                    return custom_new_keep_alive<device_array>(
-                        py::type<device_array>(),
-                        /*keep_alive=*/existing.device().scope(),
-                        device_array::for_transfer(existing));
-                  })
+      .def("for_transfer",
+           [](device_array &self) {
+             return custom_new_keep_alive<device_array>(
+                 py::type<device_array>(),
+                 /*keep_alive=*/self.device().scope(), self.for_transfer());
+           })
       .def_prop_ro("device", &device_array::device,
                    py::rv_policy::reference_internal)
       .def_prop_ro("storage", &device_array::storage,

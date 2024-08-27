@@ -160,7 +160,7 @@ jobs:
         CTEST_OUTPUT_ON_FAILURE: 1
       run: |
         cd ${{ env.LIBSHORTFIN_DIR }}/build
-        cmake --build . --target test
+        ctest --timeout 30 --output-on-failure
 
     - name: Run pytest
       if: ${{ !cancelled() }}

@@ -17,6 +17,10 @@
 #include "iree/vm/api.h"
 #include "shortfin/support/api.h"
 
+#if !defined(SHORTFIN_IREE_LOG_RC)
+#define SHORTFIN_IREE_LOG_RC 0
+#endif
+
 namespace shortfin {
 
 // -------------------------------------------------------------------------- //
@@ -36,59 +40,142 @@ namespace iree {
 
 namespace detail {
 
+#if SHORTFIN_IREE_LOG_RC
+void SHORTFIN_API LogIREERetain(const char *type_name, void *ptr);
+void SHORTFIN_API LogIREERelease(const char *type_name, void *ptr);
+void SHORTFIN_API LogIREESteal(const char *type_name, void *ptr);
+void SHORTFIN_API LogLiveRefs();
+#else
+inline void LogIREERetain(const char *type_name, void *ptr) {}
+inline void LogIREERelease(const char *type_name, void *ptr) {}
+inline void LogIREESteal(const char *type_name, void *ptr) {}
+inline void LogLiveRefs() {}
+#endif
+
 struct hal_buffer_ptr_helper {
-  static void retain(iree_hal_buffer_t *obj) { iree_hal_buffer_retain(obj); }
-  static void release(iree_hal_buffer_t *obj) { iree_hal_buffer_release(obj); }
+  static void steal(iree_hal_buffer_t *obj) {
+    LogIREESteal("iree_hal_buffer_t", obj);
+  }
+  static void retain(iree_hal_buffer_t *obj) {
+    LogIREERetain("iree_hal_buffer_t", obj);
+    iree_hal_buffer_retain(obj);
+  }
+  static void release(iree_hal_buffer_t *obj) {
+    LogIREERelease("iree_hal_buffer_t", obj);
+    iree_hal_buffer_release(obj);
+  }
 };
 
 struct hal_command_buffer_helper {
+  static void steal(iree_hal_command_buffer_t *obj) {
+    LogIREESteal("iree_hal_command_buffer_t", obj);
+  }
   static void retain(iree_hal_command_buffer_t *obj) {
+    LogIREERetain("iree_hal_command_buffer_t", obj);
     iree_hal_command_buffer_retain(obj);
   }
   static void release(iree_hal_command_buffer_t *obj) {
+    LogIREERelease("iree_hal_command_buffer_t", obj);
     iree_hal_command_buffer_release(obj);
   }
 };
 
 struct hal_device_ptr_helper {
-  static void retain(iree_hal_device_t *obj) { iree_hal_device_retain(obj); }
-  static void release(iree_hal_device_t *obj) { iree_hal_device_release(obj); }
+  static void steal(iree_hal_device_t *obj) {
+    LogIREESteal("iree_hal_device_t", obj);
+  }
+  static void retain(iree_hal_device_t *obj) {
+    LogIREERetain("iree_hal_device_t", obj);
+    iree_hal_device_retain(obj);
+  }
+  static void release(iree_hal_device_t *obj) {
+    LogIREERelease("iree_hal_device_t", obj);
+    iree_hal_device_release(obj);
+  }
 };
 
 struct hal_driver_ptr_helper {
-  static void retain(iree_hal_driver_t *obj) { iree_hal_driver_retain(obj); }
-  static void release(iree_hal_driver_t *obj) { iree_hal_driver_release(obj); }
+  static void steal(iree_hal_driver_t *obj) {
+    LogIREESteal("iree_hal_driver_t", obj);
+  }
+  static void retain(iree_hal_driver_t *obj) {
+    LogIREERetain("iree_hal_driver_t", obj);
+    iree_hal_driver_retain(obj);
+  }
+  static void release(iree_hal_driver_t *obj) {
+    LogIREERelease("iree_hal_driver_t", obj);
+    iree_hal_driver_release(obj);
+  }
 };
 
 struct hal_fence_ptr_helper {
-  static void retain(iree_hal_fence_t *obj) { iree_hal_fence_retain(obj); }
-  static void release(iree_hal_fence_t *obj) { iree_hal_fence_release(obj); }
+  static void steal(iree_hal_fence_t *obj) {
+    LogIREESteal("iree_hal_fence_t", obj);
+  }
+  static void retain(iree_hal_fence_t *obj) {
+    LogIREERetain("iree_hal_fence_t", obj);
+    iree_hal_fence_retain(obj);
+  }
+  static void release(iree_hal_fence_t *obj) {
+    LogIREERelease("iree_hal_fence_t", obj);
+    iree_hal_fence_release(obj);
+  }
 };
 
 struct hal_semaphore_ptr_helper {
+  static void steal(iree_hal_semaphore_t *obj) {
+    LogIREESteal("iree_hal_semaphore_t", obj);
+  }
   static void retain(iree_hal_semaphore_t *obj) {
+    LogIREERetain("iree_hal_semaphore_t", obj);
     iree_hal_semaphore_retain(obj);
   }
   static void release(iree_hal_semaphore_t *obj) {
+    LogIREERelease("iree_hal_semaphore_t", obj);
     iree_hal_semaphore_release(obj);
   }
 };
 
 struct vm_context_ptr_helper {
-  static void retain(iree_vm_context_t *obj) { iree_vm_context_retain(obj); }
-  static void release(iree_vm_context_t *obj) { iree_vm_context_release(obj); }
+  static void steal(iree_vm_context_t *obj) {
+    LogIREESteal("iree_vm_context_t", obj);
+  }
+  static void retain(iree_vm_context_t *obj) {
+    LogIREERetain("iree_vm_context_t", obj);
+    iree_vm_context_retain(obj);
+  }
+  static void release(iree_vm_context_t *obj) {
+    LogIREERelease("iree_vm_context_t", obj);
+    iree_vm_context_release(obj);
+  }
 };
 
 struct vm_instance_ptr_helper {
-  static void retain(iree_vm_instance_t *obj) { iree_vm_instance_retain(obj); }
+  static void steal(iree_vm_instance_t *obj) {
+    LogIREESteal("iree_vm_instance_t", obj);
+  }
+  static void retain(iree_vm_instance_t *obj) {
+    LogIREERetain("iree_vm_instance_t", obj);
+    iree_vm_instance_retain(obj);
+  }
   static void release(iree_vm_instance_t *obj) {
+    LogIREERelease("iree_vm_instance_t", obj);
     iree_vm_instance_release(obj);
   }
 };
 
 struct vm_module_ptr_helper {
-  static void retain(iree_vm_module_t *obj) { iree_vm_module_retain(obj); }
-  static void release(iree_vm_module_t *obj) { iree_vm_module_release(obj); }
+  static void steal(iree_vm_module_t *obj) {
+    LogIREESteal("iree_vm_module_t", obj);
+  }
+  static void retain(iree_vm_module_t *obj) {
+    LogIREERetain("iree_vm_module_t", obj);
+    iree_vm_module_retain(obj);
+  }
+  static void release(iree_vm_module_t *obj) {
+    LogIREERelease("iree_vm_module_t", obj);
+    iree_vm_module_release(obj);
+  }
 };
 
 };  // namespace detail
@@ -105,41 +192,60 @@ class object_ptr {
     }
   }
   object_ptr(object_ptr &&other) : ptr(other.ptr) { other.ptr = nullptr; }
+  object_ptr &operator=(const object_ptr &other) = delete;
   object_ptr &operator=(object_ptr &&other) {
+    reset();
     ptr = other.ptr;
     other.ptr = nullptr;
     return *this;
   }
-  ~object_ptr() {
-    if (ptr) {
-      Helper::release(ptr);
-    }
-  }
+  ~object_ptr() { reset(); }
 
   // Constructs a new object_ptr by transferring ownership of a raw
   // pointer.
-  static object_ptr steal_reference(T *owned) { return object_ptr(owned); }
+  static object_ptr steal_reference(T *owned) {
+    Helper::steal(owned);
+    return object_ptr(owned);
+  }
+  // Constructs a new object_ptr by retaining a raw pointer.
   static object_ptr borrow_reference(T *owned) {
     Helper::retain(owned);
     return object_ptr(owned);
   }
   operator T *() const noexcept { return ptr; }
 
+  class Assignment {
+   public:
+    explicit Assignment(object_ptr *assign) : assign(assign) {}
+    ~Assignment() {
+      if (assign->ptr) {
+        Helper::steal(assign->ptr);
+      }
+    }
+
+    constexpr operator T **() noexcept {
+      return reinterpret_cast<T **>(&assign->ptr);
+    }
+
+   private:
+    object_ptr *assign = nullptr;
+  };
+
   // Releases any current reference held by this instance and returns a
   // pointer to the raw backing pointer. This is typically used for passing
   // to out parameters which are expected to store a new owned pointer directly.
-  T **for_output() {
+  constexpr Assignment for_output() noexcept {
     reset();
-    return &ptr;
+    return Assignment(this);
   }
 
   operator bool() const { return ptr != nullptr; }
   T *get() const { return ptr; }
-  void reset(T *other = nullptr) {
+  void reset() {
     if (ptr) {
       Helper::release(ptr);
     }
-    ptr = other;
+    ptr = nullptr;
   }
   T *release() {
     T *ret = ptr;
@@ -151,6 +257,8 @@ class object_ptr {
   // Assumes the reference count for owned_ptr.
   object_ptr(T *owned_ptr) : ptr(owned_ptr) {}
   T *ptr = nullptr;
+
+  friend class Assignment;
 };
 
 using hal_buffer_ptr =
