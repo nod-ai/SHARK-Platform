@@ -80,10 +80,9 @@ class SHORTFIN_API device_array
         shape, dtype);
   }
 
-  // Allocates a host array for transfer to/from the given device array.
-  static device_array for_transfer(device_array &with_device_array) {
-    return for_host(with_device_array.storage().device(),
-                    with_device_array.shape(), with_device_array.dtype());
+  // Allocates a host array for transfer to/from this array.
+  device_array for_transfer() {
+    return for_host(storage().device(), shape(), dtype());
   }
 
   // Untyped access to the backing data. The array must be mappable. Specific

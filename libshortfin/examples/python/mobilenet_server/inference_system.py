@@ -12,7 +12,7 @@ import sys
 import shortfin as sf
 import shortfin.array as sfnp
 
-MAX_BATCH = 8
+MAX_BATCH = 1
 
 
 class InferenceRequest(sf.Message):
@@ -27,18 +27,23 @@ class InferenceProcess(sf.Process):
         self.program = program
         self.request_reader = request_queue.reader()
         self.device = self.scope.device(0)
-        self.host_staging = sfnp.host_array(
-            self.device, [MAX_BATCH, 3, 224, 224], sfnp.float32
-        )
         self.device_input = sfnp.device_array(
             self.device, [MAX_BATCH, 3, 224, 224], sfnp.float32
         )
+        self.host_staging = self.device_input.for_transfer()
 
     async def run(self):
         print(f"Inference process: {self.pid}")
         while request := await self.request_reader():
             print(f"[{self.pid}] Got request {request}")
-            # self.host_staging.data = self.raw_image_data
+            # TODO: Should really be taking a slice and writing that. For now,
+            # just writing to the backing storage is the best we have API
+            # support for. Generally, APIs on storage should be mirrored onto
+            # the array.
+            self.host_staging.storage.data = request.raw_image_data
+            print(self.host_staging)
+            self.device_input.storage.copy_from(self.host_staging.storage)
+            print(self.device_input)
 
 
 class Main:
@@ -95,7 +100,10 @@ def run_cli(home_dir: Path, argv):
         # Dumb way to prepare some data to feed [1, 3, 224, 224] f32.
         import array
 
-        dummy_data = array.array("f", [0.2] * (3 * 224 * 224))
+        dummy_data = array.array(
+            "f", ([0.2] * (224 * 224)) + ([0.4] * (224 * 224)) + ([-0.2] * (224 * 224))
+        )
+        # dummy_data = array.array("f", [0.2] * (3 * 224 * 224))
         message = InferenceRequest(dummy_data)
         writer(message)
 

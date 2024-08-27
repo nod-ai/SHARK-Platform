@@ -26,6 +26,15 @@ void ThrowIllegalDeviceAffinity(Device *first, Device *second) {
 }
 }  // namespace detail
 
+storage::storage(local::ScopedDevice device, iree::hal_buffer_ptr buffer,
+                 local::detail::TimelineResource::Ref timeline_resource)
+    : timeline_resource_(std::move(timeline_resource)),
+      buffer_(std::move(buffer)),
+      device_(device) {
+  logging::construct("array::storage", this);
+}
+storage::~storage() { logging::destruct("array::storage", this); }
+
 storage storage::AllocateDevice(ScopedDevice &device,
                                 iree_device_size_t allocation_size) {
   if (!device.raw_device()) {
@@ -103,7 +112,28 @@ void storage::Fill(const void *pattern, iree_host_size_t pattern_length) {
 }
 
 void storage::CopyFrom(storage &source_storage) {
-  throw std::logic_error("CopyFrom NYI");
+  device_.scope().scheduler().AppendCommandBuffer(
+      device_, TransactionType::TRANSFER, [&](Account &account) {
+        // Must depend on the source's mutation dependencies to avoid
+        // read-before-write hazard.
+        account.active_deps_extend(
+            source_storage.timeline_resource_->mutation_barrier());
+        // And depend on our own use and mutations dependencies.
+        account.active_deps_extend(timeline_resource_->use_barrier());
+        account.active_deps_extend(timeline_resource_->mutation_barrier());
+
+        SHORTFIN_THROW_IF_ERROR(iree_hal_command_buffer_copy_buffer(
+            account.active_command_buffer(),
+            /*source_ref=*/
+            iree_hal_make_buffer_ref(source_storage.buffer_, 0, byte_length()),
+            /*target_ref=*/
+            iree_hal_make_buffer_ref(buffer_, 0, byte_length())));
+
+        // And move our own mutation barrier to the current pending timeline
+        // value.
+        timeline_resource_->set_mutation_barrier(
+            account.timeline_sem(), account.timeline_idle_timepoint());
+      });
 }
 
 bool storage::is_mappable_for_read() const {
@@ -127,8 +157,7 @@ void storage::MapExplicit(mapping &mapping, iree_hal_memory_access_t access) {
       buffer_, IREE_HAL_MAPPING_MODE_SCOPED, access,
       /*byte_offset=*/0, byte_length(), &mapping.mapping_));
   mapping.access_ = access;
-  mapping.hal_device_ownership_baton_ =
-      iree::hal_device_ptr::borrow_reference(hal_device_ownership_baton_);
+  mapping.timeline_resource_ = timeline_resource_;
 }
 
 iree_hal_memory_type_t storage::memory_type() const {
@@ -169,16 +198,22 @@ std::string storage::to_s() const {
 // mapping
 // -------------------------------------------------------------------------- //
 
-mapping::mapping() { std::memset(&mapping_, 0, sizeof(mapping_)); }
+mapping::mapping() {
+  logging::construct("array::mapping", this);
+  std::memset(&mapping_, 0, sizeof(mapping_));
+}
 
-mapping::~mapping() noexcept { reset(); }
+mapping::~mapping() noexcept {
+  logging::destruct("array::mapping", this);
+  reset();
+}
 
 void mapping::reset() noexcept {
   if (*this) {
     // Crash the process on failure to unmap. We don't have a good mitigation,
     IREE_CHECK_OK(iree_hal_buffer_unmap_range(&mapping_));
     access_ = IREE_HAL_MEMORY_ACCESS_NONE;
-    hal_device_ownership_baton_.reset();
+    timeline_resource_.reset();
   }
 }
 

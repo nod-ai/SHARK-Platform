@@ -19,6 +19,7 @@ namespace shortfin::local {
 
 System::System(iree_allocator_t host_allocator)
     : host_allocator_(host_allocator) {
+  logging::construct("System", this);
   SHORTFIN_THROW_IF_ERROR(iree_vm_instance_create(IREE_VM_TYPE_CAPACITY_DEFAULT,
                                                   host_allocator_,
                                                   vm_instance_.for_output()));
@@ -27,6 +28,7 @@ System::System(iree_allocator_t host_allocator)
 }
 
 System::~System() {
+  logging::destruct("System", this);
   bool needs_shutdown = false;
   {
     iree::slim_mutex_lock_guard guard(lock_);
@@ -40,6 +42,21 @@ System::~System() {
         "explicitly for maximum stability.");
     Shutdown();
   }
+
+  // Orderly destruction of heavy-weight objects.
+  // Shutdown order is important so we don't leave it to field ordering.
+  vm_instance_.reset();
+
+  // Devices.
+  devices_.clear();
+  named_devices_.clear();
+  retained_devices_.clear();
+
+  // HAL drivers.
+  hal_drivers_.clear();
+
+  // If support for logging refs was compiled in, report now.
+  iree::detail::LogLiveRefs();
 }
 
 void System::Shutdown() {
@@ -63,20 +80,7 @@ void System::Shutdown() {
     }
   }
   blocking_executor_.Kill();
-
   local_workers.clear();
-
-  // Orderly destruction of heavy-weight objects.
-  // Shutdown order is important so we don't leave it to field ordering.
-  vm_instance_.reset();
-
-  // Devices.
-  devices_.clear();
-  named_devices_.clear();
-  retained_devices_.clear();
-
-  // HAL drivers.
-  hal_drivers_.clear();
 }
 
 std::shared_ptr<Scope> System::CreateScope(Worker &worker,
@@ -180,7 +184,7 @@ void System::InitializeHalDriver(std::string_view moniker,
     throw std::logic_error(fmt::format(
         "Cannot register multiple hal drivers with moniker '{}'", moniker));
   }
-  slot.reset(driver.release());
+  slot = std::move(driver);
 }
 
 void System::InitializeHalDevice(std::unique_ptr<Device> device) {
