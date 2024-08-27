@@ -42,9 +42,40 @@ class SystemBuilder;
 // on some form of factory that constructs one to suit both the system being
 // executed on and any preferences on which resources should be accessible.
 //
-// As the root of the hierarchy and the owner of numerous ancillary resources,
-// we declare that System is always managed via a shared_ptr, as this
-// simplifies many aspects of system management.
+// Ownership
+// ---------
+// There are three levels of ownership, all rooted on the System:
+//   1. System: The System class, all drivers, devices, workers, and executors.
+//      There will only ever be one (or a small number if doing something multi
+//      tenant), and all owning references to the System are via
+//      `std::shared_ptr<System>`. Every object in the system must either be
+//      a managed child of the system or own a system reference.
+//   2. Scope: Binds any number of devices to a coherent schedule, rooted on
+//      a Worker. Scopes are independent of the system and there are generally
+//      as many as needed logical concurrency in the application. Each scope
+//      holds a system reference by way of a `std::shared_ptr<System>`. These
+//      are still heavy-weight objects mostly created at initialization time
+//      and are therefore managed held as a `std::shared_ptr<Scope>` by anything
+//      that depends on them.
+//   3. TimelineResource: Any resource in the system (i.e. buffer,
+//      synchronization, object, etc) will hold a unique TimelineResource. These
+//      are light-weight objects managed via intrusive reference counting by
+//      their contained `TimelineResource::Ref` class. Each `TimelineResource`
+//      maintains a `std::shared_ptr<Scope>` back reference to its owning
+//      scope.
+//
+// Leaf objects can have any lifetime that they wish, so long as they maintain
+// an appropriate ownership reference into the System hierarchy above. This
+// includes any application managed objects like arrays, storage, processes,
+// messages, queues, etc.
+//
+// Lifetime debug logging can be enabled via compiler defines:
+//   SHORTFIN_LOG_LIFETIMES=1 : Enables constructor/destructor and this pointer
+//     logging for the primary objects in the system hierarchy.
+//   SHORTFIN_IREE_LOG_RC=1 : Enables the application view of IREE object
+//     reference counting, showing steal/retain/release and the number of
+//     references the application holds for each object. Also will log any
+//     outstanding references when the System is deallocated.
 class SHORTFIN_API System : public std::enable_shared_from_this<System> {
  public:
   System(iree_allocator_t host_allocator);
