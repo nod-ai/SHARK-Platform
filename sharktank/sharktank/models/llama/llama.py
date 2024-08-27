@@ -309,9 +309,9 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         self.add_module(
             "ffn_norm", RMSNormLayer(theta("ffn_norm"), epsilon=rms_epsilon)
         )
-        self.add_module("ffn_gate", LinearLayer(theta("ffn_gate")))
-        self.add_module("ffn_up", LinearLayer(theta("ffn_up")))
-        self.add_module("ffn_down", LinearLayer(theta("ffn_down")))
+        self.add_module("ffn_gate", LinearLayer(theta("ffn_gate_exps")))
+        self.add_module("ffn_up", LinearLayer(theta("ffn_up_exps")))
+        self.add_module("ffn_down", LinearLayer(theta("ffn_down_exps")))
 
         self.block_index = block_index
         self.cache = cache
