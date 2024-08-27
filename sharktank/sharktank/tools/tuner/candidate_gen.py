@@ -485,7 +485,7 @@ def parse_mlir(mlir_text: str) -> ir.Module:
 
 
 @dataclass
-class TFMLIR:
+class MLIRTransformation:
     """Transformation of MLIR context"""
 
     template: str
@@ -510,7 +510,7 @@ class DispatchTuner(ABC):
         problem_size: ProblemSize,
         template: list[str],
         configuration: Configuration,
-    ) -> TFMLIR:
+    ) -> MLIRTransformation:
         """Apply parameter transformations to the operation."""
         pass
 
@@ -631,7 +631,7 @@ class MmtTuner(DispatchTuner):
         problem_size: ProblemSize,
         template: list[str],
         configuration: Configuration,
-    ) -> TFMLIR:
+    ) -> MLIRTransformation:
         M, N, K = problem_size.MNK
         modified = indent(
             self.get_transform_function_mmt(
@@ -646,7 +646,7 @@ class MmtTuner(DispatchTuner):
             self.get_transform_function_mmt(problem_size, f"match_op", configuration),
             "  ",
         )
-        return TFMLIR(template, modified, embeddable)
+        return MLIRTransformation(template, modified, embeddable)
 
 
 class ConvTuner(DispatchTuner):
@@ -768,7 +768,7 @@ class ConvTuner(DispatchTuner):
         problem_size: ProblemSize,
         template: list[str],
         configuration: Configuration,
-    ) -> TFMLIR:
+    ) -> MLIRTransformation:
         conv_dims = ConvDimInfo.from_problem_size(problem_size)
         modified = indent(
             self.get_transform_function_conv(
@@ -785,7 +785,7 @@ class ConvTuner(DispatchTuner):
             self.get_transform_function_conv(problem_size, f"match_op", configuration),
             "  ",
         )
-        return TFMLIR(template, modified, embeddable)
+        return MLIRTransformation(template, modified, embeddable)
 
 
 class ContractionTuner(DispatchTuner):
@@ -957,7 +957,7 @@ transform.yield %generic, %config : !transform.any_op, !transform.any_param
         problem_size: ProblemSize,
         template: list[str],
         configuration: Configuration,
-    ) -> TFMLIR:
+    ) -> MLIRTransformation:
         M, N, K = problem_size.MNK
         modified = indent(
             self.get_transform_function_broadcast_rhs_mmt(
@@ -975,21 +975,21 @@ transform.yield %generic, %config : !transform.any_op, !transform.any_param
             ),
             "  ",
         )
-        return TFMLIR(template, modified, embeddable)
+        return MLIRTransformation(template, modified, embeddable)
 
     def apply_params(
         self,
         problem_size: ProblemSize,
         template: list[str],
         configuration: Configuration,
-    ) -> TFMLIR:
+    ) -> MLIRTransformation:
         if self.is_broadcast_rhs_mmt(template):
             return self.apply_params_broadcast_rhs_mmt(
                 problem_size, template, configuration
             )
 
         # TODO: Generate transform function.
-        return TFMLIR(
+        return MLIRTransformation(
             template,
             apply_configuration(
                 template,
@@ -1087,7 +1087,7 @@ transform.yield %generic, %config : !transform.any_op, !transform.any_param
         problem_size: ProblemSize,
         template: list[str],
         configuration: Configuration,
-    ) -> TFMLIR:
+    ) -> MLIRTransformation:
         M, N, K = problem_size.MNK
         B = problem_size.matmul_size.B
         modified = indent(
@@ -1106,7 +1106,7 @@ transform.yield %generic, %config : !transform.any_op, !transform.any_param
             ),
             "  ",
         )
-        return TFMLIR(template, modified, embeddable)
+        return MLIRTransformation(template, modified, embeddable)
 
 
 class BatchMatmulTuner(DispatchTuner):
@@ -1226,7 +1226,7 @@ class BatchMatmulTuner(DispatchTuner):
         problem_size: ProblemSize,
         template: list[str],
         configuration: Configuration,
-    ) -> TFMLIR:
+    ) -> MLIRTransformation:
         M, N, K = problem_size.MNK
         modified = indent(
             self.get_transform_function_batch_matmul(
@@ -1249,7 +1249,7 @@ class BatchMatmulTuner(DispatchTuner):
             ),
             "  ",
         )
-        return TFMLIR(template, modified, embeddable)
+        return MLIRTransformation(template, modified, embeddable)
 
 
 def walk_callback_get_fn(
