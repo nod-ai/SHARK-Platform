@@ -21,7 +21,7 @@ python punet_autotune.py 1286.mlir --num-candidates=64 --num-model-candidates=10
 
 """
 
-from .. import libtuner
+from ... import libtuner
 from pathlib import Path
 
 
