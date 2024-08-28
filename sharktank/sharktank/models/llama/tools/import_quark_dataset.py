@@ -99,7 +99,11 @@ def apply_per_layer_quant(
     updated_tensors: dict[str, InferenceTensor],
     n_head: int,
     split_sizes: list[int],
-) -> dict[str, InferenceTensor]:
+):
+    """Take the quantization parameters and hf weights from the imported Theta
+    and create InferenceTensors out of them, converting their names to gguf format
+    in the process.
+    """
 
     layer_theta = root_theta(layer_name)
 
