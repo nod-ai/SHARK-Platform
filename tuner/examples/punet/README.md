@@ -1,7 +1,7 @@
 # Punet Tuner
 
 ## Environments
-Follow instructions in `/tuner/README.md`
+Follow instructions in [`/tuner/README.md`](../README.md)
 
 ## Shell Scripts
 
