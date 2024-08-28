@@ -21,7 +21,7 @@ python punet_autotune.py 1286.mlir --num-candidates=64 --num-model-candidates=10
 
 """
 
-import libtuner
+from .. import libtuner
 from pathlib import Path
 
 
@@ -70,7 +70,7 @@ class PunetClient(libtuner.TuningClient):
         command = [
             "timeout",
             "300s",
-            (script_dir / "../int8-model/compile-punet-base.sh").as_posix(),
+            (script_dir / "compile-punet-base.sh").as_posix(),
             "./tools/iree-compile",
             "gfx942",
             f"{mlir_spec_path.resolve()}",

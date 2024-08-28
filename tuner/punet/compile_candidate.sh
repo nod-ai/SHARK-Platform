@@ -2,8 +2,7 @@
 
 set -eou pipefail
 
-readonly MODE="$1"  # Unused for punet.
-readonly INPUT="$2"
+readonly INPUT="$1"
 readonly DIR="$(dirname "$INPUT")"
 readonly BASENAME="$(basename "$INPUT" .mlir)"
 readonly OUT="${DIR}/compiled/${BASENAME}.vmfb"
