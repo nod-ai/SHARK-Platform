@@ -32,6 +32,10 @@ inline std::string_view to_string_view(iree_string_view_t isv) {
   return std::string_view(isv.data, isv.size);
 }
 
+inline iree_string_view_t to_iree_string_view(std::string_view sv) {
+  return iree_make_string_view(sv.data(), sv.size());
+}
+
 namespace iree {
 
 // -------------------------------------------------------------------------- //
@@ -51,132 +55,6 @@ inline void LogIREERelease(const char *type_name, void *ptr) {}
 inline void LogIREESteal(const char *type_name, void *ptr) {}
 inline void LogLiveRefs() {}
 #endif
-
-struct hal_buffer_ptr_helper {
-  static void steal(iree_hal_buffer_t *obj) {
-    LogIREESteal("iree_hal_buffer_t", obj);
-  }
-  static void retain(iree_hal_buffer_t *obj) {
-    LogIREERetain("iree_hal_buffer_t", obj);
-    iree_hal_buffer_retain(obj);
-  }
-  static void release(iree_hal_buffer_t *obj) {
-    LogIREERelease("iree_hal_buffer_t", obj);
-    iree_hal_buffer_release(obj);
-  }
-};
-
-struct hal_command_buffer_helper {
-  static void steal(iree_hal_command_buffer_t *obj) {
-    LogIREESteal("iree_hal_command_buffer_t", obj);
-  }
-  static void retain(iree_hal_command_buffer_t *obj) {
-    LogIREERetain("iree_hal_command_buffer_t", obj);
-    iree_hal_command_buffer_retain(obj);
-  }
-  static void release(iree_hal_command_buffer_t *obj) {
-    LogIREERelease("iree_hal_command_buffer_t", obj);
-    iree_hal_command_buffer_release(obj);
-  }
-};
-
-struct hal_device_ptr_helper {
-  static void steal(iree_hal_device_t *obj) {
-    LogIREESteal("iree_hal_device_t", obj);
-  }
-  static void retain(iree_hal_device_t *obj) {
-    LogIREERetain("iree_hal_device_t", obj);
-    iree_hal_device_retain(obj);
-  }
-  static void release(iree_hal_device_t *obj) {
-    LogIREERelease("iree_hal_device_t", obj);
-    iree_hal_device_release(obj);
-  }
-};
-
-struct hal_driver_ptr_helper {
-  static void steal(iree_hal_driver_t *obj) {
-    LogIREESteal("iree_hal_driver_t", obj);
-  }
-  static void retain(iree_hal_driver_t *obj) {
-    LogIREERetain("iree_hal_driver_t", obj);
-    iree_hal_driver_retain(obj);
-  }
-  static void release(iree_hal_driver_t *obj) {
-    LogIREERelease("iree_hal_driver_t", obj);
-    iree_hal_driver_release(obj);
-  }
-};
-
-struct hal_fence_ptr_helper {
-  static void steal(iree_hal_fence_t *obj) {
-    LogIREESteal("iree_hal_fence_t", obj);
-  }
-  static void retain(iree_hal_fence_t *obj) {
-    LogIREERetain("iree_hal_fence_t", obj);
-    iree_hal_fence_retain(obj);
-  }
-  static void release(iree_hal_fence_t *obj) {
-    LogIREERelease("iree_hal_fence_t", obj);
-    iree_hal_fence_release(obj);
-  }
-};
-
-struct hal_semaphore_ptr_helper {
-  static void steal(iree_hal_semaphore_t *obj) {
-    LogIREESteal("iree_hal_semaphore_t", obj);
-  }
-  static void retain(iree_hal_semaphore_t *obj) {
-    LogIREERetain("iree_hal_semaphore_t", obj);
-    iree_hal_semaphore_retain(obj);
-  }
-  static void release(iree_hal_semaphore_t *obj) {
-    LogIREERelease("iree_hal_semaphore_t", obj);
-    iree_hal_semaphore_release(obj);
-  }
-};
-
-struct vm_context_ptr_helper {
-  static void steal(iree_vm_context_t *obj) {
-    LogIREESteal("iree_vm_context_t", obj);
-  }
-  static void retain(iree_vm_context_t *obj) {
-    LogIREERetain("iree_vm_context_t", obj);
-    iree_vm_context_retain(obj);
-  }
-  static void release(iree_vm_context_t *obj) {
-    LogIREERelease("iree_vm_context_t", obj);
-    iree_vm_context_release(obj);
-  }
-};
-
-struct vm_instance_ptr_helper {
-  static void steal(iree_vm_instance_t *obj) {
-    LogIREESteal("iree_vm_instance_t", obj);
-  }
-  static void retain(iree_vm_instance_t *obj) {
-    LogIREERetain("iree_vm_instance_t", obj);
-    iree_vm_instance_retain(obj);
-  }
-  static void release(iree_vm_instance_t *obj) {
-    LogIREERelease("iree_vm_instance_t", obj);
-    iree_vm_instance_release(obj);
-  }
-};
-
-struct vm_module_ptr_helper {
-  static void steal(iree_vm_module_t *obj) {
-    LogIREESteal("iree_vm_module_t", obj);
-  }
-  static void retain(iree_vm_module_t *obj) {
-    LogIREERetain("iree_vm_module_t", obj);
-    iree_vm_module_retain(obj);
-  }
-  static void release(iree_vm_module_t *obj) {
-    LogIREERelease("iree_vm_module_t", obj);
-    iree_vm_module_release(obj);
-  }
-};
 
 };  // namespace detail
 
@@ -261,24 +139,38 @@ class object_ptr {
   friend class Assignment;
 };
 
-using hal_buffer_ptr =
-    object_ptr<iree_hal_buffer_t, detail::hal_buffer_ptr_helper>;
-using hal_command_buffer_ptr =
-    object_ptr<iree_hal_command_buffer_t, detail::hal_command_buffer_helper>;
-using hal_driver_ptr =
-    object_ptr<iree_hal_driver_t, detail::hal_driver_ptr_helper>;
-using hal_device_ptr =
-    object_ptr<iree_hal_device_t, detail::hal_device_ptr_helper>;
-using hal_fence_ptr =
-    object_ptr<iree_hal_fence_t, detail::hal_fence_ptr_helper>;
-using hal_semaphore_ptr =
-    object_ptr<iree_hal_semaphore_t, detail::hal_semaphore_ptr_helper>;
-using vm_context_ptr =
-    object_ptr<iree_vm_context_t, detail::vm_context_ptr_helper>;
-using vm_instance_ptr =
-    object_ptr<iree_vm_instance_t, detail::vm_instance_ptr_helper>;
-using vm_module_ptr =
-    object_ptr<iree_vm_module_t, detail::vm_module_ptr_helper>;
+// Defines a reference counting helper struct named like
+// iree_hal_buffer_ptr_helper (for type_stem == hal_buffer).
+// These must be defined in the shortfin::iree::detail namespace.
+#define SHORTFIN_IREE_DEF_PTR(type_stem)             \
+  namespace detail {                                 \
+  struct type_stem##_ptr_helper {                    \
+    static void steal(iree_##type_stem##_t *obj) {   \
+      LogIREESteal(#type_stem "_t", obj);            \
+    }                                                \
+    static void retain(iree_##type_stem##_t *obj) {  \
+      LogIREERetain(#type_stem "_t", obj);           \
+      iree_##type_stem##_retain(obj);                \
+    }                                                \
+    static void release(iree_##type_stem##_t *obj) { \
+      LogIREERelease(#type_stem "_t", obj);          \
+      iree_##type_stem##_release(obj);               \
+    }                                                \
+  };                                                 \
+  }                                                  \
+  using type_stem##_ptr =                            \
+      object_ptr<iree_##type_stem##_t, detail::type_stem##_ptr_helper>
+
+SHORTFIN_IREE_DEF_PTR(hal_command_buffer);
+SHORTFIN_IREE_DEF_PTR(hal_buffer);
+SHORTFIN_IREE_DEF_PTR(hal_device);
+SHORTFIN_IREE_DEF_PTR(hal_driver);
+SHORTFIN_IREE_DEF_PTR(hal_fence);
+SHORTFIN_IREE_DEF_PTR(hal_semaphore);
+SHORTFIN_IREE_DEF_PTR(vm_context);
+SHORTFIN_IREE_DEF_PTR(vm_instance);
+SHORTFIN_IREE_DEF_PTR(vm_list);
+SHORTFIN_IREE_DEF_PTR(vm_module);
 
 // Holds a pointer allocated by some allocator, deleting it if still owned
 // at destruction time.

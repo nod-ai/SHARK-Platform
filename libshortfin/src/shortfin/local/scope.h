@@ -140,6 +140,8 @@ class SHORTFIN_API Scope : public std::enable_shared_from_this<Scope> {
   Program LoadUnboundProgram(std::span<const ProgramModule> modules,
                              Program::Options options = {});
 
+  void Invoke(ProgramFunction &function);
+
  private:
   void AddDevice(std::string_view device_class, Device *device);
   void Initialize();  // Called after all devices are added.

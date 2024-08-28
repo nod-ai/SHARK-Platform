@@ -12,6 +12,26 @@
 
 namespace shortfin::local::detail {
 
+namespace {
+
+std::string SummarizeFence(iree_hal_fence_t *fence) {
+  if (!SHORTFIN_SCHED_LOG_ENABLED) {
+    return std::string();
+  }
+  std::string result("fence(");
+  iree_hal_semaphore_list_t list = iree_hal_fence_semaphore_list(fence);
+  for (iree_host_size_t i = 0; i < list.count; ++i) {
+    if (i > 0) result.append(", ");
+    result.append(fmt::format("[{}@{}]",
+                              static_cast<void *>(list.semaphores[i]),
+                              list.payload_values[i]));
+  }
+  result.append(")");
+  return result;
+}
+
+}  // namespace
+
 // -------------------------------------------------------------------------- //
 // Account
 // -------------------------------------------------------------------------- //
@@ -30,9 +50,6 @@ void Account::Initialize() {
 
 void Account::Reset() {
   active_tx_type_ = TransactionType::NONE;
-  // if (active_command_buffer_) {
-  //   iree_hal_command_buffer_end(active_command_buffer_);
-  // }
   active_command_buffer_.reset();
 }
 
@@ -55,8 +72,12 @@ CompletionEvent Account::OnSync() {
     iree::shared_event::ref satisfied(false);
     iree::hal_semaphore_ptr sem = sem_;
     auto idle_timepoint = idle_timepoint_;
+    SHORTFIN_SCHED_LOG("OnSync::Wait({}@{})", static_cast<void *>(sem.get()),
+                       idle_timepoint);
     scheduler_.system().blocking_executor().Schedule(
         [sem = std::move(sem), idle_timepoint, satisfied]() {
+          SHORTFIN_SCHED_LOG("OnSync::Complete({}@{})",
+                             static_cast<void *>(sem.get()), idle_timepoint);
           iree_status_t status = iree_hal_semaphore_wait(
               sem, idle_timepoint, iree_infinite_timeout());
           IREE_CHECK_OK(status);
@@ -140,8 +161,10 @@ void Scheduler::AppendCommandBuffer(ScopedDevice &device,
                                     TransactionType tx_type,
                                     std::function<void(Account &)> callback) {
   Account &account = GetDefaultAccount(device);
-
   auto needed_affinity_bits = device.affinity().queue_affinity();
+  SHORTFIN_SCHED_LOG(
+      "AppendCommandBuffer(account=0x{:x}, tx_type={}, queue_affinity={}):",
+      account.id(), static_cast<int>(tx_type), needed_affinity_bits);
 
   // Initialize a fresh command buffer if needed.
   if (!account.active_command_buffer_) {
@@ -181,6 +204,11 @@ void Scheduler::AppendCommandBuffer(ScopedDevice &device,
     account.active_deps_ = std::move(new_active_deps);
     account.active_command_buffer_ = std::move(new_cb);
     account.idle_timepoint_ += 1;
+    SHORTFIN_SCHED_LOG(
+        "  : New command buffer (category={}, idle_timepoint={})", category,
+        account.idle_timepoint_);
+  } else {
+    SHORTFIN_SCHED_LOG("  : Continue active command buffer");
   }
 
   // Perform the mutation.
@@ -199,13 +227,21 @@ void Scheduler::Flush() {
   // from idle to active.
   for (Account &account : accounts_) {
     if (!account.active_command_buffer_) continue;
-
     iree_hal_semaphore_t *signal_sem = account.sem_;
     uint64_t signal_timepoint = account.idle_timepoint_;
     iree_hal_command_buffer_t *active_command_buffer =
         account.active_command_buffer_;
     iree_hal_buffer_binding_table_t binding_tables =
         iree_hal_buffer_binding_table_empty();
+
+    SHORTFIN_SCHED_LOG(
+        "Flush command buffer (account=0x{:x}, queue_affinity={}, "
+        "signal_timepoint={}, deps={})",
+        account.id(), account.active_queue_affinity_bits_, signal_timepoint,
+        SummarizeFence(account.active_deps_));
+
+    // End recording and submit.
+    SHORTFIN_THROW_IF_ERROR(iree_hal_command_buffer_end(active_command_buffer));
     SHORTFIN_THROW_IF_ERROR(iree_hal_device_queue_execute(
         account.hal_device(),
         /*queue_affinity=*/account.active_queue_affinity_bits_,

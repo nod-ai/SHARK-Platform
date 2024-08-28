@@ -67,7 +67,7 @@ class SHORTFIN_API device_array
   static device_array for_device(local::ScopedDevice &device,
                                  std::span<const size_t> shape, DType dtype) {
     return device_array(
-        storage::AllocateDevice(device, dtype.compute_dense_nd_size(shape)),
+        storage::allocate_device(device, dtype.compute_dense_nd_size(shape)),
         shape, dtype);
   }
 
@@ -76,13 +76,30 @@ class SHORTFIN_API device_array
   static device_array for_host(local::ScopedDevice &device,
                                std::span<const size_t> shape, DType dtype) {
     return device_array(
-        storage::AllocateHost(device, dtype.compute_dense_nd_size(shape)),
+        storage::allocate_host(device, dtype.compute_dense_nd_size(shape)),
         shape, dtype);
   }
 
   // Allocates a host array for transfer to/from this array.
   device_array for_transfer() {
     return for_host(storage().device(), shape(), dtype());
+  }
+
+  // Enqueues a fill of the storage with an arbitrary pattern of the given
+  // size. The pattern size must be 1, 2, or 4. Equivalent to calling the same
+  // on the backing storage.
+  void fill(const void *pattern, iree_host_size_t pattern_length) {
+    storage_.fill(pattern, pattern_length);
+  }
+
+  // Performs either a d2h, h2d or d2d transfer from a source storage to this
+  // storage. Equivalent to calling the same on the backing storage.
+  void copy_from(device_array &source_array) {
+    storage_.copy_from(source_array.storage_);
+  }
+  // Inverse of copy_from.
+  void copy_to(device_array &dest_array) {
+    dest_array.storage_.copy_from(storage_);
   }
 
   // Untyped access to the backing data. The array must be mappable. Specific

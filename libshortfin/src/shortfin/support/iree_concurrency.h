@@ -16,21 +16,7 @@
 
 namespace shortfin::iree {
 
-namespace detail {
-struct thread_ptr_helper {
-  static void steal(iree_thread_t *obj) { LogIREESteal("iree_thread_t", obj); }
-  static void retain(iree_thread_t *obj) {
-    LogIREERetain("iree_thread_t", obj);
-    iree_thread_retain(obj);
-  }
-  static void release(iree_thread_t *obj) {
-    LogIREERelease("iree_thread_t", obj);
-    iree_thread_release(obj);
-  }
-};
-};  // namespace detail
-
-using thread_ptr = object_ptr<iree_thread_t, detail::thread_ptr_helper>;
+SHORTFIN_IREE_DEF_PTR(thread);
 
 // Wraps an iree::slim_mutex as an RAII object.
 class slim_mutex {

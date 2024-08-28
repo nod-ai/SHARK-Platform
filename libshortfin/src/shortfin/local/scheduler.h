@@ -175,6 +175,9 @@ class SHORTFIN_API Account {
   Device *device() const { return device_; }
   iree_hal_device_t *hal_device() { return hal_device_; }
   size_t semaphore_count() const { return 1; }
+  // Gets a unique integer id for this account. Currently just the address of
+  // the sem, but can be derived from any owned entity.
+  uintptr_t id() const { return reinterpret_cast<uintptr_t>(sem_.get()); }
 
   // Accesses the active command buffer. This will only be non-null if a
   // pending transaction has been set up (i.e. via AppendCommandBuffer).

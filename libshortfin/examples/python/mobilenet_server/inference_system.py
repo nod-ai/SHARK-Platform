@@ -24,7 +24,7 @@ class InferenceRequest(sf.Message):
 class InferenceProcess(sf.Process):
     def __init__(self, program, request_queue, **kwargs):
         super().__init__(**kwargs)
-        self.program = program
+        self.main_function = program["module.torch-jit-export$async"]
         self.request_reader = request_queue.reader()
         self.device = self.scope.device(0)
         self.device_input = sfnp.device_array(
@@ -41,9 +41,14 @@ class InferenceProcess(sf.Process):
             # support for. Generally, APIs on storage should be mirrored onto
             # the array.
             self.host_staging.storage.data = request.raw_image_data
-            print(self.host_staging)
-            self.device_input.storage.copy_from(self.host_staging.storage)
-            print(self.device_input)
+            print("host_staging =", self.host_staging)
+            self.device_input.copy_from(self.host_staging)
+            output = await self.scope.invoke(self.main_function, self.device_input)
+            print("OUTPUT:", output)
+            # read_back = self.device_input.for_transfer()
+            # read_back.copy_from(self.device_input)
+            # await self.device
+            # print("read back =", read_back)
 
 
 class Main:

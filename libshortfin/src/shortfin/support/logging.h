@@ -13,6 +13,10 @@
 #define SHORTFIN_LOG_LIFETIMES 0
 #endif
 
+// Scheduler logging.
+#define SHORTFIN_SCHED_LOG_ENABLED 1
+#define SHORTFIN_SCHED_LOG(...) shortfin::logging::info("SCHED: " __VA_ARGS__)
+
 namespace shortfin::logging {
 
 // TODO: Re-export doesn't really work like this. Need to define API

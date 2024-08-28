@@ -20,19 +20,19 @@ template class InlinedDims<std::size_t>;
 // device_array
 // -------------------------------------------------------------------------- //
 
-const mapping device_array::data() const { return storage_.MapRead(); }
+const mapping device_array::data() const { return storage_.map_read(); }
 
-mapping device_array::data() { return storage_.MapRead(); }
+mapping device_array::data() { return storage_.map_read(); }
 
-mapping device_array::data_rw() { return storage_.MapReadWrite(); }
+mapping device_array::data_rw() { return storage_.map_read_write(); }
 
-mapping device_array::data_w() { return storage_.MapWriteDiscard(); }
+mapping device_array::data_w() { return storage_.map_write_discard(); }
 
 std::optional<mapping> device_array::map_memory_for_xtensor() {
   if (storage_.is_mappable_for_read_write()) {
-    return storage_.MapReadWrite();
+    return storage_.map_read_write();
   } else if (storage_.is_mappable_for_read()) {
-    return storage_.MapRead();
+    return storage_.map_read();
   }
   return {};
 }
@@ -52,10 +52,12 @@ std::string device_array::to_s() const {
     }
   }
 
-  return fmt::format("device_array([{}], dtype='{}', device={}({})) ={}{}",
-                     fmt::join(shape(), ", "), dtype().name(),
-                     storage_.device().to_s(), storage_.formatted_memory_type(),
-                     contents_prefix, contents);
+  return fmt::format(
+      "device_array([{}], dtype='{}', device={}(type={}, usage={}, access={})) "
+      "={}{}",
+      fmt::join(shape(), ", "), dtype().name(), storage_.device().to_s(),
+      storage_.formatted_memory_type(), storage_.formatted_buffer_usage(),
+      storage_.formatted_memory_access(), contents_prefix, contents);
 }
 
 }  // namespace shortfin::array

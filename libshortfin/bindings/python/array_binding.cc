@@ -13,6 +13,23 @@ using namespace shortfin::array;
 namespace shortfin::python {
 
 namespace {
+static const char DOCSTRING_ARRAY_COPY_FROM[] =
+    R"(Copy contents from a source array to this array.
+
+Equivalent to `dest_array.storage.copy_from(source_array.storage)`.
+)";
+
+static const char DOCSTRING_ARRAY_COPY_TO[] =
+    R"(Copy contents this array to a destination array.
+
+Equivalent to `dest_array.storage.copy_from(source_array.storage)`.
+)";
+
+static const char DOCSTRING_ARRAY_FILL[] = R"(Fill an array with a value.
+
+Equivalent to `array.storage.fill(pattern)`.
+)";
+
 static const char DOCSTRING_STORAGE_DATA[] = R"(Access raw binary contents.
 
 Accessing `foo = storage.data` is equivalent to `storage.data.map(read=True)`.
@@ -26,6 +43,23 @@ bytes leaves any unwritten contents in an undefined state.
 
 As with `map`, this will only work on buffers that are host visible, which
 includes all host buffers and device buffers created with the necessary access.
+)";
+
+static const char DOCSTRING_STORAGE_COPY_FROM[] =
+    R"(Copy contents from a source storage to this array.
+
+This operation executes asynchronously and the effect will only be visible
+once the execution scope has been synced to the point of mutation.
+)";
+
+static const char DOCSTRING_STORAGE_FILL[] = R"(Fill a storage with a value.
+
+Takes as argument any value that can be interpreted as a buffer with the Python
+buffer protocol of size 1, 2, or 4 bytes. The storage will be filled uniformly
+with the pattern.
+
+This operation executes asynchronously and the effect will only be visible
+once the execution scope has been synced to the point of mutation.
 )";
 
 static const char DOCSTRING_STORAGE_MAP[] =
@@ -104,26 +138,30 @@ void BindArray(py::module_ &m) {
       .def_static(
           "allocate_host",
           [](local::ScopedDevice &device, iree_device_size_t allocation_size) {
-            return storage::AllocateHost(device, allocation_size);
+            return storage::allocate_host(device, allocation_size);
           },
           py::arg("device"), py::arg("allocation_size"), py::keep_alive<0, 1>())
       .def_static(
           "allocate_device",
           [](local::ScopedDevice &device, iree_device_size_t allocation_size) {
-            return storage::AllocateDevice(device, allocation_size);
+            return storage::allocate_device(device, allocation_size);
           },
           py::arg("device"), py::arg("allocation_size"), py::keep_alive<0, 1>())
-      .def("fill",
-           [](storage &self, py::handle buffer) {
-             Py_buffer py_view;
-             int flags = PyBUF_FORMAT | PyBUF_ND;  // C-Contiguous ND.
-             if (PyObject_GetBuffer(buffer.ptr(), &py_view, flags) != 0) {
-               throw py::python_error();
-             }
-             PyBufferReleaser py_view_releaser(py_view);
-             self.Fill(py_view.buf, py_view.len);
-           })
-      .def("copy_from", [](storage &self, storage &src) { self.CopyFrom(src); })
+      .def(
+          "fill",
+          [](storage &self, py::handle buffer) {
+            Py_buffer py_view;
+            int flags = PyBUF_FORMAT | PyBUF_ND;  // C-Contiguous ND.
+            if (PyObject_GetBuffer(buffer.ptr(), &py_view, flags) != 0) {
+              throw py::python_error();
+            }
+            PyBufferReleaser py_view_releaser(py_view);
+            self.fill(py_view.buf, py_view.len);
+          },
+          py::arg("pattern"), DOCSTRING_STORAGE_FILL)
+      .def(
+          "copy_from", [](storage &self, storage &src) { self.copy_from(src); },
+          py::arg("source_storage"), DOCSTRING_STORAGE_COPY_FROM)
       .def(
           "map",
           [](storage &self, bool read, bool write, bool discard) {
@@ -137,7 +175,7 @@ void BindArray(py::module_ &m) {
             }
             mapping *cpp_mapping = nullptr;
             py::object py_mapping = CreateMappingObject(&cpp_mapping);
-            self.MapExplicit(
+            self.map_explicit(
                 *cpp_mapping,
                 static_cast<iree_hal_memory_access_bits_t>(access));
             return py_mapping;
@@ -154,12 +192,12 @@ void BindArray(py::module_ &m) {
           [](storage &self) {
             mapping *cpp_mapping = nullptr;
             py::object py_mapping = CreateMappingObject(&cpp_mapping);
-            *cpp_mapping = self.MapRead();
+            *cpp_mapping = self.map_read();
             return py_mapping;
           },
           [](storage &self, py::handle buffer_obj) {
             PyBufferRequest src_info(buffer_obj, PyBUF_SIMPLE);
-            auto dest_data = self.MapWriteDiscard();
+            auto dest_data = self.map_write_discard();
             if (src_info.view().len > dest_data.size()) {
               throw std::invalid_argument(
                   fmt::format("Cannot write {} bytes into buffer of {} bytes",
@@ -243,6 +281,17 @@ void BindArray(py::module_ &m) {
                    py::rv_policy::reference_internal)
       .def_prop_ro("storage", &device_array::storage,
                    py::rv_policy::reference_internal)
+
+      .def(
+          "fill",
+          [](py::handle self, py::handle buffer) {
+            self.attr("storage").attr("fill")(buffer);
+          },
+          py::arg("pattern"), DOCSTRING_ARRAY_FILL)
+      .def("copy_from", &device_array::copy_from, py::arg("source_array"),
+           DOCSTRING_ARRAY_COPY_FROM)
+      .def("copy_to", &device_array::copy_to, py::arg("dest_array"),
+           DOCSTRING_ARRAY_COPY_TO)
       .def("__repr__", &device_array::to_s);
 }
 

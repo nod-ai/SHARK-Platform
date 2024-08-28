@@ -379,8 +379,17 @@ void BindLocal(py::module_ &m) {
       .def("__add__", &local::DeviceAffinity::AddDevice)
       .def("__repr__", &local::DeviceAffinity::to_s);
 
-  py::class_<local::Program>(m, "Program");
+  py::class_<local::Program>(m, "Program")
+      .def_prop_ro("exports", &local::Program::exports)
+      .def("lookup_function", &local::Program::LookupRequiredFunction)
+      .def("__getitem__", &local::Program::LookupRequiredFunction);
+  py::class_<local::ProgramFunction>(m, "ProgramFunction")
+      .def_prop_ro("name", &local::ProgramFunction::name)
+      .def_prop_ro("calling_convention",
+                   &local::ProgramFunction::calling_convention)
+      .def("__repr__", &local::ProgramFunction::to_s);
   py::class_<local::ProgramModule>(m, "ProgramModule")
+      .def_prop_ro("exports", &local::ProgramModule::exports)
       .def("__repr__", &local::ProgramModule::to_s)
       .def_static("load", &local::ProgramModule::Load, py::arg("system"),
                   py::arg("path"), py::arg("mmap") = true);
