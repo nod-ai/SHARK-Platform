@@ -41,11 +41,11 @@ class LinearLayer(ThetaLayer):
         *,
         weight_name: str = "weight",
         bias_name: str = "bias",
-        debug_save_file = None
+        debug_save_file=None,
     ):
         super().__init__(theta)
         self._simulate_native_quant = True
-        self.weight = self.theta_tensor(weight_name).to(device="cuda:0")
+        self.weight = self.theta_tensor(weight_name)  # .to(device="cuda:0")
         self.bias = None
         if bias_name in self.theta.keys:
             self.bias = self.theta_tensor(bias_name)
@@ -65,17 +65,17 @@ class LinearLayer(ThetaLayer):
         q_input = self.q_input
         qdq_input = self.qdq_input
         qdq_output = self.qdq_output
-
+        original_input = x.clone().detach()
         if self.premul_input is not None:
             x = ops.elementwise(torch.mul, x, self.premul_input)
 
         if q_input is not None:
             x = q_input.quantize(x)
         elif qdq_input is not None:
+            print("qdq input")
             x = qdq_input.quantize(x).unpack().dequant()
-        #from torch.nn import functional as F
-        
-        print("calling linear")
+        # from torch.nn import functional as F
+
         y = ops.linear(x, weight, bias)
         # Unconditionally dequantize.
         # TODO: Support a q_output specifier that signals the layer to let
@@ -87,6 +87,15 @@ class LinearLayer(ThetaLayer):
             qdq_y = qdq_output.quantize(y).unpack().dequant()
         if self.debug_save_file != None:
             print(f"debug save file: {self.debug_save_file}")
-            save_file({"qdq_y": qdq_y, "y": y,"input":x, "weight": weight.unpack().dequant()}, self.debug_save_file)
-        y = qdq_y if qdq_y is not None else y 
+            save_file(
+                {
+                    "qdq_y": qdq_y,
+                    "y": y,
+                    "qdq_i": x,
+                    "input": original_input,
+                    "weight": weight.unpack().dequant(),
+                },
+                self.debug_save_file,
+            )
+        y = qdq_y if qdq_y is not None else y
         return y

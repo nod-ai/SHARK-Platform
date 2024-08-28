@@ -133,7 +133,6 @@ class PagedLlamaModelV1(BaseCausalLMModel):
         
         key = "token_embd"
         if key not in list(theta.keys):
-            self.hf = True
             key = "model.embed_tokens"
         self.add_module(
             "token_embedding",
@@ -192,6 +191,8 @@ class PagedLlamaModelV1(BaseCausalLMModel):
         self._assert_device(*cache_state, dtype=self.activation_dtype)
         h = self.token_embedding(tokens)
         self.trace_tensor("llama.token_embedding", h)
+        #with safe_open("/home/nod/cuda_dumps/model_layers_0_input_layernorm.safetensors", "pt") as f:
+            #h =f.get_tensor("input").to(self.device, dtype=torch.float16)
 
         # Iterate over attention blocks.
         for block_idx, block in enumerate(self.attn_blocks):
@@ -311,7 +312,7 @@ class PagedLlamaAttentionBlock(ThetaLayer):
             # tensor = tensor.reshape(head_count_kv, head_count // head_count_kv + 2, head_dim, head_dim * head_count)
             # print(tensor)
             self.add_module(
-                "attn_norm", RMSNormLayer(theta("input_layernorm"), epsilon=rms_epsilon)
+                "attn_norm", RMSNormLayer(theta("input_layernorm"), epsilon=rms_epsilon, debug_save_file=f"input_layernorm_{block_index}.safetensors")
             )
             # self.add_module("attn_qkv", LinearLayer(theta("self_attn.qkv")))
             self.add_module("attn_q", LinearLayer(theta("self_attn.q_proj"), debug_save_file=f"attn_q_{block_index}.safetensors"))
@@ -368,7 +369,6 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         xv_temp: Optional[torch.Tensor] = None,
     ):
         assert bool(start_index is not None) ^ bool(embedding_batch_mask is not None)
-        h = h.to(torch.float16)
         x = self.attn_norm(h)
         #with safe_open("/home/nod/quant_linear.safetensors", "pt") as f:
         #    x = f.get_tensor("input").to(torch.float32)
@@ -381,19 +381,19 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         xq = xq.view(bs, batch_seq_len, self.head_count, self.head_dim)
         xk = xk.view(bs, batch_seq_len, self.head_count_kv, self.head_dim)
         xv = xv.view(bs, batch_seq_len, self.head_count_kv, self.head_dim)
-        save_dict = {"xq": xq.detach().clone().contiguous(), "xk": xk.detach().clone().contiguous(), "xv": xv.detach().clone().contiguous()}
+        #save_dict = {"xq": xq.detach().clone().contiguous(), "xk": xk.detach().clone().contiguous(), "xv": xv.detach().clone().contiguous()}
         #with safe_open(f"/home/nod/cuda_dumps/hf_attn_block{self.block_index}.safetensors", "pt") as f:
-        #    xq = f.get_tensor("xq").to("cuda:0").transpose(1,2)
-        #    xk = f.get_tensor("xk").to("cuda:0").transpose(1,2)
-        #    xv = f.get_tensor("xv").to("cuda:0").transpose(1,2)
+            #xq = f.get_tensor("xq").to("cuda:0").transpose(1,2)
+            #xk = f.get_tensor("xk").to("cuda:0").transpose(1,2)
+            #xv = f.get_tensor("xv").to("cuda:0").transpose(1,2)
 
         # Fast path to start_index based embedding lookup if available.
         # Falls back to a slower position based index lookup.
         if start_index is not None:
             print(f"using start index: {start_index}")
             xq, xk = embedding.forward(xq=xq, xk=xk, start_index=start_index)
-            save_dict["embed_xq"]= xq.detach().clone().contiguous()
-            save_dict["embed_xk"]= xk.detach().clone().contiguous()
+            #save_dict["embed_xq"]= xq.detach().clone().contiguous()
+            #save_dict["embed_xk"]= xk.detach().clone().contiguous()
         else:
             xq, xk = embedding.apply_batched_mask(
                 xq=xq, xk=xk, mask=embedding_batch_mask
@@ -421,8 +421,8 @@ class PagedLlamaAttentionBlock(ThetaLayer):
                 kv_seq_len=kv_seq_len,
                 cache_state=cache_state,
             )
-            save_dict["cache_xk"] = xk.detach().clone().contiguous()
-            save_dict["cache_xv"] = xv.detach().clone().contiguous()
+            #save_dict["cache_xk"] = xk.detach().clone().contiguous()
+            #save_dict["cache_xv"] = xv.detach().clone().contiguous()
         else:
             raise NotImplementedError(f"Unsupported KV cache type: {type(self.cache)}")
 
@@ -441,8 +441,8 @@ class PagedLlamaAttentionBlock(ThetaLayer):
 
             xk = repeat_kv(xk)
             xv = repeat_kv(xv)
-        save_dict["repeat_xk"] = xk.detach().clone().contiguous() 
-        save_dict["repeat_xv"] = xv.detach().clone().contiguous()
+        #save_dict["repeat_xk"] = xk.detach().clone().contiguous() 
+        #save_dict["repeat_xv"] = xv.detach().clone().contiguous()
 
         # Transpose into [bs, heads, sl, dim]
         xq = xq.transpose(1, 2)
@@ -451,7 +451,7 @@ class PagedLlamaAttentionBlock(ThetaLayer):
 
         # Flash attention.
         attn_weights = torch.matmul(xq, keys.transpose(2, 3)) / math.sqrt(self.head_dim)
-        save_dict["attn_weights"] = attn_weights.detach().clone().contiguous()
+        #save_dict["attn_weights"] = attn_weights.detach().clone().contiguous()
         self.assert_not_nan(attn_weights)
 
         # Apply attention mask.
@@ -459,13 +459,13 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         if attention_mask is not None:
             # self.trace_tensor("attn_mask", attention_mask)
             attn_weights = attn_weights + attention_mask
-        save_dict["masked_attn_weights"] = attn_weights.detach().clone().contiguous()
+        #save_dict["masked_attn_weights"] = attn_weights.detach().clone().contiguous()
         attn_weights = F.softmax(attn_weights.float(), dim=-1).type_as(xq)
-        save_dict["softmax_attn_weights"] = attn_weights.detach().clone().contiguous()
+        #save_dict["softmax_attn_weights"] = attn_weights.detach().clone().contiguous()
         attn_output = torch.matmul(attn_weights, values)  # (bs, heads, slen, head_dim)
         attn_output = attn_output.transpose(1, 2).reshape(bs, batch_seq_len, -1)
-        save_dict["pre_projection"] = attn_output.detach().clone().contiguous()
-        save_file(save_dict, f"attn_block_{self.block_index}.safetensors")
+        #save_dict["pre_projection"] = attn_output.detach().clone().contiguous()
+        #save_file(save_dict, f"attn_block_{self.block_index}.safetensors")
         # Project.
         attn_output = self.attn_output(attn_output)
 

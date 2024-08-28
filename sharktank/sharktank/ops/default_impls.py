@@ -188,7 +188,6 @@ def matmul_default(lhs, rhs, *, transpose_rhs: bool) -> Tensor:
     rhs = unbox_tensor(rhs)
     if transpose_rhs:
         rhs = rhs.T
-    print(f"using default torch matmul, lhs dtype: {lhs.dtype}, rhs dtype: {rhs.dtype}")
     return torch.matmul(lhs, rhs.to(lhs.dtype))
 
 
@@ -216,7 +215,7 @@ def rms_norm_default(x, weight, *, epsilon: float) -> Tensor:
     weight = unbox_tensor(weight).to(device=x.device)
     variance = x.pow(2).mean(-1, keepdim=True)
     output = x * torch.rsqrt(variance + epsilon)
-    output = output * weight
+    output = weight * output.to(torch.float16)
     return output
 
 

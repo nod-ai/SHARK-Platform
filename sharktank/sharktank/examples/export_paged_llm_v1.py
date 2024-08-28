@@ -51,10 +51,7 @@ def main():
     dataset = cli.get_input_dataset(args)
     print('\n'.join([x for x in dataset.root_theta.flatten() if x.endswith(".weight")]))
 
-    if dataset_type == "irpa":
-        hp = configs.LlamaHParams.from_hf_props(dataset.properties)
-    else:
-        hp = configs.LlamaHParams.from_gguf_props(dataset.properties)
+    hp = configs.LlamaHParams.from_gguf_props(dataset.properties)
     llama_config = LlamaModelConfig(hp)
     llama_config.static_tables = False  # Rely on the compiler for hoisting tables.
     llama_config.kv_cache_type = "direct" if args.bs == [1] else "paged"

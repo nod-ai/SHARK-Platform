@@ -53,6 +53,7 @@ class TorchGenerator:
         #token_ids, seq_lens = self.tokenizer.encode(
         #    prompts, pad_to_multiple_of=self.model.cache.pad_sequence_stride
         #)
+
         #token_ids = torch.tensor(token_ids, device=self.model.device)
         #seq_lens = torch.tensor(seq_lens, device=self.model.device)
         with safe_open("/home/nod/batch.safetensors", framework="pt", device="cpu") as st:
@@ -224,6 +225,11 @@ def main():
         default="float32",
     )
     parser.add_argument(
+        "--attention-dtype",
+        help="DType to use for attention in the model",
+        default="float16",
+    )
+    parser.add_argument(
         "--use-hf",
         action="store_true",
         default=False,
@@ -234,7 +240,9 @@ def main():
 
     device = torch.device(args.device) if args.device else None
     activation_dtype = getattr(torch, args.activation_dtype)
+    attention_dtype = getattr(torch, args.attention_dtype)
     assert isinstance(activation_dtype, torch.dtype)
+    assert isinstance(attention_dtype, torch.dtype)
     dataset = cli.get_input_dataset(args)
     tokenizer = cli.get_tokenizer(args)
     prompts = args.prompt
@@ -245,7 +253,7 @@ def main():
         kv_cache_type=args.kv_cache_type,
         device=device,
         activation_dtype=activation_dtype,
-        attention_dtype=activation_dtype,
+        attention_dtype=attention_dtype,
         use_hf=args.use_hf,
     )
     model = PagedLlamaModelV1(dataset.root_theta, config)
@@ -272,8 +280,8 @@ def main():
         intermediates_saver.save_file(
             args.save_intermediates_path + "_prefill.safetensors"
         )
-    counter = 0
     exit()
+    counter = 0
     while not batch.done:
         batch.decode()
         if args.save_intermediates_path:

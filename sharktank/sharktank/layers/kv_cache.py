@@ -100,6 +100,7 @@ class DirectKVCache(BaseKVCache):
         self.seq_length = seq_length
         self.device = device
         self.dtype = dtype
+        print("cache dtype = ", dtype)
 
     @property
     def pad_sequence_stride(self) -> int:
