@@ -26,7 +26,6 @@ from pathlib import Path
 
 
 class PunetClient(libtuner.TuningClient):
-
     def get_dispatch_compile_command(
         self, candidate_tracker: libtuner.CandidateTracker
     ) -> list[str]:

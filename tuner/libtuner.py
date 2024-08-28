@@ -850,9 +850,10 @@ def parse_dispatch_benchmark_results(
             continue
         assert benchmark_time is not None
         candidate_trackers[candidate_id].first_benchmark_time = benchmark_time
-        candidate_trackers[candidate_id].spec_path = (
-            path_config.specs_dir
-            / path_config.get_candidate_spec_filename(candidate_id)
+        candidate_trackers[
+            candidate_id
+        ].spec_path = path_config.specs_dir / path_config.get_candidate_spec_filename(
+            candidate_id
         )
         mlir_path = candidate_trackers[candidate_id].dispatch_mlir_path
         spec_path = candidate_trackers[candidate_id].spec_path
@@ -1109,9 +1110,9 @@ def parse_model_benchmark_results(
     ]
 
     dump_list = []
-    incomplete_list: list[tuple[int, Optional[str]]] = (
-        []
-    )  # format: [(candidate_id, device_id)]
+    incomplete_list: list[
+        tuple[int, Optional[str]]
+    ] = []  # format: [(candidate_id, device_id)]
 
     baseline_time = None
     for same_device_results in grouped_benchmark_results:
@@ -1160,9 +1161,9 @@ def parse_model_benchmark_results(
                 calibrated_benchmark_diff = (
                     benchmark_time - baseline_time
                 ) / baseline_time
-                candidate_trackers[candidate_id].calibrated_benchmark_diff = (
-                    calibrated_benchmark_diff
-                )
+                candidate_trackers[
+                    candidate_id
+                ].calibrated_benchmark_diff = calibrated_benchmark_diff
             else:
                 calibrated_benchmark_diff = None
 
