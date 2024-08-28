@@ -29,16 +29,15 @@ class RotaryEmbeddingLayer(BaseLayer):
         # See https://github.com/nod-ai/sharktank/issues/156
         static_tables = True
         self.device = device
-#<<<<<<< HEAD
-#        self.rope_dimension_count = rope_dimension_count
-#        self.max_seqlen = max_seqlen
-#        self.use_hf = use_hf
-#        if static_tables:
-#            self.register_buffer(
-#                "static_rotary_embed_table", self._create_rotary_embed_table()
-#            )
-#        else:
-#            self.static_rotary_embed_table = None
+        self.rope_dimension_count = rope_dimension_count
+        self.max_seqlen = max_seqlen
+        self.use_hf = use_hf
+        if static_tables:
+            self.register_buffer(
+                "static_rotary_embed_table", self._create_rotary_embed_table()
+            )
+        else:
+            self.static_rotary_embed_table = None
 
     @property
     def rotary_embed_table(self):
@@ -46,13 +45,6 @@ class RotaryEmbeddingLayer(BaseLayer):
             return self._create_rotary_embed_table()
         else:
             return self.static_rotary_embed_table
-#=======
-        self._table = self._create_rotary_embed_table(
-            max_seqlen=max_seqlen,
-            dim=rope_dimension_count,
-            theta_value=rope_freq_base,
-        )
-#>>>>>>> e29c591 (Cleaning up debug statements)
 
     def forward(self, *, xq: torch.Tensor, xk: torch.Tensor, start_index: int):
         # xq_, xk_ shape: bs, sl, _, dim

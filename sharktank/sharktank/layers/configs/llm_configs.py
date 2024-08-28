@@ -47,30 +47,30 @@ class LlamaHParams:
         default_expert_count = 0
         default_expert_used_count = 0
         default_rope_freq_base = 10000.0
-        attention_head_count = _int_prop(p, "llama.attention.head_count")
+        attention_head_count = _int_prop(p, "grok.attention.head_count")
 
         return LlamaHParams(
-            context_length=_int_prop(p, "llama.context_length"),
-            embedding_length=_int_prop(p, "llama.embedding_length"),
-            block_count=_int_prop(p, "llama.block_count"),
-            feed_forward_length=_int_prop(p, "llama.feed_forward_length"),
-            attn_head_dim=_int_prop(p, "llama.rope.dimension_count"),
-            rope_dimension_count=_int_prop(p, "llama.rope.dimension_count"),
+            context_length=_int_prop(p, "grok.context_length"),
+            embedding_length=_int_prop(p, "grok.embedding_length"),
+            block_count=_int_prop(p, "grok.block_count"),
+            feed_forward_length=_int_prop(p, "grok.feed_forward_length"),
+            attn_head_dim=128,#_int_prop(p, "grok.rope.dimension_count"),
+            rope_dimension_count=128,#_int_prop(p, "grok.rope.dimension_count"),
             attention_head_count=attention_head_count,
             attention_layer_norm_rms_epsilon=_float_prop(
-                p, "llama.attention.layer_norm_rms_epsilon"
+                p, "grok.attention.layer_norm_rms_epsilon"
             ),
             attention_head_count_kv=_optional_int_prop(
-                p, "llama.attention.head_count_kv", attention_head_count
+                p, "grok.attention.head_count_kv", attention_head_count
             ),
             rope_freq_base=_optional_float_prop(
-                p, "llama.rope.freq_base", default_rope_freq_base
+                p, "grok.rope.freq_base", default_rope_freq_base
             ),
             expert_count=_optional_int_prop(
-                p, "llama.expert_count", default_expert_count
+                p, "grok.expert_count", default_expert_count
             ),
             expert_used_count=_optional_int_prop(
-                p, "llama.expert_used_count", default_expert_used_count
+                p, "grok.expert_used_count", default_expert_used_count
             ),
         )
 
