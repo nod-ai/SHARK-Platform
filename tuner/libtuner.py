@@ -12,7 +12,9 @@ Provides fundamental functions for tuning:
     - compile_models()
     - benchmark_models()
 
-Requires a wrapper Python script to import `libtuner`, use the `TuningClient` API, customize compilation and benchmarking commands, and implement a complete tuning loop for a specific model.
+Requires a wrapper Python script to import `libtuner`,
+use the `TuningClient` API, customize compilation and benchmarking commands,
+and implement a complete tuning loop for a specific model.
 """
 
 
@@ -46,13 +48,11 @@ DEFAULT_DEVICE_LIST = ["hip://0"]
 # Default values for max number of workers
 DEFAULT_MAX_CPU_WORKERS = (
     multiprocessing.cpu_count() // 2
-)  # the actual amount of worker that will be generated = max(min(max_cpu_workers//2, len(task_list)), 1)
-"""note: Do not use all CPU cores"""
+)  # the actual amount of worker that will be generated = min(max_cpu_workers, len(task_list))
 
 # Declare global variables at the module level for multiprocessing
 worker_id = None
 device_id = None
-"""Do not need to change"""
 
 # Declare special symbols for libtuner to search and locate
 DEVICE_ID_PLACEHOLDER = "!DEVICE_ID!"
@@ -224,17 +224,15 @@ class IREEBenchmarkResult:
             return None
 
 
-def generate_display_DBR(
-    candidate_id: int = 0, mean_time: float = random.uniform(100.0, 500.0)
-) -> str:
+def generate_display_DBR(candidate_id: int, mean_time: float) -> str:
     """Generate dispatch_benchmark_result string for displaying"""
     return f"{candidate_id}\tMean Time: {mean_time:.1f}"
 
 
 def generate_display_MBR(
-    candidate_vmfb_path_str: str = "baseline.vmfb",
-    device_id: str = "0",
-    t1: float = random.uniform(100.0, 500.0),
+    candidate_vmfb_path_str: str,
+    device_id: str,
+    t1: float,
     calibrated_diff: Optional[float] = None,
 ) -> str:
     """Generate model_benchmark_result string for displaying"""
