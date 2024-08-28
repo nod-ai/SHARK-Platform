@@ -17,19 +17,26 @@ Please configure the file paths and update commands in `PunetClient`.
 
 ## Running the Tuner
 
+### [Optional] Generate a tunable mlir
+Use [`punet.sh`](https://github.com/nod-ai/sdxl-scripts/blob/main/tuning/punet.sh) to compile the sample matmul mlir [`mmt_unet.mlir`](https://github.com/nod-ai/sdxl-scripts/blob/main/tuning/mmt_unet.mlir):
+```
+./punet.sh ./mmt_unet.mlir -o baseline.vmfb --iree-hal-dump-executable-files-to=dump-mmt
+cp ./dump-mmt/module_main_2_dispatch_0_rocm_hsaco_fb_benchmark.mlir ./2.mlir
+```
+
 ### Recommended Trial Run
 For an initial trial to test the tuning loop, use:
 ```
-python punet_autotune.py 1286.mlir --num-candidates=1
+python punet_autotune.py 2.mlir --num-candidates=1
 ```
 
 ### Dry Run Test
 To perform a dry run (no GPU required), use:
 ```
-python punet_autotune.py 1286.mlir --num-candidates=64 --num-model-candidates=10 --dry-run
+python punet_autotune.py 2.mlir --num-candidates=64 --num-model-candidates=10 --dry-run
 ```
 
 ### Basic Usage
 ```
-python punet_autotune.py 1286.mlir
+python punet_autotune.py 2.mlir
 ```

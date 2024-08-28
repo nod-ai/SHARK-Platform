@@ -7,17 +7,17 @@
 """
 Sample Usage:
 
-python punet_autotune.py 1286.mlir --lhs-dims=bmk --rhs-dims=bkn --tile-dims=*mnk --devices=hip://0,hip://1 --num-candidates=64
+python punet_autotune.py 2.mlir --lhs-dims=bmk --rhs-dims=bkn --tile-dims=*mnk --devices=hip://0,hip://1 --num-candidates=64
 
 
 Recommended Trial Run:
 
-python punet_autotune.py 1286.mlir --num-candidates=1
+python punet_autotune.py 2.mlir --num-candidates=1
 
 
 Dry Run Test (no gpu requried):
 
-python punet_autotune.py 1286.mlir --num-candidates=64 --num-model-candidates=10 --dry-run
+python punet_autotune.py 2.mlir --num-candidates=64 --num-model-candidates=10 --dry-run
 
 """
 
