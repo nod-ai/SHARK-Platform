@@ -41,9 +41,6 @@ class LlamaHParams:
     attention_layer_norm_rms_epsilon: float
     attention_head_count_kv: int
 
-    #    @staticmethod
-    #    def from_hf_props(p: dict[str, Any]):
-
     @staticmethod
     def from_gguf_props(p: dict[str, Any]):
         attention_head_count = _int_prop(p, "llama.attention.head_count")

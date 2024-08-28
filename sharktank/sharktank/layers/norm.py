@@ -8,7 +8,6 @@ import torch
 
 from .. import ops
 from .base import Theta, ThetaLayer
-from safetensors.torch import save_file
 
 
 class RMSNormLayer(ThetaLayer):
@@ -35,9 +34,6 @@ class RMSNormLayer(ThetaLayer):
 
     def forward(self, x: torch.Tensor):
         orig_dtype = x.dtype
-        print("norm dtype: ", self.dtype)
-        print("orgi_dtype: ", orig_dtype)
-
         x = x.to(self.dtype)
         norm = ops.rms_norm(x, self.weight, epsilon=self.epsilon)
         # Will automatically upcast to the dtype of the weight, which is

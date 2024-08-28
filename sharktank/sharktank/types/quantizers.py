@@ -139,8 +139,7 @@ class StaticScaledQuantizer(QuantizerTensor):
         if axis is None:
             # Per tensor.
             if offset is None:
-                print(self._scale)
-                print(self.dtype)
+                # Changed to t/reciprocal because narrow float types are garbage
                 qs = saturate_cast(
                     t / self._reciprocal_scale,
                     dtype=self.dtype,
@@ -148,7 +147,7 @@ class StaticScaledQuantizer(QuantizerTensor):
                 )
             else:
                 qs = saturate_cast(
-                    t * self._scale + offset,
+                    t / self._reciprocal_scale + offset,
                     dtype=self.dtype,
                     disable_saturate=self._disable_saturate,
                 )

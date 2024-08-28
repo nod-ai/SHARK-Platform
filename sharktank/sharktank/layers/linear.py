@@ -7,11 +7,8 @@
 from typing import Optional
 
 import torch
-from safetensors.torch import save_file
-from torch.nn import functional as F
 from .. import ops
 from .base import Theta, ThetaLayer
-from ..types.layout_utils import saturate_cast
 from ..types import (
     DynamicScaledQuantizer,
     QuantizedTensor,
@@ -44,7 +41,7 @@ class LinearLayer(ThetaLayer):
     ):
         super().__init__(theta)
         self._simulate_native_quant = True
-        self.weight = self.theta_tensor(weight_name)  # .to(device="cuda:0")
+        self.weight = self.theta_tensor(weight_name)
         self.bias = None
         if bias_name in self.theta.keys:
             self.bias = self.theta_tensor(bias_name)
@@ -73,9 +70,9 @@ class LinearLayer(ThetaLayer):
             # TODO: probably need a way to only do q_input if exporting.
             print("qdq input")
             x = qdq_input.quantize(x).unpack().dequant()
-        # from torch.nn import functional as F
 
         y = ops.linear(x, weight, bias)
+
         # Unconditionally dequantize.
         # TODO: Support a q_output specifier that signals the layer to let
         # the QuantizedTensor escape.

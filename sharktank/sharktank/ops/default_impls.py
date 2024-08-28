@@ -212,10 +212,11 @@ def scaled_dot_product_attention(q, k, v, a) -> Tensor:
 @rms_norm.override(Tensor, Tensor)
 def rms_norm_default(x, weight, *, epsilon: float) -> Tensor:
     x = unbox_tensor(x)
-    weight = unbox_tensor(weight).to(device=x.device)
+    weight = unbox_tensor(weight)
     variance = x.pow(2).mean(-1, keepdim=True)
     output = x * torch.rsqrt(variance + epsilon)
-    output = weight * output.to(torch.float16)
+    # The cast here is to match the hf implementation, affects numerics
+    output = weight * output.to(weight.dtype)
     return output
 
 

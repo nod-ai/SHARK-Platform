@@ -15,11 +15,11 @@ from sharktank.layers import *
 from sharktank.types import *
 
 # TODO: Should be using a base class with the protocol supported.
-from sharktank.models.llama.llama import LlamaModelConfig, PagedLlamaModelV1
+from ..models.llama.llama import LlamaModelConfig, PagedLlamaModelV1
 
 
 def main():
-    from sharktank.utils import cli
+    from ..utils import cli
 
     parser = cli.create_parser()
     cli.add_input_dataset_options(parser)
@@ -49,7 +49,6 @@ def main():
     dataset_type = cli.get_input_data_files(args)
     dataset_type = "irpa" if "irpa" in dataset_type else "gguf"
     dataset = cli.get_input_dataset(args)
-    print('\n'.join([x for x in dataset.root_theta.flatten() if x.endswith(".weight")]))
 
     hp = configs.LlamaHParams.from_gguf_props(dataset.properties)
     llama_config = LlamaModelConfig(hp)

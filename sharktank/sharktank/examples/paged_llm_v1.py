@@ -15,15 +15,14 @@ import sys
 
 import torch
 
-from sharktank.layers import *
-from sharktank.types import *
+from ..layers import *
+from ..types import *
 
 # TODO: Should be using a base class with the protocol supported.
-from sharktank.models.llama.llama import *
-from sharktank.utils.debugging import trace_tensor
-from sharktank.utils.tokenizer import InferenceTokenizer, load_tokenizer
-from sharktank.utils.patching import SaveModuleResultTensorsPatch
-from sharktank.models.punet.tools.sample_data import get_random_inputs, load_inputs, save_outputs
+from ..models.llama.llama import *
+from ..utils.debugging import trace_tensor
+from ..utils.tokenizer import InferenceTokenizer
+
 
 class TorchGenerator:
     """Generator that runs directly on the Torch model."""
@@ -50,15 +49,12 @@ class TorchGenerator:
         return self.model.cache.block_seq_stride
 
     def begin_batch(self, prompts: list[str]):
-        #token_ids, seq_lens = self.tokenizer.encode(
-        #    prompts, pad_to_multiple_of=self.model.cache.pad_sequence_stride
-        #)
+        token_ids, seq_lens = self.tokenizer.encode(
+            prompts, pad_to_multiple_of=self.model.cache.pad_sequence_stride
+        )
 
-        #token_ids = torch.tensor(token_ids, device=self.model.device)
-        #seq_lens = torch.tensor(seq_lens, device=self.model.device)
-        with safe_open("/home/nod/batch.safetensors", framework="pt", device="cpu") as st:
-            token_ids=st.get_tensor("batch").to(device=self.model.device)
-        seq_lens = torch.tensor([2048]).to(device=self.model.device)
+        token_ids = torch.tensor(token_ids, device=self.model.device)
+        seq_lens = torch.tensor(seq_lens, device=self.model.device)
         if self.shared_cache_state is not None:
             cache_state = self.shared_cache_state
         else:
@@ -264,23 +260,19 @@ def main():
         intermediates_saver.patch_child_modules(model)
     generator = TorchGenerator(model, tokenizer)
 
-
     print(f":: Prompting:")
     for prompt in prompts:
         print(f"    {prompt.encode()}")
-    
 
     batch = generator.begin_batch(prompts)
     print(f":: Prompt tokens: {batch.token_ids}")
     batch.prefill()
-    intermediates_saver.save_file("/home/nod/stank.safetensors")
     print(batch.detokenize())
 
     if args.save_intermediates_path:
         intermediates_saver.save_file(
             args.save_intermediates_path + "_prefill.safetensors"
         )
-    exit()
     counter = 0
     while not batch.done:
         batch.decode()

@@ -8,7 +8,6 @@ from typing import Optional
 
 from dataclasses import dataclass
 import math
-from safetensors.torch import safe_open, save_file
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -36,7 +35,7 @@ class LlamaModelConfig:
     block_seq_stride: int = 16
 
     # Either "paged" or "direct".
-    kv_cache_type: str = "direct"
+    kv_cache_type: str = "paged"
 
     # The device on which to place intermediate state.
     device: Optional[torch.device] = None
@@ -123,17 +122,15 @@ class PagedLlamaModelV1(BaseCausalLMModel):
             activation_dtype=config.activation_dtype,
             attention_dtype=config.attention_dtype,
         )
-        self.hf = False
         self.config = config
         self.hp = hp
         self.cache = config.create_kv_cache()
         self.activation_dtype = config.activation_dtype
         self.use_hf = config.use_hf
 
-        key = "token_embd"
         self.add_module(
             "token_embedding",
-            TokenEmbeddingLayer(theta(key), dtype=config.activation_dtype),
+            TokenEmbeddingLayer(theta("token_embd"), dtype=config.activation_dtype),
         )
         self.add_module(
             "attention_embedding",

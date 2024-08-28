@@ -4,20 +4,14 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-"""Imports Brevitas pre-processed weights and quantization config into a
-Dataset.
+"""Imports quark pre-processed weights and quantization config into a
+Dataset of the gguf format.
 
 Usage:
-  python -m sharktank.models.punet.import_hf_dataset \
-    --output-irpa-file ~/models/punet/punet_fp16.irpa \
-    --config-json ~/models/stable-diffusion-xl-base-1.0/unet/config.json
+  python -m sharktank.models.llama.tools.import_quark_dataset \
+    --params=llama2-7b-fp8.safetensors --output-irpa-file=new.irpa \
+    --config-json=../llama2/config.json
 
-The resulting dataset has all tensors as nested in the original model.
-Properties are separated into a "meta" dict (for "_" prefixed props) and an
-"hparams" dict.
-
-Default flag values assume that there is a quant_param.json and
-params.safetensors adjacent to the HF config.json file.
 """
 from typing import Optional
 
