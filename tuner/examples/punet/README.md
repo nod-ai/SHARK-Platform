@@ -13,7 +13,7 @@ These scripts include:
 3. `punet.sh` - Invoked by `compile_candidate.sh`.
 
 Please configure the file paths and update commands in `PunetClient`.
-**Note:** For convenience, you can alternatively add these scripts to your `PATH` environment variable.
+**Note:** Alternatively, add these scripts to your `PATH` environment variable
 
 ## Running the Tuner
 
