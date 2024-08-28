@@ -47,7 +47,7 @@ class PunetClient(libtuner.TuningClient):
         command = [
             "timeout",
             "16s",
-            "./tools/iree-benchmark-module",
+            "./iree-benchmark-module",
             f"--device={libtuner.DEVICE_ID_PLACEHOLDER}",
             f"--module={compiled_vmfb_path.resolve()}",
             "--hip_use_streams=true",
@@ -70,7 +70,7 @@ class PunetClient(libtuner.TuningClient):
             "timeout",
             "300s",
             "./compile-punet-base.sh",
-            "./tools/iree-compile",
+            "./iree-compile",
             "gfx942",
             f"{mlir_spec_path.resolve()}",
             "./punet.mlir",
@@ -88,7 +88,7 @@ class PunetClient(libtuner.TuningClient):
         command = [
             "timeout",
             "180s",
-            "tools/iree-benchmark-module",
+            "iree-benchmark-module",
             f"--device={libtuner.DEVICE_ID_PLACEHOLDER}",
             "--hip_use_streams=true",
             "--hip_allow_inline_execution=true",
