@@ -41,7 +41,6 @@ class LinearLayer(ThetaLayer):
         *,
         weight_name: str = "weight",
         bias_name: str = "bias",
-        debug_save_file=None,
     ):
         super().__init__(theta)
         self._simulate_native_quant = True
@@ -57,7 +56,6 @@ class LinearLayer(ThetaLayer):
         if self.q_input is not None and self.qdq_input is not None:
             raise AssertionError(f"LinearLayer cannot have both q_input and qdq_input")
         self.qdq_output: Optional[QuantizedTensor] = theta.optional_tensor("qdq_output")
-        self.debug_save_file = debug_save_file
 
     def forward(self, x):
         weight = self.weight
@@ -72,6 +70,7 @@ class LinearLayer(ThetaLayer):
         if q_input is not None:
             x = q_input.quantize(x)
         elif qdq_input is not None:
+            # TODO: probably need a way to only do q_input if exporting.
             print("qdq input")
             x = qdq_input.quantize(x).unpack().dequant()
         # from torch.nn import functional as F
@@ -80,22 +79,9 @@ class LinearLayer(ThetaLayer):
         # Unconditionally dequantize.
         # TODO: Support a q_output specifier that signals the layer to let
         # the QuantizedTensor escape.
-        qdq_y = None
         if isinstance(y, QuantizedTensor):
             y = y.unpack().dequant()
         if qdq_output is not None:
-            qdq_y = qdq_output.quantize(y).unpack().dequant()
-        if self.debug_save_file != None:
-            print(f"debug save file: {self.debug_save_file}")
-            save_file(
-                {
-                    "qdq_y": qdq_y,
-                    "y": y,
-                    "qdq_i": x,
-                    "input": original_input,
-                    "weight": weight.unpack().dequant(),
-                },
-                self.debug_save_file,
-            )
-        y = qdq_y if qdq_y is not None else y
+            # TODO: same as above.
+            y = qdq_output.quantize(y).unpack().dequant()
         return y
