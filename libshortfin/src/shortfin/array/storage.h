@@ -14,9 +14,65 @@
 
 namespace shortfin::array {
 
+// Access to mapped memory.
+// Mappings are moveable but not copyable. When default constructed or moved
+// from, they will not be valid and have nullptr semantics.
+class SHORTFIN_API mapping {
+ public:
+  mapping();
+  mapping(const mapping &) = delete;
+  mapping &operator=(const mapping &) = delete;
+  mapping &operator=(mapping &&other) {
+    timeline_resource_ = std::move(other.timeline_resource_);
+    access_ = other.access_;
+    mapping_ = other.mapping_;
+    other.access_ = IREE_HAL_MEMORY_ACCESS_NONE;
+    std::memset(&other.mapping_, 0, sizeof(other.mapping_));
+    return *this;
+  }
+  mapping(mapping &&other)
+      : timeline_resource_(std::move(other.timeline_resource_)),
+        access_(other.access_),
+        mapping_(other.mapping_) {
+    other.access_ = IREE_HAL_MEMORY_ACCESS_NONE;
+    std::memset(&other.mapping_, 0, sizeof(other.mapping_));
+  }
+  ~mapping() noexcept;
+
+  // Whether the mapping is valid.
+  operator bool() const { return access_ != IREE_HAL_MEMORY_ACCESS_NONE; }
+
+  // Resets the mapping, making it invalid (if not already so);
+  void reset() noexcept;
+
+  // Access the mapped data. The mapping must be valid or else it is UB.
+  const uint8_t *data() const {
+    assert(*this && "mapping is not valid");
+    return mapping_.contents.data;
+  }
+  uint8_t *data() {
+    assert(*this && "mapping is not valid");
+    return mapping_.contents.data;
+  }
+
+  // The size of the mapped data. Will return 0 if the mapping is not valid.
+  iree_device_size_t size() const { return mapping_.contents.data_length; }
+
+  bool readable() const { return access_ & IREE_HAL_MEMORY_ACCESS_READ; }
+  bool writable() const { return access_ & IREE_HAL_MEMORY_ACCESS_WRITE; }
+
+ private:
+  // See note on storage::timeline_resource_. Must be declared first.
+  local::detail::TimelineResource::Ref timeline_resource_;
+  iree_hal_memory_access_t access_ = IREE_HAL_MEMORY_ACCESS_NONE;
+  iree_hal_buffer_mapping_t mapping_;
+  friend class storage;
+};
+
 // Array storage backed by an IREE buffer of some form.
 class SHORTFIN_API storage {
  public:
+  ~storage();
   local::ScopedDevice &device() { return device_; }
   local::Scope &scope() { return device_.scope(); }
   const local::ScopedDevice &device() const { return device_; }
@@ -29,9 +85,9 @@ class SHORTFIN_API storage {
 
   // Allocates host storage, compatible with the given device affinity.
   // By default, if there are any affinity bits set in the device, then
-  // the storage will be device visible and have permitted usage for transfers.
-  // This default policy can be overriden based on device defaults or explicit
-  // options.
+  // the storage will be device visible and have permitted usage for
+  // transfers. This default policy can be overriden based on device defaults
+  // or explicit options.
   static storage AllocateHost(local::ScopedDevice &device,
                               iree_device_size_t allocation_size);
 
@@ -53,17 +109,106 @@ class SHORTFIN_API storage {
     return iree_hal_buffer_byte_length(buffer_.get());
   }
 
+  // Memory type and access.
+  iree_hal_memory_type_t memory_type() const;
+  iree_hal_memory_access_t memory_access() const;
+  iree_hal_buffer_usage_t buffer_usage() const;
+
+  // Formatted type and access.
+  std::string formatted_memory_type() const;
+  std::string formatted_memory_access() const;
+  std::string formatted_buffer_usage() const;
+
+  // Whether the buffer supports host mappable memory.
+  bool is_mappable_for_read() const;
+  bool is_mappable_for_read_write() const;
+
+  // Maps the memory for access from a host pointer using a scoped mapping.
+  void MapExplicit(mapping &mapping, iree_hal_memory_access_t access);
+
+  // Maps the memory for read/write access, preserving any contents.
+  mapping MapReadWrite() {
+    mapping m;
+    MapExplicit(m, IREE_HAL_MEMORY_ACCESS_READ | IREE_HAL_MEMORY_ACCESS_WRITE);
+    return m;
+  }
+
+  // Maps the memory for discard write. This is used if populating an initial
+  // buffer.
+  mapping MapWriteDiscard() {
+    mapping m;
+    MapExplicit(m, IREE_HAL_MEMORY_ACCESS_DISCARD_WRITE);
+    return m;
+  }
+
+  // Maps the memory for read-only access.
+  mapping MapRead() {
+    mapping m;
+    MapExplicit(m, IREE_HAL_MEMORY_ACCESS_READ);
+    return m;
+  }
+
+  const mapping MapRead() const {
+    mapping m;
+    const_cast<storage *>(this)->MapExplicit(m, IREE_HAL_MEMORY_ACCESS_READ);
+    return m;
+  }
+
   std::string to_s() const;
+
+  // Access raw buffer. This must not be retained apart from the storage for
+  // any length of time that may extend its lifetime (as the storage keeps
+  // underlying device references alive as needed).
+  operator iree_hal_buffer_t *() { return buffer_; }
 
  private:
   storage(local::ScopedDevice device, iree::hal_buffer_ptr buffer,
-          local::detail::TimelineResource::Ref timeline_resource)
-      : buffer_(std::move(buffer)),
-        device_(device),
-        timeline_resource_(std::move(timeline_resource)) {}
+          local::detail::TimelineResource::Ref timeline_resource);
+  // The timeline resource holds the back reference to the owning scope,
+  // which keeps all devices alive. Buffers must be destroyed before devices,
+  // so this must be declared first.
+  local::detail::TimelineResource::Ref timeline_resource_;
   iree::hal_buffer_ptr buffer_;
   local::ScopedDevice device_;
-  local::detail::TimelineResource::Ref timeline_resource_;
+};
+
+// Wraps an untyped mapping, providing typed access.
+template <typename EltTy>
+class typed_mapping {
+ public:
+  using span_type = std::span<EltTy>;
+  using const_span_type = std::span<const EltTy>;
+
+  typed_mapping(mapping untyped_mapping)
+      : untyped_mapping_(std::move(untyped_mapping)) {}
+  typed_mapping(const typed_mapping &) = delete;
+  typed_mapping &operator=(const typed_mapping &) = delete;
+
+  iree_device_size_t size() const noexcept {
+    return untyped_mapping_.size() / sizeof(EltTy);
+  }
+  bool empty() const noexcept { return size() == 0; }
+  EltTy *data() noexcept {
+    return reinterpret_cast<EltTy *>(untyped_mapping_.data());
+  }
+  EltTy *data() const noexcept {
+    return reinterpret_cast<const EltTy *>(untyped_mapping_.data());
+  }
+
+  span_type span() { return span_type(data(), size()); }
+  const_span_type span() const { return const_span_type(data(), size()); }
+
+  span_type::iterator begin() { return span().begin(); }
+  span_type::iterator end() { return span().end(); }
+
+  const_span_type::iterator begin() const { return span().begin(); }
+  const_span_type::iterator end() const { return span().end(); }
+
+  const_span_type::iterator cbegin() const { return span().begin(); }
+  const_span_type::iterator cend() const { return span().end(); }
+
+ private:
+  mapping untyped_mapping_;
 };
 
 }  // namespace shortfin::array

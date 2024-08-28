@@ -18,6 +18,8 @@ project(
   VERSION 0.9
   LANGUAGES C CXX)
 
+set(SOVERSION 1)
+
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 20)
 # https://discourse.cmake.org/t/cmake-3-28-cmake-cxx-compiler-clang-scan-deps-notfound-not-found/9244/3
@@ -33,7 +35,29 @@ endif()
 option(SHORTFIN_BUILD_PYTHON_BINDINGS "Builds Python Bindings" OFF)
 option(SHORTFIN_BUILD_TESTS "Builds C++ tests" ON)
 option(SHORTFIN_BUNDLE_DEPS "Download dependencies instead of using system libraries" OFF)
+
 set(SHORTFIN_IREE_SOURCE_DIR "" CACHE FILEPATH "Path to IREE source")
+
+# Enabling ASAN. Note that this will work best if building in a completely
+# bundled fashion and with an ASAN rigged CPython. Otherwise, various LD_PRELOAD
+# hacks are needed. This is merely a develope convenience: people are more
+# than welcome to set flags themselves.
+option(SHORTFIN_ENABLE_ASAN "Enable ASAN" OFF)
+if(SHORTFIN_ENABLE_ASAN)
+  add_compile_options(-fsanitize=address)
+  add_link_options(-fsanitize=address)
+
+  # Enable more ASAN checks.
+  add_compile_definitions(IREE_SANITIZER_ADDRESS)
+endif()
+
+option(SHORTFIN_SYSTEMS_AMDGPU "Builds for AMD GPU systems" ON)
+message(STATUS "libshortfin supported systems:")
+if(SHORTFIN_SYSTEMS_AMDGPU)
+  message(STATUS "  - AMD GPU")
+  add_compile_definitions("SHORTFIN_HAVE_AMDGPU")
+endif()
+message(STATUS "  - Host")
 
 include(FetchContent)
 
@@ -92,6 +116,7 @@ if (NOT SHORTFIN_IREE_SOURCE_DIR AND SHORTFIN_BUNDLE_DEPS)
     # TODO: We shouldn't have to pull googletest when we are not building tests.
     #       This needs to be fixed with IREE.
     GIT_SUBMODULES "third_party/benchmark third_party/cpuinfo third_party/flatcc third_party/hip-build-deps third_party/googletest"
+    GIT_SHALLOW TRUE
   )
   FetchContent_GetProperties(iree)
   if(NOT iree_POPULATED)
@@ -110,7 +135,9 @@ if(SHORTFIN_IREE_SOURCE_DIR)
   set(IREE_HAL_DRIVER_DEFAULTS OFF)
   set(IREE_HAL_DRIVER_LOCAL_SYNC ON)
   set(IREE_HAL_DRIVER_LOCAL_TASK ON)
-  set(IREE_HAL_DRIVER_HIP ON)
+  if(SHORTFIN_SYSTEMS_AMDGPU)
+    set(IREE_HAL_DRIVER_HIP ON)
+  endif()
   add_subdirectory(${SHORTFIN_IREE_SOURCE_DIR} shortfin_iree SYSTEM EXCLUDE_FROM_ALL)
 else()
   # Try to find iree using find_package

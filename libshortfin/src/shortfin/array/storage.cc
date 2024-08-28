@@ -14,6 +14,10 @@ namespace shortfin::array {
 using namespace local;
 using namespace local::detail;
 
+// -------------------------------------------------------------------------- //
+// storage
+// -------------------------------------------------------------------------- //
+
 namespace detail {
 void ThrowIllegalDeviceAffinity(Device *first, Device *second) {
   throw std::invalid_argument(fmt::format(
@@ -21,6 +25,15 @@ void ThrowIllegalDeviceAffinity(Device *first, Device *second) {
       first->name(), second->name()));
 }
 }  // namespace detail
+
+storage::storage(local::ScopedDevice device, iree::hal_buffer_ptr buffer,
+                 local::detail::TimelineResource::Ref timeline_resource)
+    : timeline_resource_(std::move(timeline_resource)),
+      buffer_(std::move(buffer)),
+      device_(device) {
+  logging::construct("array::storage", this);
+}
+storage::~storage() { logging::destruct("array::storage", this); }
 
 storage storage::AllocateDevice(ScopedDevice &device,
                                 iree_device_size_t allocation_size) {
@@ -99,12 +112,109 @@ void storage::Fill(const void *pattern, iree_host_size_t pattern_length) {
 }
 
 void storage::CopyFrom(storage &source_storage) {
-  // TODO
+  device_.scope().scheduler().AppendCommandBuffer(
+      device_, TransactionType::TRANSFER, [&](Account &account) {
+        // Must depend on the source's mutation dependencies to avoid
+        // read-before-write hazard.
+        account.active_deps_extend(
+            source_storage.timeline_resource_->mutation_barrier());
+        // And depend on our own use and mutations dependencies.
+        account.active_deps_extend(timeline_resource_->use_barrier());
+        account.active_deps_extend(timeline_resource_->mutation_barrier());
+
+        SHORTFIN_THROW_IF_ERROR(iree_hal_command_buffer_copy_buffer(
+            account.active_command_buffer(),
+            /*source_ref=*/
+            iree_hal_make_buffer_ref(source_storage.buffer_, 0, byte_length()),
+            /*target_ref=*/
+            iree_hal_make_buffer_ref(buffer_, 0, byte_length())));
+
+        // And move our own mutation barrier to the current pending timeline
+        // value.
+        timeline_resource_->set_mutation_barrier(
+            account.timeline_sem(), account.timeline_idle_timepoint());
+      });
+}
+
+bool storage::is_mappable_for_read() const {
+  return (iree_hal_buffer_allowed_usage(buffer_) &
+          IREE_HAL_MEMORY_TYPE_HOST_VISIBLE) &&
+         (iree_hal_buffer_allowed_access(buffer_) &
+          IREE_HAL_MEMORY_ACCESS_READ);
+}
+
+bool storage::is_mappable_for_read_write() const {
+  return (iree_hal_buffer_allowed_usage(buffer_) &
+          IREE_HAL_MEMORY_TYPE_HOST_VISIBLE) &&
+         (iree_hal_buffer_allowed_access(buffer_) &
+          (IREE_HAL_MEMORY_ACCESS_READ | IREE_HAL_MEMORY_ACCESS_WRITE));
+}
+
+void storage::MapExplicit(mapping &mapping, iree_hal_memory_access_t access) {
+  assert(access != IREE_HAL_MEMORY_ACCESS_NONE);
+  mapping.reset();
+  SHORTFIN_THROW_IF_ERROR(iree_hal_buffer_map_range(
+      buffer_, IREE_HAL_MAPPING_MODE_SCOPED, access,
+      /*byte_offset=*/0, byte_length(), &mapping.mapping_));
+  mapping.access_ = access;
+  mapping.timeline_resource_ = timeline_resource_;
+}
+
+iree_hal_memory_type_t storage::memory_type() const {
+  return iree_hal_buffer_memory_type(buffer_);
+}
+iree_hal_memory_access_t storage::memory_access() const {
+  return iree_hal_buffer_allowed_access(buffer_);
+}
+iree_hal_buffer_usage_t storage::buffer_usage() const {
+  return iree_hal_buffer_allowed_usage(buffer_);
+}
+
+// Formatted type and access.
+std::string storage::formatted_memory_type() const {
+  iree_bitfield_string_temp_t temp;
+  auto sv = iree_hal_memory_type_format(memory_type(), &temp);
+  return std::string(sv.data, sv.size);
+}
+
+std::string storage::formatted_memory_access() const {
+  iree_bitfield_string_temp_t temp;
+  auto sv = iree_hal_memory_access_format(memory_access(), &temp);
+  return std::string(sv.data, sv.size);
+}
+
+std::string storage::formatted_buffer_usage() const {
+  iree_bitfield_string_temp_t temp;
+  auto sv = iree_hal_buffer_usage_format(buffer_usage(), &temp);
+  return std::string(sv.data, sv.size);
 }
 
 std::string storage::to_s() const {
   return fmt::format("<storage {} size {}>", static_cast<void *>(buffer_.get()),
                      byte_length());
+}
+
+// -------------------------------------------------------------------------- //
+// mapping
+// -------------------------------------------------------------------------- //
+
+mapping::mapping() {
+  logging::construct("array::mapping", this);
+  std::memset(&mapping_, 0, sizeof(mapping_));
+}
+
+mapping::~mapping() noexcept {
+  logging::destruct("array::mapping", this);
+  reset();
+}
+
+void mapping::reset() noexcept {
+  if (*this) {
+    // Crash the process on failure to unmap. We don't have a good mitigation,
+    IREE_CHECK_OK(iree_hal_buffer_unmap_range(&mapping_));
+    access_ = IREE_HAL_MEMORY_ACCESS_NONE;
+    timeline_resource_.reset();
+  }
 }
 
 }  // namespace shortfin::array

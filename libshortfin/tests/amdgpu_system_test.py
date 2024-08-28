@@ -4,8 +4,11 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
+import pytest
 
-def test_create_host_cpu_system():
+
+@pytest.mark.requires_amd_gpu
+def test_create_amd_gpu_system():
     from _shortfin import lib as sfl
 
     sc = sfl.local.amdgpu.SystemBuilder()
@@ -15,3 +18,5 @@ def test_create_host_cpu_system():
         print(f"  DEVICE: {device_name} = {ls.device(device_name)}")
 
     print(ls.devices)
+    print("Shutting down")
+    ls.shutdown()

@@ -12,6 +12,53 @@ using namespace shortfin::array;
 
 namespace shortfin::python {
 
+namespace {
+static const char DOCSTRING_STORAGE_DATA[] = R"(Access raw binary contents.
+
+Accessing `foo = storage.data` is equivalent to `storage.data.map(read=True)`.
+The returned object is a context manager that will close on exit.
+
+Assigning `storage.data = array.array("f", [1.0])` will copy that raw data
+from the source object using the buffer protocol. The source data must be
+less than or equal to the length of the storage object. Note that the entire
+storage is mapped as write-only/discardable, and writing less than the storage
+bytes leaves any unwritten contents in an undefined state.
+
+As with `map`, this will only work on buffers that are host visible, which
+includes all host buffers and device buffers created with the necessary access.
+)";
+
+static const char DOCSTRING_STORAGE_MAP[] =
+    R"(Create a mapping of the buffer contents in host memory.
+
+Support kwargs of:
+
+read: Enables read access to the mapped memory.
+write: Enables write access to the mapped memory and will flush upon close
+  (for non-unified memory systems).
+discard: Indicates that the entire memory map should be treated as if it will
+  be overwritten. Initial contents will be undefined.
+
+Mapping memory for access from the host requires a compatible buffer that has
+been created with host visibility (which includes host buffers).
+
+The returned mapping object is a context manager that will close/flush on
+exit. Alternatively, the `close()` method can be invoked explicitly.
+)";
+
+// Does in-place creation of a mapping object and stores a pointer to the
+// contained array::mapping C++ object.
+py::object CreateMappingObject(mapping **out_cpp_mapping) {
+  py::object py_mapping = py::inst_alloc(py::type<mapping>());
+  mapping *cpp_mapping = py::inst_ptr<mapping>(py_mapping);
+  new (cpp_mapping) mapping();
+  py::inst_mark_ready(py_mapping);
+  *out_cpp_mapping = cpp_mapping;
+  return py_mapping;
+}
+
+}  // namespace
+
 void BindArray(py::module_ &m) {
   py::class_<DType>(m, "DType")
       .def_prop_ro("is_boolean", &DType::is_boolean)
@@ -52,6 +99,7 @@ void BindArray(py::module_ &m) {
   m.attr("complex64") = DType::complex64();
   m.attr("complex128") = DType::complex128();
 
+  // storage
   py::class_<storage>(m, "storage")
       .def_static(
           "allocate_host",
@@ -75,8 +123,83 @@ void BindArray(py::module_ &m) {
              PyBufferReleaser py_view_releaser(py_view);
              self.Fill(py_view.buf, py_view.len);
            })
+      .def("copy_from", [](storage &self, storage &src) { self.CopyFrom(src); })
+      .def(
+          "map",
+          [](storage &self, bool read, bool write, bool discard) {
+            int access = 0;
+            if (read) access |= IREE_HAL_MEMORY_ACCESS_READ;
+            if (write) access |= IREE_HAL_MEMORY_ACCESS_WRITE;
+            if (discard) access |= IREE_HAL_MEMORY_ACCESS_DISCARD;
+            if (!access) {
+              throw std::invalid_argument(
+                  "One of the access flags must be set");
+            }
+            mapping *cpp_mapping = nullptr;
+            py::object py_mapping = CreateMappingObject(&cpp_mapping);
+            self.MapExplicit(
+                *cpp_mapping,
+                static_cast<iree_hal_memory_access_bits_t>(access));
+            return py_mapping;
+          },
+          py::kw_only(), py::arg("read") = false, py::arg("write") = false,
+          py::arg("discard") = false, DOCSTRING_STORAGE_MAP)
+      // The 'data' prop is a short-hand for accessing the backing storage
+      // in a one-shot manner (as for reading or writing). Getting the attribute
+      // will map for read and return a memory view (equiv to map(read=True)).
+      // On write, it will accept an object implementing the buffer protocol
+      // and write/discard the backing storage.
+      .def_prop_rw(
+          "data",
+          [](storage &self) {
+            mapping *cpp_mapping = nullptr;
+            py::object py_mapping = CreateMappingObject(&cpp_mapping);
+            *cpp_mapping = self.MapRead();
+            return py_mapping;
+          },
+          [](storage &self, py::handle buffer_obj) {
+            PyBufferRequest src_info(buffer_obj, PyBUF_SIMPLE);
+            auto dest_data = self.MapWriteDiscard();
+            if (src_info.view().len > dest_data.size()) {
+              throw std::invalid_argument(
+                  fmt::format("Cannot write {} bytes into buffer of {} bytes",
+                              src_info.view().len, dest_data.size()));
+            }
+            std::memcpy(dest_data.data(), src_info.view().buf,
+                        src_info.view().len);
+          },
+          DOCSTRING_STORAGE_DATA)
       .def("__repr__", &storage::to_s);
 
+  // mapping
+  auto mapping_class = py::class_<mapping>(m, "mapping");
+  mapping_class.def("close", &mapping::reset)
+      .def_prop_ro("valid", [](mapping &self) -> bool { return self; })
+      .def("__enter__", [](py::object self_obj) { return self_obj; })
+      .def(
+          "__exit__",
+          [](mapping &self, py::handle exc_type, py::handle exc_value,
+             py::handle exc_tb) { self.reset(); },
+          py::arg("exc_type").none(), py::arg("exc_value").none(),
+          py::arg("exc_tb").none());
+  struct MappingBufferHandler {
+    int operator()(mapping &self, Py_buffer *view, int flags) {
+      view->buf = self.data();
+      view->len = self.size();
+      view->readonly = self.writable();
+      view->itemsize = 1;
+      view->format = (char *)"B";  // Byte
+      view->ndim = 1;
+      view->shape = nullptr;
+      view->strides = nullptr;
+      view->suboffsets = nullptr;
+      view->internal = nullptr;
+      return 0;
+    }
+  };
+  BindBufferProtocol<mapping, MappingBufferHandler>(mapping_class);
+
+  // base_array and subclasses
   py::class_<base_array>(m, "base_array")
       .def_prop_ro("dtype", &base_array::dtype)
       .def_prop_ro("shape", &base_array::shape);
@@ -94,40 +217,33 @@ void BindArray(py::module_ &m) {
                      std::span<const size_t> shape, DType dtype) {
                     return custom_new_keep_alive<device_array>(
                         py_type, /*keep_alive=*/device.scope(),
-                        device_array::allocate(device, shape, dtype));
+                        device_array::for_device(device, shape, dtype));
                   })
+      .def_static("for_device",
+                  [](local::ScopedDevice &device, std::span<const size_t> shape,
+                     DType dtype) {
+                    return custom_new_keep_alive<device_array>(
+                        py::type<device_array>(), /*keep_alive=*/device.scope(),
+                        device_array::for_device(device, shape, dtype));
+                  })
+      .def_static("for_host",
+                  [](local::ScopedDevice &device, std::span<const size_t> shape,
+                     DType dtype) {
+                    return custom_new_keep_alive<device_array>(
+                        py::type<device_array>(), /*keep_alive=*/device.scope(),
+                        device_array::for_host(device, shape, dtype));
+                  })
+      .def("for_transfer",
+           [](device_array &self) {
+             return custom_new_keep_alive<device_array>(
+                 py::type<device_array>(),
+                 /*keep_alive=*/self.device().scope(), self.for_transfer());
+           })
       .def_prop_ro("device", &device_array::device,
                    py::rv_policy::reference_internal)
       .def_prop_ro("storage", &device_array::storage,
                    py::rv_policy::reference_internal)
       .def("__repr__", &device_array::to_s);
-  py::class_<host_array, base_array>(m, "host_array")
-      .def("__init__", [](py::args, py::kwargs) {})
-      .def_static("__new__",
-                  [](py::handle py_type, class storage storage,
-                     std::span<const size_t> shape, DType dtype) {
-                    return custom_new_keep_alive<host_array>(
-                        py_type, /*keep_alive=*/storage.scope(), storage, shape,
-                        dtype);
-                  })
-      .def_static("__new__",
-                  [](py::handle py_type, local::ScopedDevice &device,
-                     std::span<const size_t> shape, DType dtype) {
-                    return custom_new_keep_alive<host_array>(
-                        py_type, /*keep_alive=*/device.scope(),
-                        host_array::allocate(device, shape, dtype));
-                  })
-      .def_static("__new__",
-                  [](py::handle py_type, device_array &device_array) {
-                    return custom_new_keep_alive<host_array>(
-                        py_type, /*keep_alive=*/device_array.device().scope(),
-                        host_array::for_transfer(device_array));
-                  })
-      .def_prop_ro("device", &host_array::device,
-                   py::rv_policy::reference_internal)
-      .def_prop_ro("storage", &host_array::storage,
-                   py::rv_policy::reference_internal)
-      .def("__repr__", &host_array::to_s);
 }
 
 }  // namespace shortfin::python

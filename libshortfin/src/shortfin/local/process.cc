@@ -54,10 +54,7 @@ void detail::BaseProcess::Launch() {
   ScheduleOnWorker();
 }
 
-void detail::BaseProcess::ScheduleOnWorker() {
-  logging::info("ScheduleOnWorker()");
-  Terminate();
-}
+void detail::BaseProcess::ScheduleOnWorker() { Terminate(); }
 
 void detail::BaseProcess::Terminate() {
   int deallocate_pid;

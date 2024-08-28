@@ -17,8 +17,10 @@ from torch import Tensor
 from ..types import PrimitiveTensor, QuantizedTensor
 
 __all__ = [
+    "AllOfExprs",
     "AllOfType",
     "AnyOfType",
+    "IsOfType",
     "overridable",
     "SignatureDispatcher",
     "BoolTypeExpr",
@@ -60,6 +62,29 @@ class BoolTypeExpr:
 
     def __call__(self, *args: type) -> bool:
         return self._expr(*args)
+
+
+class AllOfExprs(BoolTypeExpr):
+    """Returns True if all types match their respective boolean type expression.
+
+    ```python
+    # True. int == int and str in (float, str).
+    AllOfExprs(IsOfType(int), IsOfType(float, str))(int, str)
+
+     # False. str is not in (int, float).
+    AllOfExprs(IsOfType(int), IsOfType(int, float))(int, str)
+    ```
+    """
+
+    def __init__(self, *exprs: BoolTypeExpr):
+        self._exprs = exprs
+
+        def expr(*types: type):
+            if len(types) < len(self._exprs):
+                return False
+            return all([e(t) for e, t in zip(self._exprs, types)])
+
+        super().__init__(expr)
 
 
 class AllOfType(BoolTypeExpr):
@@ -107,6 +132,9 @@ class AnyOfType(BoolTypeExpr):
             )
 
         super().__init__(expr)
+
+
+IsOfType = AllOfType
 
 
 class SignatureDispatcher:
@@ -201,7 +229,7 @@ class SignatureDispatcher:
         ):
             if len(override_type_spec) > 1:
                 raise TypeError(
-                    "Override with multiple arguments not allowed when using BoolTypeExpr."
+                    f"Override with multiple arguments not allowed when using BoolTypeExpr. Type spec: {override_type_spec}"
                 )
             return True
         return False

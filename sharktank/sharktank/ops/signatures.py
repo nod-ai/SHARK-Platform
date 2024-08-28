@@ -12,6 +12,7 @@ import torch
 import numbers
 from torch import Tensor, dtype
 from ..types import AnyTensor, ShardedTensor, Theta, sharding
+from numbers import Number
 
 from ._registry import *
 
@@ -22,6 +23,7 @@ __all__ = [
     "elementwise",
     "embedding_lookup",
     "equal",
+    "gemm",
     "group_norm_affine",
     "layer_norm",
     "interpolate",
@@ -204,6 +206,45 @@ def _equal_trampoline(d: SignatureDispatcher, a: AnyTensor, b: AnyTensor):
     tensors = (a,)
     for override in d.find_overrides(tensors):
         result = override(a, b)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(tensors)
+
+
+@overridable
+def gemm(
+    a: AnyTensor,
+    b: AnyTensor,
+    c: Optional[AnyTensor] = None,
+    alpha: Optional[Union[Number, AnyTensor]] = None,
+    beta: Optional[Union[Number, AnyTensor]] = None,
+    transa: bool = False,
+    transb: bool = False,
+):
+    """GEMM as defined by BLAS.
+    `alpha*a*b + beta*c`
+    If `c` is None it is the zero-filed tensor.
+    """
+    raise NotImplementedError
+
+
+@gemm.trampoline
+def _gemm_trampoline(
+    d: SignatureDispatcher,
+    a: AnyTensor,
+    b: AnyTensor,
+    c: Optional[AnyTensor] = None,
+    alpha: Optional[Union[Number, AnyTensor]] = None,
+    beta: Optional[Union[Number, AnyTensor]] = None,
+    transa: bool = False,
+    transb: bool = False,
+):
+    tensors = (a, b, c)
+    for override in d.find_overrides(tensors):
+        result = override(
+            a=a, b=b, c=c, alpha=alpha, beta=beta, transa=transa, transb=transb
+        )
         if result is not NotImplemented:
             return override, result
     else:

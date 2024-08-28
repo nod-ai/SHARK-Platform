@@ -31,7 +31,7 @@ shortfin_cc_component(
 )
 
 shortfin_gtest_test(
-  NAME support_test
+  NAME shortfin_support_test
   SRCS
     # Order is specific: lower level tests before higher level.
     iree_helpers_test.cc

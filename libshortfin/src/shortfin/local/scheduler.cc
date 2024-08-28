@@ -30,6 +30,9 @@ void Account::Initialize() {
 
 void Account::Reset() {
   active_tx_type_ = TransactionType::NONE;
+  // if (active_command_buffer_) {
+  //   iree_hal_command_buffer_end(active_command_buffer_);
+  // }
   active_command_buffer_.reset();
 }
 
@@ -67,10 +70,17 @@ CompletionEvent Account::OnSync() {
 // TimelineResource
 // -------------------------------------------------------------------------- //
 
-TimelineResource::TimelineResource(iree_allocator_t host_allocator,
-                                   size_t semaphore_capacity) {
-  SHORTFIN_THROW_IF_ERROR(iree_hal_fence_create(
-      semaphore_capacity, host_allocator, use_barrier_fence_.for_output()));
+TimelineResource::TimelineResource(std::shared_ptr<Scope> scope,
+                                   size_t semaphore_capacity)
+    : scope_(std::move(scope)) {
+  logging::construct("TimelineResource", this);
+  SHORTFIN_THROW_IF_ERROR(
+      iree_hal_fence_create(semaphore_capacity, scope_->host_allocator(),
+                            use_barrier_fence_.for_output()));
+}
+
+TimelineResource::~TimelineResource() {
+  logging::destruct("TimelineResource", this);
 }
 
 void TimelineResource::use_barrier_insert(iree_hal_semaphore_t *sem,
@@ -82,6 +92,19 @@ void TimelineResource::use_barrier_insert(iree_hal_semaphore_t *sem,
 // -------------------------------------------------------------------------- //
 // Scheduler
 // -------------------------------------------------------------------------- //
+
+Scheduler::Scheduler(System &system) : system_(system) {
+  logging::construct("Scheduler", this);
+}
+
+Scheduler::~Scheduler() {
+  logging::destruct("Scheduler", this);
+
+  // Explicitly reset account state prior to implicit destruction.
+  for (auto &account : accounts_) {
+    account.Reset();
+  }
+}
 
 void Scheduler::Initialize(std::span<Device *const> devices) {
   for (Device *device : devices) {

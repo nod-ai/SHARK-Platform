@@ -31,7 +31,7 @@ def main():
     parser.add_argument(
         "--output-config",
         help="Output file path for exported config file",
-        default="/tmp/batch_llama_v1.json",
+        default="tmp/batch_llama_v1.json",
     )
     parser.add_argument(
         "--bs",
@@ -50,6 +50,7 @@ def main():
 
     hp = configs.LlamaHParams.from_gguf_props(dataset.properties)
     llama_config = LlamaModelConfig(hp)
+    llama_config.static_tables = False  # Rely on the compiler for hoisting tables.
     llama_config.kv_cache_type = "direct" if args.bs == [1] else "paged"
     model = PagedLlamaModelV1(dataset.root_theta, llama_config)
 
