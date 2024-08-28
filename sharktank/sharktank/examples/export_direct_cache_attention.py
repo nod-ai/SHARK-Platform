@@ -40,7 +40,6 @@ class RefLlamaModelConfig:
     attention_head_count_kv=32
 
     # local params
-    bs = 1
     sl = 1
     start_index = 0
     q_len = 1
@@ -59,28 +58,6 @@ class LlamaAttentionBlock(torch.nn.Module):
         config: RefLlamaModelConfig,
     ):
         super().__init__()
-      #   super().__init__(theta)
-        # self.add_module(
-        #     "attn_norm", RMSNormLayer(theta("attn_norm"), epsilon=rms_epsilon)
-        # )
-        # self.add_module("attn_q", LinearLayer(theta("attn_q")))
-        # self.add_module("attn_k", LinearLayer(theta("attn_k")))
-        # self.add_module("attn_v", LinearLayer(theta("attn_v")))
-        # self.add_module("attn_output", LinearLayer(theta("attn_output")))
-        # self.add_module(
-        #     "ffn_norm", RMSNormLayer(theta("ffn_norm"), epsilon=rms_epsilon)
-        # )
-        # self.add_module("ffn_gate", LinearLayer(theta("ffn_gate")))
-        # self.add_module("ffn_up", LinearLayer(theta("ffn_up")))
-        # self.add_module("ffn_down", LinearLayer(theta("ffn_down")))
-
-        # self.embedding = embedding
-        # self.head_count = head_count
-        # self.head_dim = head_dim
-        # self.head_count_kv = head_count_kv
-        # self.context_length = context_length
-        # self.attention_head_count = attention_head_count
-        # self.rope_dimension_count = head_dim
 
         self.config = config
         self.activation_dtype: torch.dtype = torch.float16
@@ -110,29 +87,16 @@ class LlamaAttentionBlock(torch.nn.Module):
         start_index: Optional[int] = 0,
         attention_mask: Optional[torch.Tensor] = None,
     ):
-        # x = self.attn_norm(h)
 
-        # bs, q_len, feature_dim = x.shape
-        kv_seq_len = self.config.kv_seq_len
-        bs = self.config.bs
-        q_len = self.config.q_len
-        # assert feature_dim == self.head_count * self.head_dim
-
-        # xq = self.attn_q(x)
-        # xk = self.attn_k(x)
-        # xv = self.attn_v(x)
-
-        # xq = xq.view(bs, q_len, self.head_count, self.head_dim)
-        # xk = xk.view(bs, q_len, self.head_count_kv, self.head_dim)
-        # xv = xv.view(bs, q_len, self.head_count_kv, self.head_dim)
-
-        # xq, xk = self.embedding(xq=xq, xk=xk, start_index=start_index)
+        bs, q_len, _, _ = xq.shape
+        kv_seq_len = start_index + q_len
 
         # TODO: Some model variants do some form of kv repetition to expand the
         # count of kv heads to the count of attention heads used by the q.
         # assert self.head_count == self.head_count_kv, "NYI: KV expansion"
 
         # Update our positions in the cache.
+
         cache_k[:bs, start_index:kv_seq_len] = xk
         cache_v[:bs, start_index:kv_seq_len] = xv
 
@@ -145,39 +109,8 @@ class LlamaAttentionBlock(torch.nn.Module):
         keys = keys.transpose(1, 2)
         values = values.transpose(1, 2)
 
-        # # Flash attention.
-        # attn_weights = torch.matmul(xq, keys.transpose(2, 3)) / math.sqrt(self.head_dim)
-
-        # # Apply attention mask.
-        # if attention_mask is not None:
-        #     expected_mask_shape = (bs, 1, q_len, kv_seq_len)
-        #     assert (
-        #         attention_mask.shape == expected_mask_shape
-        #     ), f"Attention mask should be of size {expected_mask_shape}, but is {attention_mask.shape}"
-        #     attn_weights = attn_weights + attention_mask
-
-        # attn_weights = F.softmax(attn_weights.float(), dim=-1).type_as(xq)
-        # attn_output = torch.matmul(attn_weights, values)  # (bs, heads, slen, head_dim)
         attn_output = F.scaled_dot_product_attention(xq, keys, values, attn_mask=attention_mask, is_causal=is_causal)
-        print('\n\n\nattn_output', attn_output.shape)
         attn_output = attn_output.transpose(1, 2).reshape(bs, q_len, -1)
-
-        # Project.
-        # attn_output = self.attn_output(attn_output)
-      
-      #   print(attn_output)
-      #   print(xq)
-      #   print(attn_weights)
-
-        # # Remainder of the block.
-        # h = h + attn_output
-
-        # # Feed forward network.
-        # ffn_input = self.ffn_norm(h)
-        # ffn_gate = F.silu(self.ffn_gate(ffn_input))
-        # ffn_up = self.ffn_up(ffn_input)
-        # ffn_down = self.ffn_down(ffn_gate * ffn_up)
-        # return h + ffn_down
         return attn_output
 
 def main(args: list[str]):
@@ -200,7 +133,7 @@ def main(args: list[str]):
         "--bs",
         help="Comma-separated batch size(s) to generate, e.g. `4` or `2,4`",
         type=lambda arg: [int(bs) for bs in arg.split(",")],
-        default="4",
+        default="2,4",
     )
     parser.add_argument(
         "--verbose",
@@ -226,88 +159,62 @@ def main(args: list[str]):
     hp = RefLlamaModelConfig()
     hp.activation_dtype = torch.float16
     start_index = 0
-
-    is_causal = True
-    q = torch.zeros((1, 1, 32, 128), dtype=torch.float16)
-    k = torch.zeros((1, 1, 32, 128), dtype=torch.float16)
-    v = torch.zeros((1, 1, 32, 128), dtype=torch.float16)
-
-    block_cache_k = torch.zeros((1, 4096, 32, 128), dtype=torch.float16)
-    block_cache_v = torch.zeros((1, 4096, 32, 128), dtype=torch.float16)
-    
-    # model = DirectCacheLlamaModelV1(dataset.root_theta, ref_llama_config)
-
+    hp.bs = args.bs
     sdpa_block = LlamaAttentionBlock(hp)
 
-    # next_tokens = [1, 1059, 31871, 1217, 322, 266, 3682, 6075, 31902, 13, 31849, 31871]
-    # print(f"Step {start_index}")
+    bsizes = []
+    for bs in hp.bs:
+        q = torch.zeros((bs, 1, 32, 128), dtype=torch.float16)
+        k = torch.zeros((bs, 1, 32, 128), dtype=torch.float16)
+        v = torch.zeros((bs, 1, 32, 128), dtype=torch.float16)
 
-    dtype = q.dtype
-    attention_mask = None
-    if hp.sl > 1:
-        # Use the smallest value like HF as opposed to -inf like original.
-        # A little bit easier for some systems.
-        attention_mask = torch.full(
-            (1, 1, hp.sl, hp.sl), torch.finfo(dtype).min, dtype=dtype
-        )
-        attention_mask = torch.triu(
-            attention_mask, diagonal=start_index + 1
-        ).type_as(q)
+        block_cache_k = torch.zeros((bs, 4096, 32, 128), dtype=torch.float16)
+        block_cache_v = torch.zeros((bs, 4096, 32, 128), dtype=torch.float16)
 
-    # h = sdpa_block.sdpa(
-    #     xq=q,
-    #     xk=k,
-    #     xv=v,
-    #     cache_k=block_cache_k,
-    #     cache_v=block_cache_v,
-    #     start_index=0,
-    #     is_causal=is_causal,
-    #     attention_mask=attention_mask,
-    # )
-
-    # print('\n\nFinal output: h\n', h)
-
-    # print(f"  : tokens = {tokens}")
-
-    # Decode a step.
-    # print("Decoding...")
-    # print(tokens.shape, tokens)
-    # decode_token = model.forward(tokens, start_index=12, local_kv_cache=kv_cache)
-    # print(f"  : decode tokens = {decode_token}")
-
-    print(f"Exporting sdpa{hp.bs}")
-    fxb = FxProgramsBuilder(sdpa_block)
-    example_args = (q, k, v, block_cache_k, block_cache_v)
-
-    # dynamic_shapes = {
-    #         "seq_lens": {},
-    #         "seq_block_ids": {1: block_dim},
-    #         "cache_state": cache_state_dynamic_shapes,
-    #     }
-
-    # @fxb.export_program(
-    #         name=f"sdpa{hp.bs}",
-    #         args=(hp, is_causal, attention_mask),
-    # )
-    @fxb.export_program(
-        name=f"sdpa{hp.bs}",
-        args=example_args,
-    )
-    def _(sdpa_block, q, k, v, block_cache_k, block_cache_v):
+        dtype = q.dtype
         attention_mask = None
-        h = sdpa_block.sdpa(
-            xq=q,
-            xk=k,
-            xv=v,
-            cache_k=block_cache_k,
-            cache_v=block_cache_v,
-            is_causal = True,
-            attention_mask=attention_mask,
+        if hp.sl > 1:
+            # Use the smallest value like HF as opposed to -inf like original.
+            # A little bit easier for some systems.
+            attention_mask = torch.full(
+                (1, 1, hp.sl, hp.sl), torch.finfo(dtype).min, dtype=dtype
+            )
+            attention_mask = torch.triu(
+                attention_mask, diagonal=start_index + 1
+            ).type_as(q)
+
+        print(f"Exporting sdpa{bs}")
+        fxb = FxProgramsBuilder(sdpa_block)
+        example_args = (q, k, v, block_cache_k, block_cache_v)
+
+        # dynamic_shapes = {
+        #         "seq_lens": {},
+        #         "seq_block_ids": {1: block_dim},
+        #         "cache_state": cache_state_dynamic_shapes,
+        #     }
+
+        # @fxb.export_program(
+        #         name=f"sdpa{hp.bs}",
+        #         args=(hp, is_causal, attention_mask),
+        # )
+        @fxb.export_program(
+            name=f"sdpa{bs}",
+            args=example_args,
         )
-        print('\n\nFinal output: h\n', h)
-        return h
-    
-    bsizes = hp.bs
+        def _(sdpa_block, q, k, v, block_cache_k, block_cache_v):
+            attention_mask = None
+            h = sdpa_block.sdpa(
+                xq=q,
+                xk=k,
+                xv=v,
+                cache_k=block_cache_k,
+                cache_v=block_cache_v,
+                is_causal = False,
+                attention_mask=attention_mask,
+            )
+            return h
+        
+        bsizes.append(bs)
 
     config = generate_params_json(hp, bsizes)
     print("GENERATED!")
