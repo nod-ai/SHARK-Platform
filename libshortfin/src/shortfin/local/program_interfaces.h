@@ -11,6 +11,8 @@
 #ifndef SHORTFIN_LOCAL_PROGRAM_INTERFACES_H
 #define SHORTFIN_LOCAL_PROGRAM_INTERFACES_H
 
+#include "shortfin/support/api.h"
+
 namespace shortfin::local {
 
 class SHORTFIN_API ProgramInvocation;
