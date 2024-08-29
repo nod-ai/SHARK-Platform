@@ -218,6 +218,27 @@ local::ProgramInvocation::Future PyFunctionCall(local::ProgramFunction &self,
   return local::ProgramInvocation::Invoke(std::move(inv));
 }
 
+py::object PyRehydrateRef(local::ProgramInvocation *inv,
+                          iree::vm_opaque_ref ref) {
+  auto type = ref.get()->type;
+  // Note that these accessors are dangerous as they assert/abort if
+  // process-wide registration is not done properly. We assume here that
+  // since we got a ref out that the basics are set up soundly, but if actually
+  // doing this on user/dynamic types, we would want to be more defensive.
+  // TODO: Don't just do a linear scan if we have more than a couple.
+  // TODO: Find a reliable way to statically cache the type id.
+  if (local::ProgramInvocationMarshalableFactory::invocation_marshalable_type<
+          array::device_array>() == type) {
+    return py::cast(local::ProgramInvocationMarshalableFactory::
+                        CreateFromInvocationResultRef<array::device_array>(
+                            inv, std::move(ref)));
+  } else if (iree_hal_buffer_type() == type) {
+  }
+  throw std::invalid_argument(
+      fmt::format("Cannot marshal ref type {} to Python",
+                  to_string_view(iree_vm_ref_type_name(type))));
+}
+
 py::object RunInForeground(std::shared_ptr<Refs> refs, local::System &self,
                            py::object coro) {
   bool is_main_thread =
@@ -440,11 +461,31 @@ void BindLocal(py::module_ &m) {
              if (!self) throw std::invalid_argument("Deallocated invocation");
              return local::ProgramInvocation::Invoke(std::move(self));
            })
-      .def("add_arg", [](local::ProgramInvocation::Ptr &self, py::handle arg) {
-        if (!self) throw std::invalid_argument("Deallocated invocation");
-        py::capsule inv_capsule(self.get());
-        PyAddProgramInvocationArg(inv_capsule, arg);
-      });
+      .def("add_arg",
+           [](local::ProgramInvocation::Ptr &self, py::handle arg) {
+             if (!self) throw std::invalid_argument("Deallocated invocation");
+             py::capsule inv_capsule(self.get());
+             PyAddProgramInvocationArg(inv_capsule, arg);
+           })
+      .def(
+          "__len__",
+          [](local::ProgramInvocation::Ptr &self) {
+            if (!self) throw std::invalid_argument("Deallocated invocation");
+            return self->results_size();
+          },
+          "The number of results in this invocation")
+      .def(
+          "__getitem__",
+          [](local::ProgramInvocation::Ptr &self, iree_host_size_t i) {
+            if (!self) throw std::invalid_argument("Deallocated invocation");
+            iree::vm_opaque_ref ref = self->result_ref(i);
+            if (!ref) {
+              throw new std::logic_error(
+                  "Program returned unsupported Python type");
+            }
+            return PyRehydrateRef(self.get(), std::move(ref));
+          },
+          "Gets the i'th result");
 
   struct DevicesSet {
     DevicesSet(local::Scope &scope) : scope(scope) {}

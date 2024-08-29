@@ -164,6 +164,7 @@ class object_ptr {
 
 SHORTFIN_IREE_DEF_PTR(hal_command_buffer);
 SHORTFIN_IREE_DEF_PTR(hal_buffer);
+SHORTFIN_IREE_DEF_PTR(hal_buffer_view);
 SHORTFIN_IREE_DEF_PTR(hal_device);
 SHORTFIN_IREE_DEF_PTR(hal_driver);
 SHORTFIN_IREE_DEF_PTR(hal_fence);

@@ -79,6 +79,9 @@ class SHORTFIN_API storage : public local::ProgramInvocationMarshalable {
   const local::ScopedDevice &device() const { return device_; }
   local::Scope &scope() const { return device_.scope(); }
 
+  static storage import_buffer(local::ScopedDevice &device,
+                               iree::hal_buffer_ptr buffer);
+
   // Allocates device storage, compatible with the given device affinity.
   // By default, this will be IREE_HAL_MEMORY_TYPE_OPTIMAL_FOR_DEVICE.
   static storage allocate_device(local::ScopedDevice &device,

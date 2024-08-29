@@ -12,6 +12,7 @@
 #define SHORTFIN_LOCAL_PROGRAM_INTERFACES_H
 
 #include "shortfin/support/api.h"
+#include "shortfin/support/iree_helpers.h"
 
 namespace shortfin::local {
 
@@ -46,6 +47,37 @@ class SHORTFIN_API ProgramInvocationMarshalable {
   // Adds this object as an invocation argument.
   virtual void AddAsInvocationArgument(ProgramInvocation *inv,
                                        ProgramResourceBarrier barrier) = 0;
+};
+
+// Trampoline class that has visibility into marshalable types and can be used
+// to construct them from an invocation reference.
+class SHORTFIN_API ProgramInvocationMarshalableFactory {
+ public:
+  // Instantiates a new `T` from an opaque reference retrieved from an
+  // invocation result. This will call through to a factory on the type to
+  // construct a new user-value and setup any needed barriers from the
+  // invocation.
+  //
+  // In order for a type to be eligible for such usage, it must expose a
+  // `T CreateFromInvocationResultRef(ProgramInvocation *inv,
+  // iree::vm_opaque_ref)` static method. The type `T` must be friends with this
+  // class.
+  template <typename T>
+  static T CreateFromInvocationResultRef(ProgramInvocation *inv,
+                                         iree::vm_opaque_ref ref) {
+    return T::CreateFromInvocationResultRef(inv, std::move(ref));
+  }
+
+  // Gets the type id that corresponds to this marshalable type.
+  //
+  // Marshalable types should define the same method.
+  // It is recommended that these type methods are defined in shortfin
+  // implementation files (not headers) since that ensures that no cross-DSO
+  // symbol visibility issues can transpire.
+  template <typename T>
+  static iree_vm_ref_type_t invocation_marshalable_type() {
+    return T::invocation_marshalable_type();
+  }
 };
 
 }  // namespace shortfin::local

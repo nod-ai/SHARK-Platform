@@ -106,32 +106,9 @@ void BindArray(py::module_ &m) {
       .def(py::self == py::self)
       .def("__repr__", &DType::name);
 
-  m.attr("opaque8") = DType::opaque8();
-  m.attr("opaque16") = DType::opaque16();
-  m.attr("opaque32") = DType::opaque32();
-  m.attr("opaque64") = DType::opaque64();
-  m.attr("bool8") = DType::bool8();
-  m.attr("int4") = DType::int4();
-  m.attr("sint4") = DType::sint4();
-  m.attr("uint4") = DType::uint4();
-  m.attr("int8") = DType::int8();
-  m.attr("sint8") = DType::sint8();
-  m.attr("uint8") = DType::uint8();
-  m.attr("int16") = DType::int16();
-  m.attr("sint16") = DType::sint16();
-  m.attr("uint16") = DType::uint16();
-  m.attr("int32") = DType::int32();
-  m.attr("sint32") = DType::sint32();
-  m.attr("uint32") = DType::uint32();
-  m.attr("int64") = DType::int64();
-  m.attr("sint64") = DType::sint64();
-  m.attr("uint64") = DType::uint64();
-  m.attr("float16") = DType::float16();
-  m.attr("float32") = DType::float32();
-  m.attr("float64") = DType::float64();
-  m.attr("bfloat16") = DType::bfloat16();
-  m.attr("complex64") = DType::complex64();
-  m.attr("complex128") = DType::complex128();
+#define SHORTFIN_DTYPE_HANDLE(et, ident) m.attr(#ident) = DType::ident();
+#include "shortfin/array/dtypes.inl"
+#undef SHORTFIN_DTYPE_HANDLE
 
   // storage
   py::class_<storage>(m, "storage")

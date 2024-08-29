@@ -52,16 +52,17 @@ class InferenceProcess(sf.Process):
             # print("results:", results)
 
             # Simple call.
-            # results = await self.main_function(self.device_input, scope=self.scope)
-            # print("Results:", results)
+            results = await self.main_function(self.device_input, scope=self.scope)
+            print("Results:", results, len(results))
+            print("Result 0:", results[0])
 
             # Multiple invocations in parallel.
-            all_results = await asyncio.gather(
-                self.main_function(self.device_input, scope=self.scope),
-                self.main_function(self.device_input, scope=self.scope),
-                self.main_function(self.device_input, scope=self.scope),
-            )
-            print("All results:", all_results)
+            # all_results = await asyncio.gather(
+            #     self.main_function(self.device_input, scope=self.scope),
+            #     self.main_function(self.device_input, scope=self.scope),
+            #     self.main_function(self.device_input, scope=self.scope),
+            # )
+            # print("All results:", all_results)
 
             # output = await self.scope.invoke(self.main_function, self.device_input)
             # print("OUTPUT:", output)

@@ -334,4 +334,16 @@ ProgramInvocation::Future ProgramInvocation::Invoke(
   return fork_future;
 }
 
+iree_host_size_t ProgramInvocation::results_size() {
+  return iree_vm_list_size(result_list_);
+}
+
+iree::vm_opaque_ref ProgramInvocation::result_ref(iree_host_size_t i) {
+  iree::vm_opaque_ref out_value;
+  auto status = iree_vm_list_get_ref_retain(result_list_, i, &out_value);
+  if (iree_status_is_failed_precondition(status)) return {};
+  SHORTFIN_THROW_IF_ERROR(status, "accessing invocation result");
+  return out_value;
+}
+
 }  // namespace shortfin::local

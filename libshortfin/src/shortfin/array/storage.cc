@@ -35,6 +35,12 @@ storage::storage(local::ScopedDevice device, iree::hal_buffer_ptr buffer,
 }
 storage::~storage() { logging::destruct("array::storage", this); }
 
+storage storage::import_buffer(local::ScopedDevice &device,
+                               iree::hal_buffer_ptr buffer) {
+  return storage(device, std::move(buffer),
+                 device.scope().NewTimelineResource());
+}
+
 storage storage::allocate_device(ScopedDevice &device,
                                  iree_device_size_t allocation_size) {
   if (!device.raw_device()) {

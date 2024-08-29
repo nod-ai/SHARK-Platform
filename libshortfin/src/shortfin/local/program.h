@@ -64,6 +64,9 @@ class SHORTFIN_API ProgramInvocation {
   // accessed.
   bool scheduled() const { return scheduled_; }
 
+  // The scope this invocation was scheduled against.
+  Scope *scope() const { return scope_.get(); }
+
   // Adds a marshalable argument with a configurable concurrency barrier.
   void AddArg(ProgramInvocationMarshalable &marshalable,
               ProgramResourceBarrier barrier = ProgramResourceBarrier::READ);
@@ -76,6 +79,14 @@ class SHORTFIN_API ProgramInvocation {
   // Transfers ownership of an invocation and schedules it on worker, returning
   // a future that will resolve to the owned invocation upon completion.
   static ProgramInvocation::Future Invoke(ProgramInvocation::Ptr invocation);
+
+  // Gets the number of outputs.
+  iree_host_size_t results_size();
+
+  // Gets the i'th result as an opaque ref object. Returns a null ref if the
+  // result is a primitive. Outputs accessed in this way are not marshaled
+  // nor do they have concurrency barriers applied.
+  iree::vm_opaque_ref result_ref(iree_host_size_t i);
 
  private:
   ProgramInvocation();
