@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "shortfin/local/async.h"
+#include "shortfin/local/program_interfaces.h"
 #include "shortfin/local/worker.h"
 #include "shortfin/support/api.h"
 #include "shortfin/support/iree_helpers.h"
@@ -63,8 +64,12 @@ class SHORTFIN_API ProgramInvocation {
   // accessed.
   bool scheduled() const { return scheduled_; }
 
-  // Adds a ref object argument. Most of our classes which can be cast to
-  // a VM object will have a type caster to produce such an instance.
+  // Adds a marshalable argument with a configurable concurrency barrier.
+  void AddArg(ProgramInvocationMarshalable &marshalable,
+              ProgramResourceBarrier barrier = ProgramResourceBarrier::READ);
+
+  // Adds a ref object argument. This low level interface directly adds a
+  // reference object and does not manipulate any execution barriers.
   void AddArg(iree::vm_opaque_ref ref);  // Moves a reference in.
   void AddArg(iree_vm_ref_t *ref);       // Borrows the reference.
 
@@ -198,12 +203,6 @@ class SHORTFIN_API Program {
       : vm_context_(std::move(vm_context)) {}
   iree::vm_context_ptr vm_context_;
   friend class Scope;
-};
-
-// Implemented by a class if it can marshal itself to an invocation as an
-// argument.
-class ProgramInvocationMarshalable {
- public:
 };
 
 }  // namespace shortfin::local

@@ -60,7 +60,8 @@ std::string device_array::to_s() const {
       storage_.formatted_memory_access(), contents_prefix, contents);
 }
 
-device_array::operator iree::vm_opaque_ref() {
+void device_array::AddAsInvocationArgument(
+    local::ProgramInvocation *inv, local::ProgramResourceBarrier barrier) {
   auto dims_span = shape();
   iree_hal_buffer_view_t *buffer_view;
   SHORTFIN_THROW_IF_ERROR(iree_hal_buffer_view_create(
@@ -70,7 +71,9 @@ device_array::operator iree::vm_opaque_ref() {
 
   iree::vm_opaque_ref ref;
   *(&ref) = iree_hal_buffer_view_move_ref(buffer_view);
-  return ref;
+  inv->AddArg(std::move(ref));
+
+  // TODO: Add barriers.
 }
 
 }  // namespace shortfin::array

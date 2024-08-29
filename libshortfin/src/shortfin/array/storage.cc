@@ -195,10 +195,13 @@ std::string storage::formatted_buffer_usage() const {
   return std::string(sv.data, sv.size);
 }
 
-storage::operator iree::vm_opaque_ref() {
+void storage::AddAsInvocationArgument(local::ProgramInvocation *inv,
+                                      local::ProgramResourceBarrier barrier) {
   iree::vm_opaque_ref ref;
   *(&ref) = iree_hal_buffer_retain_ref(buffer_);
-  return ref;
+  inv->AddArg(std::move(ref));
+
+  // TODO: Add barriers.
 }
 
 std::string storage::to_s() const {

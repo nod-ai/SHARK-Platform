@@ -9,6 +9,7 @@
 
 #include <string_view>
 
+#include "shortfin/local/program_interfaces.h"
 #include "shortfin/local/scope.h"
 #include "shortfin/support/api.h"
 
@@ -70,7 +71,7 @@ class SHORTFIN_API mapping {
 };
 
 // Array storage backed by an IREE buffer of some form.
-class SHORTFIN_API storage {
+class SHORTFIN_API storage : public local::ProgramInvocationMarshalable {
  public:
   ~storage();
   local::ScopedDevice &device() { return device_; }
@@ -161,9 +162,6 @@ class SHORTFIN_API storage {
   // underlying device references alive as needed).
   operator iree_hal_buffer_t *() { return buffer_; }
 
-  // Returns a ref to the underlying buffer.
-  operator iree::vm_opaque_ref();
-
   iree_allocator_t host_allocator() {
     return timeline_resource_->host_allocator();
   }
@@ -171,6 +169,9 @@ class SHORTFIN_API storage {
  private:
   storage(local::ScopedDevice device, iree::hal_buffer_ptr buffer,
           local::detail::TimelineResource::Ref timeline_resource);
+  // ProgramInvocationMarshalable implementation.
+  void AddAsInvocationArgument(local::ProgramInvocation *inv,
+                               local::ProgramResourceBarrier barrier) override;
   // The timeline resource holds the back reference to the owning scope,
   // which keeps all devices alive. Buffers must be destroyed before devices,
   // so this must be declared first.

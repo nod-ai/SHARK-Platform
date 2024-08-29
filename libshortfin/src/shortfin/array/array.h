@@ -16,6 +16,7 @@
 #include "shortfin/array/dtype.h"
 #include "shortfin/array/storage.h"
 #include "shortfin/array/xtensor_bridge.h"
+#include "shortfin/local/program_interfaces.h"
 #include "shortfin/support/api.h"
 
 namespace shortfin::array {
@@ -55,7 +56,8 @@ class SHORTFIN_API base_array {
 
 class SHORTFIN_API device_array
     : public base_array,
-      public poly_xt_mixin<device_array, class mapping> {
+      public poly_xt_mixin<device_array, class mapping>,
+      public local::ProgramInvocationMarshalable {
  public:
   device_array(class storage storage, std::span<const Dims::value_type> shape,
                DType dtype)
@@ -139,14 +141,15 @@ class SHORTFIN_API device_array
     return typed_mapping<EltTy>(data_w());
   }
 
-  // Returns a buffer_view ref object. The returned buffer view snapshots the
-  // shape.
-  operator iree::vm_opaque_ref();
-
   std::string to_s() const override;
 
  protected:
   class storage storage_;
+
+ private:
+  // ProgramInvocationMarshalable implementation.
+  void AddAsInvocationArgument(local::ProgramInvocation *inv,
+                               local::ProgramResourceBarrier barrier) override;
 };
 
 }  // namespace shortfin::array

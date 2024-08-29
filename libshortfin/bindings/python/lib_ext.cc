@@ -191,12 +191,14 @@ class PyProcess : public local::detail::BaseProcess {
   std::shared_ptr<Refs> refs_;
 };
 
-void PyAddProgramInvocationArg(local::ProgramInvocation::Ptr &inv,
-                               py::handle arg) {
-  py::object py_ref = py::getattr(arg, "__sf_opaque_ref__", py::none());
-  if (!py_ref.is_none()) {
-    iree::vm_opaque_ref &ref_object = py::cast<iree::vm_opaque_ref &>(py_ref);
-    inv->AddArg(ref_object.get());
+void PyAddProgramInvocationArg(py::capsule &inv_capsule, py::handle arg) {
+  // See if the object implements our marshaling protocol. If it does, then
+  // We invoke the marshaling method with the Invocation wrapped as a capsule
+  // and the ProgramResourceBarrier.
+  py::object marshaler = py::getattr(arg, "__sfinv_marshal__", py::none());
+  if (!marshaler.is_none()) {
+    marshaler(inv_capsule,
+              static_cast<int>(local::ProgramResourceBarrier::DEFAULT));
     return;
   }
 
@@ -209,8 +211,9 @@ local::ProgramInvocation::Future PyFunctionCall(local::ProgramFunction &self,
                                                 py::args args,
                                                 local::Scope &scope) {
   auto inv = self.CreateInvocation(scope.shared_from_this());
+  py::capsule inv_capsule(inv.get());
   for (py::handle arg : args) {
-    PyAddProgramInvocationArg(inv, arg);
+    PyAddProgramInvocationArg(inv_capsule, arg);
   }
   return local::ProgramInvocation::Invoke(std::move(inv));
 }
@@ -439,7 +442,8 @@ void BindLocal(py::module_ &m) {
            })
       .def("add_arg", [](local::ProgramInvocation::Ptr &self, py::handle arg) {
         if (!self) throw std::invalid_argument("Deallocated invocation");
-        PyAddProgramInvocationArg(self, arg);
+        py::capsule inv_capsule(self.get());
+        PyAddProgramInvocationArg(inv_capsule, arg);
       });
 
   struct DevicesSet {
