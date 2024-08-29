@@ -43,9 +43,9 @@ std::string_view ProgramFunction::calling_convention() const {
       iree_vm_function_signature(&vm_function_).calling_convention);
 }
 
-Invocation::Ptr ProgramFunction::CreateInvocation(
+ProgramInvocation::Ptr ProgramFunction::CreateInvocation(
     std::shared_ptr<Scope> scope) {
-  return Invocation::New(std::move(scope), vm_context_, vm_function_);
+  return ProgramInvocation::New(std::move(scope), vm_context_, vm_function_);
 }
 
 std::string ProgramFunction::to_s() const {
@@ -145,26 +145,26 @@ std::vector<std::string> Program::exports() const {
 }
 
 // -------------------------------------------------------------------------- //
-// Invocation
+// ProgramInvocation
 // -------------------------------------------------------------------------- //
 
-void Invocation::Deleter::operator()(Invocation *inst) {
-  inst->~Invocation();
+void ProgramInvocation::Deleter::operator()(ProgramInvocation *inst) {
+  inst->~ProgramInvocation();
   uint8_t *memory = static_cast<uint8_t *>(static_cast<void *>(inst));
 
   // Trailing arg list and result list. The arg list pointer is only available
   // at construction, so we use the knowledge that it is stored right after
   // the object. The result_list_ is available for the life of the invocation.
   iree_vm_list_deinitialize(static_cast<iree_vm_list_t *>(
-      static_cast<void *>(memory + sizeof(Invocation))));
+      static_cast<void *>(memory + sizeof(ProgramInvocation))));
   iree_vm_list_deinitialize(inst->result_list_);
 
   // Was allocated in New as a uint8_t[] so delete it by whence it came.
   delete[] memory;
 }
 
-Invocation::Invocation() = default;
-Invocation::~Invocation() {
+ProgramInvocation::ProgramInvocation() = default;
+ProgramInvocation::~ProgramInvocation() {
   if (!scheduled()) {
     // This instance was dropped on the floor before scheduling.
     // Clean up the initialization parameters.
@@ -173,9 +173,9 @@ Invocation::~Invocation() {
   }
 }
 
-Invocation::Ptr Invocation::New(std::shared_ptr<Scope> scope,
-                                iree::vm_context_ptr vm_context,
-                                iree_vm_function_t &vm_function) {
+ProgramInvocation::Ptr ProgramInvocation::New(std::shared_ptr<Scope> scope,
+                                              iree::vm_context_ptr vm_context,
+                                              iree_vm_function_t &vm_function) {
   auto sig = iree_vm_function_signature(&vm_function);
   iree_host_size_t arg_count;
   iree_host_size_t result_count;
@@ -189,79 +189,84 @@ Invocation::Ptr Invocation::New(std::shared_ptr<Scope> scope,
   iree_host_size_t result_storage_size =
       iree_vm_list_storage_size(&variant_type_def, result_count);
 
-  // Allocate storage for the Invocation, arg, result list and placement new
-  // the Invocation into the storage area.
+  // Allocate storage for the ProgramInvocation, arg, result list and placement
+  // new the ProgramInvocation into the storage area.
   std::unique_ptr<uint8_t[]> inst_storage(
-      new uint8_t[sizeof(Invocation) + arg_storage_size + result_storage_size]);
-  new (inst_storage.get()) Invocation();
+      new uint8_t[sizeof(ProgramInvocation) + arg_storage_size +
+                  result_storage_size]);
+  new (inst_storage.get()) ProgramInvocation();
 
   // Initialize trailing lists. Abort on failure since this is a bug and we
   // would otherwise leak.
   iree_vm_list_t *arg_list;
   iree_vm_list_t *result_list;
-  IREE_CHECK_OK(
-      iree_vm_list_initialize({.data = inst_storage.get() + sizeof(Invocation),
-                               .data_length = arg_storage_size},
-                              &variant_type_def, arg_count, &arg_list));
   IREE_CHECK_OK(iree_vm_list_initialize(
-      {.data = inst_storage.get() + sizeof(Invocation) + arg_storage_size,
+      {.data = inst_storage.get() + sizeof(ProgramInvocation),
+       .data_length = arg_storage_size},
+      &variant_type_def, arg_count, &arg_list));
+  IREE_CHECK_OK(iree_vm_list_initialize(
+      {.data =
+           inst_storage.get() + sizeof(ProgramInvocation) + arg_storage_size,
        .data_length = result_storage_size},
       &variant_type_def, result_count, &result_list));
 
-  Ptr inst(
-      static_cast<Invocation *>(static_cast<void *>(inst_storage.release())),
-      Deleter());
+  Ptr inst(static_cast<ProgramInvocation *>(
+               static_cast<void *>(inst_storage.release())),
+           Deleter());
   inst->scope_ = std::move(scope);
   inst->state.params.context =
-      vm_context.release();  // Ref transfer to Invocation.
+      vm_context.release();  // Ref transfer to ProgramInvocation.
   inst->state.params.function = vm_function;
   inst->state.params.arg_list = arg_list;
   inst->result_list_ = result_list;
   return inst;
 }
 
-void Invocation::CheckNotScheduled() {
+void ProgramInvocation::CheckNotScheduled() {
   if (scheduled()) {
     throw std::logic_error("Cannot mutate an invocation once scheduled.");
   }
 }
 
-void Invocation::AddArg(iree::vm_opaque_ref ref) {
+void ProgramInvocation::AddArg(iree::vm_opaque_ref ref) {
   CheckNotScheduled();
   SHORTFIN_THROW_IF_ERROR(
       iree_vm_list_push_ref_move(state.params.arg_list, &ref));
 }
 
-void Invocation::AddArg(iree_vm_ref_t *ref) {
+void ProgramInvocation::AddArg(iree_vm_ref_t *ref) {
   CheckNotScheduled();
   SHORTFIN_THROW_IF_ERROR(
       iree_vm_list_push_ref_retain(state.params.arg_list, ref));
 }
 
-Invocation::Future Invocation::Invoke(Invocation::Ptr invocation) {
+ProgramInvocation::Future ProgramInvocation::Invoke(
+    ProgramInvocation::Ptr invocation) {
   invocation->CheckNotScheduled();
   Worker &worker = invocation->scope_->worker();
   // We're about to overwrite the instance level storage for params, so move
   // it to the stack and access there.
   Params params = invocation->state.params;
 
-  auto schedule = [](Invocation *raw_invocation, Worker *worker,
+  auto schedule = [](ProgramInvocation *raw_invocation, Worker *worker,
                      iree_vm_context_t *owned_context,
                      iree_vm_function_t function, iree_vm_list_t *arg_list,
-                     std::optional<Invocation::Future> failure_future) {
+                     std::optional<ProgramInvocation::Future> failure_future) {
     auto complete_callback =
         [](void *user_data, iree_loop_t loop, iree_status_t status,
            iree_vm_list_t *outputs) noexcept -> iree_status_t {
       // Async invocation helpfully gives us a retained reference to the
-      // outputs, but we already have one statically on the Invocation. So
-      // release this one, which makes it safe to deallocate the Invocation at
-      // any point after this (there must be no live references to
-      // inputs/outputs when the Invocation::Ptr deleter is invoked).
+      // outputs, but we already have one statically on the ProgramInvocation.
+      // So release this one, which makes it safe to deallocate the
+      // ProgramInvocation at any point after this (there must be no live
+      // references to inputs/outputs when the ProgramInvocation::Ptr deleter is
+      // invoked).
       iree::vm_list_ptr::steal_reference(outputs);
 
-      // Repatriate the Invocation.
-      Invocation::Ptr invocation(static_cast<Invocation *>(user_data));
-      Invocation *raw_invocation = invocation.get();
+      // Repatriate the ProgramInvocation.
+      ProgramInvocation::Ptr invocation(
+          static_cast<ProgramInvocation *>(user_data));
+      ProgramInvocation *raw_invocation = invocation.get();
       if (iree_status_is_ok(status)) {
         raw_invocation->future_->set_result(std::move(invocation));
       } else {
@@ -276,7 +281,7 @@ Invocation::Future Invocation::Invoke(Invocation::Ptr invocation) {
       return iree_ok_status();
     };
 
-    Invocation::Ptr invocation(raw_invocation);
+    ProgramInvocation::Ptr invocation(raw_invocation);
     // TODO: Need to fork based on whether on the current worker. If not, then
     // do cross thread scheduling.
     iree_status_t status = iree_vm_async_invoke(

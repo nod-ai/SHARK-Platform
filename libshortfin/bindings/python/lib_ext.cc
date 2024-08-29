@@ -191,7 +191,8 @@ class PyProcess : public local::detail::BaseProcess {
   std::shared_ptr<Refs> refs_;
 };
 
-void PyAddInvocationArg(local::Invocation::Ptr &inv, py::handle arg) {
+void PyAddProgramInvocationArg(local::ProgramInvocation::Ptr &inv,
+                               py::handle arg) {
   py::object py_ref = py::getattr(arg, "__sf_opaque_ref__", py::none());
   if (!py_ref.is_none()) {
     iree::vm_opaque_ref &ref_object = py::cast<iree::vm_opaque_ref &>(py_ref);
@@ -204,13 +205,14 @@ void PyAddInvocationArg(local::Invocation::Ptr &inv, py::handle arg) {
                   py::cast<std::string>(py::repr(arg.type()))));
 }
 
-local::Invocation::Future PyFunctionCall(local::ProgramFunction &self,
-                                         py::args args, local::Scope &scope) {
+local::ProgramInvocation::Future PyFunctionCall(local::ProgramFunction &self,
+                                                py::args args,
+                                                local::Scope &scope) {
   auto inv = self.CreateInvocation(scope.shared_from_this());
   for (py::handle arg : args) {
-    PyAddInvocationArg(inv, arg);
+    PyAddProgramInvocationArg(inv, arg);
   }
-  return local::Invocation::Invoke(std::move(inv));
+  return local::ProgramInvocation::Invoke(std::move(inv));
 }
 
 py::object RunInForeground(std::shared_ptr<Refs> refs, local::System &self,
@@ -429,15 +431,15 @@ void BindLocal(py::module_ &m) {
       .def("__repr__", &local::ProgramModule::to_s)
       .def_static("load", &local::ProgramModule::Load, py::arg("system"),
                   py::arg("path"), py::arg("mmap") = true);
-  py::class_<local::Invocation::Ptr>(m, "Invocation")
+  py::class_<local::ProgramInvocation::Ptr>(m, "ProgramInvocation")
       .def("invoke",
-           [](local::Invocation::Ptr &self) {
+           [](local::ProgramInvocation::Ptr &self) {
              if (!self) throw std::invalid_argument("Deallocated invocation");
-             return local::Invocation::Invoke(std::move(self));
+             return local::ProgramInvocation::Invoke(std::move(self));
            })
-      .def("add_arg", [](local::Invocation::Ptr &self, py::handle arg) {
+      .def("add_arg", [](local::ProgramInvocation::Ptr &self, py::handle arg) {
         if (!self) throw std::invalid_argument("Deallocated invocation");
-        PyAddInvocationArg(self, arg);
+        PyAddProgramInvocationArg(self, arg);
       });
 
   struct DevicesSet {
@@ -478,7 +480,8 @@ void BindLocal(py::module_ &m) {
             options.trace_execution = trace_execution;
             return scope.LoadUnboundProgram(modules, std::move(options));
           },
-          py::arg("modules"), py::arg("trace_execution") = false);
+          py::arg("modules"), py::kw_only(),
+          py::arg("trace_execution") = false);
 
   py::class_<local::ScopedDevice>(m, "ScopedDevice")
       .def_prop_ro("scope", &local::ScopedDevice::scope,
@@ -751,17 +754,18 @@ void BindLocal(py::module_ &m) {
         return iter_ret;
       });
   py::class_<local::VoidFuture, local::Future>(m, "VoidFuture");
-  py::class_<local::Invocation::Future, local::Future>(m, "InvocationFuture")
-      .def("result", [](local::Invocation::Future &self) {
-        local::Invocation::Ptr &result = self.result();
+  py::class_<local::ProgramInvocation::Future, local::Future>(
+      m, "ProgramInvocationFuture")
+      .def("result", [](local::ProgramInvocation::Future &self) {
+        local::ProgramInvocation::Ptr &result = self.result();
         if (!result) return py::none();
-        // Sharp edge: InvocationFutures are read-once since we move the
-        // Invocation::Ptr out of the future here and transfer ownership
+        // Sharp edge: ProgramInvocationFutures are read-once since we move the
+        // ProgramInvocation::Ptr out of the future here and transfer ownership
         // to a Python object. There isn't a better way to do this without
         // increasing overhead on this hot path or doing something more
-        // expensive in the C++ API: essentially, Invocations flow through
-        // the system precisely one way. As a low level facility, this is
-        // deemed acceptable.
+        // expensive in the C++ API: essentially, ProgramInvocations flow
+        // through the system precisely one way. As a low level facility, this
+        // is deemed acceptable.
         return py::cast(std::move(result));
       });
   py::class_<local::MessageFuture, local::Future>(m, "MessageFuture")

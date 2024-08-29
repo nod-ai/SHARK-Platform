@@ -85,7 +85,9 @@ class Main:
         # Note that currently, program load is synchronous. But we do it
         # in a task so we can await it in the future and let program loads
         # overlap.
-        program = scope.load_unbound_program([self.program_module])
+        program = scope.load_unbound_program(
+            [self.program_module], trace_execution=False
+        )
         for _ in range(self.processes_per_worker):
             self.processes.append(
                 InferenceProcess(program, self.request_queue, scope=scope).launch()

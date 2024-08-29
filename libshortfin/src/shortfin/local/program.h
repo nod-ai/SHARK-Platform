@@ -27,9 +27,9 @@ class SHORTFIN_API System;
 // Since ownership of this object is transferred to the loop/callback and
 // internal pointers into it must remain stable, it is only valid to heap
 // allocate it.
-class SHORTFIN_API Invocation {
+class SHORTFIN_API ProgramInvocation {
   struct Deleter {
-    void operator()(Invocation *);
+    void operator()(ProgramInvocation *);
   };
 
  public:
@@ -38,7 +38,7 @@ class SHORTFIN_API Invocation {
   // unique_ptr machinery but template meta-programming that is specialized
   // for unique_ptr sees this as a bespoke class (which is what we want because
   // ownership semantics are special).
-  class Ptr : private std::unique_ptr<Invocation, Deleter> {
+  class Ptr : private std::unique_ptr<ProgramInvocation, Deleter> {
    public:
     using unique_ptr::unique_ptr;
     using unique_ptr::operator=;
@@ -48,18 +48,19 @@ class SHORTFIN_API Invocation {
     using unique_ptr::release;
   };
   static_assert(sizeof(Ptr) == sizeof(void *));
-  using Future = TypedFuture<Invocation::Ptr>;
+  using Future = TypedFuture<ProgramInvocation::Ptr>;
 
   static Ptr New(std::shared_ptr<Scope> scope, iree::vm_context_ptr vm_context,
                  iree_vm_function_t &vm_function);
-  Invocation(const Invocation &) = delete;
-  Invocation &operator=(const Invocation &) = delete;
-  Invocation &operator=(Invocation &&) = delete;
-  Invocation(Invocation &&inv) = delete;
-  ~Invocation();
+  ProgramInvocation(const ProgramInvocation &) = delete;
+  ProgramInvocation &operator=(const ProgramInvocation &) = delete;
+  ProgramInvocation &operator=(ProgramInvocation &&) = delete;
+  ProgramInvocation(ProgramInvocation &&inv) = delete;
+  ~ProgramInvocation();
 
-  // Whether the Invocation has entered the scheduled state. Once scheduled,
-  // arguments and initialization parameters can no longer be accessed.
+  // Whether the ProgramInvocation has entered the scheduled state. Once
+  // scheduled, arguments and initialization parameters can no longer be
+  // accessed.
   bool scheduled() const { return scheduled_; }
 
   // Adds a ref object argument. Most of our classes which can be cast to
@@ -69,10 +70,10 @@ class SHORTFIN_API Invocation {
 
   // Transfers ownership of an invocation and schedules it on worker, returning
   // a future that will resolve to the owned invocation upon completion.
-  static Invocation::Future Invoke(Invocation::Ptr invocation);
+  static ProgramInvocation::Future Invoke(ProgramInvocation::Ptr invocation);
 
  private:
-  Invocation();
+  ProgramInvocation();
   void CheckNotScheduled();
 
   // Parameters needed to make the async call are stored at construction time
@@ -111,7 +112,7 @@ class SHORTFIN_API ProgramFunction {
   std::string_view name() const;
   std::string_view calling_convention() const;
 
-  Invocation::Ptr CreateInvocation(std::shared_ptr<Scope> scope);
+  ProgramInvocation::Ptr CreateInvocation(std::shared_ptr<Scope> scope);
 
   std::string to_s() const;
 
@@ -197,6 +198,12 @@ class SHORTFIN_API Program {
       : vm_context_(std::move(vm_context)) {}
   iree::vm_context_ptr vm_context_;
   friend class Scope;
+};
+
+// Implemented by a class if it can marshal itself to an invocation as an
+// argument.
+class ProgramInvocationMarshalable {
+ public:
 };
 
 }  // namespace shortfin::local
