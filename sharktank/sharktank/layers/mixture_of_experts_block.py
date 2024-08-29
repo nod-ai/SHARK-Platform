@@ -45,6 +45,11 @@ class SparseMoeBlock(ThetaLayer):
             "ffn_norm", RMSNormLayer(theta("ffn_norm"), epsilon=rms_epsilon)
         )
 
+        # Add FFN output norm
+        self.add_module(
+            "layer_output_norm", RMSNormLayer(theta("layer_output_norm"), epsilon=rms_epsilon)
+        )
+
         # Add expert_count x FFN
         self.experts = nn.ModuleList(
             [FFNMOE(theta, expert_idx=i) for i in range(expert_count)]
@@ -104,4 +109,6 @@ class SparseMoeBlock(ThetaLayer):
 
             moe_output.index_add_(0, token_idx, current_expert.to(ffn_input.dtype))
         moe_output = moe_output.reshape(batch_size, sequence_length, feature_dim)
+
+        moe_output = self.layer_output_norm(moe_output)
         return h + moe_output
