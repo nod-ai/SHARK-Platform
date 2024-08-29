@@ -26,6 +26,9 @@ from pathlib import Path
 
 
 class PunetClient(libtuner.TuningClient):
+    def get_dispatch_compile_timeout_s(self) -> int:
+        return 4
+
     def get_dispatch_compile_command(
         self, candidate_tracker: libtuner.CandidateTracker
     ) -> list[str]:
@@ -36,6 +39,9 @@ class PunetClient(libtuner.TuningClient):
             mlir_path.as_posix(),
         ]
         return command
+
+    def get_dispatch_benchmark_timeout_s(self) -> int:
+        return 15
 
     def get_dispatch_benchmark_command(
         self,
@@ -54,9 +60,14 @@ class PunetClient(libtuner.TuningClient):
             "--hip_allow_inline_execution=true",
             "--batch_size=1000",
             "--benchmark_repetitions=3",
+            f"--benchmark_out=dispatch_{candidate_tracker.candidate_id}_bm.json",
+            "--benchmark_out_format=json",
         ]
 
         return command
+
+    def get_model_compile_timeout_s(self) -> int:
+        return 300
 
     def get_model_compile_command(
         self, candidate_tracker: libtuner.CandidateTracker
@@ -78,6 +89,9 @@ class PunetClient(libtuner.TuningClient):
             (target_dir / output_name).as_posix(),
         ]
         return command
+
+    def get_model_benchmark_timeout_s(self) -> int:
+        return 180
 
     def get_model_benchmark_command(
         self, candidate_tracker: libtuner.CandidateTracker
@@ -103,6 +117,8 @@ class PunetClient(libtuner.TuningClient):
             "--input=2x6xf16",
             "--input=1xf16",
             "--benchmark_repetitions=5",
+            f"--benchmark_out=model_{candidate_tracker.candidate_id}_bm.json",
+            "--benchmark_out_format=json",
         ]
         return command
 

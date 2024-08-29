@@ -179,20 +179,47 @@ class TuningClient(ABC):
     ) -> list[str]:
         pass
 
+    @abstractmethod
+    def get_dispatch_compile_timeout_s(self) -> int:
+        pass
+
+    @abstractmethod
+    def get_dispatch_benchmark_timeout_s(self) -> int:
+        pass
+
+    @abstractmethod
+    def get_model_compile_timeout_s(self) -> int:
+        pass
+
+    @abstractmethod
+    def get_model_benchmark_timeout_s(self) -> int:
+        pass
+
+
+@dataclass
+class RunPack:
+    command: list[str]
+    check: bool = True
+    timeout: Optional[int] = None
+
+
+@dataclass
+class RunResult:
+    process_res: Optional[subprocess.CompletedProcess]
+    is_timeout: bool
+
 
 @dataclass
 class TaskPack:
-    args: argparse.Namespace
+    run_pack: RunPack
     candidate_id: int
-    command: list[str]
-    check: bool = True
     command_need_device_id: bool = False
     cooling_time: int = 0
 
 
 @dataclass
 class TaskResult:
-    result: subprocess.CompletedProcess
+    run_result: RunResult
     candidate_id: int
     device_id: str
 
@@ -484,29 +511,30 @@ def create_worker_context_queue(device_ids: list[int]) -> queue.Queue[tuple[int,
     return worker_contexts_queue
 
 
-def run_command(
-    args: argparse.Namespace, command: list[str], check: bool = True
-) -> Optional[subprocess.CompletedProcess]:
-    """Run a shell command and log the output.
+def run_command(run_pack: RunPack) -> TaskResult:
+    command = run_pack.command
+    check = run_pack.check
+    timeout = run_pack.timeout
 
-    Args:
-        args (argparse.Namespace): Parsed command line arguments.
-        command (list): The command to run as a list of strings.
-        check (bool, optional): Whether to check the command's exit status. Defaults to True.
-
-    Returns:
-        subprocess.CompletedProcess: The result of the command execution.
-    """
     result = None
+    is_timeout = False
     try:
         # Convert the command list to a command string for logging
         command_str = " ".join(command)
         logging.debug(f"Run: {command_str}")
-        result = subprocess.run(command, check=check, capture_output=True, text=True)
+
+        # Add timeout to subprocess.run call
+        result = subprocess.run(
+            command, check=check, capture_output=True, text=True, timeout=timeout
+        )
+
         if result.stdout:
             logging.info(f"stdout: {result.stdout}")
         if result.stderr:
             logging.info(f"stderr: {result.stderr}")
+    except subprocess.TimeoutExpired as e:
+        logging.warning(f"Command '{command_str}' timed out after {timeout} seconds.")
+        is_timeout = True
     except subprocess.CalledProcessError as e:
         print(e.output)
         logging.error(
@@ -518,29 +546,29 @@ def run_command(
     except KeyboardInterrupt:
         print("Ctrl+C detected, terminating child processes...")
 
-    return result
+    return RunResult(result, is_timeout)
 
 
-def run_command_wrapper(task_tuple: TaskPack) -> TaskResult:
-    """pool.imap_unordered can't iterate an iterable of iterables input, this function helps dividing arguments"""
-    if task_tuple.command_need_device_id:
+def run_command_wrapper(task_pack: TaskPack) -> TaskResult:
+    """Help handle extra requirements and record more data for run_command()"""
+    if task_pack.command_need_device_id:
         # Worker searches for the special symbol and substitutes it with the actual device_id
         pattern = re.compile(re.escape(DEVICE_ID_PLACEHOLDER))
-        task_tuple.command = [
-            pattern.sub(str(device_id), s) for s in task_tuple.command
+        task_pack.run_pack.command = [
+            pattern.sub(str(device_id), s) for s in task_pack.run_pack.command
         ]
 
-    res = run_command(task_tuple.args, task_tuple.command, task_tuple.check)
-    if res is None:
-        raise
+    run_result = run_command(task_pack.run_pack)
 
     task_result = TaskResult(
-        res, task_tuple.candidate_id, device_id=str(-1)
+        run_result, task_pack.candidate_id, device_id=str(-1)
     )  # Main process
     if device_id:
-        task_result = TaskResult(res, task_tuple.candidate_id, device_id)  # Subprocess
+        task_result = TaskResult(
+            run_result, task_pack.candidate_id, device_id
+        )  # Subprocess
 
-    time.sleep(task_tuple.cooling_time)
+    time.sleep(task_pack.cooling_time)
 
     return task_result
 
@@ -769,10 +797,14 @@ def compile_dispatches(
 
     task_list = [
         TaskPack(
-            args,
+            RunPack(
+                command=tuning_client.get_dispatch_compile_command(
+                    candidate_trackers[i]
+                ),
+                check=False,
+                timeout=tuning_client.get_dispatch_compile_timeout_s(),
+            ),
             candidate_id=i,
-            command=tuning_client.get_dispatch_compile_command(candidate_trackers[i]),
-            check=False,
         )
         for i in candidates
     ]
@@ -781,6 +813,7 @@ def compile_dispatches(
         num_worker=num_worker, task_list=task_list, function=run_command_wrapper
     )
 
+    # Note: failed/incompleted candidates can also be detected by checking if subprocess.res is None
     compiled_files = sorted(
         path_config.compiled_dir.glob("*.vmfb"), key=numerical_sort_key
     )
@@ -839,13 +872,17 @@ def parse_dispatch_benchmark_results(
     incomplete_list = []
 
     for benchmark_result in benchmark_results:
-        res_str = benchmark_result.result.stdout
         candidate_id = benchmark_result.candidate_id
+        process_res = benchmark_result.run_result.process_res
+
+        if not process_res:
+            if benchmark_result.run_result.is_timeout:
+                incomplete_list.append(candidate_id)
+            continue
+
+        res_str = process_res.stdout
         res = IREEBenchmarkResult(candidate_id, res_str)
         benchmark_time = res.get_mean_time()
-        if benchmark_time is None:
-            incomplete_list.append(candidate_id)
-            continue
         assert benchmark_time is not None
         candidate_trackers[candidate_id].first_benchmark_time = benchmark_time
         candidate_trackers[
@@ -870,7 +907,7 @@ def parse_dispatch_benchmark_results(
         )
 
     if incomplete_list:
-        dump_list += [f"Candidate {i} not incompleted" for i in incomplete_list]
+        dump_list += [f"Candidate {i} not completed" for i in incomplete_list]
 
     return benchmark_result_configs, dump_list
 
@@ -940,12 +977,14 @@ def benchmark_dispatches(
         # Benchmarking dispatch candidates
         task_list = [
             TaskPack(
-                args,
-                candidate_id=i,
-                command=tuning_client.get_dispatch_benchmark_command(
-                    candidate_trackers[i]
+                RunPack(
+                    command=tuning_client.get_dispatch_benchmark_command(
+                        candidate_trackers[i]
+                    ),
+                    check=False,
+                    timeout=tuning_client.get_dispatch_benchmark_timeout_s(),
                 ),
-                check=False,
+                candidate_id=i,
                 command_need_device_id=True,
             )
             for i in compiled_candidates
@@ -1020,10 +1059,12 @@ def compile_models(
 
     task_list = [
         TaskPack(
-            args,
+            RunPack(
+                command=tuning_client.get_model_compile_command(candidate_trackers[i]),
+                check=False,
+                timeout=tuning_client.get_model_compile_timeout_s(),
+            ),
             candidate_id=i,
-            command=tuning_client.get_model_compile_command(candidate_trackers[i]),
-            check=False,
         )
         for i in candidates
         if i != 0
@@ -1116,17 +1157,19 @@ def parse_model_benchmark_results(
     for same_device_results in grouped_benchmark_results:
         dump_unsort_list: list[tuple[float, str]] = []
         for task_result in same_device_results:
-            result_str = task_result.result.stdout
             candidate_id = task_result.candidate_id
             device_id = task_result.device_id
+            process_res = task_result.run_result.process_res
 
             # Check if benchmarking has completed
-            if result_str is None:
-                incomplete_list.append((candidate_id, device_id))
+            if not process_res:
+                if task_result.run_result.is_timeout:
+                    incomplete_list.append((candidate_id, device_id))
                 if candidate_id == 0:
                     baseline_time = None
                 continue
 
+            result_str = process_res.stdout
             res = IREEBenchmarkResult(candidate_id, result_str)
             benchmark_time = res.get_mean_time()
             assert benchmark_time is not None
@@ -1215,12 +1258,14 @@ def benchmark_models(
         worker_context_queue = create_worker_context_queue(args.devices)
         benchmark_task_list = [
             TaskPack(
-                args,
-                candidate_id=i,
-                command=tuning_client.get_model_benchmark_command(
-                    candidate_trackers[i]
+                RunPack(
+                    command=tuning_client.get_model_benchmark_command(
+                        candidate_trackers[i]
+                    ),
+                    check=False,
+                    timeout=tuning_client.get_dispatch_benchmark_timeout_s(),
                 ),
-                check=False,
+                candidate_id=i,
                 command_need_device_id=True,
                 cooling_time=10,
             )
@@ -1239,12 +1284,14 @@ def benchmark_models(
         worker_context_queue = create_worker_context_queue(args.devices)
         baseline_task_list = [
             TaskPack(
-                args,
-                candidate_id=0,
-                command=tuning_client.get_model_benchmark_command(
-                    candidate_trackers[0]
+                RunPack(
+                    command=tuning_client.get_model_benchmark_command(
+                        candidate_trackers[0]
+                    ),
+                    check=False,
+                    timeout=tuning_client.get_model_benchmark_timeout_s(),
                 ),
-                check=False,
+                candidate_id=0,
                 command_need_device_id=True,
             )
         ] * len(group_benchmark_results_by_device_id(candidate_results))

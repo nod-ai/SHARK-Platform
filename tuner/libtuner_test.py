@@ -110,13 +110,13 @@ def test_parse_dispatch_benchmark_results():
     object.__setattr__(path_config, "specs_dir", spec_dir)
 
     mock_result_1 = MagicMock()
-    mock_result_1.result.stdout = "process_time/real_time_mean 100.0 us"
+    mock_result_1.run_result.process_res.stdout = "process_time/real_time_mean 100.0 us"
     mock_result_1.candidate_id = 1
     mock_result_2 = MagicMock()
-    mock_result_2.result.stdout = "process_time/real_time_mean 200.0 us"
+    mock_result_2.run_result.process_res.stdout = "process_time/real_time_mean 200.0 us"
     mock_result_2.candidate_id = 2
     mock_result_3 = MagicMock()
-    mock_result_3.result.stdout = ""  # Incomplete result
+    mock_result_3.run_result.process_res = None  # Incomplete result
     mock_result_3.candidate_id = 3
     benchmark_results = [mock_result_1, mock_result_2, mock_result_3]
 
@@ -152,7 +152,7 @@ def test_parse_dispatch_benchmark_results():
     expected_dump_list = [
         "1\tMean Time: 100.0\n",
         "2\tMean Time: 200.0\n",
-        "Candidate 3 not incompleted",
+        "Candidate 3 not completed",
     ]
 
     parsed_results, dump_list = libtuner.parse_dispatch_benchmark_results(
@@ -188,34 +188,34 @@ def test_parse_model_benchmark_results():
     candidate_trackers = [tracker0, tracker1, tracker2, tracker3]
 
     # Setup mock data for task results
-    result1 = MagicMock(spec=libtuner.TaskResult)
-    result1.result = MagicMock(stdout="1.23")
+    result1 = MagicMock()
+    result1.run_result.process_res.stdout = "1.23"
     result1.candidate_id = 1
     result1.device_id = "device1"
 
-    result2 = MagicMock(spec=libtuner.TaskResult)
-    result2.result = MagicMock(stdout="4.56")
+    result2 = MagicMock()
+    result2.run_result.process_res.stdout = "4.56"
     result2.candidate_id = 2
     result2.device_id = "device2"
 
-    result3 = MagicMock(spec=libtuner.TaskResult)
-    result3.result = MagicMock(stdout="0.98")
+    result3 = MagicMock()
+    result3.run_result.process_res.stdout = "0.98"
     result3.candidate_id = 0
     result3.device_id = "device1"
 
-    result4 = MagicMock(spec=libtuner.TaskResult)
-    result4.result = MagicMock(stdout="4.13")
+    result4 = MagicMock()
+    result4.run_result.process_res.stdout = "4.13"
     result4.candidate_id = 0
     result4.device_id = "device2"
 
     # Incomplete baseline on device3
-    result5 = MagicMock(spec=libtuner.TaskResult)
-    result5.result = MagicMock(stdout=None)
+    result5 = MagicMock()
+    result5.run_result.process_res = None
     result5.candidate_id = 0
     result5.device_id = "device3"
 
-    result6 = MagicMock(spec=libtuner.TaskResult)
-    result6.result = MagicMock(stdout="3.38")
+    result6 = MagicMock()
+    result6.run_result.process_res.stdout = "3.38"
     result6.candidate_id = 3
     result6.device_id = "device3"
 
