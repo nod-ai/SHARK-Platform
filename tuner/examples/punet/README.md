@@ -18,9 +18,10 @@ Please configure the file paths and update commands in `PunetClient`.
 ## Running the Tuner
 
 ### [Optional] Generate a tunable mlir
-Use [`punet.sh`](https://github.com/nod-ai/sdxl-scripts/blob/main/tuning/punet.sh) to compile the sample matmul mlir [`mmt_unet.mlir`](https://github.com/nod-ai/sdxl-scripts/blob/main/tuning/mmt_unet.mlir):
+A sample `2.mlir` is provided for test run. Hoever, this file may become outdated if IREE makes changes to the MLIR format. To ensure you are working with the latest format, please follow the instructions below to compile and generate the most recent benchmark file.
+Use [`punet.sh`](https://github.com/nod-ai/sdxl-scripts/blob/main/tuning/punet.sh) to compile the sample matmul `mmt.mlir` (can also find here: [`mmt_unet.mlir`](https://github.com/nod-ai/sdxl-scripts/blob/main/tuning/mmt_unet.mlir)):
 ```
-./punet.sh ./mmt_unet.mlir -o baseline.vmfb --iree-hal-dump-executable-files-to=dump-mmt
+./punet.sh ./mmt.mlir -o baseline.vmfb --iree-hal-dump-executable-files-to=dump-mmt
 cp ./dump-mmt/module_main_2_dispatch_0_rocm_hsaco_fb_benchmark.mlir ./2.mlir
 ```
 
