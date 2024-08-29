@@ -433,7 +433,7 @@ def setup_logging(args: argparse.Namespace, path_config: PathConfig):
     # Create a formatter that dynamically adds [levelname] for ERROR and WARNING
     class CustomFormatter(logging.Formatter):
         def format(self, record):
-            if record.levelno == logging.CRITICAL:
+            if record.levelno == logging.INFO:
                 return f"{record.message}"
             else:
                 return f"[{record.levelname}] {record.message}"
@@ -454,7 +454,7 @@ def setup_logging(args: argparse.Namespace, path_config: PathConfig):
     # If verbose flag is set, add a console handler for INFO level and higher
     if args.verbose:
         verbose_console_handler = logging.StreamHandler()
-        verbose_console_handler.setLevel(logging.INFO)
+        verbose_console_handler.setLevel(logging.DEBUG)
         verbose_console_handler.setFormatter(file_formatter)
         logging.getLogger().addHandler(verbose_console_handler)
 
@@ -463,7 +463,7 @@ def setup_logging(args: argparse.Namespace, path_config: PathConfig):
     tune_logger.setLevel(logging.DEBUG)
 
     # Log all arguments
-    logging.info(f"Input Arguments:")
+    logging.debug(f"Input Arguments:")
     for arg, value in vars(args).items():
         tune_logger.info(f"{arg}: {value}")
 
@@ -480,6 +480,9 @@ def handle_error(
         return
 
     # Log the message with the specified level
+    if level == logging.CRITICAL:
+        logging.critical(msg)
+        raise error_type(msg)
     if level == logging.ERROR:
         logging.error(msg)
         raise error_type(msg)
@@ -491,7 +494,7 @@ def handle_error(
         logging.debug(msg)
     else:
         raise ValueError(
-            "Invalid logging level specified: choose from logging.ERROR, logging.WARNING, logging.INFO, logging.DEBUG"
+            "Invalid logging level specified: choose from logging.CRITICAL, logging.ERROR, logging.WARNING, logging.INFO, logging.DEBUG"
         )
 
     if exit_program:
@@ -532,9 +535,9 @@ def run_command(run_pack: RunPack) -> TaskResult:
         )
 
         if result.stdout:
-            logging.info(f"stdout: {result.stdout}")
+            logging.debug(f"stdout: {result.stdout}")
         if result.stderr:
-            logging.info(f"stderr: {result.stderr}")
+            logging.debug(f"stderr: {result.stderr}")
     except subprocess.TimeoutExpired as e:
         logging.warning(f"Command '{command_str}' timed out after {timeout} seconds.")
         is_timeout = True
@@ -690,7 +693,7 @@ def generate_candidates(
     candidate_trackers: list[CandidateTracker],
 ) -> list[int]:
     """Generate candidate files for tuning. Returns the list of candidate indexes"""
-    logging.info("generate_candidates()")
+    logging.debug("generate_candidates()")
 
     try:
         shutil.copy(
@@ -758,7 +761,7 @@ def generate_candidates(
         condition=(len(candidates) == 0), msg="Failed to generate any candidates"
     )
 
-    logging.critical(f"Generated [{len(candidates)}] candidates")
+    logging.info(f"Generated [{len(candidates)}] candidates")
 
     return candidates
 
@@ -788,10 +791,10 @@ def compile_dispatches(
     candidate_trackers: list[CandidateTracker],
     tuning_client: TuningClient,
 ) -> list[int]:
-    logging.info("compile_dispatches()")
+    logging.debug("compile_dispatches()")
 
     if not candidates:
-        logging.info("No candidates to compile.")
+        logging.warning("No candidates to compile.")
         return []
 
     path_config.compiled_dir.mkdir(parents=True, exist_ok=True)
@@ -826,7 +829,7 @@ def compile_dispatches(
 
     total, good, bad = len(task_list), len(compiled_files), len(failed_files)
     compiling_rate = good / total * 100
-    logging.critical(
+    logging.info(
         f"Total: {total} | Compiled: {good} | Failed: {bad} | Compiling Rate: {compiling_rate:.1f}%"
     )
 
@@ -860,7 +863,7 @@ def compile_dispatches(
         compiled_candidates_hash_list
     )
     if collision_detected:
-        logging.critical(f"Remains [{len(unique_indexes)}] unique candidate indexes")
+        logging.info(f"Remains [{len(unique_indexes)}] unique candidate indexes")
 
     return compiled_candidates if not collision_detected else unique_indexes
 
@@ -929,7 +932,7 @@ def generate_sample_task_result(
 def generate_dryrun_dispatch_benchmark_results(
     compiled_candidates: list[int],
 ) -> list[TaskResult]:
-    logging.info("generate_dryrun_dispatch_benchmark_results")
+    logging.debug("generate_dryrun_dispatch_benchmark_results()")
 
     task_results = [
         generate_sample_task_result(
@@ -970,7 +973,7 @@ def benchmark_dispatches(
     candidate_trackers: list[CandidateTracker],
     tuning_client: TuningClient,
 ):
-    logging.info("benchmark_dispatches()")
+    logging.debug("benchmark_dispatches()")
 
     if args.dry_run:
         benchmark_results = generate_dryrun_dispatch_benchmark_results(
@@ -1014,7 +1017,7 @@ def benchmark_dispatches(
     )
 
     benchmarking_rate = (len(parsed_benchmark_results) / len(benchmark_results)) * 100
-    logging.critical(
+    logging.info(
         f"Total: {len(benchmark_results)} | Benchmarked: {len(parsed_benchmark_results)} | Failed: {len(benchmark_results) - len(parsed_benchmark_results)} | Benchmarking Rate: {benchmarking_rate:.1f}%"
     )
     handle_error(
@@ -1026,7 +1029,7 @@ def benchmark_dispatches(
     best_results = sorted(
         parsed_benchmark_results, key=lambda x: float(x.benchmark_time_in_seconds)
     )[: args.num_model_candidates]
-    logging.critical(f"Selected top[{len(best_results)}]")
+    logging.info(f"Selected top[{len(best_results)}]")
 
     dump_list = [
         f"{result.benchmark_time_in_seconds}\t{result.candidate_mlir.as_posix()}\t{result.candidate_spec_mlir.as_posix()}\n"
@@ -1047,7 +1050,7 @@ def compile_models(
     candidate_trackers: list[CandidateTracker],
     tuning_client: TuningClient,
 ) -> list[int]:
-    logging.info("compile_models()")
+    logging.debug("compile_models()")
 
     candidate_trackers[0].compiled_model_path = path_config.model_baseline_vmfb
 
@@ -1057,7 +1060,7 @@ def compile_models(
         return candidates
 
     if not candidates:
-        logging.info("No model candidates to compile.")
+        logging.warning("No model candidates to compile.")
         return []
 
     task_list = [
@@ -1098,7 +1101,7 @@ def compile_models(
     )
 
     if collision_detected:
-        logging.critical(
+        logging.info(
             f"Remains [{len(unique_model_candidates_indexes)}] unique candidate indexes"
         )
 
@@ -1250,7 +1253,7 @@ def benchmark_models(
     tuning_client: TuningClient,
 ):
     """Benchmark U-Net candidate files and log the results."""
-    logging.info("benchmark_models()")
+    logging.debug("benchmark_models()")
 
     if args.dry_run:
         candidate_results, baseline_results = generate_dryrun_model_benchmark_results(
