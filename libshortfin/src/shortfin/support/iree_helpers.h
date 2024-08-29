@@ -15,6 +15,7 @@
 #include "iree/hal/api.h"
 #include "iree/modules/hal/types.h"
 #include "iree/vm/api.h"
+#include "iree/vm/ref_cc.h"
 #include "shortfin/support/api.h"
 
 #if !defined(SHORTFIN_IREE_LOG_RC)
@@ -324,12 +325,24 @@ class ignorable_status {
   ignorable_status(ignorable_status &&other) = delete;
   ~ignorable_status() { iree_status_ignore(status_); }
 
-  operator iree_status_t() const { return status_; }
+  // Consumes that status. Only the first consumer will receive all payloads.
+  // Others will just get the cloned basic status.
+  iree_status_t ConsumeStatus() {
+    iree_status_t local_status = status_;
+    status_ = iree_status_clone(status_);
+    return local_status;
+  }
   iree_status_t status() const { return status_; }
 
  private:
-  iree_status_t status_;
+  mutable iree_status_t status_;
 };
+
+// -------------------------------------------------------------------------- //
+// VM Ref and Variant Interop
+// -------------------------------------------------------------------------- //
+
+using vm_opaque_ref = ::iree::vm::opaque_ref;
 
 }  // namespace iree
 }  // namespace shortfin

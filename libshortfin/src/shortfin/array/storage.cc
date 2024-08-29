@@ -195,6 +195,12 @@ std::string storage::formatted_buffer_usage() const {
   return std::string(sv.data, sv.size);
 }
 
+storage::operator iree::vm_opaque_ref() {
+  iree::vm_opaque_ref ref;
+  *(&ref) = iree_hal_buffer_retain_ref(buffer_);
+  return ref;
+}
+
 std::string storage::to_s() const {
   return fmt::format("<storage {} size {}>", static_cast<void *>(buffer_.get()),
                      byte_length());

@@ -11,6 +11,7 @@
 #include <memory>
 #include <span>
 
+#include "iree/hal/buffer_view.h"
 #include "shortfin/support/api.h"
 
 namespace shortfin::array {
@@ -248,8 +249,8 @@ class SHORTFIN_API InlinedDims {
   _D dims_;
 };
 
-extern template class InlinedDims<std::size_t>;
-using Dims = InlinedDims<std::size_t>;
+extern template class InlinedDims<iree_hal_dim_t>;
+using Dims = InlinedDims<iree_hal_dim_t>;
 
 }  // namespace shortfin::array
 

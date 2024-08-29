@@ -7,6 +7,8 @@
 #include "./lib_ext.h"
 
 #include "./utils.h"
+#include "shortfin/array/array.h"
+#include "shortfin/array/storage.h"
 #include "shortfin/local/async.h"
 #include "shortfin/local/messaging.h"
 #include "shortfin/local/process.h"
@@ -23,6 +25,13 @@
 namespace shortfin::python {
 
 namespace {
+
+static const char DOCSTRING_PROGRAM_FUNCTION_INVOCATION[] =
+    R"(Creates an invocation object targeting the function.
+
+This is a low-level interface for performing an invocation, and it should be
+used when precise, non-default control is needed.
+)";
 
 class Refs {
  public:
@@ -387,12 +396,31 @@ void BindLocal(py::module_ &m) {
       .def_prop_ro("name", &local::ProgramFunction::name)
       .def_prop_ro("calling_convention",
                    &local::ProgramFunction::calling_convention)
+      .def("invocation", &local::ProgramFunction::CreateInvocation,
+           py::kw_only(), py::arg("scope"),
+           DOCSTRING_PROGRAM_FUNCTION_INVOCATION)
       .def("__repr__", &local::ProgramFunction::to_s);
   py::class_<local::ProgramModule>(m, "ProgramModule")
       .def_prop_ro("exports", &local::ProgramModule::exports)
       .def("__repr__", &local::ProgramModule::to_s)
       .def_static("load", &local::ProgramModule::Load, py::arg("system"),
                   py::arg("path"), py::arg("mmap") = true);
+  py::class_<local::Invocation::Ptr>(m, "Invocation")
+      .def("invoke",
+           [](local::Invocation::Ptr &self) {
+             if (!self) throw std::invalid_argument("Deallocated invocation");
+             return local::Invocation::Invoke(std::move(self));
+           })
+      // Bind overloads for all ref object types we support adding as arguments.
+      .def("add_arg",
+           [](local::Invocation::Ptr &self, array::device_array &obj) {
+             if (!self) throw std::invalid_argument("Deallocated invocation");
+             self->AddArg(obj);
+           })
+      .def("add_arg", [](local::Invocation::Ptr &self, array::storage &obj) {
+        if (!self) throw std::invalid_argument("Deallocated invocation");
+        self->AddArg(obj);
+      });
 
   struct DevicesSet {
     DevicesSet(local::Scope &scope) : scope(scope) {}
@@ -705,6 +733,19 @@ void BindLocal(py::module_ &m) {
         return iter_ret;
       });
   py::class_<local::VoidFuture, local::Future>(m, "VoidFuture");
+  py::class_<local::Invocation::Future, local::Future>(m, "InvocationFuture")
+      .def("result", [](local::Invocation::Future &self) {
+        local::Invocation::Ptr &result = self.result();
+        if (!result) return py::none();
+        // Sharp edge: InvocationFutures are read-once since we move the
+        // Invocation::Ptr out of the future here and transfer ownership
+        // to a Python object. There isn't a better way to do this without
+        // increasing overhead on this hot path or doing something more
+        // expensive in the C++ API: essentially, Invocations flow through
+        // the system precisely one way. As a low level facility, this is
+        // deemed acceptable.
+        return py::cast(std::move(result));
+      });
   py::class_<local::MessageFuture, local::Future>(m, "MessageFuture")
       .def("result", [](local::MessageFuture &self) {
         // Get a raw backing msg (without an increased refcount). When cast

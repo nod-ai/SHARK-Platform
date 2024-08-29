@@ -23,7 +23,8 @@ namespace shortfin::array {
 // Either a host or device nd-array view.
 class SHORTFIN_API base_array {
  public:
-  base_array(std::span<const size_t> shape, DType dtype) : dtype_(dtype) {
+  base_array(std::span<const Dims::value_type> shape, DType dtype)
+      : dtype_(dtype) {
     set_shape(shape);
   }
   // Need to explicitly define copy/move constructors even though this is
@@ -38,9 +39,9 @@ class SHORTFIN_API base_array {
   DType dtype() const { return dtype_; }
 
   // Access shape.
-  void set_shape(std::span<const size_t> shape) { shape_.set(shape); }
-  std::span<const size_t> shape() const { return shape_.span(); }
-  std::span<size_t> mutable_shape() { return shape_.span(); }
+  void set_shape(std::span<const Dims::value_type> shape) { shape_.set(shape); }
+  std::span<const Dims::value_type> shape() const { return shape_.span(); }
+  std::span<Dims::value_type> mutable_shape() { return shape_.span(); }
 
   // Sometimes we need to access the raw shape container (i.e. for adapters,
   // etc).
@@ -56,7 +57,7 @@ class SHORTFIN_API device_array
     : public base_array,
       public poly_xt_mixin<device_array, class mapping> {
  public:
-  device_array(class storage storage, std::span<const size_t> shape,
+  device_array(class storage storage, std::span<const Dims::value_type> shape,
                DType dtype)
       : base_array(shape, dtype), storage_(std::move(storage)) {}
 
@@ -65,7 +66,8 @@ class SHORTFIN_API device_array
 
   // Allocate an array on the device.
   static device_array for_device(local::ScopedDevice &device,
-                                 std::span<const size_t> shape, DType dtype) {
+                                 std::span<const Dims::value_type> shape,
+                                 DType dtype) {
     return device_array(
         storage::allocate_device(device, dtype.compute_dense_nd_size(shape)),
         shape, dtype);
@@ -74,7 +76,8 @@ class SHORTFIN_API device_array
   // Allocates a host array that is registered by the device. This can include
   // arrays that are visible from different combinations of host/device.
   static device_array for_host(local::ScopedDevice &device,
-                               std::span<const size_t> shape, DType dtype) {
+                               std::span<const Dims::value_type> shape,
+                               DType dtype) {
     return device_array(
         storage::allocate_host(device, dtype.compute_dense_nd_size(shape)),
         shape, dtype);
@@ -135,6 +138,10 @@ class SHORTFIN_API device_array
   typed_mapping<EltTy> typed_data_w() {
     return typed_mapping<EltTy>(data_w());
   }
+
+  // Returns a buffer_view ref object. The returned buffer view snapshots the
+  // shape.
+  operator iree::vm_opaque_ref();
 
   std::string to_s() const override;
 

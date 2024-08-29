@@ -19,7 +19,84 @@
 
 namespace shortfin::local {
 
+class SHORTFIN_API Scope;
 class SHORTFIN_API System;
+
+// State related to making an invocation of a function on a program.
+//
+// Since ownership of this object is transferred to the loop/callback and
+// internal pointers into it must remain stable, it is only valid to heap
+// allocate it.
+class SHORTFIN_API Invocation {
+  struct Deleter {
+    void operator()(Invocation *);
+  };
+
+ public:
+  // The fact that we traffic in invocation pointers based on unique_ptr
+  // is incidental. By cloaking its public interface this way, we use the
+  // unique_ptr machinery but template meta-programming that is specialized
+  // for unique_ptr sees this as a bespoke class (which is what we want because
+  // ownership semantics are special).
+  class Ptr : private std::unique_ptr<Invocation, Deleter> {
+   public:
+    using unique_ptr::unique_ptr;
+    using unique_ptr::operator=;
+    using unique_ptr::operator->;
+    using unique_ptr::operator bool;
+    using unique_ptr::get;
+    using unique_ptr::release;
+  };
+  static_assert(sizeof(Ptr) == sizeof(void *));
+  using Future = TypedFuture<Invocation::Ptr>;
+
+  static Ptr New(std::shared_ptr<Scope> scope, iree::vm_context_ptr vm_context,
+                 iree_vm_function_t &vm_function);
+  Invocation(const Invocation &) = delete;
+  Invocation &operator=(const Invocation &) = delete;
+  Invocation &operator=(Invocation &&) = delete;
+  Invocation(Invocation &&inv) = delete;
+  ~Invocation();
+
+  // Whether the Invocation has entered the scheduled state. Once scheduled,
+  // arguments and initialization parameters can no longer be accessed.
+  bool scheduled() const { return scheduled_; }
+
+  // Adds a ref object argument. Most of our classes which can be cast to
+  // a VM object will have a type caster to produce such an instance.
+  void AddArg(iree::vm_opaque_ref ref);
+
+  // Transfers ownership of an invocation and schedules it on worker, returning
+  // a future that will resolve to the owned invocation upon completion.
+  static Invocation::Future Invoke(Invocation::Ptr invocation);
+
+ private:
+  Invocation();
+  void CheckNotScheduled();
+
+  // Parameters needed to make the async call are stored at construction time
+  // up until the point the call is made in the params union. When invoking,
+  // these will be copied to the stack and passed to the async invocation,
+  // which initializes the async_invoke_state. Phasing it like this saves
+  // hundreds of bytes of redundant storage.
+  struct Params {
+    // Context is retained upon construction and released when scheduled.
+    iree_vm_context_t *context;
+    iree_vm_function_t function;
+    iree_vm_list_t *arg_list = nullptr;
+  };
+  union State {
+    State() {}
+    ~State() {}
+    Params params;
+    iree_vm_async_invoke_state_t async_invoke_state;
+  } state;
+
+  std::shared_ptr<Scope> scope_;
+  iree_vm_list_t *result_list_ = nullptr;
+  std::optional<Future> future_;
+  bool scheduled_ = false;
+};
 
 // References a function in a Program.
 class SHORTFIN_API ProgramFunction {
@@ -33,6 +110,8 @@ class SHORTFIN_API ProgramFunction {
   std::string_view name() const;
   std::string_view calling_convention() const;
 
+  Invocation::Ptr CreateInvocation(std::shared_ptr<Scope> scope);
+
   std::string to_s() const;
 
   operator iree_vm_context_t *() { return vm_context_.get(); }
@@ -42,7 +121,6 @@ class SHORTFIN_API ProgramFunction {
   // The context that this function was resolved against.
   iree::vm_context_ptr vm_context_;
   iree_vm_function_t vm_function_;
-
   friend class Program;
 };
 
@@ -118,61 +196,6 @@ class SHORTFIN_API Program {
       : vm_context_(std::move(vm_context)) {}
   iree::vm_context_ptr vm_context_;
   friend class Scope;
-};
-
-// State related to making an invocation of a function on a program.
-//
-// Since ownership of this object is transferred to the loop/callback and
-// internal pointers into it must remain stable, it is only valid to heap
-// allocate it.
-class SHORTFIN_API Invocation {
-  struct Deleter {
-    void operator()(Invocation *);
-  };
-
- public:
-  using Ptr = std::unique_ptr<Invocation, Deleter>;
-  static_assert(sizeof(Ptr) == sizeof(void *));
-  using Future = TypedFuture<Invocation::Ptr>;
-
-  Ptr New(iree::vm_context_ptr vm_context, iree_vm_function_t &vm_function);
-  Invocation(const Invocation &) = delete;
-  Invocation &operator=(const Invocation &) = delete;
-  Invocation &operator=(Invocation &&) = delete;
-  Invocation(Invocation &&inv) = delete;
-  ~Invocation();
-
-  // Whether the Invocation has entered the scheduled state. Once scheduled,
-  // arguments and initialization parameters can no longer be accessed.
-  bool scheduled() const { return static_cast<bool>(future_); }
-
-  // Transfers ownership of an invocation and schedules it on worker, returning
-  // a future that will resolve to the owned invocation upon completion.
-  static Future Invoke(Ptr invocation, Worker &worker);
-
- private:
-  Invocation();
-
-  // Parameters needed to make the async call are stored at construction time
-  // up until the point the call is made in the params union. When invoking,
-  // these will be copied to the stack and passed to the async invocation,
-  // which initializes the async_invoke_state. Phasing it like this saves
-  // hundreds of bytes of redundant storage.
-  struct Params {
-    // Context is retained upon construction and released when scheduled.
-    iree_vm_context_t *context;
-    iree_vm_function_t function;
-    iree_vm_list_t *arg_list = nullptr;
-  };
-  union State {
-    State() {}
-    ~State() {}
-    Params params;
-    iree_vm_async_invoke_state_t async_invoke_state;
-  } state;
-
-  iree_vm_list_t *result_list_ = nullptr;
-  std::optional<Future> future_;
 };
 
 }  // namespace shortfin::local

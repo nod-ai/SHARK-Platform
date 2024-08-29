@@ -110,6 +110,10 @@ void TimelineResource::use_barrier_insert(iree_hal_semaphore_t *sem,
       iree_hal_fence_insert(use_barrier_fence_, sem, timepoint));
 }
 
+iree_allocator_t TimelineResource::host_allocator() {
+  return scope_->host_allocator();
+}
+
 // -------------------------------------------------------------------------- //
 // Scheduler
 // -------------------------------------------------------------------------- //

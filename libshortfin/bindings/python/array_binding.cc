@@ -284,7 +284,7 @@ void BindArray(py::module_ &m) {
 
       .def(
           "fill",
-          [](py::handle self, py::handle buffer) {
+          [](py::handle_t<device_array> self, py::handle buffer) {
             self.attr("storage").attr("fill")(buffer);
           },
           py::arg("pattern"), DOCSTRING_ARRAY_FILL)

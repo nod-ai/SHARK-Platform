@@ -142,6 +142,8 @@ class SHORTFIN_API TimelineResource {
     return iree_hal_fence_semaphore_list(use_barrier_fence_);
   }
 
+  iree_allocator_t host_allocator();
+
  private:
   TimelineResource(std::shared_ptr<Scope> scope, size_t semaphore_capacity);
   ~TimelineResource();

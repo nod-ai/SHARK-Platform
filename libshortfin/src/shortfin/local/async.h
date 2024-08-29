@@ -166,6 +166,16 @@ class SHORTFIN_API TypedFuture : public Future {
     return *this;
   }
 
+  // Futures are non-nullable, so construct/assign from an rvalue reference
+  // is just a copy and does not clear the original.
+  TypedFuture(TypedFuture &&other) : Future(other.state_) { Retain(); }
+  TypedFuture &operator=(TypedFuture &&other) {
+    other.Retain();
+    Release();
+    state_ = other.state_;
+    return *this;
+  }
+
   void set_result(ResultTy result) {
     iree::slim_mutex_lock_guard g(state_->lock_);
     if (state_->done_) {

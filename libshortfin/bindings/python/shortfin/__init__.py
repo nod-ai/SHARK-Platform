@@ -10,10 +10,13 @@ from _shortfin import lib as _sfl
 # level of the public API.
 CompletionEvent = _sfl.local.CompletionEvent
 Device = _sfl.local.Device
+Invocation = _sfl.local.Invocation
+InvocationFuture = _sfl.local.InvocationFuture
 Message = _sfl.local.Message
 Node = _sfl.local.Node
 Process = _sfl.local.Process
 Program = _sfl.local.Program
+ProgramFunction = _sfl.local.ProgramFunction
 ProgramModule = _sfl.local.ProgramModule
 Queue = _sfl.local.Queue
 QueueReader = _sfl.local.QueueReader
@@ -34,9 +37,12 @@ from . import host
 __all__ = [
     "CompletionEvent",
     "Device",
+    "Invocation",
+    "InvocationFuture",
     "Message",
     "Node",
     "Program",
+    "ProgramFunction",
     "ProgramModule",
     "Queue",
     "QueueReader",

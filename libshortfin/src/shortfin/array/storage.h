@@ -161,6 +161,13 @@ class SHORTFIN_API storage {
   // underlying device references alive as needed).
   operator iree_hal_buffer_t *() { return buffer_; }
 
+  // Returns a ref to the underlying buffer.
+  operator iree::vm_opaque_ref();
+
+  iree_allocator_t host_allocator() {
+    return timeline_resource_->host_allocator();
+  }
+
  private:
   storage(local::ScopedDevice device, iree::hal_buffer_ptr buffer,
           local::detail::TimelineResource::Ref timeline_resource);

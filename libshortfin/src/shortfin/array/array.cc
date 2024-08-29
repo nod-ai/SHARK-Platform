@@ -14,7 +14,7 @@
 
 namespace shortfin::array {
 
-template class InlinedDims<std::size_t>;
+template class InlinedDims<iree_hal_dim_t>;
 
 // -------------------------------------------------------------------------- //
 // device_array
@@ -58,6 +58,19 @@ std::string device_array::to_s() const {
       fmt::join(shape(), ", "), dtype().name(), storage_.device().to_s(),
       storage_.formatted_memory_type(), storage_.formatted_buffer_usage(),
       storage_.formatted_memory_access(), contents_prefix, contents);
+}
+
+device_array::operator iree::vm_opaque_ref() {
+  auto dims_span = shape();
+  iree_hal_buffer_view_t *buffer_view;
+  SHORTFIN_THROW_IF_ERROR(iree_hal_buffer_view_create(
+      storage_, dims_span.size(), dims_span.data(), dtype(),
+      IREE_HAL_ENCODING_TYPE_DENSE_ROW_MAJOR, storage_.host_allocator(),
+      &buffer_view));
+
+  iree::vm_opaque_ref ref;
+  *(&ref) = iree_hal_buffer_view_move_ref(buffer_view);
+  return ref;
 }
 
 }  // namespace shortfin::array
