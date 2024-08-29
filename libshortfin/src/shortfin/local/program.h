@@ -64,7 +64,8 @@ class SHORTFIN_API Invocation {
 
   // Adds a ref object argument. Most of our classes which can be cast to
   // a VM object will have a type caster to produce such an instance.
-  void AddArg(iree::vm_opaque_ref ref);
+  void AddArg(iree::vm_opaque_ref ref);  // Moves a reference in.
+  void AddArg(iree_vm_ref_t *ref);       // Borrows the reference.
 
   // Transfers ownership of an invocation and schedules it on worker, returning
   // a future that will resolve to the owned invocation upon completion.

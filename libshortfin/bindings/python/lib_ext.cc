@@ -191,6 +191,28 @@ class PyProcess : public local::detail::BaseProcess {
   std::shared_ptr<Refs> refs_;
 };
 
+void PyAddInvocationArg(local::Invocation::Ptr &inv, py::handle arg) {
+  py::object py_ref = py::getattr(arg, "__sf_opaque_ref__", py::none());
+  if (!py_ref.is_none()) {
+    iree::vm_opaque_ref &ref_object = py::cast<iree::vm_opaque_ref &>(py_ref);
+    inv->AddArg(ref_object.get());
+    return;
+  }
+
+  throw std::invalid_argument(
+      fmt::format("Unsupported argument type {} in call to ProgramFunction",
+                  py::cast<std::string>(py::repr(arg.type()))));
+}
+
+local::Invocation::Future PyFunctionCall(local::ProgramFunction &self,
+                                         py::args args, local::Scope &scope) {
+  auto inv = self.CreateInvocation(scope.shared_from_this());
+  for (py::handle arg : args) {
+    PyAddInvocationArg(inv, arg);
+  }
+  return local::Invocation::Invoke(std::move(inv));
+}
+
 py::object RunInForeground(std::shared_ptr<Refs> refs, local::System &self,
                            py::object coro) {
   bool is_main_thread =
@@ -246,7 +268,7 @@ py::object RunInForeground(std::shared_ptr<Refs> refs, local::System &self,
 }  // namespace
 
 NB_MODULE(lib, m) {
-  m.def("initialize", shortfin::GlobalInitialize);
+  py::class_<iree::vm_opaque_ref>(m, "_OpaqueVmRef");
   auto local_m = m.def_submodule("local");
   BindLocal(local_m);
   BindHostSystem(local_m);
@@ -399,6 +421,8 @@ void BindLocal(py::module_ &m) {
       .def("invocation", &local::ProgramFunction::CreateInvocation,
            py::kw_only(), py::arg("scope"),
            DOCSTRING_PROGRAM_FUNCTION_INVOCATION)
+      .def("__call__", PyFunctionCall, py::arg("args"), py::kw_only(),
+           py::arg("scope"))
       .def("__repr__", &local::ProgramFunction::to_s);
   py::class_<local::ProgramModule>(m, "ProgramModule")
       .def_prop_ro("exports", &local::ProgramModule::exports)
@@ -411,15 +435,9 @@ void BindLocal(py::module_ &m) {
              if (!self) throw std::invalid_argument("Deallocated invocation");
              return local::Invocation::Invoke(std::move(self));
            })
-      // Bind overloads for all ref object types we support adding as arguments.
-      .def("add_arg",
-           [](local::Invocation::Ptr &self, array::device_array &obj) {
-             if (!self) throw std::invalid_argument("Deallocated invocation");
-             self->AddArg(obj);
-           })
-      .def("add_arg", [](local::Invocation::Ptr &self, array::storage &obj) {
+      .def("add_arg", [](local::Invocation::Ptr &self, py::handle arg) {
         if (!self) throw std::invalid_argument("Deallocated invocation");
-        self->AddArg(obj);
+        PyAddInvocationArg(self, arg);
       });
 
   struct DevicesSet {

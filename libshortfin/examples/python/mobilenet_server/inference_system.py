@@ -45,10 +45,23 @@ class InferenceProcess(sf.Process):
             self.device_input.copy_from(self.host_staging)
             await self.device  # Temp until we get dependence in.
 
-            inv = self.main_function.invocation(scope=self.scope)
-            inv.add_arg(self.device_input)
-            results = await inv.invoke()
-            print("results:", results)
+            # Explicit invocation object.
+            # inv = self.main_function.invocation(scope=self.scope)
+            # inv.add_arg(self.device_input)
+            # results = await inv.invoke()
+            # print("results:", results)
+
+            # Simple call.
+            # results = await self.main_function(self.device_input, scope=self.scope)
+            # print("Results:", results)
+
+            # Multiple invocations in parallel.
+            all_results = await asyncio.gather(
+                self.main_function(self.device_input, scope=self.scope),
+                self.main_function(self.device_input, scope=self.scope),
+                self.main_function(self.device_input, scope=self.scope),
+            )
+            print("All results:", all_results)
 
             # output = await self.scope.invoke(self.main_function, self.device_input)
             # print("OUTPUT:", output)

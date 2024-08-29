@@ -232,6 +232,12 @@ void Invocation::AddArg(iree::vm_opaque_ref ref) {
       iree_vm_list_push_ref_move(state.params.arg_list, &ref));
 }
 
+void Invocation::AddArg(iree_vm_ref_t *ref) {
+  CheckNotScheduled();
+  SHORTFIN_THROW_IF_ERROR(
+      iree_vm_list_push_ref_retain(state.params.arg_list, ref));
+}
+
 Invocation::Future Invocation::Invoke(Invocation::Ptr invocation) {
   invocation->CheckNotScheduled();
   Worker &worker = invocation->scope_->worker();

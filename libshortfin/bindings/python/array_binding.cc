@@ -135,6 +135,9 @@ void BindArray(py::module_ &m) {
 
   // storage
   py::class_<storage>(m, "storage")
+      .def_prop_ro(
+          "__sf_opaque_ref__",
+          [](device_array &self) -> iree::vm_opaque_ref { return self; })
       .def_static(
           "allocate_host",
           [](local::ScopedDevice &device, iree_device_size_t allocation_size) {
@@ -257,6 +260,9 @@ void BindArray(py::module_ &m) {
                         py_type, /*keep_alive=*/device.scope(),
                         device_array::for_device(device, shape, dtype));
                   })
+      .def_prop_ro(
+          "__sf_opaque_ref__",
+          [](device_array &self) -> iree::vm_opaque_ref { return self; })
       .def_static("for_device",
                   [](local::ScopedDevice &device, std::span<const size_t> shape,
                      DType dtype) {
