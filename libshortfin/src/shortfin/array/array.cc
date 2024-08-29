@@ -98,6 +98,9 @@ device_array device_array::CreateFromInvocationResultRef(
   auto imported_storage = storage::import_buffer(device, std::move(buffer));
   std::span<const iree_hal_dim_t> shape(iree_hal_buffer_view_shape_dims(bv),
                                         iree_hal_buffer_view_shape_rank(bv));
+
+  // TODO: barriers
+  
   return device_array(
       std::move(imported_storage), shape,
       DType::import_element_type(iree_hal_buffer_view_element_type(bv)));

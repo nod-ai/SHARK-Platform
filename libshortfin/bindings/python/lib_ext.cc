@@ -229,10 +229,16 @@ py::object PyRehydrateRef(local::ProgramInvocation *inv,
   // TODO: Find a reliable way to statically cache the type id.
   if (local::ProgramInvocationMarshalableFactory::invocation_marshalable_type<
           array::device_array>() == type) {
+    // device_array
     return py::cast(local::ProgramInvocationMarshalableFactory::
                         CreateFromInvocationResultRef<array::device_array>(
                             inv, std::move(ref)));
-  } else if (iree_hal_buffer_type() == type) {
+  } else if (local::ProgramInvocationMarshalableFactory::
+                 invocation_marshalable_type<array::storage>() == type) {
+    // storage
+    return py::cast(local::ProgramInvocationMarshalableFactory::
+                        CreateFromInvocationResultRef<array::storage>(
+                            inv, std::move(ref)));
   }
   throw std::invalid_argument(
       fmt::format("Cannot marshal ref type {} to Python",
