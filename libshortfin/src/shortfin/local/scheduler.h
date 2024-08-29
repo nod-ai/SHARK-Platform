@@ -263,6 +263,10 @@ class SHORTFIN_API Scheduler {
         new TimelineResource(std::move(scope), semaphore_count_));
   }
 
+  // Creates a new fence with capacity for all semaphores that are extant at
+  // the point of the call.
+  iree::hal_fence_ptr NewFence();
+
   System &system() { return system_; }
 
  private:

@@ -23,6 +23,17 @@ namespace shortfin::local {
 class SHORTFIN_API Scope;
 class SHORTFIN_API System;
 
+enum class ProgramInvocationModel {
+  // Uses the coarse-fences invocation model. In this model, the last two
+  // arguments are a wait and signal fence, which are used for function-level
+  // scheduling.
+  COARSE_FENCES,
+  // The function was not annotated with an invocation model.
+  NONE,
+  // The function is not annotated or is simple/synchronous.
+  UNKNOWN,
+};
+
 // State related to making an invocation of a function on a program.
 //
 // Since ownership of this object is transferred to the loop/callback and
@@ -52,7 +63,8 @@ class SHORTFIN_API ProgramInvocation {
   using Future = TypedFuture<ProgramInvocation::Ptr>;
 
   static Ptr New(std::shared_ptr<Scope> scope, iree::vm_context_ptr vm_context,
-                 iree_vm_function_t &vm_function);
+                 iree_vm_function_t &vm_function,
+                 ProgramInvocationModel invocation_model);
   ProgramInvocation(const ProgramInvocation &) = delete;
   ProgramInvocation &operator=(const ProgramInvocation &) = delete;
   ProgramInvocation &operator=(ProgramInvocation &&) = delete;
@@ -66,6 +78,11 @@ class SHORTFIN_API ProgramInvocation {
 
   // The scope this invocation was scheduled against.
   Scope *scope() const { return scope_.get(); }
+
+  // Access the wait and signal fences for the invocation. These are created
+  // on the fly as needed.
+  iree_hal_fence_t *wait_fence();
+  iree_hal_fence_t *signal_fence();
 
   // Adds a marshalable argument with a configurable concurrency barrier.
   void AddArg(ProgramInvocationMarshalable &marshalable,
@@ -101,6 +118,7 @@ class SHORTFIN_API ProgramInvocation {
     // Context is retained upon construction and released when scheduled.
     iree_vm_context_t *context;
     iree_vm_function_t function;
+    ProgramInvocationModel invocation_model;
     iree_vm_list_t *arg_list = nullptr;
   };
   union State {
@@ -113,6 +131,8 @@ class SHORTFIN_API ProgramInvocation {
   std::shared_ptr<Scope> scope_;
   iree_vm_list_t *result_list_ = nullptr;
   std::optional<Future> future_;
+  iree::hal_fence_ptr wait_fence_;
+  iree::hal_fence_ptr signal_fence_;
   bool scheduled_ = false;
 };
 
@@ -120,13 +140,14 @@ class SHORTFIN_API ProgramInvocation {
 class SHORTFIN_API ProgramFunction {
  public:
   ProgramFunction(iree::vm_context_ptr vm_context,
-                  iree_vm_function_t vm_function)
-      : vm_context_(std::move(vm_context)), vm_function_(vm_function) {}
+                  iree_vm_function_t vm_function,
+                  std::optional<ProgramInvocationModel> invocation_model = {});
 
   operator bool() const { return vm_context_; }
 
   std::string_view name() const;
   std::string_view calling_convention() const;
+  ProgramInvocationModel invocation_model() const { return invocation_model_; }
 
   ProgramInvocation::Ptr CreateInvocation(std::shared_ptr<Scope> scope);
 
@@ -136,9 +157,13 @@ class SHORTFIN_API ProgramFunction {
   operator iree_vm_function_t &() { return vm_function_; }
 
  private:
+  static ProgramInvocationModel GetInvocationModelFromFunction(
+      iree_vm_function_t &f);
+
   // The context that this function was resolved against.
   iree::vm_context_ptr vm_context_;
   iree_vm_function_t vm_function_;
+  ProgramInvocationModel invocation_model_;
   friend class Program;
 };
 

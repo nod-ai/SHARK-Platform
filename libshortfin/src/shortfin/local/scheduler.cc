@@ -265,4 +265,11 @@ void Scheduler::Flush() {
   }
 }
 
+iree::hal_fence_ptr Scheduler::NewFence() {
+  iree::hal_fence_ptr fence;
+  iree_hal_fence_create(semaphore_count_, system_.host_allocator(),
+                        fence.for_output());
+  return fence;
+}
+
 }  // namespace shortfin::local::detail
