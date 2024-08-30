@@ -194,6 +194,7 @@ class SHORTFIN_API DeviceAffinity {
     return result;
   }
 
+  operator bool() const { return device_ != nullptr; }
   Device *device() const { return device_; }
   iree_hal_queue_affinity_t queue_affinity() const { return queue_affinity_; }
   // Returns the lowest queue ordinal in the affinity set. If there are no

@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "shortfin/local/async.h"
+#include "shortfin/local/device.h"
 #include "shortfin/local/program_interfaces.h"
 #include "shortfin/local/worker.h"
 #include "shortfin/support/api.h"
@@ -79,10 +80,10 @@ class SHORTFIN_API ProgramInvocation {
   // The scope this invocation was scheduled against.
   Scope *scope() const { return scope_.get(); }
 
-  // Access the wait and signal fences for the invocation. These are created
-  // on the fly as needed.
-  iree_hal_fence_t *wait_fence();
-  iree_hal_fence_t *signal_fence();
+  // Adds wait barriers to the invocation. For coarse fences invocations, these
+  // will cause execution of the function to wait until all sempahores added
+  // thusly are satisfied.
+  void wait_insert(iree_hal_semaphore_list_t sem_list);
 
   // Adds a marshalable argument with a configurable concurrency barrier.
   void AddArg(ProgramInvocationMarshalable &marshalable,
@@ -105,15 +106,48 @@ class SHORTFIN_API ProgramInvocation {
   // nor do they have concurrency barriers applied.
   iree::vm_opaque_ref result_ref(iree_host_size_t i);
 
+  // As arguments are processed, the device they are associated with should be
+  // passed here. The accumulation of these will drive the selection of the
+  // scheduling account used for the invocation timeline. In the absence of
+  // a specific directive, all arguments implicated in scheduling (i.e.
+  // excepting those with ProgramResourceBarrier::NONE) must be on the same
+  // logical device and only differ by queue affinity.
+  // This method will raise an exception if the implied semantics are violated.
+  void DeviceSelect(DeviceAffinity device_affinity);
+
+  // Selected device affinity used for scheduling.
+  const DeviceAffinity &device_selection() { return device_selection_; }
+
+  // If this invocation provides coarse signaling of result availability,
+  // the semaphore and timepoint are returned here. If the semaphore is null,
+  // then coarse signaling is not available.
+  // Valid after invocation has been scheduled.
+  std::pair<iree_hal_semaphore_t *, uint64_t> coarse_signal() {
+    return std::make_pair(signal_sem_, signal_timepoint_);
+  }
+
  private:
   ProgramInvocation();
   void CheckNotScheduled();
+
+  // Accesses the invocation owned wait fence, creating it if needed.
+  iree_hal_fence_t *wait_fence();
+
+  // Called as part of scheduling to finalize the calling convention and
+  // invocation model after user arguments have been added. Because this is
+  // potentially run in a foreign callback context, it uses iree_status_t
+  // error reporting vs exceptions.
+  iree_status_t FinalizeCallingConvention(
+      iree_vm_list_t *arg_list, iree_vm_function_t &function,
+      ProgramInvocationModel invocation_model);
 
   // Parameters needed to make the async call are stored at construction time
   // up until the point the call is made in the params union. When invoking,
   // these will be copied to the stack and passed to the async invocation,
   // which initializes the async_invoke_state. Phasing it like this saves
-  // hundreds of bytes of redundant storage.
+  // memory that would otherwise be retained for the life of the invocation.
+  // This must not contain entities that require destruction or cannot be
+  // trivially copied.
   struct Params {
     // Context is retained upon construction and released when scheduled.
     iree_vm_context_t *context;
@@ -122,7 +156,7 @@ class SHORTFIN_API ProgramInvocation {
     iree_vm_list_t *arg_list = nullptr;
   };
   union State {
-    State() {}
+    State() { new (&params) Params(); }
     ~State() {}
     Params params;
     iree_vm_async_invoke_state_t async_invoke_state;
@@ -132,7 +166,9 @@ class SHORTFIN_API ProgramInvocation {
   iree_vm_list_t *result_list_ = nullptr;
   std::optional<Future> future_;
   iree::hal_fence_ptr wait_fence_;
-  iree::hal_fence_ptr signal_fence_;
+  iree_hal_semaphore_t *signal_sem_ = nullptr;
+  uint64_t signal_timepoint_ = 0;
+  DeviceAffinity device_selection_;
   bool scheduled_ = false;
 };
 

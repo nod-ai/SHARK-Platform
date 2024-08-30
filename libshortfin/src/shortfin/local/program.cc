@@ -289,6 +289,56 @@ void ProgramInvocation::AddArg(iree_vm_ref_t *ref) {
       iree_vm_list_push_ref_retain(state.params.arg_list, ref));
 }
 
+iree_status_t ProgramInvocation::FinalizeCallingConvention(
+    iree_vm_list_t *arg_list, iree_vm_function_t &function,
+    ProgramInvocationModel invocation_model) {
+  // Handle post-processing invocation model setup.
+  if (invocation_model == ProgramInvocationModel::COARSE_FENCES) {
+    // If we have a device_selection, set up to signal the leader account.
+    if (device_selection_) {
+      ScopedDevice scoped_device(*scope(), device_selection_);
+      auto &sched_account =
+          scope()->scheduler().GetDefaultAccount(scoped_device);
+      iree_hal_fence_t *wait_fence = this->wait_fence();
+      iree_hal_semaphore_t *timeline_sem = sched_account.timeline_sem();
+      uint64_t timeline_now = sched_account.timeline_idle_timepoint();
+      SHORTFIN_SCHED_LOG("Invocation {}: Wait on account timeline {}@{}",
+                         static_cast<void *>(this),
+                         static_cast<void *>(timeline_sem), timeline_now);
+      IREE_RETURN_IF_ERROR(
+          iree_hal_fence_insert(wait_fence, timeline_sem, timeline_now));
+      signal_sem_ = sched_account.timeline_sem();
+      signal_timepoint_ = sched_account.timeline_acquire_timepoint();
+    }
+
+    // Push wait fence (or null if no wait needed).
+    ::iree::vm::ref<iree_hal_fence_t> wait_ref;
+    if (wait_fence_) {
+      ::iree::vm::retain_ref(wait_fence());
+    }
+    IREE_RETURN_IF_ERROR(iree_vm_list_push_ref_move(arg_list, wait_ref));
+
+    // Create and push signal fence (or null if no signal needed).
+    ::iree::vm::ref<iree_hal_fence_t> signal_ref;
+    if (signal_sem_) {
+      SHORTFIN_SCHED_LOG("Invocation {}: Set signal {}@{}",
+                         static_cast<void *>(this),
+                         static_cast<void *>(signal_sem_), signal_timepoint_);
+      IREE_RETURN_IF_ERROR(
+          iree_hal_fence_create_at(signal_sem_, signal_timepoint_,
+                                   scope()->host_allocator(), &signal_ref));
+    }
+    IREE_RETURN_IF_ERROR(iree_vm_list_push_ref_move(arg_list, signal_ref));
+  } else {
+    logging::warn(
+        "Invoking function '{}' with unknown or synchronous invocation model "
+        "is not fully supported",
+        to_string_view(iree_vm_function_name(&function)));
+  }
+
+  return iree_ok_status();
+}
+
 ProgramInvocation::Future ProgramInvocation::Invoke(
     ProgramInvocation::Ptr invocation) {
   invocation->CheckNotScheduled();
@@ -298,27 +348,10 @@ ProgramInvocation::Future ProgramInvocation::Invoke(
   // it to the stack and access there.
   Params params = invocation->state.params;
 
-  // Handle post-processing invocation model setup.
-  if (params.invocation_model == ProgramInvocationModel::COARSE_FENCES) {
-    iree_vm_ref_t wait_ref =
-        iree_hal_fence_retain_ref(invocation->wait_fence());
-    SHORTFIN_THROW_IF_ERROR(
-        iree_vm_list_push_ref_move(params.arg_list, &wait_ref));
-    iree_vm_ref_t signal_ref =
-        iree_hal_fence_retain_ref(invocation->signal_fence());
-    SHORTFIN_THROW_IF_ERROR(
-        iree_vm_list_push_ref_move(params.arg_list, &signal_ref));
-  } else {
-    logging::warn(
-        "Invoking function '{}' with unknown or synchronous invocation model "
-        "is "
-        "not fully supported",
-        to_string_view(iree_vm_function_name(&params.function)));
-  }
-
   auto schedule = [](ProgramInvocation *raw_invocation, Worker *worker,
                      iree_vm_context_t *owned_context,
                      iree_vm_function_t function, iree_vm_list_t *arg_list,
+                     ProgramInvocationModel invocation_model,
                      std::optional<ProgramInvocation::Future> failure_future) {
     auto complete_callback =
         [](void *user_data, iree_loop_t loop, iree_status_t status,
@@ -350,17 +383,28 @@ ProgramInvocation::Future ProgramInvocation::Invoke(
     };
 
     ProgramInvocation::Ptr invocation(raw_invocation);
-    // TODO: Need to fork based on whether on the current worker. If
-    // not, then do cross thread scheduling.
-    iree_status_t status = iree_vm_async_invoke(
-        worker->loop(), &invocation->state.async_invoke_state, owned_context,
-        function,
-        /*flags=*/IREE_VM_INVOCATION_FLAG_NONE,
-        /*policy=*/nullptr,
-        /*inputs=*/arg_list,
-        /*outputs=*/invocation->result_list_, iree_allocator_system(),
-        +complete_callback,
-        /*user_data=*/invocation.get());
+    iree_status_t status = iree_ok_status();
+
+    // Multiple steps needed to schedule need to all exit via the same
+    // path.
+    if (iree_status_is_ok(status)) {
+      status = invocation->scope()->scheduler().FlushWithStatus();
+    }
+    if (iree_status_is_ok(status)) {
+      status = invocation->FinalizeCallingConvention(arg_list, function,
+                                                     invocation_model);
+    }
+    if (iree_status_is_ok(status)) {
+      status = iree_vm_async_invoke(worker->loop(),
+                                    &invocation->state.async_invoke_state,
+                                    owned_context, function,
+                                    /*flags=*/IREE_VM_INVOCATION_FLAG_NONE,
+                                    /*policy=*/nullptr,
+                                    /*inputs=*/arg_list,
+                                    /*outputs=*/invocation->result_list_,
+                                    iree_allocator_system(), +complete_callback,
+                                    /*user_data=*/invocation.get());
+    }
 
     // Regardless of status, the context reference we were holding is no
     // longer needed. Drop it on the floor.
@@ -389,12 +433,12 @@ ProgramInvocation::Future ProgramInvocation::Invoke(
   if (&worker == Worker::GetCurrent()) {
     // On the same worker: fast-path directly to the loop.
     schedule(invocation.release(), &worker, params.context, params.function,
-             params.arg_list, /*failure_future=*/{});
+             params.arg_list, params.invocation_model, /*failure_future=*/{});
   } else {
     // Cross worker coordination: submit an external task to bootstrap.
     auto bound_schedule =
         std::bind(schedule, invocation.release(), &worker, params.context,
-                  params.function, params.arg_list,
+                  params.function, params.arg_list, params.invocation_model,
                   /*failure_future=*/fork_future);
     worker.CallThreadsafe(bound_schedule);
   }
@@ -421,11 +465,23 @@ iree_hal_fence_t *ProgramInvocation::wait_fence() {
   return wait_fence_.get();
 }
 
-iree_hal_fence_t *ProgramInvocation::signal_fence() {
-  if (!signal_fence_) {
-    signal_fence_ = scope_->scheduler().NewFence();
+void ProgramInvocation::wait_insert(iree_hal_semaphore_list_t sem_list) {
+  iree_hal_fence_t *f = wait_fence();
+  for (iree_host_size_t i = 0; i < sem_list.count; ++i) {
+    SHORTFIN_SCHED_LOG("Invocation {}: Wait on {}@{}",
+                       static_cast<void *>(this),
+                       static_cast<void *>(sem_list.semaphores[i]),
+                       sem_list.payload_values[i]);
+    SHORTFIN_THROW_IF_ERROR(iree_hal_fence_insert(f, sem_list.semaphores[i],
+                                                  sem_list.payload_values[i]));
   }
-  return signal_fence_.get();
+}
+
+void ProgramInvocation::DeviceSelect(DeviceAffinity device_affinity) {
+  CheckNotScheduled();
+  SHORTFIN_SCHED_LOG("Invocation {}: DeviceSelect {}",
+                     static_cast<void *>(this), device_affinity.to_s());
+  device_selection_ |= device_affinity;
 }
 
 }  // namespace shortfin::local

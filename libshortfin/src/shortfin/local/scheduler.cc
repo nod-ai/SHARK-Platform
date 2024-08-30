@@ -76,11 +76,11 @@ CompletionEvent Account::OnSync() {
                        idle_timepoint);
     scheduler_.system().blocking_executor().Schedule(
         [sem = std::move(sem), idle_timepoint, satisfied]() {
-          SHORTFIN_SCHED_LOG("OnSync::Complete({}@{})",
-                             static_cast<void *>(sem.get()), idle_timepoint);
           iree_status_t status = iree_hal_semaphore_wait(
               sem, idle_timepoint, iree_infinite_timeout());
           IREE_CHECK_OK(status);
+          SHORTFIN_SCHED_LOG("OnSync::Complete({}@{})",
+                             static_cast<void *>(sem.get()), idle_timepoint);
           satisfied->set();
         });
     return CompletionEvent(satisfied);
@@ -224,7 +224,7 @@ void Scheduler::AppendCommandBuffer(ScopedDevice &device,
   }
 }
 
-void Scheduler::Flush() {
+iree_status_t Scheduler::FlushWithStatus() noexcept {
   // This loop is optimized for a small number of accounts, where it is
   // fine to just linearly probe. If this ever becomes cumbersome, we can
   // maintain a dirty list which is appended to when an account transitions
@@ -245,8 +245,8 @@ void Scheduler::Flush() {
         SummarizeFence(account.active_deps_));
 
     // End recording and submit.
-    SHORTFIN_THROW_IF_ERROR(iree_hal_command_buffer_end(active_command_buffer));
-    SHORTFIN_THROW_IF_ERROR(iree_hal_device_queue_execute(
+    IREE_RETURN_IF_ERROR(iree_hal_command_buffer_end(active_command_buffer));
+    IREE_RETURN_IF_ERROR(iree_hal_device_queue_execute(
         account.hal_device(),
         /*queue_affinity=*/account.active_queue_affinity_bits_,
         /*wait_sempahore_list=*/account.active_deps_
@@ -263,6 +263,7 @@ void Scheduler::Flush() {
         /*binding_tables=*/&binding_tables));
     account.Reset();
   }
+  return iree_ok_status();
 }
 
 iree::hal_fence_ptr Scheduler::NewFence() {

@@ -43,7 +43,6 @@ class InferenceProcess(sf.Process):
             self.host_staging.storage.data = request.raw_image_data
             print("host_staging =", self.host_staging)
             self.device_input.copy_from(self.host_staging)
-            await self.device  # Temp until we get dependence in.
 
             # Explicit invocation object.
             # inv = self.main_function.invocation(scope=self.scope)
@@ -51,10 +50,17 @@ class InferenceProcess(sf.Process):
             # results = await inv.invoke()
             # print("results:", results)
 
-            # Simple call.
-            results = await self.main_function(self.device_input, scope=self.scope)
-            print("Results:", results, len(results))
-            print("Result 0:", results[0])
+            # Simple call. Note that the await here is merely awaiting the
+            # result being *available* (i.e. that the VM coroutine has
+            # completed) but does not indicate that the result is ready.
+            (result1,) = await self.main_function(self.device_input, scope=self.scope)
+            (result2,) = await self.main_function(self.device_input, scope=self.scope)
+
+            # TODO: Implement await on individual results. The accounting is
+            # there but currently we can only await on the device itself.
+            await self.device
+            print("Result 1:", result1)
+            print("Result 2:", result2)
 
             # Multiple invocations in parallel.
             # all_results = await asyncio.gather(

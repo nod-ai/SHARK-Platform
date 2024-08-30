@@ -73,7 +73,7 @@ void device_array::AddAsInvocationArgument(
   *(&ref) = iree_hal_buffer_view_move_ref(buffer_view);
   inv->AddArg(std::move(ref));
 
-  // TODO: Add barriers.
+  storage().AddInvocationArgBarrier(inv, barrier);
 }
 
 iree_vm_ref_type_t device_array::invocation_marshalable_type() {
@@ -88,19 +88,10 @@ device_array device_array::CreateFromInvocationResultRef(
   iree::hal_buffer_ptr buffer =
       iree::hal_buffer_ptr::borrow_reference(iree_hal_buffer_view_buffer(bv));
 
-  // TODO: We've lost information at this point needed to determine which
-  // device the buffer exists on. This isn't a great state of affairs and
-  // we just punt and associate to device 0 to start. This should really
-  // be associated with the index 0 device of the proper physical hal device.
-  // Hilarity will ensure with this like it is with true multi-device.
-  local::ScopedDevice device = inv->scope()->device(0);
-
-  auto imported_storage = storage::import_buffer(device, std::move(buffer));
+  auto imported_storage =
+      storage::ImportInvocationResultStorage(inv, std::move(buffer));
   std::span<const iree_hal_dim_t> shape(iree_hal_buffer_view_shape_dims(bv),
                                         iree_hal_buffer_view_shape_rank(bv));
-
-  // TODO: barriers
-  
   return device_array(
       std::move(imported_storage), shape,
       DType::import_element_type(iree_hal_buffer_view_element_type(bv)));

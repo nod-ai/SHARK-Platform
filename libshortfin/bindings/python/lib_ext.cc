@@ -236,9 +236,9 @@ py::object PyRehydrateRef(local::ProgramInvocation *inv,
   } else if (local::ProgramInvocationMarshalableFactory::
                  invocation_marshalable_type<array::storage>() == type) {
     // storage
-    return py::cast(local::ProgramInvocationMarshalableFactory::
-                        CreateFromInvocationResultRef<array::storage>(
-                            inv, std::move(ref)));
+    return py::cast(
+        local::ProgramInvocationMarshalableFactory::
+            CreateFromInvocationResultRef<array::storage>(inv, std::move(ref)));
   }
   throw std::invalid_argument(
       fmt::format("Cannot marshal ref type {} to Python",
@@ -472,6 +472,22 @@ void BindLocal(py::module_ &m) {
              if (!self) throw std::invalid_argument("Deallocated invocation");
              py::capsule inv_capsule(self.get());
              PyAddProgramInvocationArg(inv_capsule, arg);
+           })
+      .def("__iter__",
+           [](local::ProgramInvocation::Ptr &self) {
+             if (!self) throw std::invalid_argument("Deallocated invocation");
+             size_t size = self->results_size();
+             py::object tp = py::steal(PyTuple_New(size));
+             for (size_t i = 0; i < size; ++i) {
+               iree::vm_opaque_ref ref = self->result_ref(i);
+               if (!ref) {
+                 throw new std::logic_error(
+                     "Program returned unsupported Python type");
+               }
+               py::object item = PyRehydrateRef(self.get(), std::move(ref));
+               PyTuple_SET_ITEM(tp.ptr(), i, item.release().ptr());
+             }
+             return tp.attr("__iter__")();
            })
       .def(
           "__len__",

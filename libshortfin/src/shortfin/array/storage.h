@@ -175,9 +175,19 @@ class SHORTFIN_API storage : public local::ProgramInvocationMarshalable {
   // ProgramInvocationMarshalable implementation.
   void AddAsInvocationArgument(local::ProgramInvocation *inv,
                                local::ProgramResourceBarrier barrier) override;
-  static storage CreateFromInvocationResultRef(
-      local::ProgramInvocation *inv, iree::vm_opaque_ref ref);
+  static storage CreateFromInvocationResultRef(local::ProgramInvocation *inv,
+                                               iree::vm_opaque_ref ref);
   static iree_vm_ref_type_t invocation_marshalable_type();
+
+  // Adds any necessary wait barriers to the invocation on behalf of this
+  // storage.
+  void AddInvocationArgBarrier(local::ProgramInvocation *inv,
+                               local::ProgramResourceBarrier barrier);
+
+  // Imports a raw hal buffer from an invocation as a storage, attaching any
+  // needed barriers.
+  static storage ImportInvocationResultStorage(local::ProgramInvocation *inv,
+                                               iree::hal_buffer_ptr buffer);
 
   // The timeline resource holds the back reference to the owning scope,
   // which keeps all devices alive. Buffers must be destroyed before devices,
@@ -187,6 +197,7 @@ class SHORTFIN_API storage : public local::ProgramInvocationMarshalable {
   local::ScopedDevice device_;
 
   friend class shortfin::local::ProgramInvocationMarshalableFactory;
+  friend class device_array;
 };
 
 // Wraps an untyped mapping, providing typed access.

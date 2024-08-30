@@ -207,31 +207,60 @@ void storage::AddAsInvocationArgument(local::ProgramInvocation *inv,
   *(&ref) = iree_hal_buffer_retain_ref(buffer_);
   inv->AddArg(std::move(ref));
 
-  // TODO: Add barriers.
+  AddInvocationArgBarrier(inv, barrier);
 }
 
 iree_vm_ref_type_t storage::invocation_marshalable_type() {
   return iree_hal_buffer_type();
 }
 
-storage storage::CreateFromInvocationResultRef(
-    local::ProgramInvocation *inv, iree::vm_opaque_ref ref) {
+storage storage::CreateFromInvocationResultRef(local::ProgramInvocation *inv,
+                                               iree::vm_opaque_ref ref) {
   // Steal the ref to one of our smart pointers.
   // TODO: Should have an opaque_ref::release().
   iree::hal_buffer_ptr buffer =
       iree::hal_buffer_ptr::steal_reference(iree_hal_buffer_deref(*ref.get()));
   (&ref)->ptr = nullptr;
+  return ImportInvocationResultStorage(inv, std::move(buffer));
+}
 
-  // TODO: We've lost information at this point needed to determine which
-  // device the buffer exists on. This isn't a great state of affairs and
-  // we just punt and associate to device 0 to start. This should really
-  // be associated with the index 0 device of the proper physical hal device.
-  // Hilarity will ensure with this like it is with true multi-device.
-  local::ScopedDevice device = inv->scope()->device(0);
-
+storage storage::ImportInvocationResultStorage(local::ProgramInvocation *inv,
+                                               iree::hal_buffer_ptr buffer) {
+  local::ScopedDevice device =
+      local::ScopedDevice(*inv->scope(), inv->device_selection());
   auto imported_storage = storage::import_buffer(device, std::move(buffer));
-  // TODO: barriers
+
+  auto coarse_signal = inv->coarse_signal();
+  if (coarse_signal.first) {
+    SHORTFIN_SCHED_LOG("Storage buffer {}: Ready barrier {}@{}",
+                       static_cast<void *>(imported_storage.buffer_.get()),
+                       static_cast<void *>(coarse_signal.first),
+                       coarse_signal.second);
+    imported_storage.timeline_resource_->set_mutation_barrier(
+        coarse_signal.first, coarse_signal.second);
+    imported_storage.timeline_resource_->use_barrier_insert(
+        coarse_signal.first, coarse_signal.second);
+  }
+
   return imported_storage;
+}
+
+void storage::AddInvocationArgBarrier(local::ProgramInvocation *inv,
+                                      local::ProgramResourceBarrier barrier) {
+  switch (barrier) {
+    case ProgramResourceBarrier::DEFAULT:
+    case ProgramResourceBarrier::READ:
+      inv->wait_insert(timeline_resource_->mutation_barrier());
+      inv->DeviceSelect(device_.affinity());
+      break;
+    case ProgramResourceBarrier::WRITE:
+      inv->wait_insert(timeline_resource_->mutation_barrier());
+      inv->wait_insert(timeline_resource_->use_barrier());
+      inv->DeviceSelect(device_.affinity());
+      break;
+    case ProgramResourceBarrier::NONE:
+      break;
+  }
 }
 
 std::string storage::to_s() const {

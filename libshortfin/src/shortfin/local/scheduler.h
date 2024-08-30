@@ -176,6 +176,7 @@ class SHORTFIN_API Account {
   Account(Scheduler &scheduler, Device *device);
   Device *device() const { return device_; }
   iree_hal_device_t *hal_device() { return hal_device_; }
+
   size_t semaphore_count() const { return 1; }
   // Gets a unique integer id for this account. Currently just the address of
   // the sem, but can be derived from any owned entity.
@@ -193,6 +194,7 @@ class SHORTFIN_API Account {
   // Queue timeline.
   iree_hal_semaphore_t *timeline_sem() { return sem_; }
   uint64_t timeline_idle_timepoint() { return idle_timepoint_; }
+  uint64_t timeline_acquire_timepoint() { return ++idle_timepoint_; }
 
   // Returns a future that is satisfied when the timeline of this account
   // reaches its current idle timepoint (i.e. all currently pending work
@@ -253,7 +255,8 @@ class SHORTFIN_API Scheduler {
                            std::function<void(Account &)> callback);
 
   // Flushes any pending accounts that have accumulated commands.
-  void Flush();
+  iree_status_t FlushWithStatus() noexcept;
+  void Flush() { SHORTFIN_THROW_IF_ERROR(FlushWithStatus()); }
 
   // Gets a fresh TimelineResource which can be used for tracking resource
   // read/write and setting barriers. Note that these are all allocated fresh

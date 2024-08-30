@@ -344,6 +344,8 @@ class ignorable_status {
 // -------------------------------------------------------------------------- //
 
 using vm_opaque_ref = ::iree::vm::opaque_ref;
+template <typename T>
+using vm_ref = ::iree::vm::ref<T>;
 
 }  // namespace iree
 }  // namespace shortfin
