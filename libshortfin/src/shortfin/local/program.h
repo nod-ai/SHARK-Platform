@@ -131,6 +131,9 @@ class SHORTFIN_API ProgramInvocation {
   ProgramInvocation();
   void CheckNotScheduled();
 
+  // Returns a pointer to the trailing arg list.
+  iree_vm_list_t *arg_list();
+
   // Accesses the invocation owned wait fence, creating it if needed.
   iree_hal_fence_t *wait_fence();
 
@@ -154,7 +157,6 @@ class SHORTFIN_API ProgramInvocation {
     iree_vm_context_t *context;
     iree_vm_function_t function;
     ProgramInvocationModel invocation_model;
-    iree_vm_list_t *arg_list = nullptr;
   };
   union State {
     State() { new (&params) Params(); }

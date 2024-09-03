@@ -28,7 +28,7 @@ set_target_properties(shortfin_python_extension
 target_link_libraries(shortfin_python_extension
   # TODO: This should be configurable as to whether we link to the static
   # or dynamic version.
-  PRIVATE shortfin-static
+  PRIVATE shortfin
 )
 
 nanobind_add_stub(

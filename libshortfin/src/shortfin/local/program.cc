@@ -241,6 +241,13 @@ std::vector<std::string> Program::exports() const {
 // ProgramInvocation
 // -------------------------------------------------------------------------- //
 
+iree_vm_list_t *ProgramInvocation::arg_list() {
+  // The arg list is located immediately after this, allocated as a trailing
+  // data structure.
+  return reinterpret_cast<iree_vm_list_t *>(reinterpret_cast<uint8_t *>(this) +
+                                            sizeof(*this));
+}
+
 void ProgramInvocation::Deleter::operator()(ProgramInvocation *inst) {
   inst->~ProgramInvocation();
   uint8_t *memory = static_cast<uint8_t *>(static_cast<void *>(inst));
@@ -311,7 +318,6 @@ ProgramInvocation::Ptr ProgramInvocation::New(
       vm_context.release();  // Ref transfer to ProgramInvocation.
   inst->state.params.function = vm_function;
   inst->state.params.invocation_model = invocation_model;
-  inst->state.params.arg_list = arg_list;
   inst->result_list_ = result_list;
   return inst;
 }
@@ -324,14 +330,12 @@ void ProgramInvocation::CheckNotScheduled() {
 
 void ProgramInvocation::AddArg(iree::vm_opaque_ref ref) {
   CheckNotScheduled();
-  SHORTFIN_THROW_IF_ERROR(
-      iree_vm_list_push_ref_move(state.params.arg_list, &ref));
+  SHORTFIN_THROW_IF_ERROR(iree_vm_list_push_ref_move(arg_list(), &ref));
 }
 
 void ProgramInvocation::AddArg(iree_vm_ref_t *ref) {
   CheckNotScheduled();
-  SHORTFIN_THROW_IF_ERROR(
-      iree_vm_list_push_ref_retain(state.params.arg_list, ref));
+  SHORTFIN_THROW_IF_ERROR(iree_vm_list_push_ref_retain(arg_list(), ref));
 }
 
 iree_status_t ProgramInvocation::FinalizeCallingConvention(
@@ -395,7 +399,7 @@ ProgramInvocation::Future ProgramInvocation::Invoke(
 
   auto schedule = [](ProgramInvocation *raw_invocation, Worker *worker,
                      iree_vm_context_t *owned_context,
-                     iree_vm_function_t function, iree_vm_list_t *arg_list,
+                     iree_vm_function_t function,
                      ProgramInvocationModel invocation_model,
                      std::optional<ProgramInvocation::Future> failure_future) {
     auto complete_callback =
@@ -436,8 +440,8 @@ ProgramInvocation::Future ProgramInvocation::Invoke(
       status = invocation->scope()->scheduler().FlushWithStatus();
     }
     if (iree_status_is_ok(status)) {
-      status = invocation->FinalizeCallingConvention(arg_list, function,
-                                                     invocation_model);
+      status = invocation->FinalizeCallingConvention(
+          invocation->arg_list(), function, invocation_model);
     }
     if (iree_status_is_ok(status)) {
       status = iree_vm_async_invoke(worker->loop(),
@@ -445,7 +449,7 @@ ProgramInvocation::Future ProgramInvocation::Invoke(
                                     owned_context, function,
                                     /*flags=*/IREE_VM_INVOCATION_FLAG_NONE,
                                     /*policy=*/nullptr,
-                                    /*inputs=*/arg_list,
+                                    /*inputs=*/invocation->arg_list(),
                                     /*outputs=*/invocation->result_list_,
                                     iree_allocator_system(), +complete_callback,
                                     /*user_data=*/invocation.get());
@@ -478,12 +482,12 @@ ProgramInvocation::Future ProgramInvocation::Invoke(
   if (&worker == Worker::GetCurrent()) {
     // On the same worker: fast-path directly to the loop.
     schedule(invocation.release(), &worker, params.context, params.function,
-             params.arg_list, params.invocation_model, /*failure_future=*/{});
+             params.invocation_model, /*failure_future=*/{});
   } else {
     // Cross worker coordination: submit an external task to bootstrap.
     auto bound_schedule =
         std::bind(schedule, invocation.release(), &worker, params.context,
-                  params.function, params.arg_list, params.invocation_model,
+                  params.function, params.invocation_model,
                   /*failure_future=*/fork_future);
     worker.CallThreadsafe(bound_schedule);
   }
