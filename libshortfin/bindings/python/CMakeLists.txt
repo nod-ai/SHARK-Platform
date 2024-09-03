@@ -10,7 +10,7 @@
 # build. - _shortfin_tracing.lib: Native library with tracing enabled (TODO). -
 # Others.
 
-# find_package(nanobind CONFIG REQUIRED)
+find_package(nanobind CONFIG REQUIRED)
 
 nanobind_add_module(shortfin_python_extension NB_STATIC LTO
   array_binding.cc

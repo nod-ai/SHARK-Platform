@@ -34,7 +34,7 @@ endif()
 # build options
 option(SHORTFIN_BUILD_PYTHON_BINDINGS "Builds Python Bindings" OFF)
 option(SHORTFIN_BUILD_TESTS "Builds C++ tests" ON)
-option(SHORTFIN_BUNDLE_DEPS "Download dependencies instead of using system libraries" OFF)
+option(SHORTFIN_BUNDLE_DEPS "Download dependencies instead of using system libraries" ON)
 
 set(SHORTFIN_IREE_SOURCE_DIR "" CACHE FILEPATH "Path to IREE source")
 

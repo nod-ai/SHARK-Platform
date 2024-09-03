@@ -78,6 +78,7 @@ jobs:
     env:
       # TODO(#151): Don't ignore ODR violations
       ASAN_OPTIONS: detect_odr_violation=0
+      LSAN_OPTIONS: suppressions=${{ github.workspace }}/libshortfin/build_tools/python_lsan_suppressions.txt
     steps:
     - name: Install dependencies
       run: |

@@ -94,6 +94,7 @@ jobs:
           -DCMAKE_C_COMPILER=clang-18 \
           -DCMAKE_CXX_COMPILER=clang++-18 \
           -DCMAKE_LINKER_TYPE=LLD \
+          -DSHORTFIN_BUNDLE_DEPS=ON \
           -DCMAKE_PREFIX_PATH=${{ env.IREE_REPO_DIR }}/build/lib/cmake/IREE \
           -DSHORTFIN_BUILD_PYTHON_BINDINGS=ON \
           ..
