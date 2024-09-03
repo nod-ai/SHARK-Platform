@@ -27,39 +27,40 @@ class FFNMOE(ThetaLayer):
 
         super().__init__(theta)
 
-        try:
-            merged_tensor = theta.tensor("ffn_gate_exps", "weight")
+        #        try:
+        print(theta.flatten())
+        merged_tensor = theta.tensor("ffn_gate_exps", "weight")
 
-            expert_tensor = extract_ffn_layer(
-                merged_tensor=merged_tensor,
-                layer_name="ffn_gate",
-                expert_idx=expert_idx,
-            )
+        expert_tensor = extract_ffn_layer(
+            merged_tensor=merged_tensor,
+            layer_name="ffn_gate",
+            expert_idx=expert_idx,
+        )
 
-            self.add_module("ffn_gate", LinearLayer(Theta({"weight": expert_tensor})))
+        self.add_module("ffn_gate", LinearLayer(Theta({"weight": expert_tensor})))
 
-            merged_tensor = theta.tensor("ffn_up_exps", "weight")
+        merged_tensor = theta.tensor("ffn_up_exps", "weight")
 
-            expert_tensor = extract_ffn_layer(
-                merged_tensor=merged_tensor, layer_name="ffn_up", expert_idx=expert_idx
-            )
+        expert_tensor = extract_ffn_layer(
+            merged_tensor=merged_tensor, layer_name="ffn_up", expert_idx=expert_idx
+        )
 
-            self.add_module("ffn_up", LinearLayer(Theta({"weight": expert_tensor})))
+        self.add_module("ffn_up", LinearLayer(Theta({"weight": expert_tensor})))
 
-            merged_tensor = theta.tensor("ffn_down_exps", "weight")
+        merged_tensor = theta.tensor("ffn_down_exps", "weight")
 
-            expert_tensor = extract_ffn_layer(
-                merged_tensor=merged_tensor,
-                layer_name="ffn_down",
-                expert_idx=expert_idx,
-            )
+        expert_tensor = extract_ffn_layer(
+            merged_tensor=merged_tensor,
+            layer_name="ffn_down",
+            expert_idx=expert_idx,
+        )
 
-            self.add_module("ffn_down", LinearLayer(Theta({"weight": expert_tensor})))
+        self.add_module("ffn_down", LinearLayer(Theta({"weight": expert_tensor})))
 
-        except:
-            self.add_module("ffn_gate", LinearLayer(theta("ffn_gate", expert_idx)))
-            self.add_module("ffn_up", LinearLayer(theta("ffn_up", expert_idx)))
-            self.add_module("ffn_down", LinearLayer(theta("ffn_down", expert_idx)))
+        # except:
+        #    self.add_module("ffn_gate", LinearLayer(theta("ffn_gate", expert_idx)))
+        #    self.add_module("ffn_up", LinearLayer(theta("ffn_up", expert_idx)))
+        #    self.add_module("ffn_down", LinearLayer(theta("ffn_down", expert_idx)))
 
     def forward(
         self,
@@ -74,11 +75,12 @@ class FFNMOE(ThetaLayer):
 def extract_ffn_layer(
     merged_tensor: DefaultPrimitiveTensor, layer_name: str, expert_idx: int
 ):
-
-    expert_layer_name = (
-        f"blk.{merged_tensor.name.split('.')[1]}.{layer_name}.{expert_idx}.weight"
-    )
+    print(merged_tensor.name)
+    # blk.0.ffn_down_exps.weight
+    # expert_layer_name = (
+    #    f"blk.{merged_tensor.name.split('.')[1]}.{layer_name}.{expert_idx}.weight"
+    # )
     expert_tensor = DefaultPrimitiveTensor(
-        name=expert_layer_name, data=merged_tensor.as_torch()[expert_idx]
+        name="", data=merged_tensor.as_torch()[expert_idx]
     )
     return expert_tensor
