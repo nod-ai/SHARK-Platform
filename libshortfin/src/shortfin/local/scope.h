@@ -132,14 +132,6 @@ class SHORTFIN_API Scope : public std::enable_shared_from_this<Scope> {
     return scheduler().NewTimelineResource(shared_ptr());
   }
 
-  // Loads a program from a list of modules onto the devices managed by this
-  // scope. The resulting program is not bound to this scope and can be imported
-  // into compatible scopes for actual execution.
-  // TODO: This is temporary during API evolution: a higher level API that
-  // includes all module concepts, params, etc is needed.
-  Program LoadUnboundProgram(std::span<const ProgramModule> modules,
-                             Program::Options options = {});
-
  private:
   void AddDevice(std::string_view device_class, Device *device);
   void Initialize();  // Called after all devices are added.

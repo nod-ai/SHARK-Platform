@@ -14,6 +14,9 @@ Message = _sfl.local.Message
 Node = _sfl.local.Node
 Process = _sfl.local.Process
 Program = _sfl.local.Program
+ProgramFunction = _sfl.local.ProgramFunction
+ProgramInvocation = _sfl.local.ProgramInvocation
+ProgramInvocationFuture = _sfl.local.ProgramInvocationFuture
 ProgramModule = _sfl.local.ProgramModule
 Queue = _sfl.local.Queue
 QueueReader = _sfl.local.QueueReader
@@ -37,6 +40,9 @@ __all__ = [
     "Message",
     "Node",
     "Program",
+    "ProgramFunction",
+    "ProgramInvocation",
+    "ProgramInvocationFuture",
     "ProgramModule",
     "Queue",
     "QueueReader",

@@ -12,6 +12,7 @@ shortfin_cc_component(
     api.h
     dims.h
     dtype.h
+    dtypes.inl
     storage.h
   SRCS
     array.cc

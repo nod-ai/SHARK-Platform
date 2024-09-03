@@ -35,8 +35,14 @@ storage::storage(local::ScopedDevice device, iree::hal_buffer_ptr buffer,
 }
 storage::~storage() { logging::destruct("array::storage", this); }
 
-storage storage::AllocateDevice(ScopedDevice &device,
-                                iree_device_size_t allocation_size) {
+storage storage::import_buffer(local::ScopedDevice &device,
+                               iree::hal_buffer_ptr buffer) {
+  return storage(device, std::move(buffer),
+                 device.scope().NewTimelineResource());
+}
+
+storage storage::allocate_device(ScopedDevice &device,
+                                 iree_device_size_t allocation_size) {
   if (!device.raw_device()) {
     throw std::invalid_argument("Cannot allocate with a null device affinity");
   }
@@ -54,8 +60,8 @@ storage storage::AllocateDevice(ScopedDevice &device,
                  device.scope().NewTimelineResource());
 }
 
-storage storage::AllocateHost(ScopedDevice &device,
-                              iree_device_size_t allocation_size) {
+storage storage::allocate_host(ScopedDevice &device,
+                               iree_device_size_t allocation_size) {
   if (!device.raw_device()) {
     throw std::invalid_argument("Cannot allocate with a null device affinity");
   }
@@ -64,7 +70,8 @@ storage storage::AllocateHost(ScopedDevice &device,
   iree_hal_buffer_params_t params = {
       .usage = IREE_HAL_BUFFER_USAGE_MAPPING,
       .access = IREE_HAL_MEMORY_ACCESS_ALL,
-      .type = IREE_HAL_MEMORY_TYPE_OPTIMAL_FOR_HOST,
+      .type = IREE_HAL_MEMORY_TYPE_OPTIMAL_FOR_HOST |
+              IREE_HAL_MEMORY_TYPE_DEVICE_VISIBLE,
       .queue_affinity = device.affinity().queue_affinity(),
   };
   if (device.affinity().queue_affinity() != 0) {
@@ -76,7 +83,7 @@ storage storage::AllocateHost(ScopedDevice &device,
                  device.scope().NewTimelineResource());
 }
 
-storage storage::Subspan(iree_device_size_t byte_offset,
+storage storage::subspan(iree_device_size_t byte_offset,
                          iree_device_size_t byte_length) {
   storage new_storage(device_, {}, timeline_resource_);
   SHORTFIN_THROW_IF_ERROR(iree_hal_buffer_subspan(
@@ -84,7 +91,7 @@ storage storage::Subspan(iree_device_size_t byte_offset,
   return new_storage;
 }
 
-void storage::Fill(const void *pattern, iree_host_size_t pattern_length) {
+void storage::fill(const void *pattern, iree_host_size_t pattern_length) {
   device_.scope().scheduler().AppendCommandBuffer(
       device_, TransactionType::TRANSFER, [&](Account &account) {
         // Must depend on all of this buffer's use dependencies to avoid
@@ -94,9 +101,8 @@ void storage::Fill(const void *pattern, iree_host_size_t pattern_length) {
         // write-after-write hazard.
         account.active_deps_extend(timeline_resource_->mutation_barrier());
 
-        // TODO: I need to join the submission dependencies on the account
-        // with the timeline resource idle fence to ensure that
-        // write-after-access is properly sequenced.
+        SHORTFIN_SCHED_LOG("  : FillBuffer({})",
+                           static_cast<void *>(buffer_.get()));
         SHORTFIN_THROW_IF_ERROR(iree_hal_command_buffer_fill_buffer(
             account.active_command_buffer(),
             iree_hal_make_buffer_ref(
@@ -111,7 +117,7 @@ void storage::Fill(const void *pattern, iree_host_size_t pattern_length) {
       });
 }
 
-void storage::CopyFrom(storage &source_storage) {
+void storage::copy_from(storage &source_storage) {
   device_.scope().scheduler().AppendCommandBuffer(
       device_, TransactionType::TRANSFER, [&](Account &account) {
         // Must depend on the source's mutation dependencies to avoid
@@ -122,6 +128,9 @@ void storage::CopyFrom(storage &source_storage) {
         account.active_deps_extend(timeline_resource_->use_barrier());
         account.active_deps_extend(timeline_resource_->mutation_barrier());
 
+        SHORTFIN_SCHED_LOG("  : CopyBuffer({} -> {})",
+                           static_cast<void *>(source_storage.buffer_.get()),
+                           static_cast<void *>(buffer_.get()));
         SHORTFIN_THROW_IF_ERROR(iree_hal_command_buffer_copy_buffer(
             account.active_command_buffer(),
             /*source_ref=*/
@@ -129,9 +138,12 @@ void storage::CopyFrom(storage &source_storage) {
             /*target_ref=*/
             iree_hal_make_buffer_ref(buffer_, 0, byte_length())));
 
-        // And move our own mutation barrier to the current pending timeline
+        // Move our own mutation barrier to the current pending timeline
         // value.
         timeline_resource_->set_mutation_barrier(
+            account.timeline_sem(), account.timeline_idle_timepoint());
+        // And extend the source use barrier.
+        source_storage.timeline_resource_->use_barrier_insert(
             account.timeline_sem(), account.timeline_idle_timepoint());
       });
 }
@@ -150,7 +162,7 @@ bool storage::is_mappable_for_read_write() const {
           (IREE_HAL_MEMORY_ACCESS_READ | IREE_HAL_MEMORY_ACCESS_WRITE));
 }
 
-void storage::MapExplicit(mapping &mapping, iree_hal_memory_access_t access) {
+void storage::map_explicit(mapping &mapping, iree_hal_memory_access_t access) {
   assert(access != IREE_HAL_MEMORY_ACCESS_NONE);
   mapping.reset();
   SHORTFIN_THROW_IF_ERROR(iree_hal_buffer_map_range(
@@ -187,6 +199,68 @@ std::string storage::formatted_buffer_usage() const {
   iree_bitfield_string_temp_t temp;
   auto sv = iree_hal_buffer_usage_format(buffer_usage(), &temp);
   return std::string(sv.data, sv.size);
+}
+
+void storage::AddAsInvocationArgument(local::ProgramInvocation *inv,
+                                      local::ProgramResourceBarrier barrier) {
+  iree::vm_opaque_ref ref;
+  *(&ref) = iree_hal_buffer_retain_ref(buffer_);
+  inv->AddArg(std::move(ref));
+
+  AddInvocationArgBarrier(inv, barrier);
+}
+
+iree_vm_ref_type_t storage::invocation_marshalable_type() {
+  return iree_hal_buffer_type();
+}
+
+storage storage::CreateFromInvocationResultRef(local::ProgramInvocation *inv,
+                                               iree::vm_opaque_ref ref) {
+  // Steal the ref to one of our smart pointers.
+  // TODO: Should have an opaque_ref::release().
+  iree::hal_buffer_ptr buffer =
+      iree::hal_buffer_ptr::steal_reference(iree_hal_buffer_deref(*ref.get()));
+  (&ref)->ptr = nullptr;
+  return ImportInvocationResultStorage(inv, std::move(buffer));
+}
+
+storage storage::ImportInvocationResultStorage(local::ProgramInvocation *inv,
+                                               iree::hal_buffer_ptr buffer) {
+  local::ScopedDevice device =
+      local::ScopedDevice(*inv->scope(), inv->device_selection());
+  auto imported_storage = storage::import_buffer(device, std::move(buffer));
+
+  auto coarse_signal = inv->coarse_signal();
+  if (coarse_signal.first) {
+    SHORTFIN_SCHED_LOG("Storage buffer {}: Ready barrier {}@{}",
+                       static_cast<void *>(imported_storage.buffer_.get()),
+                       static_cast<void *>(coarse_signal.first),
+                       coarse_signal.second);
+    imported_storage.timeline_resource_->set_mutation_barrier(
+        coarse_signal.first, coarse_signal.second);
+    imported_storage.timeline_resource_->use_barrier_insert(
+        coarse_signal.first, coarse_signal.second);
+  }
+
+  return imported_storage;
+}
+
+void storage::AddInvocationArgBarrier(local::ProgramInvocation *inv,
+                                      local::ProgramResourceBarrier barrier) {
+  switch (barrier) {
+    case ProgramResourceBarrier::DEFAULT:
+    case ProgramResourceBarrier::READ:
+      inv->wait_insert(timeline_resource_->mutation_barrier());
+      inv->DeviceSelect(device_.affinity());
+      break;
+    case ProgramResourceBarrier::WRITE:
+      inv->wait_insert(timeline_resource_->mutation_barrier());
+      inv->wait_insert(timeline_resource_->use_barrier());
+      inv->DeviceSelect(device_.affinity());
+      break;
+    case ProgramResourceBarrier::NONE:
+      break;
+  }
 }
 
 std::string storage::to_s() const {

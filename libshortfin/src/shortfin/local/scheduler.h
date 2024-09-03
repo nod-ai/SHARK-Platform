@@ -142,6 +142,8 @@ class SHORTFIN_API TimelineResource {
     return iree_hal_fence_semaphore_list(use_barrier_fence_);
   }
 
+  iree_allocator_t host_allocator();
+
  private:
   TimelineResource(std::shared_ptr<Scope> scope, size_t semaphore_capacity);
   ~TimelineResource();
@@ -174,7 +176,11 @@ class SHORTFIN_API Account {
   Account(Scheduler &scheduler, Device *device);
   Device *device() const { return device_; }
   iree_hal_device_t *hal_device() { return hal_device_; }
+
   size_t semaphore_count() const { return 1; }
+  // Gets a unique integer id for this account. Currently just the address of
+  // the sem, but can be derived from any owned entity.
+  uintptr_t id() const { return reinterpret_cast<uintptr_t>(sem_.get()); }
 
   // Accesses the active command buffer. This will only be non-null if a
   // pending transaction has been set up (i.e. via AppendCommandBuffer).
@@ -188,6 +194,7 @@ class SHORTFIN_API Account {
   // Queue timeline.
   iree_hal_semaphore_t *timeline_sem() { return sem_; }
   uint64_t timeline_idle_timepoint() { return idle_timepoint_; }
+  uint64_t timeline_acquire_timepoint() { return ++idle_timepoint_; }
 
   // Returns a future that is satisfied when the timeline of this account
   // reaches its current idle timepoint (i.e. all currently pending work
@@ -248,7 +255,8 @@ class SHORTFIN_API Scheduler {
                            std::function<void(Account &)> callback);
 
   // Flushes any pending accounts that have accumulated commands.
-  void Flush();
+  iree_status_t FlushWithStatus() noexcept;
+  void Flush() { SHORTFIN_THROW_IF_ERROR(FlushWithStatus()); }
 
   // Gets a fresh TimelineResource which can be used for tracking resource
   // read/write and setting barriers. Note that these are all allocated fresh
@@ -257,6 +265,10 @@ class SHORTFIN_API Scheduler {
     return TimelineResource::Ref(
         new TimelineResource(std::move(scope), semaphore_count_));
   }
+
+  // Creates a new fence with capacity for all semaphores that are extant at
+  // the point of the call.
+  iree::hal_fence_ptr NewFence();
 
   System &system() { return system_; }
 
