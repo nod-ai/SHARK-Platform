@@ -14,7 +14,7 @@ namespace shortfin::local::detail {
 
 namespace {
 
-std::string SummarizeFence(iree_hal_fence_t *fence) {
+[[maybe_unused]] std::string SummarizeFence(iree_hal_fence_t *fence) {
   if (!SHORTFIN_SCHED_LOG_ENABLED) {
     return std::string();
   }

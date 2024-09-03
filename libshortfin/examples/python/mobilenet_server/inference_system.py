@@ -44,23 +44,23 @@ class InferenceProcess(sf.Process):
             print("host_staging =", self.host_staging)
             self.device_input.copy_from(self.host_staging)
 
-            # Explicit invocation object.
-            # inv = self.main_function.invocation(scope=self.scope)
-            # inv.add_arg(self.device_input)
-            # results = await inv.invoke()
-            # print("results:", results)
-
             # Simple call. Note that the await here is merely awaiting the
             # result being *available* (i.e. that the VM coroutine has
             # completed) but does not indicate that the result is ready.
-            (result1,) = await self.main_function(self.device_input, scope=self.scope)
-            (result2,) = await self.main_function(self.device_input, scope=self.scope)
+            (result1,) = await self.main_function(self.device_input)
+            (result2,) = await self.main_function(self.device_input)
 
             # TODO: Implement await on individual results. The accounting is
             # there but currently we can only await on the device itself.
             await self.device
             print("Result 1:", result1)
             print("Result 2:", result2)
+
+            # Explicit invocation object.
+            # inv = self.main_function.invocation(scope=self.scope)
+            # inv.add_arg(self.device_input)
+            # results = await inv.invoke()
+            # print("results:", results)
 
             # Multiple invocations in parallel.
             # all_results = await asyncio.gather(
@@ -80,7 +80,7 @@ class InferenceProcess(sf.Process):
 
 class Main:
     def __init__(self, lsys: sf.System, home_dir: Path):
-        self.processes_per_worker = 1
+        self.processes_per_worker = 2
         self.lsys = lsys
         self.home_dir = home_dir
         self.request_queue = lsys.create_queue("request")
@@ -92,10 +92,8 @@ class Main:
         # Note that currently, program load is synchronous. But we do it
         # in a task so we can await it in the future and let program loads
         # overlap.
-        program = scope.load_unbound_program(
-            [self.program_module], trace_execution=False
-        )
         for _ in range(self.processes_per_worker):
+            program = sf.Program([self.program_module], scope=scope)
             self.processes.append(
                 InferenceProcess(program, self.request_queue, scope=scope).launch()
             )

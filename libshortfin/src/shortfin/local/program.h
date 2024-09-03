@@ -9,6 +9,7 @@
 
 #include <filesystem>
 #include <optional>
+#include <span>
 #include <string_view>
 #include <vector>
 
@@ -175,17 +176,13 @@ class SHORTFIN_API ProgramInvocation {
 // References a function in a Program.
 class SHORTFIN_API ProgramFunction {
  public:
-  ProgramFunction(iree::vm_context_ptr vm_context,
-                  iree_vm_function_t vm_function,
-                  std::optional<ProgramInvocationModel> invocation_model = {});
-
   operator bool() const { return vm_context_; }
 
   std::string_view name() const;
   std::string_view calling_convention() const;
   ProgramInvocationModel invocation_model() const { return invocation_model_; }
 
-  ProgramInvocation::Ptr CreateInvocation(std::shared_ptr<Scope> scope);
+  ProgramInvocation::Ptr CreateInvocation();
 
   std::string to_s() const;
 
@@ -193,10 +190,15 @@ class SHORTFIN_API ProgramFunction {
   operator iree_vm_function_t &() { return vm_function_; }
 
  private:
+  ProgramFunction(std::shared_ptr<Scope> scope, iree::vm_context_ptr vm_context,
+                  iree_vm_function_t vm_function,
+                  std::optional<ProgramInvocationModel> invocation_model = {});
+
   static ProgramInvocationModel GetInvocationModelFromFunction(
       iree_vm_function_t &f);
 
   // The context that this function was resolved against.
+  std::shared_ptr<Scope> scope_;
   iree::vm_context_ptr vm_context_;
   iree_vm_function_t vm_function_;
   ProgramInvocationModel invocation_model_;
@@ -241,23 +243,30 @@ class SHORTFIN_API ProgramModule {
 };
 
 // Programs consist of ProgramModules instantiated together and capable of
-// having functions invoked on them. While it is possible to construct
-// programs that do not depend on device-associated state, the dominant
-// use case is for programs that are compiled to operate against the device
-// HAL with a list of concrete devices. Such programs are constructed from
-// a Scope.
+// having functions invoked on them. While the underlying programming model
+// is a bit broader and can be exploited in various advanced way, generally,
+// a program should be thought of as a fiber, and it is therefore bound to
+// a Scope, which provides a logical thread of execution. By default, all
+// invocations will take place in logical order (there are certain ways to
+// violate this constraint safely that are provided for separately).
 //
-// While the concurrency model for programs is technically a bit broader, the
-// intended use is for them to be interacted with on a single Worker in a
-// non-blocking fashion. There are many advanced ways that programs can be
-// constructed to straddle devices, scopes, and workers, but that is left as
-// an advanced use case.
+// The program will source any needed parameters from the System and it will
+// make an effort to cache them for proper locality on individual devices
+// (TODO: make this actually true).
 class SHORTFIN_API Program {
  public:
   struct Options {
+    Options() {}
+
     // Enables program-wide execution tracing (to stderr).
     bool trace_execution = false;
   };
+
+  // Loads a program attached to a scope with a list of user provided modules
+  // and options.
+  static Program Load(std::shared_ptr<Scope> scope,
+                      std::span<const ProgramModule> modules,
+                      Options options = {});
 
   // Looks up a public function by fully qualified name (i.e. module.function).
   // Returns nothing if not found.
@@ -271,8 +280,10 @@ class SHORTFIN_API Program {
   std::vector<std::string> exports() const;
 
  private:
-  explicit Program(iree::vm_context_ptr vm_context)
-      : vm_context_(std::move(vm_context)) {}
+  explicit Program(std::shared_ptr<Scope> scope,
+                   iree::vm_context_ptr vm_context)
+      : scope_(std::move(scope)), vm_context_(std::move(vm_context)) {}
+  std::shared_ptr<Scope> scope_;
   iree::vm_context_ptr vm_context_;
   friend class Scope;
 };

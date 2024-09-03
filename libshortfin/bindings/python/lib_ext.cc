@@ -208,9 +208,8 @@ void PyAddProgramInvocationArg(py::capsule &inv_capsule, py::handle arg) {
 }
 
 local::ProgramInvocation::Future PyFunctionCall(local::ProgramFunction &self,
-                                                py::args args,
-                                                local::Scope &scope) {
-  auto inv = self.CreateInvocation(scope.shared_from_this());
+                                                py::args args) {
+  auto inv = self.CreateInvocation();
   py::capsule inv_capsule(inv.get());
   for (py::handle arg : args) {
     PyAddProgramInvocationArg(inv_capsule, arg);
@@ -443,6 +442,15 @@ void BindLocal(py::module_ &m) {
       .def("__repr__", &local::DeviceAffinity::to_s);
 
   py::class_<local::Program>(m, "Program")
+      .def(py::new_([](std::span<const local::ProgramModule> modules,
+                       local::Scope &scope, bool trace_execution) {
+             local::Program::Options options;
+             options.trace_execution = trace_execution;
+             return local::Program::Load(scope.shared_from_this(), modules,
+                                         std::move(options));
+           }),
+           py::arg("modules"), py::arg("scope"), py::kw_only(),
+           py::arg("trace_execution") = false)
       .def_prop_ro("exports", &local::Program::exports)
       .def("lookup_function", &local::Program::LookupRequiredFunction)
       .def("__getitem__", &local::Program::LookupRequiredFunction);
@@ -451,10 +459,8 @@ void BindLocal(py::module_ &m) {
       .def_prop_ro("calling_convention",
                    &local::ProgramFunction::calling_convention)
       .def("invocation", &local::ProgramFunction::CreateInvocation,
-           py::kw_only(), py::arg("scope"),
            DOCSTRING_PROGRAM_FUNCTION_INVOCATION)
-      .def("__call__", PyFunctionCall, py::arg("args"), py::kw_only(),
-           py::arg("scope"))
+      .def("__call__", PyFunctionCall, py::arg("args"))
       .def("__repr__", &local::ProgramFunction::to_s);
   py::class_<local::ProgramModule>(m, "ProgramModule")
       .def_prop_ro("exports", &local::ProgramModule::exports)
@@ -538,17 +544,7 @@ void BindLocal(py::module_ &m) {
           [](local::Scope &self, py::args args) {
             return CastDeviceAffinity(self, args);
           },
-          py::rv_policy::reference_internal)
-      .def(
-          "load_unbound_program",
-          [](local::Scope &scope, std::span<const local::ProgramModule> modules,
-             bool trace_execution) {
-            local::Program::Options options;
-            options.trace_execution = trace_execution;
-            return scope.LoadUnboundProgram(modules, std::move(options));
-          },
-          py::arg("modules"), py::kw_only(),
-          py::arg("trace_execution") = false);
+          py::rv_policy::reference_internal);
 
   py::class_<local::ScopedDevice>(m, "ScopedDevice")
       .def_prop_ro("scope", &local::ScopedDevice::scope,

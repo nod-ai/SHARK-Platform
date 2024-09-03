@@ -8,6 +8,7 @@
 
 #include "fmt/core.h"
 #include "fmt/std.h"
+#include "iree/modules/hal/module.h"
 #include "iree/vm/bytecode/module.h"
 #include "shortfin/local/scope.h"
 #include "shortfin/local/system.h"
@@ -33,9 +34,11 @@ void GetVmModuleExports(iree_vm_module_t *vm_module,
 // -------------------------------------------------------------------------- //
 
 ProgramFunction::ProgramFunction(
-    iree::vm_context_ptr vm_context, iree_vm_function_t vm_function,
+    std::shared_ptr<Scope> scope, iree::vm_context_ptr vm_context,
+    iree_vm_function_t vm_function,
     std::optional<ProgramInvocationModel> invocation_model)
-    : vm_context_(std::move(vm_context)),
+    : scope_(std::move(scope)),
+      vm_context_(std::move(vm_context)),
       vm_function_(vm_function),
       invocation_model_(invocation_model
                             ? *invocation_model
@@ -68,9 +71,8 @@ std::string_view ProgramFunction::calling_convention() const {
       iree_vm_function_signature(&vm_function_).calling_convention);
 }
 
-ProgramInvocation::Ptr ProgramFunction::CreateInvocation(
-    std::shared_ptr<Scope> scope) {
-  return ProgramInvocation::New(std::move(scope), vm_context_, vm_function_,
+ProgramInvocation::Ptr ProgramFunction::CreateInvocation() {
+  return ProgramInvocation::New(scope_, vm_context_, vm_function_,
                                 invocation_model_);
 }
 
@@ -133,6 +135,49 @@ std::vector<std::string> ProgramModule::exports() const {
 // Program
 // -------------------------------------------------------------------------- //
 
+Program Program::Load(std::shared_ptr<Scope> scope,
+                      std::span<const ProgramModule> modules, Options options) {
+  std::vector<iree_vm_module_t *> all_modules;
+  std::vector<iree_hal_device_t *> raw_devices;
+
+  // By default, bind all devices in the scope in order to the program.
+  for (Device *d : scope->raw_devices()) {
+    raw_devices.push_back(d->hal_device());
+  }
+
+  // Add a HAL module.
+  // TODO: at some point may want to change this to something similar to
+  // what the tooling does in iree_tooling_resolve_modules - it uses
+  // iree_vm_module_enumerate_dependencies to walk the dependencies and add the
+  // required modules only as needed. to start you could use it just to see if
+  // the hal is used, but as you add other module types for exposing sharkfin
+  // functionality (or module versions; iree_vm_module_dependency_t has the
+  // minimum version required so you can switch between them, and whether they
+  // are optional/required).
+  auto &system = scope->system();
+  iree::vm_module_ptr hal_module;
+  SHORTFIN_THROW_IF_ERROR(
+      iree_hal_module_create(system.vm_instance(), raw_devices.size(),
+                             raw_devices.data(), IREE_HAL_MODULE_FLAG_NONE,
+                             system.host_allocator(), hal_module.for_output()));
+  all_modules.push_back(hal_module);
+
+  // Add explicit modules.
+  for (auto &pm : modules) {
+    all_modules.push_back(pm.vm_module());
+  }
+
+  // Create the context.
+  iree::vm_context_ptr context;
+  iree_vm_context_flags_t flags = IREE_VM_CONTEXT_FLAG_CONCURRENT;
+  if (options.trace_execution) flags |= IREE_VM_CONTEXT_FLAG_TRACE_EXECUTION;
+  SHORTFIN_THROW_IF_ERROR(iree_vm_context_create_with_modules(
+      system.vm_instance(), flags, all_modules.size(), all_modules.data(),
+      system.host_allocator(), context.for_output()));
+
+  return Program(std::move(scope), std::move(context));
+}
+
 std::optional<ProgramFunction> Program::LookupFunction(std::string_view name) {
   // By convention, we currently name our coarse-fences function variants
   // as ending in "$async". These are the ones we want but it is inconvenient.
@@ -149,7 +194,7 @@ std::optional<ProgramFunction> Program::LookupFunction(std::string_view name) {
       // TODO: Torch import is not setting the coarse-fences abi.model on
       // its functions. Get it from there instead of just assuming based on
       // name.
-      return ProgramFunction(vm_context_, f,
+      return ProgramFunction(scope_, vm_context_, f,
                              ProgramInvocationModel::COARSE_FENCES);
     } else if (!iree_status_is_not_found(status)) {
       SHORTFIN_THROW_IF_ERROR(status);
@@ -161,7 +206,7 @@ std::optional<ProgramFunction> Program::LookupFunction(std::string_view name) {
       vm_context_, to_iree_string_view(name), &f);
   if (iree_status_is_not_found(status)) return {};
   SHORTFIN_THROW_IF_ERROR(status);
-  return ProgramFunction(vm_context_, f);
+  return ProgramFunction(scope_, vm_context_, f);
 }
 
 ProgramFunction Program::LookupRequiredFunction(std::string_view name) {
