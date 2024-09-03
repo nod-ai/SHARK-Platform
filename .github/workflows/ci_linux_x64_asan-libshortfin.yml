@@ -27,13 +27,15 @@ env:
   CACHE_DEPS_VER: 1
   IREE_SOURCE_DIR: ${{ github.workspace }}/iree
   LIBSHORTFIN_DIR: ${{ github.workspace }}/libshortfin/
-  # TODO(#151): Don't ignore ODR violations
-  ASAN_OPTIONS: detect_odr_violation=0
 
 jobs:
   setup-python-asan:
     name: Setup Python ASan
     runs-on: ubuntu-24.04
+    env:
+      # The Python build process leaks. Here we just disable leak checking vs
+      # being more precise.
+      ASAN_OPTIONS: detect_leaks=0
 
     steps:
     - name: Cache Python ASan
@@ -73,6 +75,9 @@ jobs:
     name: Build and test libshortfin
     needs: [setup-python-asan]
     runs-on: ubuntu-24.04
+    env:
+      # TODO(#151): Don't ignore ODR violations
+      ASAN_OPTIONS: detect_odr_violation=0
     steps:
     - name: Install dependencies
       run: |
