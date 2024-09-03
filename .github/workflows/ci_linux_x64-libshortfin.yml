@@ -122,6 +122,6 @@ jobs:
           -DSHORTFIN_BUILD_PYTHON_BINDINGS=ON \
           -DSHORTFIN_HAVE_AMDGPU=OFF \
           -DSHORTFIN_BUILD_STATIC=ON \
-          -DSHORTFIN_BUILD_DYNAMIC=ON
+          -DSHORTFIN_BUILD_DYNAMIC=ON \
           ..
         cmake --build . --target all
