@@ -1,1 +1,1 @@
-leak:PyModule_ExecDef
+leak:PyUnicode_New
