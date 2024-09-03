@@ -23,16 +23,19 @@ env:
   PYENV_ROOT: ${{ github.workspace }}/pyenv
   PYENV_REF: 9ecd803bffaffb949fbdd8c70cb086227f6a3202 # v2.4.10
   PYTHON_VER: 3.12.3
-  CACHE_ASAN_VER: 1
+  CACHE_ASAN_VER: 2
   CACHE_DEPS_VER: 1
   IREE_SOURCE_DIR: ${{ github.workspace }}/iree
   LIBSHORTFIN_DIR: ${{ github.workspace }}/libshortfin/
-
 
 jobs:
   setup-python-asan:
     name: Setup Python ASan
     runs-on: ubuntu-24.04
+    env:
+      # The Python build process leaks. Here we just disable leak checking vs
+      # being more precise.
+      ASAN_OPTIONS: detect_leaks=0
 
     steps:
     - name: Cache Python ASan
@@ -64,15 +67,18 @@ jobs:
         cd ${{ env.PYENV_ROOT }}
         src/configure && make -C src
         export PATH=${{ env.PYENV_ROOT }}/bin:$PATH && eval "$(pyenv init -)"
-        CC=clang-18 CXX=clang++-18 LDFLAGS="-lstdc++" PYTHON_CONFIGURE_OPTS="--with-address-sanitizer" pyenv install -v -g ${{ env.PYTHON_VER }}
-        pyenv global ${{ env.PYTHON_VER }}-debug
+        CC=clang-18 CXX=clang++-18 LDFLAGS="-lstdc++" PYTHON_CONFIGURE_OPTS="--with-address-sanitizer" pyenv install -v ${{ env.PYTHON_VER }}
+        pyenv global ${{ env.PYTHON_VER }}
 
 
   build-and-test:
     name: Build and test libshortfin
     needs: [setup-python-asan]
     runs-on: ubuntu-24.04
-
+    env:
+      # TODO(#151): Don't ignore ODR violations
+      ASAN_OPTIONS: detect_odr_violation=0
+      LSAN_OPTIONS: suppressions=${{ github.workspace }}/libshortfin/build_tools/python_lsan_suppressions.txt
     steps:
     - name: Install dependencies
       run: |
@@ -135,9 +141,6 @@ jobs:
         key: ${{ steps.cache-python-deps-restore.outputs.cache-primary-key }}
 
     - name: Build libshortfin
-      env:
-        # TODO(#151): Don't ignore ODR violations
-        ASAN_OPTIONS=detect_odr_violation: 0
       run: |
         eval "$(pyenv init -)"
         mkdir ${{ env.LIBSHORTFIN_DIR }}/build
@@ -168,4 +171,4 @@ jobs:
       run: |
         eval "$(pyenv init -)"
         cd ${{ env.LIBSHORTFIN_DIR }}
-        pytest -m "not requires_amd_gpu"
+        pytest -m "not requires_amd_gpu" -s

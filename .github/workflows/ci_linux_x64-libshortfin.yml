@@ -94,6 +94,7 @@ jobs:
           -DCMAKE_C_COMPILER=clang-18 \
           -DCMAKE_CXX_COMPILER=clang++-18 \
           -DCMAKE_LINKER_TYPE=LLD \
+          -DSHORTFIN_BUNDLE_DEPS=ON \
           -DCMAKE_PREFIX_PATH=${{ env.IREE_REPO_DIR }}/build/lib/cmake/IREE \
           -DSHORTFIN_BUILD_PYTHON_BINDINGS=ON \
           ..
@@ -111,6 +112,8 @@ jobs:
       run: |
         mkdir ${{ env.LIBSHORTFIN_DIR }}/build-host-only
         cd ${{ env.LIBSHORTFIN_DIR }}/build-host-only
+        # In this configuration, also build static+dynamic in order to verify
+        # that path structurally works.
         cmake -GNinja \
           -DCMAKE_C_COMPILER=clang-18 \
           -DCMAKE_CXX_COMPILER=clang++-18 \
@@ -118,5 +121,7 @@ jobs:
           -DCMAKE_PREFIX_PATH=${{ env.IREE_REPO_DIR }}/build/lib/cmake/IREE \
           -DSHORTFIN_BUILD_PYTHON_BINDINGS=ON \
           -DSHORTFIN_HAVE_AMDGPU=OFF \
+          -DSHORTFIN_BUILD_STATIC=ON \
+          -DSHORTFIN_BUILD_DYNAMIC=ON \
           ..
         cmake --build . --target all
