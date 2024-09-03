@@ -77,6 +77,12 @@ if(SHORTFIN_BUNDLE_DEPS)
     GIT_TAG        e69e5f977d458f2650bb346dadf2ad30c5320281 # 10.2.1 (sync with spdlog)
   )
 
+  FetchContent_Declare(
+    nanobind
+    GIT_REPOSITORY https://github.com/wjakob/nanobind.git
+    GIT_TAG        9641bb7151f04120013b812789b3ebdfa7e7324f # 2.1.0
+  )
+
   ## spdlog
   # We build fmt from source instead, because we also use fmt.
   set(SPDLOG_FMT_EXTERNAL ON)
@@ -100,7 +106,7 @@ if(SHORTFIN_BUNDLE_DEPS)
     GIT_TAG        3634f2ded19e0cf38208c8b86cea9e1d7c8e397d # v0.25.0
   )
 
-  FetchContent_MakeAvailable(fmt spdlog xtl xtensor)
+  FetchContent_MakeAvailable(fmt nanobind spdlog xtl xtensor)
 else()
   find_package(spdlog)
   find_package(xtensor)
