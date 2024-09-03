@@ -1,4 +1,4 @@
-nanobind==2.0.0
+nanobind==2.1.0
 pytest
 requests
 fastapi
