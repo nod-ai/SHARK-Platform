@@ -85,6 +85,7 @@ jobs:
       run: |
         pip install nanobind
         pip install -r ${{ env.LIBSHORTFIN_DIR }}/requirements-tests.txt
+        pip freeze
 
     - name: Build libshortfin (full)
       run: |

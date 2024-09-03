@@ -124,6 +124,7 @@ jobs:
       run: |
         eval "$(pyenv init -)"
         pip install -r ${{ env.LIBSHORTFIN_DIR }}/requirements-tests.txt
+        pip freeze
 
     - name: Save Python dependencies cache
       if: steps.cache-python-deps-restore.outputs.cache-hit != 'true'
