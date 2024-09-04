@@ -96,6 +96,7 @@ jobs:
         repository: iree-org/iree
         path: ${{ env.IREE_SOURCE_DIR }}
         submodules: false
+        ref: candidate-20240904.1006
 
     - name: Initalize IREE submodules
       run : |
@@ -130,6 +131,7 @@ jobs:
       run: |
         eval "$(pyenv init -)"
         pip install -r ${{ env.LIBSHORTFIN_DIR }}/requirements-tests.txt
+        pip install -r ${{ env.LIBSHORTFIN_DIR }}/requirements-iree-compiler.txt
         pip freeze
 
     - name: Save Python dependencies cache
