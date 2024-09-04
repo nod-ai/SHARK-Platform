@@ -20,6 +20,17 @@ template class InlinedDims<iree_hal_dim_t>;
 // device_array
 // -------------------------------------------------------------------------- //
 
+device_array::device_array(class storage storage,
+                           std::span<const Dims::value_type> shape, DType dtype)
+    : base_array(shape, dtype), storage_(std::move(storage)) {
+  auto needed_size = this->dtype().compute_dense_nd_size(this->shape());
+  if (storage_.byte_length() < needed_size) {
+    throw std::invalid_argument(
+        fmt::format("Array storage requires at least {} bytes but has only {}",
+                    needed_size, storage_.byte_length()));
+  }
+}
+
 const mapping device_array::data() const { return storage_.map_read(); }
 
 mapping device_array::data() { return storage_.map_read(); }

@@ -251,9 +251,13 @@ py::object RunInForeground(std::shared_ptr<Refs> refs, local::System &self,
 
   local::Worker &worker = self.init_worker();
   py::object result = py::none();
+  py::object py_exception = py::none();
   auto done_callback = [&](py::handle future) {
     worker.Kill();
-    result = future.attr("result")();
+    py_exception = future.attr("exception")();
+    if (py_exception.is_none()) {
+      result = future.attr("result")();
+    }
   };
   worker.CallThreadsafe([&]() {
     // Run within the worker we are about to donate to.
@@ -293,12 +297,47 @@ py::object RunInForeground(std::shared_ptr<Refs> refs, local::System &self,
   }
 
   self.Shutdown();
+
+  if (!py_exception.is_none()) {
+    // We got this exception from a future/user code, which could have done
+    // something nefarious. So type check it.
+    if (PyObject_IsInstance(py_exception.ptr(), PyExc_Exception)) {
+      PyErr_SetObject(py_exception.type().ptr(), py_exception.ptr());
+    } else {
+      PyErr_SetObject(PyExc_RuntimeError, py_exception.ptr());
+    }
+    throw py::python_error();
+  }
   return result;
 }
 
 }  // namespace
 
 NB_MODULE(lib, m) {
+  py::register_exception_translator(
+      [](const std::exception_ptr &p, void * /*unused*/) {
+        try {
+          std::rethrow_exception(p);
+        } catch (shortfin::iree::error &e) {
+          PyObject *exc_type;
+          switch (e.code()) {
+            case IREE_STATUS_INVALID_ARGUMENT:
+            case IREE_STATUS_OUT_OF_RANGE:
+              exc_type = PyExc_ValueError;
+              break;
+            case IREE_STATUS_FAILED_PRECONDITION:
+              exc_type = PyExc_AssertionError;
+              break;
+            case IREE_STATUS_UNIMPLEMENTED:
+              exc_type = PyExc_NotImplementedError;
+              break;
+            default:
+              exc_type = PyExc_RuntimeError;
+          }
+          PyErr_SetString(PyExc_ValueError, e.what());
+        }
+      });
+
   py::class_<iree::vm_opaque_ref>(m, "_OpaqueVmRef");
   auto local_m = m.def_submodule("local");
   BindLocal(local_m);

@@ -82,7 +82,9 @@ void SHORTFIN_API LogLiveRefs() {
 }  // namespace detail
 
 error::error(std::string message, iree_status_t failing_status)
-    : message_(std::move(message)), failing_status_(failing_status) {
+    : code_(iree_status_code(failing_status)),
+      message_(std::move(message)),
+      failing_status_(failing_status) {
   message_.append(": ");
 }
 error::error(iree_status_t failing_status) : failing_status_(failing_status) {}

@@ -192,6 +192,7 @@ void BindArray(py::module_ &m) {
                         src_info.view().len);
           },
           DOCSTRING_STORAGE_DATA)
+      .def(py::self == py::self)
       .def("__repr__", &storage::to_s);
 
   // mapping
@@ -209,7 +210,7 @@ void BindArray(py::module_ &m) {
     int operator()(mapping &self, Py_buffer *view, int flags) {
       view->buf = self.data();
       view->len = self.size();
-      view->readonly = self.writable();
+      view->readonly = !self.writable();
       view->itemsize = 1;
       view->format = (char *)"B";  // Byte
       view->ndim = 1;
@@ -285,7 +286,12 @@ void BindArray(py::module_ &m) {
            DOCSTRING_ARRAY_COPY_FROM)
       .def("copy_to", &device_array::copy_to, py::arg("dest_array"),
            DOCSTRING_ARRAY_COPY_TO)
-      .def("__repr__", &device_array::to_s);
+      .def("__repr__", &device_array::to_s)
+      .def("__str__", [](device_array &self) -> std::string {
+        auto contents = self.contents_to_s();
+        if (!contents) return "<<unmappable>>";
+        return *contents;
+      });
 }
 
 }  // namespace shortfin::python
