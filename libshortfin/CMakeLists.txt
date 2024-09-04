@@ -1,4 +1,4 @@
-# Copyright 2024 Advanced Micro Devices, Inc
+# Copyright 2024 Advanced Micro Devices, Inc.
 #
 # Licensed under the Apache License v2.0 with LLVM Exceptions. See
 # https://llvm.org/LICENSE.txt for license information. SPDX-License-Identifier:
@@ -18,6 +18,8 @@ project(
   VERSION 0.9
   LANGUAGES C CXX)
 
+include(CMakeDependentOption)
+
 set(SOVERSION 1)
 
 set(CMAKE_C_STANDARD 11)
@@ -34,9 +36,25 @@ endif()
 # build options
 option(SHORTFIN_BUILD_PYTHON_BINDINGS "Builds Python Bindings" OFF)
 option(SHORTFIN_BUILD_TESTS "Builds C++ tests" ON)
-option(SHORTFIN_BUNDLE_DEPS "Download dependencies instead of using system libraries" OFF)
+option(SHORTFIN_BUNDLE_DEPS "Download dependencies instead of using system libraries" ON)
 
 set(SHORTFIN_IREE_SOURCE_DIR "" CACHE FILEPATH "Path to IREE source")
+
+# Options for building static or dynamic libraries.
+option(SHORTFIN_BUILD_STATIC "Builds static libraries" OFF)
+option(SHORTFIN_BUILD_DYNAMIC "Builds dynamic libraries" ON)
+cmake_dependent_option(SHORTFIN_LINK_DYNAMIC "Links internal binaries against static libshortfin.a" ON "SHORTFIN_BUILD_DYNAMIC" OFF)
+if(NOT SHORTFIN_BUILD_STATIC AND NOT SHORTFIN_BUILD_DYNAMIC)
+  message(FATAL_ERROR "One of SHORTFIN_BUILD_STATIC or SHORTFIN_BUILD_DYNAMIC must be ON")
+endif()
+message(STATUS "Shortfin build static = ${SHORTFIN_BUILD_STATIC}, dynamic = ${SHORTFIN_BUILD_DYNAMIC}")
+if(SHORTFIN_LINK_DYNAMIC)
+  message(STATUS "Dynamic linking to shortfin")
+  set(SHORTFIN_LINK_LIBRARY_NAME "shortfin")
+else()
+  message(STATUS "Static linking to shortfin-static")
+  set(SHORTFIN_LINK_LIBRARY_NAME "shortfin-static")
+endif()
 
 # Enabling ASAN. Note that this will work best if building in a completely
 # bundled fashion and with an ASAN rigged CPython. Otherwise, various LD_PRELOAD
@@ -112,7 +130,7 @@ if (NOT SHORTFIN_IREE_SOURCE_DIR AND SHORTFIN_BUNDLE_DEPS)
   FetchContent_Declare(
     iree
     GIT_REPOSITORY https://github.com/iree-org/iree.git
-    GIT_TAG candidate-20240821.992
+    GIT_TAG candidate-20240904.1006
     # TODO: We shouldn't have to pull googletest when we are not building tests.
     #       This needs to be fixed with IREE.
     GIT_SUBMODULES "third_party/benchmark third_party/cpuinfo third_party/flatcc third_party/hip-build-deps third_party/googletest"

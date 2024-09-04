@@ -1,4 +1,4 @@
-// Copyright 2024 Advanced Micro Devices, Inc
+// Copyright 2024 Advanced Micro Devices, Inc.
 //
 // Licensed under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -79,6 +79,7 @@ class SHORTFIN_API Worker {
 
   const Options &options() const { return options_; }
   const std::string_view name() const { return options_.name; }
+  iree_loop_t loop() { return loop_; }
   std::string to_s();
 
   // Gets the Worker that is active for the current thread or nullptr if none.

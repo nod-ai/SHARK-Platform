@@ -1,4 +1,4 @@
-// Copyright 2024 Advanced Micro Devices, Inc
+// Copyright 2024 Advanced Micro Devices, Inc.
 //
 // Licensed under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -16,6 +16,7 @@
 #include "shortfin/array/dtype.h"
 #include "shortfin/array/storage.h"
 #include "shortfin/array/xtensor_bridge.h"
+#include "shortfin/local/program_interfaces.h"
 #include "shortfin/support/api.h"
 
 namespace shortfin::array {
@@ -23,7 +24,8 @@ namespace shortfin::array {
 // Either a host or device nd-array view.
 class SHORTFIN_API base_array {
  public:
-  base_array(std::span<const size_t> shape, DType dtype) : dtype_(dtype) {
+  base_array(std::span<const Dims::value_type> shape, DType dtype)
+      : dtype_(dtype) {
     set_shape(shape);
   }
   // Need to explicitly define copy/move constructors even though this is
@@ -38,9 +40,9 @@ class SHORTFIN_API base_array {
   DType dtype() const { return dtype_; }
 
   // Access shape.
-  void set_shape(std::span<const size_t> shape) { shape_.set(shape); }
-  std::span<const size_t> shape() const { return shape_.span(); }
-  std::span<size_t> mutable_shape() { return shape_.span(); }
+  void set_shape(std::span<const Dims::value_type> shape) { shape_.set(shape); }
+  std::span<const Dims::value_type> shape() const { return shape_.span(); }
+  std::span<Dims::value_type> mutable_shape() { return shape_.span(); }
 
   // Sometimes we need to access the raw shape container (i.e. for adapters,
   // etc).
@@ -54,35 +56,54 @@ class SHORTFIN_API base_array {
 
 class SHORTFIN_API device_array
     : public base_array,
-      public poly_xt_mixin<device_array, class mapping> {
+      public poly_xt_mixin<device_array, class mapping>,
+      public local::ProgramInvocationMarshalable {
  public:
-  device_array(class storage storage, std::span<const size_t> shape,
-               DType dtype)
-      : base_array(shape, dtype), storage_(std::move(storage)) {}
+  device_array(class storage storage, std::span<const Dims::value_type> shape,
+               DType dtype);
 
   class storage &storage() { return storage_; }
   local::ScopedDevice &device() { return storage_.device(); }
 
   // Allocate an array on the device.
   static device_array for_device(local::ScopedDevice &device,
-                                 std::span<const size_t> shape, DType dtype) {
+                                 std::span<const Dims::value_type> shape,
+                                 DType dtype) {
     return device_array(
-        storage::AllocateDevice(device, dtype.compute_dense_nd_size(shape)),
+        storage::allocate_device(device, dtype.compute_dense_nd_size(shape)),
         shape, dtype);
   }
 
   // Allocates a host array that is registered by the device. This can include
   // arrays that are visible from different combinations of host/device.
   static device_array for_host(local::ScopedDevice &device,
-                               std::span<const size_t> shape, DType dtype) {
+                               std::span<const Dims::value_type> shape,
+                               DType dtype) {
     return device_array(
-        storage::AllocateHost(device, dtype.compute_dense_nd_size(shape)),
+        storage::allocate_host(device, dtype.compute_dense_nd_size(shape)),
         shape, dtype);
   }
 
   // Allocates a host array for transfer to/from this array.
   device_array for_transfer() {
     return for_host(storage().device(), shape(), dtype());
+  }
+
+  // Enqueues a fill of the storage with an arbitrary pattern of the given
+  // size. The pattern size must be 1, 2, or 4. Equivalent to calling the same
+  // on the backing storage.
+  void fill(const void *pattern, iree_host_size_t pattern_length) {
+    storage_.fill(pattern, pattern_length);
+  }
+
+  // Performs either a d2h, h2d or d2d transfer from a source storage to this
+  // storage. Equivalent to calling the same on the backing storage.
+  void copy_from(device_array &source_array) {
+    storage_.copy_from(source_array.storage_);
+  }
+  // Inverse of copy_from.
+  void copy_to(device_array &dest_array) {
+    dest_array.storage_.copy_from(storage_);
   }
 
   // Untyped access to the backing data. The array must be mappable. Specific
@@ -123,6 +144,15 @@ class SHORTFIN_API device_array
 
  protected:
   class storage storage_;
+
+ private:
+  // ProgramInvocationMarshalable implementation.
+  void AddAsInvocationArgument(local::ProgramInvocation *inv,
+                               local::ProgramResourceBarrier barrier) override;
+  static device_array CreateFromInvocationResultRef(
+      local::ProgramInvocation *inv, iree::vm_opaque_ref ref);
+  static iree_vm_ref_type_t invocation_marshalable_type();
+  friend class shortfin::local::ProgramInvocationMarshalableFactory;
 };
 
 }  // namespace shortfin::array

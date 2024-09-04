@@ -1,4 +1,4 @@
-// Copyright 2024 Advanced Micro Devices, Inc
+// Copyright 2024 Advanced Micro Devices, Inc.
 //
 // Licensed under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -121,9 +121,9 @@ class SHORTFIN_API Message {
   // sized field that the allocator can use at it sees fit. Both fields
   // are managed within a lock_ scope and are optimized for single threaded
   // access and cross-thread transfers with coarse references.
+  mutable iree::slim_mutex lock_;
   mutable intptr_t ref_data_ = 1;
   mutable detail::MessageRefOwner owner_;
-  mutable iree::slim_mutex lock_;
   friend struct detail::MessageRefOwner;
 };
 

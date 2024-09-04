@@ -1,4 +1,4 @@
-// Copyright 2024 Advanced Micro Devices, Inc
+// Copyright 2024 Advanced Micro Devices, Inc.
 //
 // Licensed under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -9,6 +9,7 @@
 
 #include <string_view>
 
+#include "shortfin/local/program_interfaces.h"
 #include "shortfin/local/scope.h"
 #include "shortfin/support/api.h"
 
@@ -70,7 +71,7 @@ class SHORTFIN_API mapping {
 };
 
 // Array storage backed by an IREE buffer of some form.
-class SHORTFIN_API storage {
+class SHORTFIN_API storage : public local::ProgramInvocationMarshalable {
  public:
   ~storage();
   local::ScopedDevice &device() { return device_; }
@@ -78,32 +79,35 @@ class SHORTFIN_API storage {
   const local::ScopedDevice &device() const { return device_; }
   local::Scope &scope() const { return device_.scope(); }
 
+  static storage import_buffer(local::ScopedDevice &device,
+                               iree::hal_buffer_ptr buffer);
+
   // Allocates device storage, compatible with the given device affinity.
   // By default, this will be IREE_HAL_MEMORY_TYPE_OPTIMAL_FOR_DEVICE.
-  static storage AllocateDevice(local::ScopedDevice &device,
-                                iree_device_size_t allocation_size);
+  static storage allocate_device(local::ScopedDevice &device,
+                                 iree_device_size_t allocation_size);
 
   // Allocates host storage, compatible with the given device affinity.
   // By default, if there are any affinity bits set in the device, then
   // the storage will be device visible and have permitted usage for
   // transfers. This default policy can be overriden based on device defaults
   // or explicit options.
-  static storage AllocateHost(local::ScopedDevice &device,
-                              iree_device_size_t allocation_size);
+  static storage allocate_host(local::ScopedDevice &device,
+                               iree_device_size_t allocation_size);
 
   // Creates a subspan view of the current storage given a byte offset and
   // length. The returned storage shares the underlying allocation and
   // scheduling control block.
-  storage Subspan(iree_device_size_t byte_offset,
+  storage subspan(iree_device_size_t byte_offset,
                   iree_device_size_t byte_length);
 
   // Enqueues a fill of the storage with an arbitrary pattern of the given
   // size. The pattern size must be 1, 2, or 4.
-  void Fill(const void *pattern, iree_host_size_t pattern_length);
+  void fill(const void *pattern, iree_host_size_t pattern_length);
 
   // Performs either a d2h, h2d or d2d transfer from a source storage to this
   // storage.
-  void CopyFrom(storage &source_storage);
+  void copy_from(storage &source_storage);
 
   iree_device_size_t byte_length() const {
     return iree_hal_buffer_byte_length(buffer_.get());
@@ -124,52 +128,80 @@ class SHORTFIN_API storage {
   bool is_mappable_for_read_write() const;
 
   // Maps the memory for access from a host pointer using a scoped mapping.
-  void MapExplicit(mapping &mapping, iree_hal_memory_access_t access);
+  void map_explicit(mapping &mapping, iree_hal_memory_access_t access);
 
   // Maps the memory for read/write access, preserving any contents.
-  mapping MapReadWrite() {
+  mapping map_read_write() {
     mapping m;
-    MapExplicit(m, IREE_HAL_MEMORY_ACCESS_READ | IREE_HAL_MEMORY_ACCESS_WRITE);
+    map_explicit(m, IREE_HAL_MEMORY_ACCESS_READ | IREE_HAL_MEMORY_ACCESS_WRITE);
     return m;
   }
 
   // Maps the memory for discard write. This is used if populating an initial
   // buffer.
-  mapping MapWriteDiscard() {
+  mapping map_write_discard() {
     mapping m;
-    MapExplicit(m, IREE_HAL_MEMORY_ACCESS_DISCARD_WRITE);
+    map_explicit(m, IREE_HAL_MEMORY_ACCESS_DISCARD_WRITE);
     return m;
   }
 
   // Maps the memory for read-only access.
-  mapping MapRead() {
+  mapping map_read() {
     mapping m;
-    MapExplicit(m, IREE_HAL_MEMORY_ACCESS_READ);
+    map_explicit(m, IREE_HAL_MEMORY_ACCESS_READ);
     return m;
   }
 
-  const mapping MapRead() const {
+  const mapping map_read() const {
     mapping m;
-    const_cast<storage *>(this)->MapExplicit(m, IREE_HAL_MEMORY_ACCESS_READ);
+    const_cast<storage *>(this)->map_explicit(m, IREE_HAL_MEMORY_ACCESS_READ);
     return m;
   }
 
   std::string to_s() const;
+
+  bool operator==(const storage &other) const {
+    return other.buffer_.get() == buffer_.get();
+  }
 
   // Access raw buffer. This must not be retained apart from the storage for
   // any length of time that may extend its lifetime (as the storage keeps
   // underlying device references alive as needed).
   operator iree_hal_buffer_t *() { return buffer_; }
 
+  iree_allocator_t host_allocator() {
+    return timeline_resource_->host_allocator();
+  }
+
  private:
   storage(local::ScopedDevice device, iree::hal_buffer_ptr buffer,
           local::detail::TimelineResource::Ref timeline_resource);
+  // ProgramInvocationMarshalable implementation.
+  void AddAsInvocationArgument(local::ProgramInvocation *inv,
+                               local::ProgramResourceBarrier barrier) override;
+  static storage CreateFromInvocationResultRef(local::ProgramInvocation *inv,
+                                               iree::vm_opaque_ref ref);
+  static iree_vm_ref_type_t invocation_marshalable_type();
+
+  // Adds any necessary wait barriers to the invocation on behalf of this
+  // storage.
+  void AddInvocationArgBarrier(local::ProgramInvocation *inv,
+                               local::ProgramResourceBarrier barrier);
+
+  // Imports a raw hal buffer from an invocation as a storage, attaching any
+  // needed barriers.
+  static storage ImportInvocationResultStorage(local::ProgramInvocation *inv,
+                                               iree::hal_buffer_ptr buffer);
+
   // The timeline resource holds the back reference to the owning scope,
   // which keeps all devices alive. Buffers must be destroyed before devices,
   // so this must be declared first.
   local::detail::TimelineResource::Ref timeline_resource_;
   iree::hal_buffer_ptr buffer_;
   local::ScopedDevice device_;
+
+  friend class shortfin::local::ProgramInvocationMarshalableFactory;
+  friend class device_array;
 };
 
 // Wraps an untyped mapping, providing typed access.

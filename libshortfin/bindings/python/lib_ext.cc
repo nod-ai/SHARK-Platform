@@ -1,4 +1,4 @@
-// Copyright 2024 Advanced Micro Devices, Inc
+// Copyright 2024 Advanced Micro Devices, Inc.
 //
 // Licensed under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -7,6 +7,8 @@
 #include "./lib_ext.h"
 
 #include "./utils.h"
+#include "shortfin/array/array.h"
+#include "shortfin/array/storage.h"
 #include "shortfin/local/async.h"
 #include "shortfin/local/messaging.h"
 #include "shortfin/local/process.h"
@@ -23,6 +25,13 @@
 namespace shortfin::python {
 
 namespace {
+
+static const char DOCSTRING_PROGRAM_FUNCTION_INVOCATION[] =
+    R"(Creates an invocation object targeting the function.
+
+This is a low-level interface for performing an invocation, and it should be
+used when precise, non-default control is needed.
+)";
 
 class Refs {
  public:
@@ -182,6 +191,59 @@ class PyProcess : public local::detail::BaseProcess {
   std::shared_ptr<Refs> refs_;
 };
 
+void PyAddProgramInvocationArg(py::capsule &inv_capsule, py::handle arg) {
+  // See if the object implements our marshaling protocol. If it does, then
+  // We invoke the marshaling method with the Invocation wrapped as a capsule
+  // and the ProgramResourceBarrier.
+  py::object marshaler = py::getattr(arg, "__sfinv_marshal__", py::none());
+  if (!marshaler.is_none()) {
+    marshaler(inv_capsule,
+              static_cast<int>(local::ProgramResourceBarrier::DEFAULT));
+    return;
+  }
+
+  throw std::invalid_argument(
+      fmt::format("Unsupported argument type {} in call to ProgramFunction",
+                  py::cast<std::string>(py::repr(arg.type()))));
+}
+
+local::ProgramInvocation::Future PyFunctionCall(local::ProgramFunction &self,
+                                                py::args args) {
+  auto inv = self.CreateInvocation();
+  py::capsule inv_capsule(inv.get());
+  for (py::handle arg : args) {
+    PyAddProgramInvocationArg(inv_capsule, arg);
+  }
+  return local::ProgramInvocation::Invoke(std::move(inv));
+}
+
+py::object PyRehydrateRef(local::ProgramInvocation *inv,
+                          iree::vm_opaque_ref ref) {
+  auto type = ref.get()->type;
+  // Note that these accessors are dangerous as they assert/abort if
+  // process-wide registration is not done properly. We assume here that
+  // since we got a ref out that the basics are set up soundly, but if actually
+  // doing this on user/dynamic types, we would want to be more defensive.
+  // TODO: Don't just do a linear scan if we have more than a couple.
+  // TODO: Find a reliable way to statically cache the type id.
+  if (local::ProgramInvocationMarshalableFactory::invocation_marshalable_type<
+          array::device_array>() == type) {
+    // device_array
+    return py::cast(local::ProgramInvocationMarshalableFactory::
+                        CreateFromInvocationResultRef<array::device_array>(
+                            inv, std::move(ref)));
+  } else if (local::ProgramInvocationMarshalableFactory::
+                 invocation_marshalable_type<array::storage>() == type) {
+    // storage
+    return py::cast(
+        local::ProgramInvocationMarshalableFactory::
+            CreateFromInvocationResultRef<array::storage>(inv, std::move(ref)));
+  }
+  throw std::invalid_argument(
+      fmt::format("Cannot marshal ref type {} to Python",
+                  to_string_view(iree_vm_ref_type_name(type))));
+}
+
 py::object RunInForeground(std::shared_ptr<Refs> refs, local::System &self,
                            py::object coro) {
   bool is_main_thread =
@@ -189,9 +251,13 @@ py::object RunInForeground(std::shared_ptr<Refs> refs, local::System &self,
 
   local::Worker &worker = self.init_worker();
   py::object result = py::none();
+  py::object py_exception = py::none();
   auto done_callback = [&](py::handle future) {
     worker.Kill();
-    result = future.attr("result")();
+    py_exception = future.attr("exception")();
+    if (py_exception.is_none()) {
+      result = future.attr("result")();
+    }
   };
   worker.CallThreadsafe([&]() {
     // Run within the worker we are about to donate to.
@@ -231,13 +297,48 @@ py::object RunInForeground(std::shared_ptr<Refs> refs, local::System &self,
   }
 
   self.Shutdown();
+
+  if (!py_exception.is_none()) {
+    // We got this exception from a future/user code, which could have done
+    // something nefarious. So type check it.
+    if (PyObject_IsInstance(py_exception.ptr(), PyExc_Exception)) {
+      PyErr_SetObject(py_exception.type().ptr(), py_exception.ptr());
+    } else {
+      PyErr_SetObject(PyExc_RuntimeError, py_exception.ptr());
+    }
+    throw py::python_error();
+  }
   return result;
 }
 
 }  // namespace
 
 NB_MODULE(lib, m) {
-  m.def("initialize", shortfin::GlobalInitialize);
+  py::register_exception_translator(
+      [](const std::exception_ptr &p, void * /*unused*/) {
+        try {
+          std::rethrow_exception(p);
+        } catch (shortfin::iree::error &e) {
+          PyObject *exc_type;
+          switch (e.code()) {
+            case IREE_STATUS_INVALID_ARGUMENT:
+            case IREE_STATUS_OUT_OF_RANGE:
+              exc_type = PyExc_ValueError;
+              break;
+            case IREE_STATUS_FAILED_PRECONDITION:
+              exc_type = PyExc_AssertionError;
+              break;
+            case IREE_STATUS_UNIMPLEMENTED:
+              exc_type = PyExc_NotImplementedError;
+              break;
+            default:
+              exc_type = PyExc_RuntimeError;
+          }
+          PyErr_SetString(PyExc_ValueError, e.what());
+        }
+      });
+
+  py::class_<iree::vm_opaque_ref>(m, "_OpaqueVmRef");
   auto local_m = m.def_submodule("local");
   BindLocal(local_m);
   BindHostSystem(local_m);
@@ -379,11 +480,79 @@ void BindLocal(py::module_ &m) {
       .def("__add__", &local::DeviceAffinity::AddDevice)
       .def("__repr__", &local::DeviceAffinity::to_s);
 
-  py::class_<local::Program>(m, "Program");
+  py::class_<local::Program>(m, "Program")
+      .def(py::new_([](std::span<const local::ProgramModule> modules,
+                       local::Scope &scope, bool trace_execution) {
+             local::Program::Options options;
+             options.trace_execution = trace_execution;
+             return local::Program::Load(scope.shared_from_this(), modules,
+                                         std::move(options));
+           }),
+           py::arg("modules"), py::arg("scope"), py::kw_only(),
+           py::arg("trace_execution") = false)
+      .def_prop_ro("exports", &local::Program::exports)
+      .def("lookup_function", &local::Program::LookupRequiredFunction)
+      .def("__getitem__", &local::Program::LookupRequiredFunction);
+  py::class_<local::ProgramFunction>(m, "ProgramFunction")
+      .def_prop_ro("name", &local::ProgramFunction::name)
+      .def_prop_ro("calling_convention",
+                   &local::ProgramFunction::calling_convention)
+      .def("invocation", &local::ProgramFunction::CreateInvocation,
+           DOCSTRING_PROGRAM_FUNCTION_INVOCATION)
+      .def("__call__", PyFunctionCall, py::arg("args"))
+      .def("__repr__", &local::ProgramFunction::to_s);
   py::class_<local::ProgramModule>(m, "ProgramModule")
+      .def_prop_ro("exports", &local::ProgramModule::exports)
       .def("__repr__", &local::ProgramModule::to_s)
       .def_static("load", &local::ProgramModule::Load, py::arg("system"),
                   py::arg("path"), py::arg("mmap") = true);
+  py::class_<local::ProgramInvocation::Ptr>(m, "ProgramInvocation")
+      .def("invoke",
+           [](local::ProgramInvocation::Ptr &self) {
+             if (!self) throw std::invalid_argument("Deallocated invocation");
+             return local::ProgramInvocation::Invoke(std::move(self));
+           })
+      .def("add_arg",
+           [](local::ProgramInvocation::Ptr &self, py::handle arg) {
+             if (!self) throw std::invalid_argument("Deallocated invocation");
+             py::capsule inv_capsule(self.get());
+             PyAddProgramInvocationArg(inv_capsule, arg);
+           })
+      .def("__iter__",
+           [](local::ProgramInvocation::Ptr &self) {
+             if (!self) throw std::invalid_argument("Deallocated invocation");
+             size_t size = self->results_size();
+             py::object tp = py::steal(PyTuple_New(size));
+             for (size_t i = 0; i < size; ++i) {
+               iree::vm_opaque_ref ref = self->result_ref(i);
+               if (!ref) {
+                 throw new std::logic_error(
+                     "Program returned unsupported Python type");
+               }
+               py::object item = PyRehydrateRef(self.get(), std::move(ref));
+               PyTuple_SET_ITEM(tp.ptr(), i, item.release().ptr());
+             }
+             return tp.attr("__iter__")();
+           })
+      .def(
+          "__len__",
+          [](local::ProgramInvocation::Ptr &self) {
+            if (!self) throw std::invalid_argument("Deallocated invocation");
+            return self->results_size();
+          },
+          "The number of results in this invocation")
+      .def(
+          "__getitem__",
+          [](local::ProgramInvocation::Ptr &self, iree_host_size_t i) {
+            if (!self) throw std::invalid_argument("Deallocated invocation");
+            iree::vm_opaque_ref ref = self->result_ref(i);
+            if (!ref) {
+              throw new std::logic_error(
+                  "Program returned unsupported Python type");
+            }
+            return PyRehydrateRef(self.get(), std::move(ref));
+          },
+          "Gets the i'th result");
 
   struct DevicesSet {
     DevicesSet(local::Scope &scope) : scope(scope) {}
@@ -414,16 +583,7 @@ void BindLocal(py::module_ &m) {
           [](local::Scope &self, py::args args) {
             return CastDeviceAffinity(self, args);
           },
-          py::rv_policy::reference_internal)
-      .def(
-          "load_unbound_program",
-          [](local::Scope &scope, std::span<const local::ProgramModule> modules,
-             bool trace_execution) {
-            local::Program::Options options;
-            options.trace_execution = trace_execution;
-            return scope.LoadUnboundProgram(modules, std::move(options));
-          },
-          py::arg("modules"), py::arg("trace_execution") = false);
+          py::rv_policy::reference_internal);
 
   py::class_<local::ScopedDevice>(m, "ScopedDevice")
       .def_prop_ro("scope", &local::ScopedDevice::scope,
@@ -696,6 +856,20 @@ void BindLocal(py::module_ &m) {
         return iter_ret;
       });
   py::class_<local::VoidFuture, local::Future>(m, "VoidFuture");
+  py::class_<local::ProgramInvocation::Future, local::Future>(
+      m, "ProgramInvocationFuture")
+      .def("result", [](local::ProgramInvocation::Future &self) {
+        local::ProgramInvocation::Ptr &result = self.result();
+        if (!result) return py::none();
+        // Sharp edge: ProgramInvocationFutures are read-once since we move the
+        // ProgramInvocation::Ptr out of the future here and transfer ownership
+        // to a Python object. There isn't a better way to do this without
+        // increasing overhead on this hot path or doing something more
+        // expensive in the C++ API: essentially, ProgramInvocations flow
+        // through the system precisely one way. As a low level facility, this
+        // is deemed acceptable.
+        return py::cast(std::move(result));
+      });
   py::class_<local::MessageFuture, local::Future>(m, "MessageFuture")
       .def("result", [](local::MessageFuture &self) {
         // Get a raw backing msg (without an increased refcount). When cast

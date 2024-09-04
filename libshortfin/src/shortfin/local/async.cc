@@ -1,4 +1,4 @@
-// Copyright 2024 Advanced Micro Devices, Inc
+// Copyright 2024 Advanced Micro Devices, Inc.
 //
 // Licensed under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -173,7 +173,7 @@ void Future::ThrowFailureWithLockHeld() {
   if (!state_->done_) {
     throw std::logic_error("Cannot get result from Future that is not done");
   }
-  SHORTFIN_THROW_IF_ERROR(state_->failure_status_);
+  SHORTFIN_THROW_IF_ERROR(state_->failure_status_.ConsumeStatus());
 }
 
 }  // namespace shortfin::local

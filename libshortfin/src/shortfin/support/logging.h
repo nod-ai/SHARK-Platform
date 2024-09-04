@@ -1,4 +1,4 @@
-// Copyright 2024 Advanced Micro Devices, Inc
+// Copyright 2024 Advanced Micro Devices, Inc.
 //
 // Licensed under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -11,6 +11,14 @@
 
 #if !defined(SHORTFIN_LOG_LIFETIMES)
 #define SHORTFIN_LOG_LIFETIMES 0
+#endif
+
+// Scheduler logging.
+#define SHORTFIN_SCHED_LOG_ENABLED 0
+#if SHORTFIN_SCHED_LOG_ENABLED
+#define SHORTFIN_SCHED_LOG(...) shortfin::logging::info("SCHED: " __VA_ARGS__)
+#else
+#define SHORTFIN_SCHED_LOG(...)
 #endif
 
 namespace shortfin::logging {
