@@ -60,8 +60,7 @@ class SHORTFIN_API device_array
       public local::ProgramInvocationMarshalable {
  public:
   device_array(class storage storage, std::span<const Dims::value_type> shape,
-               DType dtype)
-      : base_array(shape, dtype), storage_(std::move(storage)) {}
+               DType dtype);
 
   class storage &storage() { return storage_; }
   local::ScopedDevice &device() { return storage_.device(); }

@@ -160,6 +160,10 @@ class SHORTFIN_API storage : public local::ProgramInvocationMarshalable {
 
   std::string to_s() const;
 
+  bool operator==(const storage &other) const {
+    return other.buffer_.get() == buffer_.get();
+  }
+
   // Access raw buffer. This must not be retained apart from the storage for
   // any length of time that may extend its lifetime (as the storage keeps
   // underlying device references alive as needed).
