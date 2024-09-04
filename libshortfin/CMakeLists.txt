@@ -130,7 +130,7 @@ if (NOT SHORTFIN_IREE_SOURCE_DIR AND SHORTFIN_BUNDLE_DEPS)
   FetchContent_Declare(
     iree
     GIT_REPOSITORY https://github.com/iree-org/iree.git
-    GIT_TAG candidate-20240821.992
+    GIT_TAG candidate-20240904.1006
     # TODO: We shouldn't have to pull googletest when we are not building tests.
     #       This needs to be fixed with IREE.
     GIT_SUBMODULES "third_party/benchmark third_party/cpuinfo third_party/flatcc third_party/hip-build-deps third_party/googletest"

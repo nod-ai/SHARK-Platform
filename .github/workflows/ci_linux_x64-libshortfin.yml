@@ -46,6 +46,7 @@ jobs:
         repository: iree-org/iree
         path: ${{ env.IREE_REPO_DIR }}
         submodules: false
+        ref: candidate-20240904.1006
 
     - name: Initalize IREE submodules
       run : |
