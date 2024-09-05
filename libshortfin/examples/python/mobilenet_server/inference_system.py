@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2024 Advanced Micro Devices, Inc
+# Copyright 2024 Advanced Micro Devices, Inc.
 #
 # Licensed under the Apache License v2.0 with LLVM Exceptions.
 # See https://llvm.org/LICENSE.txt for license information.
@@ -24,7 +24,7 @@ class InferenceRequest(sf.Message):
 class InferenceProcess(sf.Process):
     def __init__(self, program, request_queue, **kwargs):
         super().__init__(**kwargs)
-        self.program = program
+        self.main_function = program["module.torch-jit-export"]
         self.request_reader = request_queue.reader()
         self.device = self.scope.device(0)
         self.device_input = sfnp.device_array(
@@ -41,14 +41,46 @@ class InferenceProcess(sf.Process):
             # support for. Generally, APIs on storage should be mirrored onto
             # the array.
             self.host_staging.storage.data = request.raw_image_data
-            print(self.host_staging)
-            self.device_input.storage.copy_from(self.host_staging.storage)
-            print(self.device_input)
+            print("host_staging =", self.host_staging)
+            self.device_input.copy_from(self.host_staging)
+
+            # Simple call. Note that the await here is merely awaiting the
+            # result being *available* (i.e. that the VM coroutine has
+            # completed) but does not indicate that the result is ready.
+            (result1,) = await self.main_function(self.device_input)
+            (result2,) = await self.main_function(self.device_input)
+
+            # TODO: Implement await on individual results. The accounting is
+            # there but currently we can only await on the device itself.
+            await self.device
+            print("Result 1:", result1)
+            print("Result 2:", result2)
+
+            # Explicit invocation object.
+            # inv = self.main_function.invocation(scope=self.scope)
+            # inv.add_arg(self.device_input)
+            # results = await inv.invoke()
+            # print("results:", results)
+
+            # Multiple invocations in parallel.
+            # all_results = await asyncio.gather(
+            #     self.main_function(self.device_input, scope=self.scope),
+            #     self.main_function(self.device_input, scope=self.scope),
+            #     self.main_function(self.device_input, scope=self.scope),
+            # )
+            # print("All results:", all_results)
+
+            # output = await self.scope.invoke(self.main_function, self.device_input)
+            # print("OUTPUT:", output)
+            # read_back = self.device_input.for_transfer()
+            # read_back.copy_from(self.device_input)
+            # await self.device
+            # print("read back =", read_back)
 
 
 class Main:
     def __init__(self, lsys: sf.System, home_dir: Path):
-        self.processes_per_worker = 1
+        self.processes_per_worker = 2
         self.lsys = lsys
         self.home_dir = home_dir
         self.request_queue = lsys.create_queue("request")
@@ -60,8 +92,8 @@ class Main:
         # Note that currently, program load is synchronous. But we do it
         # in a task so we can await it in the future and let program loads
         # overlap.
-        program = scope.load_unbound_program([self.program_module])
         for _ in range(self.processes_per_worker):
+            program = sf.Program([self.program_module], scope=scope)
             self.processes.append(
                 InferenceProcess(program, self.request_queue, scope=scope).launch()
             )

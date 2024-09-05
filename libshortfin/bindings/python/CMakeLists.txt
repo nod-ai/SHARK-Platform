@@ -1,4 +1,4 @@
-# Copyright 2024 Advanced Micro Devices, Inc
+# Copyright 2024 Advanced Micro Devices, Inc.
 #
 # Licensed under the Apache License v2.0 with LLVM Exceptions. See
 # https://llvm.org/LICENSE.txt for license information. SPDX-License-Identifier:
@@ -10,12 +10,13 @@
 # build. - _shortfin_tracing.lib: Native library with tracing enabled (TODO). -
 # Others.
 
-# Detect the installed nanobind package and import it into CMake
-execute_process(
-  COMMAND "${Python_EXECUTABLE}" -m nanobind --cmake_dir
-  OUTPUT_STRIP_TRAILING_WHITESPACE
-  OUTPUT_VARIABLE nanobind_ROOT)
-find_package(nanobind CONFIG REQUIRED)
+# nanobind
+FetchContent_Declare(
+  nanobind
+  GIT_REPOSITORY https://github.com/wjakob/nanobind.git
+  GIT_TAG        9641bb7151f04120013b812789b3ebdfa7e7324f # 2.1.0
+)
+FetchContent_MakeAvailable(nanobind)
 
 nanobind_add_module(shortfin_python_extension NB_STATIC LTO
   array_binding.cc
@@ -26,9 +27,7 @@ set_target_properties(shortfin_python_extension
                       PROPERTIES OUTPUT_NAME "_shortfin_default/lib")
 
 target_link_libraries(shortfin_python_extension
-  # TODO: This should be configurable as to whether we link to the static
-  # or dynamic version.
-  PRIVATE shortfin
+  PRIVATE ${SHORTFIN_LINK_LIBRARY_NAME}
 )
 
 nanobind_add_stub(

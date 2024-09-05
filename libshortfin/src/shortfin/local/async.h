@@ -1,4 +1,4 @@
-// Copyright 2024 Advanced Micro Devices, Inc
+// Copyright 2024 Advanced Micro Devices, Inc.
 //
 // Licensed under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -160,6 +160,16 @@ class SHORTFIN_API TypedFuture : public Future {
   ~TypedFuture() override = default;
   TypedFuture(const TypedFuture &other) : Future(other.state_) { Retain(); }
   TypedFuture &operator=(const TypedFuture &other) {
+    other.Retain();
+    Release();
+    state_ = other.state_;
+    return *this;
+  }
+
+  // Futures are non-nullable, so construct/assign from an rvalue reference
+  // is just a copy and does not clear the original.
+  TypedFuture(TypedFuture &&other) : Future(other.state_) { Retain(); }
+  TypedFuture &operator=(TypedFuture &&other) {
     other.Retain();
     Release();
     state_ = other.state_;
