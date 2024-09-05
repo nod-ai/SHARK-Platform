@@ -17,6 +17,7 @@ from .ffn_moe_block import FFNMOE
 
 __all__ = [
     "SparseMoeBlock",
+    "PreGatherMoeBlock",
 ]
 
 
@@ -109,6 +110,70 @@ class SparseMoeBlock(ThetaLayer):
             current_expert = current_expert.reshape(-1, feature_dim)
 
             moe_output.index_add_(0, token_idx, current_expert.to(ffn_input.dtype))
+        moe_output = moe_output.reshape(batch_size, sequence_length, feature_dim)
+
+        moe_output = self.layer_output_norm(moe_output)
+        return h + moe_output
+
+
+class PreGatherMoeBlock(ThetaLayer):
+    """
+    This implementation considers MoE operations as block-sparse
+    operations to support imbalanced token assignments to experts.
+    This enables the MoE to operate at a faster rate and in full capacity without any dropped tokens
+    (or reduced performance).
+    """
+
+    def __init__(
+        self,
+        theta: Theta,
+        expert_count: int,
+        expert_used_count: int,
+        rms_epsilon: float,
+    ):
+        super().__init__(theta)
+
+        # Add router gate
+        self.add_module("ffn_gate_inp", LinearLayer(theta("ffn_gate_inp")))
+
+        # Add FFN norm
+        self.add_module(
+            "ffn_norm", RMSNormLayer(theta("ffn_norm"), epsilon=rms_epsilon)
+        )
+
+        # Add FFN output norm
+        self.add_module(
+            "layer_output_norm",
+            RMSNormLayer(theta("layer_output_norm"), epsilon=rms_epsilon),
+        )
+
+        # Add expert_count x FFN
+        self.mix = PreGatherFFNMOE(theta)
+
+        self.expert_count = expert_count
+        self.expert_used_count = expert_used_count
+
+    def forward(
+        self,
+        h: torch.Tensor,
+    ):
+        ffn_input = self.ffn_norm(h)
+        batch_size, sequence_length, feature_dim = ffn_input.shape
+        ffn_input = ffn_input.view(-1, feature_dim)
+
+        # For each token, the router calculates the router weights for all experts
+        # router_logits: (batch_size * sequence_length, expert_count)
+        router_logits = self.ffn_gate_inp(ffn_input)
+        router_weights = F.softmax(router_logits, dim=1, dtype=torch.float)
+
+        # Select top k experts from router weights
+        router_weights, top_k_experts = torch.topk(
+            router_weights, self.expert_used_count, dim=-1
+        )
+        router_weights /= router_weights.sum(dim=-1, keepdim=True)
+        router_weights = router_weights.to(ffn_input.dtype)
+
+        moe_output = self.mix(ffn_input, top_k_experts)
         moe_output = moe_output.reshape(batch_size, sequence_length, feature_dim)
 
         moe_output = self.layer_output_norm(moe_output)

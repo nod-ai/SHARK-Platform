@@ -15,7 +15,50 @@ from ..types import Theta, DefaultPrimitiveTensor
 
 __all__ = [
     "FFNMOE",
+    "PreGatherFFNMOE",
 ]
+
+
+class PreGatherFFNMOE(ThetaLayer):
+    def __init__(
+        self,
+        theta: Theta,
+    ):
+
+        super().__init__(theta)
+
+        self.ffn_gate = theta.tensor("ffn_gate_exps", "weight")
+        self.ffn_up = theta.tensor("ffn_up_exps", "weight")
+        self.ffn_down = theta.tensor("ffn_down_exps", "weight")
+
+    def pre_matmul_gather(self, inputs, weights, experts):
+        inputs = inputs[:, :]
+        weights = weights[experts.reshape(-1), :, :]
+        matmul = torch.einsum("mk,mkn->mn", inputs, weights)
+        return matmul
+
+    def forward(
+        self,
+        h: torch.Tensor,
+        experts: torch.Tensor,
+    ):
+        ffn_gate = F.silu(self.pre_matmul_gather(h, self.ffn_gate, experts))
+        ffn_up = self.pre_matmul_gather(h, self.ffn_up, experts)
+        ffn_down = self.pre_matmul_gather(ffn_gate * ffn_up, self.ffn_down, experts)
+        return ffn_down
+
+
+def extract_ffn_layer(
+    merged_tensor: DefaultPrimitiveTensor, layer_name: str, expert_idx: int
+):
+    # fetches the block_idx from merged_tensor_name. e.g. blk.0.ffn_gate_exps.weight
+    expert_layer_name = (
+        f"blk.{merged_tensor.name.split('.')[1]}.{layer_name}.{expert_idx}.weight"
+    )
+    expert_tensor = DefaultPrimitiveTensor(
+        name=expert_layer_name, data=merged_tensor.as_torch()[expert_idx]
+    )
+    return expert_tensor
 
 
 class FFNMOE(ThetaLayer):
