@@ -68,7 +68,6 @@ class LinearLayer(ThetaLayer):
             x = q_input.quantize(x)
         elif qdq_input is not None:
             # TODO: probably need a way to only do q_input if exporting.
-            print("qdq input")
             x = qdq_input.quantize(x).unpack().dequant()
 
         y = ops.linear(x, weight, bias)
