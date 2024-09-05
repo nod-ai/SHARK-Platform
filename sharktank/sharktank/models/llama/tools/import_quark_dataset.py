@@ -319,6 +319,8 @@ def main(argv):
     # Convert hyperparams to gguf format
     updated_properties = convert_hf_hparams_to_gguf(ds.properties)
 
+    head_count = (updated_properties["llama.attention.head_count"],)
+
     updated_tensors: dict[str, InferenceTensor] = {}
     model_layers = [f"model.layers.{i}" for i in range(num_layers)]
 
@@ -333,7 +335,11 @@ def main(argv):
         for sub in sub_layers:
             layer_name = layer + "." + sub
             apply_per_layer_quant(
-                quant_theta, layer_name, updated_tensors, split_sizes=split_sizes
+                quant_theta,
+                layer_name,
+                updated_tensors,
+                n_head=head_count,
+                split_sizes=split_sizes,
             )
 
     # Update the non quantized weights (norm layers)
@@ -342,8 +348,6 @@ def main(argv):
             quant_theta,
             layer_idx,
             updated_tensors,
-            head_count=updated_properties["llama.attention.head_count"],
-            split_sizes=split_sizes,
         )
 
     # The stragglers
