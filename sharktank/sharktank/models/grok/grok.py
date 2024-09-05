@@ -29,7 +29,7 @@ __all__ = [
 
 @dataclass
 class GrokModelConfig:
-    hp: configs.GrokHParams
+    hp: configs.LlamaHParams
 
     # Block sequence stride for a paged KV cache. This must divide evenly
     # into the context length.
