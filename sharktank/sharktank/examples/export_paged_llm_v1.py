@@ -16,6 +16,7 @@ from sharktank.types import *
 
 # TODO: Should be using a base class with the protocol supported.
 from ..models.llama.llama import LlamaModelConfig, PagedLlamaModelV1
+from ..models.mixtral.mixtral import *
 
 
 def main():
@@ -52,7 +53,10 @@ def main():
     llama_config = LlamaModelConfig(hp)
     llama_config.static_tables = False  # Rely on the compiler for hoisting tables.
     llama_config.kv_cache_type = "direct" if args.bs == [1] else "paged"
-    model = PagedLlamaModelV1(dataset.root_theta, llama_config)
+    if llama_config.hp.expert_count:
+        model = PagedMixtralModelV1(dataset.root_theta, llama_config)
+    else:
+        model = PagedLlamaModelV1(dataset.root_theta, llama_config)
 
     def generate_params_json(hp, prefill_bs: list[int], decode_bs: list[int]):
         return {

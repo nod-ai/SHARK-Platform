@@ -17,6 +17,7 @@ from ..layers import *
 from ..types import *
 
 # TODO: Should be using a base class with the protocol supported.
+from ..models.mixtral.mixtral import *
 from ..models.llama.llama import *
 from ..utils.debugging import trace_tensor
 from ..utils.tokenizer import InferenceTokenizer, load_tokenizer
@@ -236,7 +237,11 @@ def main():
         activation_dtype=activation_dtype,
         attention_dtype=activation_dtype,
     )
-    model = PagedLlamaModelV1(dataset.root_theta, config)
+
+    if config.hp.expert_count:
+        model = PagedMixtralModelV1(dataset.root_theta, config)
+    else:
+        model = PagedLlamaModelV1(dataset.root_theta, config)
     if args.save_intermediates_path:
         from ..utils.patching import SaveModuleResultTensorsPatch
 
