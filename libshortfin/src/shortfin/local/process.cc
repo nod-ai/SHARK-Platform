@@ -1,4 +1,4 @@
-// Copyright 2024 Advanced Micro Devices, Inc
+// Copyright 2024 Advanced Micro Devices, Inc.
 //
 // Licensed under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -54,10 +54,7 @@ void detail::BaseProcess::Launch() {
   ScheduleOnWorker();
 }
 
-void detail::BaseProcess::ScheduleOnWorker() {
-  logging::info("ScheduleOnWorker()");
-  Terminate();
-}
+void detail::BaseProcess::ScheduleOnWorker() { Terminate(); }
 
 void detail::BaseProcess::Terminate() {
   int deallocate_pid;

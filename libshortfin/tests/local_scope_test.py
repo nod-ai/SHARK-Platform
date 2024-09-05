@@ -1,4 +1,4 @@
-# Copyright 2024 Advanced Micro Devices, Inc
+# Copyright 2024 Advanced Micro Devices, Inc.
 #
 # Licensed under the Apache License v2.0 with LLVM Exceptions.
 # See https://llvm.org/LICENSE.txt for license information.
@@ -13,7 +13,9 @@ from _shortfin import lib as sfl
 @pytest.fixture
 def lsys():
     sc = sfl.local.host.CPUSystemBuilder()
-    return sc.create_system()
+    ls = sc.create_system()
+    yield ls
+    ls.shutdown()
 
 
 @pytest.fixture

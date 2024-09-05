@@ -1,4 +1,4 @@
-// Copyright 2024 Advanced Micro Devices, Inc
+// Copyright 2024 Advanced Micro Devices, Inc.
 //
 // Licensed under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -29,6 +29,7 @@ struct iree_dummy_t {
 };
 
 struct dummy_ptr_helper {
+  static void steal(iree_dummy_t *obj) {}
   static void retain(iree_dummy_t *obj) { obj->retain_count++; }
   static void release(iree_dummy_t *obj) { obj->release_count++; }
 };

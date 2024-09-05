@@ -71,7 +71,14 @@ class LlamaAttentionBlock(ThetaLayer):
         xk = xk.view(bs, q_len, self.head_count_kv, self.head_dim)
         xv = xv.view(bs, q_len, self.head_count_kv, self.head_dim)
 
-        xq, xk = self.embedding(xq=xq, xk=xk, start_index=start_index)
+        # Fast path to start_index based embedding lookup if available.
+        # Falls back to a slower position based index lookup.
+        if start_index is not None:
+            xq, xk = embedding.forward(xq=xq, xk=xk, start_index=start_index)
+        else:
+            xq, xk = embedding.apply_batched_mask(
+                xq=xq, xk=xk, mask=embedding_batch_mask
+            )
 
         # Expand kv heads for GQA.
         gqa_n_rep = self.head_count // self.head_count_kv

@@ -1,4 +1,4 @@
-# Copyright 2024 Advanced Micro Devices, Inc
+# Copyright 2024 Advanced Micro Devices, Inc.
 #
 # Licensed under the Apache License v2.0 with LLVM Exceptions.
 # See https://llvm.org/LICENSE.txt for license information.
@@ -20,17 +20,33 @@ class RotaryEmbeddingLayer(BaseLayer):
         rope_dimension_count: int,
         rope_freq_base: float,
         max_seqlen: int,
+        rope_freq_base: Optional[float] = 10000.0,
         device: Optional[torch.device] = None,
         use_hf: bool = False,
+        static_tables: bool = True,
     ):
         super().__init__()
+        # Force static_tables until compiler limitations are solved.
+        # See https://github.com/nod-ai/sharktank/issues/156
+        static_tables = True
         self.device = device
+        self.rope_dimension_count = rope_dimension_count
+        self.max_seqlen = max_seqlen
         self.use_hf = use_hf
-        self._table = self._create_rotary_embed_table(
-            max_seqlen=max_seqlen,
-            dim=rope_dimension_count,
-            theta_value=rope_freq_base,
-        )
+        self.rope_freq_base = rope_freq_base
+        if static_tables:
+            self.register_buffer(
+                "static_rotary_embed_table", self._create_rotary_embed_table()
+            )
+        else:
+            self.static_rotary_embed_table = None
+
+    @property
+    def rotary_embed_table(self):
+        if self.static_rotary_embed_table is None:
+            return self._create_rotary_embed_table()
+        else:
+            return self.static_rotary_embed_table
 
     def forward(self, *, xq: torch.Tensor, xk: torch.Tensor, start_index: int):
         # xq_, xk_ shape: bs, sl, _, dim
@@ -82,7 +98,7 @@ class RotaryEmbeddingLayer(BaseLayer):
         _, sl, _, dim = xq_.shape
 
         # Offset the table based on starting position.
-        freqs_cis = self._table[start_index : start_index + sl, :]
+        freqs_cis = self.rotary_embed_table[start_index : start_index + sl, :]
         assert freqs_cis.shape[-1] == dim
         assert (
             freqs_cis.shape[0] >= sl
@@ -141,7 +157,7 @@ class RotaryEmbeddingLayer(BaseLayer):
         ) + start_positions.unsqueeze(1)
         # Broadcast lookup to [b, ...].
         self.trace_tensor("rope.positions_seq", positions_seq)
-        freqs_cis = self._table[positions_seq]
+        freqs_cis = self.rotary_embed_table[positions_seq]
 
         # Unsqueeze a unit dim for attention heads.
         broadcast_freqs_cis = freqs_cis.unsqueeze(2)
@@ -169,12 +185,11 @@ class RotaryEmbeddingLayer(BaseLayer):
 
     def _create_rotary_embed_table(
         self,
-        max_seqlen: int,
-        dim: int,
-        theta_value: float = 10000.0,
     ):
+        dim = self.rope_dimension_count
+        max_seqlen = self.max_seqlen
         freqs = 1.0 / (
-            theta_value
+            self.rope_freq_base
             ** (torch.arange(0, dim, 2, device=self.device)[: (dim // 2)].float() / dim)
         )
         t = torch.arange(max_seqlen, device=freqs.device)

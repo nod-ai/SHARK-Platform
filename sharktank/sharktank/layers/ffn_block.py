@@ -16,18 +16,16 @@ __all__ = [
     "FFN",
 ]
 
-
 class FFN(ThetaLayer):
     def __init__(
         self,
         theta: Theta,
-        expert_idx: Optional[int] = None,
     ):
         super().__init__(theta)
 
-        self.add_module("ffn_gate", LinearLayer(theta("ffn_gate", expert_idx)))
-        self.add_module("ffn_up", LinearLayer(theta("ffn_up", expert_idx)))
-        self.add_module("ffn_down", LinearLayer(theta("ffn_down", expert_idx)))
+        self.add_module("ffn_gate", LinearLayer(theta("ffn_gate")))
+        self.add_module("ffn_up", LinearLayer(theta("ffn_up")))
+        self.add_module("ffn_down", LinearLayer(theta("ffn_down")))
 
     def forward(
         self,

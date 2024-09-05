@@ -1,4 +1,4 @@
-# Copyright 2024 Advanced Micro Devices, Inc
+# Copyright 2024 Advanced Micro Devices, Inc.
 #
 # Licensed under the Apache License v2.0 with LLVM Exceptions.
 # See https://llvm.org/LICENSE.txt for license information.
@@ -37,7 +37,6 @@ complex128 = _sfl.array.complex128
 
 base_array = _sfl.array.base_array
 device_array = _sfl.array.device_array
-host_array = _sfl.array.host_array
 storage = _sfl.array.storage
 DType = _sfl.array.DType
 
@@ -73,7 +72,6 @@ __all__ = [
     # Classes.
     "base_array",
     "device_array",
-    "host_array",
     "storage",
     "DType",
 ]

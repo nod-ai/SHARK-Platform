@@ -1,4 +1,4 @@
-// Copyright 2024 Advanced Micro Devices, Inc
+// Copyright 2024 Advanced Micro Devices, Inc.
 //
 // Licensed under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "shortfin/local/device.h"
+#include "shortfin/local/messaging.h"
 #include "shortfin/local/worker.h"
 #include "shortfin/support/api.h"
 #include "shortfin/support/blocking_executor.h"
@@ -41,19 +42,45 @@ class SystemBuilder;
 // on some form of factory that constructs one to suit both the system being
 // executed on and any preferences on which resources should be accessible.
 //
-// As the root of the hierarchy and the owner of numerous ancillary resources,
-// we declare that System is always managed via a shared_ptr, as this
-// simplifies many aspects of system management.
+// Ownership
+// ---------
+// There are three levels of ownership, all rooted on the System:
+//   1. System: The System class, all drivers, devices, workers, and executors.
+//      There will only ever be one (or a small number if doing something multi
+//      tenant), and all owning references to the System are via
+//      `std::shared_ptr<System>`. Every object in the system must either be
+//      a managed child of the system or own a system reference.
+//   2. Scope: Binds any number of devices to a coherent schedule, rooted on
+//      a Worker. Scopes are independent of the system and there are generally
+//      as many as needed logical concurrency in the application. Each scope
+//      holds a system reference by way of a `std::shared_ptr<System>`. These
+//      are still heavy-weight objects mostly created at initialization time
+//      and are therefore managed held as a `std::shared_ptr<Scope>` by anything
+//      that depends on them.
+//   3. TimelineResource: Any resource in the system (i.e. buffer,
+//      synchronization, object, etc) will hold a unique TimelineResource. These
+//      are light-weight objects managed via intrusive reference counting by
+//      their contained `TimelineResource::Ref` class. Each `TimelineResource`
+//      maintains a `std::shared_ptr<Scope>` back reference to its owning
+//      scope.
+//
+// Leaf objects can have any lifetime that they wish, so long as they maintain
+// an appropriate ownership reference into the System hierarchy above. This
+// includes any application managed objects like arrays, storage, processes,
+// messages, queues, etc.
+//
+// Lifetime debug logging can be enabled via compiler defines:
+//   SHORTFIN_LOG_LIFETIMES=1 : Enables constructor/destructor and this pointer
+//     logging for the primary objects in the system hierarchy.
+//   SHORTFIN_IREE_LOG_RC=1 : Enables the application view of IREE object
+//     reference counting, showing steal/retain/release and the number of
+//     references the application holds for each object. Also will log any
+//     outstanding references when the System is deallocated.
 class SHORTFIN_API System : public std::enable_shared_from_this<System> {
  public:
   System(iree_allocator_t host_allocator);
   System(const System &) = delete;
   ~System();
-
-  // Sets a worker factory that will be used for all subsequently created
-  // Worker instances. Certain bindings and integrations may need special
-  // kinds of Worker classes, and this can customize that.
-  void set_worker_factory(Worker::Factory factory);
 
   // Explicit shutdown (vs in destructor) is encouraged.
   void Shutdown();
@@ -72,6 +99,13 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
     return named_devices_;
   }
 
+  // Queue access.
+  Queue &CreateQueue(Queue::Options options);
+  Queue &named_queue(std::string_view name);
+  const std::unordered_map<std::string_view, Queue *> named_queues() {
+    return queues_by_name_;
+  }
+
   // Access the system wide blocking executor thread pool. This can be used
   // to execute thunks that can block on a dedicated thread and is needed
   // to bridge APIs that cannot be used in a non-blocking context.
@@ -81,10 +115,8 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
   // Creates a new Scope bound to this System (it will internally
   // hold a reference to this instance). All devices in system order will be
   // added to the scope.
-  std::shared_ptr<Scope> CreateScope(Worker &worker);
-
-  // Creates a scope bound to the init worker.
-  std::shared_ptr<Scope> CreateScope();
+  std::shared_ptr<Scope> CreateScope(Worker &worker,
+                                     std::span<Device *const> devices);
 
   // Creates and starts a worker (if it is configured to run in a thread).
   Worker &CreateWorker(Worker::Options options);
@@ -94,6 +126,10 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
   // Internally, this worker is called "__init__". It will be created on
   // demand if it does not yet exist.
   Worker &init_worker();
+
+  // Adds a worker initializer which will be called when each worker starts.
+  // This can only be called before any workers are created.
+  void AddWorkerInitializer(std::function<void(Worker &)> initializer);
 
   // Initialization APIs. Calls to these methods is only permitted between
   // construction and Initialize().
@@ -105,7 +141,6 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
   void FinishInitialization();
 
  private:
-  static std::unique_ptr<Worker> DefaultWorkerFactory(Worker::Options options);
   void AssertNotInitialized() {
     if (initialized_) {
       throw std::logic_error(
@@ -121,6 +156,9 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
   // Deallocates a process by pid. This is done on process destruction. Note
   // that is acquires the system lock and is non-reentrant.
   void DeallocateProcess(int64_t pid);
+
+  // Calls each registered worker initializer.
+  void InitializeWorker(Worker &worker);
 
   const iree_allocator_t host_allocator_;
 
@@ -146,9 +184,13 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
   // Global blocking executor.
   BlockingExecutor blocking_executor_;
 
+  // Queues.
+  std::vector<std::unique_ptr<Queue>> queues_;
+  std::unordered_map<std::string_view, Queue *> queues_by_name_;
+
   // Workers.
-  Worker::Factory worker_factory_ = System::DefaultWorkerFactory;
   std::vector<std::unique_ptr<Worker>> workers_;
+  std::vector<std::function<void(Worker &)>> worker_initializers_;
   std::unordered_map<std::string_view, Worker *> workers_by_name_;
 
   // Process management.

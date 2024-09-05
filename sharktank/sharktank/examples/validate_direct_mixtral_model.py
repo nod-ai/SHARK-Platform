@@ -84,11 +84,6 @@ def main(args: list[str]):
         1
     )
     print(f"  : tokens = {tokens}")
-    # TODO(scotttodd): flatten then print? or index into full tensor?
-    # print(f"  : cache[127] = {cache_state[0][127]}")
-    # print(f"  : cache[126] = {cache_state[0][126]}")
-    # print(f"  : cache[0] = {cache_state[0][0]}")
-    # print(f"  : cache[1] = {cache_state[0][1]}")
 
     # Decode a step.
     print("Decoding...")
@@ -110,22 +105,12 @@ def main(args: list[str]):
     )
     tokens = torch.tensor(model.extract_tokens_from_logits(logits, [1])).unsqueeze(1)
     print(f"  : tokens = {tokens}")
-    # print(f"  : cache[127] = {cache_state[0][127]}")
-    # print(f"  : cache[126] = {cache_state[0][126]}")
-    # print(f"  : cache[0] = {cache_state[0][0]}")
-    # print(f"  : cache[1] = {cache_state[0][1]}")
-
-    # from sharktank.models import llama
-    # print(f"+++PREFILL XK = {llama.DEBUG_PREFILL_XK.shape}\n{llama.DEBUG_PREFILL_XK}")
-    # print(f"+++DECODE  XK = {llama.DEBUG_DECODE_XK.shape}\n{llama.DEBUG_DECODE_XK}")
-    # torch.testing.assert_close(llama.DEBUG_PREFILL_XK, llama.DEBUG_DECODE_XK)
 
     def save_prefill_module(model):
         from iree.compiler.extras.fx_importer import FxImporter
         from iree.compiler.ir import AsmState
 
         importer = FxImporter()
-        # asm_state = AsmState(importer.module_op)
 
         print("Generating FX graph")
 
@@ -153,9 +138,6 @@ def main(args: list[str]):
         print("Saving to:", output_file)
         with open(output_file, "wb") as f:
             importer.module_op.write_bytecode(f)
-
-    # save_prefill_module()
-
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))

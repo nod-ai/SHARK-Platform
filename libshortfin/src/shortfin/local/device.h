@@ -1,4 +1,4 @@
-// Copyright 2024 Advanced Micro Devices, Inc
+// Copyright 2024 Advanced Micro Devices, Inc.
 //
 // Licensed under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -194,6 +194,7 @@ class SHORTFIN_API DeviceAffinity {
     return result;
   }
 
+  operator bool() const { return device_ != nullptr; }
   Device *device() const { return device_; }
   iree_hal_queue_affinity_t queue_affinity() const { return queue_affinity_; }
   // Returns the lowest queue ordinal in the affinity set. If there are no

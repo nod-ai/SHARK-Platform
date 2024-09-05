@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2024 Advanced Micro Devices, Inc
+# Copyright 2024 Advanced Micro Devices, Inc.
 #
 # Licensed under the Apache License v2.0 with LLVM Exceptions.
 # See https://llvm.org/LICENSE.txt for license information.
@@ -30,7 +30,7 @@ fs = []
 total_delay = 0.0
 max_delay = 0.0
 for i in range(20):
-    delay = random.random() * 2
+    delay = random.random() * 0.25
     total_delay += delay
     max_delay = max(max_delay, delay)
     print("SCHEDULE", i)

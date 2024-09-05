@@ -1,4 +1,4 @@
-# Copyright 2024 Advanced Micro Devices, Inc
+# Copyright 2024 Advanced Micro Devices, Inc.
 #
 # Licensed under the Apache License v2.0 with LLVM Exceptions.
 # See https://llvm.org/LICENSE.txt for license information.
@@ -28,7 +28,8 @@ class BaseCausalLMModel(ThetaLayer):
         theta: Theta,
         *,
         context_length: int,
-        static_context_mask: bool = True,
+        static_tables: bool = True,
+        static_context_mask: bool = False,
         device: Optional[torch.device] = None,
         activation_dtype: torch.dtype = torch.float32,
         attention_dtype: torch.dtype = torch.float32,
@@ -39,7 +40,7 @@ class BaseCausalLMModel(ThetaLayer):
         self.attention_dtype = attention_dtype
         self.context_length = context_length
 
-        if static_context_mask:
+        if static_tables:
             self.register_buffer(
                 "causal_context_mask", self.generate_causal_context_mask()
             )
@@ -66,10 +67,12 @@ class BaseCausalLMModel(ThetaLayer):
 
     def generate_causal_context_mask(self) -> torch.Tensor:
         context_length = self.context_length
+        unary_broadcast_ones = torch.ones([1, 1], dtype=torch.bool, device=self.device)
+        context_broadcast_ones = unary_broadcast_ones.expand(
+            context_length, context_length
+        )
         causal_context_mask = torch.triu(
-            torch.ones(
-                [context_length, context_length], dtype=torch.bool, device=self.device
-            ),
+            context_broadcast_ones,
             diagonal=1,
         )[None, None, :, :]
         return causal_context_mask
@@ -114,9 +117,11 @@ class BaseCausalLMModel(ThetaLayer):
         scenarios can benefit from managing this in different ways.
         """
         if causal_context_mask is None:
+            # Try to use the statically generated.
             causal_context_mask = self.causal_context_mask
         if causal_context_mask is None:
-            causal_context_mask = self._generate_causal_context_mask()
+            # Fallback to dynamically generated.
+            causal_context_mask = self.generate_causal_context_mask()
 
         # Combine the causal context mask and input mask.
         dtype = self.attention_dtype

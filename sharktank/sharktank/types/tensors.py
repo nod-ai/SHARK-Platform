@@ -1,4 +1,4 @@
-# Copyright 2024 Advanced Micro Devices, Inc
+# Copyright 2024 Advanced Micro Devices, Inc.
 #
 # Licensed under the Apache License v2.0 with LLVM Exceptions.
 # See https://llvm.org/LICENSE.txt for license information.
@@ -283,6 +283,21 @@ class InferenceTensor(ABC):
         from ..ops import elementwise
 
         return elementwise(torch.add, self, rhs)
+
+    def __radd__(self, lhs):
+        # Assumes commutative addition due to torch.elementwise not handling numbers on
+        # the lhs.
+        return self.__add__(lhs)
+
+    def __mul__(self, rhs):
+        from ..ops import elementwise
+
+        return elementwise(torch.mul, self, rhs)
+
+    def __rmul__(self, lhs):
+        # Assumes commutative multiplication due to torch.elementwise not handling
+        # numbers on the lhs.
+        return self.__mul__(lhs)
 
 
 REGISTERED_INFERENCE_TENSOR_CLASSES: dict[str, Type[InferenceTensor]] = {}

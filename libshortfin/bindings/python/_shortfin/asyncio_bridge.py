@@ -1,13 +1,10 @@
-# Copyright 2024 Advanced Micro Devices, Inc
+# Copyright 2024 Advanced Micro Devices, Inc.
 #
 # Licensed under the Apache License v2.0 with LLVM Exceptions.
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 import asyncio
-from collections.abc import Callable
-from contextvars import Context
-from typing_extensions import Unpack
 
 from . import lib as sfl
 
@@ -52,8 +49,16 @@ class PyWorkerEventLoop(asyncio.AbstractEventLoop):
         return handle
 
     def call_exception_handler(self, context) -> None:
-        # TODO: Should route this to the central exception handler.
-        raise RuntimeError(f"Async exception on {self._worker}: {context}")
+        # TODO: Should route this to the central exception handler. Should
+        # also play with ergonomics of how the errors get reported in
+        # various contexts and optimize.
+        source_exception = context.get("exception")
+        if isinstance(source_exception, BaseException):
+            raise RuntimeError(
+                f"Async exception on {self._worker}): {source_exception}"
+            ).with_traceback(source_exception.__traceback__)
+        else:
+            raise RuntimeError(f"Async exception on {self._worker}: {context}")
 
     def _timer_handle_cancelled(self, handle):
         # We don't do anything special: just skip it if it comes up.

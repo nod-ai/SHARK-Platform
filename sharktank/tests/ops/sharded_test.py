@@ -1,4 +1,4 @@
-# Copyright 2024 Advanced Micro Devices, Inc
+# Copyright 2024 Advanced Micro Devices, Inc.
 #
 # Licensed under the Apache License v2.0 with LLVM Exceptions.
 # See https://llvm.org/LICENSE.txt for license information.
@@ -335,6 +335,25 @@ class EqualTest(unittest.TestCase):
         b_sharded = ops.reshard_like(b, a_sharded)
         assert not ops.equal(a_sharded, b_sharded)
         assert not ops.equal(b_sharded, a_sharded)
+
+
+class GemmTest(unittest.TestCase):
+    def testShardedParallelDim(self):
+        a = torch.rand(4, 3)
+        b = torch.rand(5, 3)
+        c = torch.rand(4, 5)
+        alpha = 2
+        beta = 3
+        shard_count = 2
+        expected = ops.gemm(a, b, c, alpha, beta, False, True)
+        sharded_a = ops.reshard_split(a, dim=0, count=shard_count)
+        sharded_c = ops.reshard_split(c, dim=0, count=shard_count)
+        sharded_result = ops.gemm(sharded_a, b, sharded_c, alpha, beta, False, True)
+        assert isinstance(sharded_result, SplitPrimitiveTensor)
+        assert sharded_result.shard_count == 2
+        assert sharded_result.shard_dim == 0
+        actual = ops.unshard(sharded_result)
+        torch.testing.assert_close(actual, expected)
 
 
 class InterpolateTest(unittest.TestCase):

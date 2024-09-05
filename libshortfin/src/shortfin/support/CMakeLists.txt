@@ -1,4 +1,4 @@
-# Copyright 2024 Advanced Micro Devices, Inc
+# Copyright 2024 Advanced Micro Devices, Inc.
 #
 # Licensed under the Apache License v2.0 with LLVM Exceptions. See
 # https://llvm.org/LICENSE.txt for license information. SPDX-License-Identifier:
@@ -31,7 +31,7 @@ shortfin_cc_component(
 )
 
 shortfin_gtest_test(
-  NAME support_test
+  NAME shortfin_support_test
   SRCS
     # Order is specific: lower level tests before higher level.
     iree_helpers_test.cc

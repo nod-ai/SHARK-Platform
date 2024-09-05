@@ -1,4 +1,4 @@
-# Copyright 2024 Advanced Micro Devices, Inc
+# Copyright 2024 Advanced Micro Devices, Inc.
 #
 # Licensed under the Apache License v2.0 with LLVM Exceptions.
 # See https://llvm.org/LICENSE.txt for license information.
@@ -13,3 +13,4 @@ def test_create_host_cpu_system():
     print(f"LOCAL SYSTEM:", ls)
 
     print("Sleeping in Python")
+    ls.shutdown()

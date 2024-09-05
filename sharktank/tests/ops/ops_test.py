@@ -1,4 +1,4 @@
-# Copyright 2024 Advanced Micro Devices, Inc
+# Copyright 2024 Advanced Micro Devices, Inc.
 #
 # Licensed under the Apache License v2.0 with LLVM Exceptions.
 # See https://llvm.org/LICENSE.txt for license information.
@@ -88,6 +88,18 @@ class EmbeddingLookupTest(unittest.TestCase):
     def testQuantizedTensorRhs(self):
         # TODO: Implement me. Quantized embedding lookup NYI completely.
         ...
+
+
+class GemmTest(unittest.TestCase):
+    def testGemm(self):
+        a = torch.tensor([[1, 2], [3, 4]])
+        b = torch.tensor([[5, 6], [7, 8]])
+        c = torch.tensor([[9, 10], [11, 12]])
+        alpha = 2
+        beta = 3
+        expected = alpha * a @ b.T + beta * c
+        result = ops.gemm(a, b, c, alpha, beta, False, True)
+        torch.testing.assert_close(result, expected)
 
 
 class MatmulTest(unittest.TestCase):

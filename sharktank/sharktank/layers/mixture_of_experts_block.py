@@ -104,4 +104,5 @@ class SparseMoeBlock(ThetaLayer):
 
             moe_output.index_add_(0, token_idx, current_expert.to(ffn_input.dtype))
         moe_output = moe_output.reshape(batch_size, sequence_length, feature_dim)
+
         return h + moe_output
