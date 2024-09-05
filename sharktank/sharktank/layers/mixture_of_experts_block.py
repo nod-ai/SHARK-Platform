@@ -47,7 +47,8 @@ class SparseMoeBlock(ThetaLayer):
 
         # Add FFN output norm
         self.add_module(
-            "layer_output_norm", RMSNormLayer(theta("layer_output_norm"), epsilon=rms_epsilon)
+            "layer_output_norm",
+            RMSNormLayer(theta("layer_output_norm"), epsilon=rms_epsilon),
         )
 
         # Add expert_count x FFN
