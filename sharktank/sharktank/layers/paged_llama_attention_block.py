@@ -46,10 +46,6 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         self.add_module("attn_k", LinearLayer(theta("attn_k")))
         self.add_module("attn_v", LinearLayer(theta("attn_v")))
         self.add_module("attn_output", LinearLayer(theta("attn_output")))
-        self.add_module(
-            "attn_output_norm",
-            RMSNormLayer(theta("attn_output_norm"), epsilon=rms_epsilon),
-        )
 
         self.block_index = block_index
         self.cache = cache
