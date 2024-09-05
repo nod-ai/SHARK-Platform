@@ -229,18 +229,9 @@ class LlamaAttentionBlock(ThetaLayer):
         values = values.transpose(1, 2)
 
         # Flash attention.
-        attn_weights = torch.matmul(xq, keys.transpose(2, 3)) / math.sqrt(self.head_dim)
-
-        # Apply attention mask.
-        if attention_mask is not None:
-            expected_mask_shape = (bs, 1, q_len, kv_seq_len)
-            assert (
-                attention_mask.shape == expected_mask_shape
-            ), f"Attention mask should be of size {expected_mask_shape}, but is {attention_mask.shape}"
-            attn_weights = attn_weights + attention_mask
-
-        attn_weights = F.softmax(attn_weights.float(), dim=-1).type_as(xq)
-        attn_output = torch.matmul(attn_weights, values)  # (bs, heads, slen, head_dim)
+        attn_output = torch.nn.functional.scaled_dot_product_attention(
+            xq, keys, values, attention_mask
+        )
         attn_output = attn_output.transpose(1, 2).reshape(bs, q_len, -1)
 
         # Project.
