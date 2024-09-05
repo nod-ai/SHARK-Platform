@@ -11,7 +11,7 @@ import torch
 
 from sharktank.models.llama.testing import *
 from sharktank.layers.rotary_embedding import RotaryEmbeddingLayer
-from sharktank.models.llama.llama import PagedLlamaAttentionBlock, PagedKVCache
+from sharktank.models.llama.llama import AttentionFFNBlock, PagedKVCache
 from sharktank import ops
 
 from transformers.models.llama.modeling_llama import (
@@ -50,7 +50,7 @@ class AttentionBlockTest(unittest.TestCase):
             device="cpu",
             dtype=torch.float32,
         )
-        attention_block = PagedLlamaAttentionBlock(
+        attention_block = AttentionFFNBlock(
             theta=attention_block_theta,
             block_index=block_index,
             cache=paged_kv_cache,

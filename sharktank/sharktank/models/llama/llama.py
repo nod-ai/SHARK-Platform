@@ -154,7 +154,7 @@ class PagedLlamaModelV1(BaseCausalLMModel):
 
         self.attn_blocks = nn.ModuleList(
             [
-                PagedLlamaAttentionBlock(
+                AttentionFFNBlock(
                     theta("blk", n),
                     block_index=n,
                     cache=self.cache,
@@ -302,24 +302,20 @@ class AttentionFFNBlock(ThetaLayer):
         self.add_module(
             "attn",
             PagedLlamaAttentionBlock(
-                theta,
-                block_index,
-                cache,
-                head_count,
-                head_dim,
-                head_count_kv,
-                rms_epsilon,
-                use_hf,
+                theta=theta,
+                block_index=block_index,
+                cache=cache,
+                head_count=head_count,
+                head_dim=head_dim,
+                head_count_kv=head_count_kv,
+                rms_epsilon=rms_epsilon,
+                use_hf=use_hf,
             ),
         )
         self.add_module(
             "ffn",
             FFN(
-                theta,
-                head_count * head_dim,
-                head_count * head_dim,
-                head_count * head_dim,
-                rms_epsilon,
+                theta=theta,
             ),
         )
         self.add_module(
