@@ -18,8 +18,8 @@ class RotaryEmbeddingLayer(BaseLayer):
         self,
         *,
         rope_dimension_count: int,
-        rope_freq_base: float,
         max_seqlen: int,
+        rope_freq_base: Optional[float] = None,
         device: Optional[torch.device] = None,
         use_hf: bool = False,
         static_tables: bool = True,
@@ -32,6 +32,7 @@ class RotaryEmbeddingLayer(BaseLayer):
         self.rope_dimension_count = rope_dimension_count
         self.max_seqlen = max_seqlen
         self.use_hf = use_hf
+        self.rope_freq_base = rope_freq_base if rope_freq_base is not None else 10000.0
         if static_tables:
             self.register_buffer(
                 "static_rotary_embed_table", self._create_rotary_embed_table()
@@ -183,12 +184,11 @@ class RotaryEmbeddingLayer(BaseLayer):
 
     def _create_rotary_embed_table(
         self,
-        theta_value: float = 10000.0,
     ):
         dim = self.rope_dimension_count
         max_seqlen = self.max_seqlen
         freqs = 1.0 / (
-            theta_value
+            self.rope_freq_base
             ** (torch.arange(0, dim, 2, device=self.device)[: (dim // 2)].float() / dim)
         )
         t = torch.arange(max_seqlen, device=freqs.device)

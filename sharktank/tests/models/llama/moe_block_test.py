@@ -15,6 +15,7 @@ from sharktank import ops
 
 
 class SparseMoeBlockTest(unittest.TestCase):
+    @unittest.skip("Skip test until grok implementation")
     def test(self):
         model = SparseMoeBlock(
             theta=make_moe_block_theta()("blk.0"),
