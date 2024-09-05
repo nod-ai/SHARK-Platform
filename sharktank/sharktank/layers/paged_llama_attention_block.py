@@ -36,24 +36,27 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         head_dim: int,
         head_count_kv: int,
         rms_epsilon: float,
+        use_hf: bool = False,
     ):
         super().__init__(theta)
         self.add_module(
             "attn_norm", RMSNormLayer(theta("attn_norm"), epsilon=rms_epsilon)
-            )
+        )
         self.add_module("attn_q", LinearLayer(theta("attn_q")))
         self.add_module("attn_k", LinearLayer(theta("attn_k")))
         self.add_module("attn_v", LinearLayer(theta("attn_v")))
         self.add_module("attn_output", LinearLayer(theta("attn_output")))
         self.add_module(
-            "attn_output_norm", RMSNormLayer(theta("attn_output_norm"), epsilon=rms_epsilon)
-            )
+            "attn_output_norm",
+            RMSNormLayer(theta("attn_output_norm"), epsilon=rms_epsilon),
+        )
 
         self.block_index = block_index
         self.cache = cache
         self.head_count = head_count
         self.head_dim = head_dim
         self.head_count_kv = head_count_kv
+        self.use_hf = use_hf
 
     def forward(
         self,
@@ -135,7 +138,7 @@ class PagedLlamaAttentionBlock(ThetaLayer):
             xk = repeat_kv(xk)
             xv = repeat_kv(xv)
 
-        # Tranpose into [bs, heads, sl, dim]
+        # Transpose into [bs, heads, sl, dim]
         xq = xq.transpose(1, 2)
         keys = xk.transpose(1, 2)
         values = xv.transpose(1, 2)
@@ -156,8 +159,6 @@ class PagedLlamaAttentionBlock(ThetaLayer):
 
         # Project.
         attn_output = self.attn_output(attn_output)
-
-        attn_output = self.attn_output_norm(attn_output)
 
         # Remainder of the block.
         h = h + attn_output
