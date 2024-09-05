@@ -120,20 +120,11 @@ def test_parse_dispatch_benchmark_results():
     mock_result_3.candidate_id = 3
     benchmark_results = [mock_result_1, mock_result_2, mock_result_3]
 
-    candidate_tracker_0 = libtuner.CandidateTracker(candidate_id=0)
-    candidate_tracker_0.dispatch_mlir_path = libtuner.Path("/mock/mlir/path/0.mlir")
-    candidate_tracker_1 = libtuner.CandidateTracker(candidate_id=1)
-    candidate_tracker_1.dispatch_mlir_path = libtuner.Path("/mock/mlir/path/1.mlir")
-    candidate_tracker_2 = libtuner.CandidateTracker(candidate_id=2)
-    candidate_tracker_2.dispatch_mlir_path = libtuner.Path("/mock/mlir/path/2.mlir")
-    candidate_tracker_3 = libtuner.CandidateTracker(candidate_id=3)
-    candidate_tracker_3.dispatch_mlir_path = libtuner.Path("/mock/mlir/path/3.mlir")
-    candidate_trackers = [
-        candidate_tracker_0,
-        candidate_tracker_1,
-        candidate_tracker_2,
-        candidate_tracker_3,
-    ]
+    candidate_trackers = []
+    for i in range(4):
+        tracker = libtuner.CandidateTracker(candidate_id=i)
+        tracker.dispatch_mlir_path = libtuner.Path(f"/mock/mlir/path/{i}.mlir")
+        candidate_trackers.append(tracker)
 
     expected_parsed_results = [
         libtuner.ParsedDisptachBenchmarkResult(
