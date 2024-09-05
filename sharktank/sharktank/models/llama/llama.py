@@ -282,6 +282,7 @@ class PagedLlamaModelV1(BaseCausalLMModel):
 ################################################################################
 
 
+# TODO Use the layer from layers/llama_attention_block.py
 class PagedLlamaAttentionBlock(ThetaLayer):
     """Implements a self attention layer in the style of Llama using a
     paged cache."""
