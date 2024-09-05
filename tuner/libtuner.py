@@ -200,7 +200,7 @@ class TuningClient(ABC):
 class RunPack:
     command: list[str]
     check: bool = True
-    timeout: Optional[int] = None
+    timeout_seconds: Optional[int] = None
 
 
 @dataclass
@@ -523,7 +523,7 @@ def create_worker_context_queue(device_ids: list[int]) -> queue.Queue[tuple[int,
 def run_command(run_pack: RunPack) -> TaskResult:
     command = run_pack.command
     check = run_pack.check
-    timeout = run_pack.timeout
+    timeout_seconds = run_pack.timeout
 
     result = None
     is_timeout = False
@@ -534,7 +534,11 @@ def run_command(run_pack: RunPack) -> TaskResult:
 
         # Add timeout to subprocess.run call
         result = subprocess.run(
-            command, check=check, capture_output=True, text=True, timeout=timeout
+            command,
+            check=check,
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds,
         )
 
         if result.stdout:
@@ -542,7 +546,9 @@ def run_command(run_pack: RunPack) -> TaskResult:
         if result.stderr:
             logging.debug(f"stderr: {result.stderr}")
     except subprocess.TimeoutExpired as e:
-        logging.warning(f"Command '{command_str}' timed out after {timeout} seconds.")
+        logging.warning(
+            f"Command '{command_str}' timed out after {timeout_seconds} seconds."
+        )
         is_timeout = True
     except subprocess.CalledProcessError as e:
         print(e.output)
@@ -811,7 +817,7 @@ def compile_dispatches(
                     candidate_trackers[i]
                 ),
                 check=False,
-                timeout=tuning_client.get_dispatch_compile_timeout_s(),
+                timeout_seconds=tuning_client.get_dispatch_compile_timeout_s(),
             ),
             candidate_id=i,
         )
@@ -991,7 +997,7 @@ def benchmark_dispatches(
                         candidate_trackers[i]
                     ),
                     check=False,
-                    timeout=tuning_client.get_dispatch_benchmark_timeout_s(),
+                    timeout_seconds=tuning_client.get_dispatch_benchmark_timeout_s(),
                 ),
                 candidate_id=i,
                 command_need_device_id=True,
@@ -1071,7 +1077,7 @@ def compile_models(
             RunPack(
                 command=tuning_client.get_model_compile_command(candidate_trackers[i]),
                 check=False,
-                timeout=tuning_client.get_model_compile_timeout_s(),
+                timeout_seconds=tuning_client.get_model_compile_timeout_s(),
             ),
             candidate_id=i,
         )
@@ -1272,7 +1278,7 @@ def benchmark_models(
                         candidate_trackers[i]
                     ),
                     check=False,
-                    timeout=tuning_client.get_dispatch_benchmark_timeout_s(),
+                    timeout_seconds=tuning_client.get_dispatch_benchmark_timeout_s(),
                 ),
                 candidate_id=i,
                 command_need_device_id=True,
@@ -1298,7 +1304,7 @@ def benchmark_models(
                         candidate_trackers[0]
                     ),
                     check=False,
-                    timeout=tuning_client.get_model_benchmark_timeout_s(),
+                    timeout_seconds=tuning_client.get_model_benchmark_timeout_s(),
                 ),
                 candidate_id=0,
                 command_need_device_id=True,

@@ -7,17 +7,17 @@
 """
 Sample Usage:
 
-python punet_autotune.py 2.mlir --lhs-dims=bmk --rhs-dims=bkn --tile-dims=*mnk --devices=hip://0,hip://1 --num-candidates=64
+python -m tuner.examples.punet.punet_autotune benchmark.mlir --lhs-dims=bmk --rhs-dims=bkn --tile-dims=*mnk --devices=hip://0,hip://1 --num-candidates=64
 
 
 Recommended Trial Run:
 
-python punet_autotune.py 2.mlir --num-candidates=1
+python -m tuner.examples.punet.punet_autotune benchmark.mlir --num-candidates=1
 
 
 Dry Run Test (no gpu requried):
 
-python punet_autotune.py 2.mlir --num-candidates=64 --num-model-candidates=10 --dry-run
+python -m tuner.examples.punet.punet_autotune benchmark.mlir --num-candidates=64 --num-model-candidates=10 --dry-run
 
 """
 
@@ -35,7 +35,7 @@ class PunetClient(libtuner.TuningClient):
         mlir_path = candidate_tracker.dispatch_mlir_path
         assert mlir_path is not None
         command = [
-            "./compile_candidate.sh",
+            "compile_candidate.sh",
             mlir_path.as_posix(),
         ]
         return command
@@ -51,9 +51,7 @@ class PunetClient(libtuner.TuningClient):
         assert compiled_vmfb_path is not None
 
         command = [
-            "timeout",
-            "16s",
-            "./iree-benchmark-module",
+            "iree-benchmark-module",
             f"--device={libtuner.DEVICE_ID_PLACEHOLDER}",
             f"--module={compiled_vmfb_path.resolve()}",
             "--hip_use_streams=true",
@@ -74,14 +72,11 @@ class PunetClient(libtuner.TuningClient):
     ) -> list[str]:
         mlir_spec_path = candidate_tracker.spec_path
         assert mlir_spec_path is not None
-        script_dir = Path(__file__).resolve().parent
         target_dir = mlir_spec_path.resolve().parent.parent.parent
         output_name = f"unet_candidate_{candidate_tracker.candidate_id}.vmfb"
         command = [
-            "timeout",
-            "300s",
-            "./compile-punet-base.sh",
-            "./iree-compile",
+            "compile-punet-base.sh",
+            "iree-compile",
             "gfx942",
             f"{mlir_spec_path.resolve()}",
             "./punet.mlir",
@@ -100,8 +95,6 @@ class PunetClient(libtuner.TuningClient):
         assert unet_candidate_path is not None
 
         command = [
-            "timeout",
-            "180s",
             "iree-benchmark-module",
             f"--device={libtuner.DEVICE_ID_PLACEHOLDER}",
             "--hip_use_streams=true",
