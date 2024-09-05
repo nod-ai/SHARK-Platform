@@ -80,9 +80,10 @@ def _externalize_tensor(
     # Important: The annotation tag must be set on the actual leaf tensor
     # which is stored in the root theta. This means that any shaping or
     # data type massaging has to happen *before* annotating.
-    data_tensor = torch.tensor(data)
     if logical_shape is not None:
-        data_tensor = data_tensor.reshape(logical_shape)
+        data_tensor = torch.as_tensor(data.reshape(logical_shape))
+    else:
+        data_tensor = torch.as_tensor(data)
     ExternalTensorTrait(external_name=name, external_scope="").set(data_tensor)
     return data_tensor
 
