@@ -274,9 +274,9 @@ def test_extract_driver_names():
 def test_fetch_available_devices_success():
     drivers = ["hip", "local-sync", "cuda"]
     mock_devices = {
-        "hip": [{"path": "0"}],
-        "local-sync": [{"path": "default"}],
-        "cuda": [{"path": "default"}],
+        "hip": [{"path": "ABCD", "device_id": 1}],
+        "local-sync": [{"path": "default", "device_id": 2}],
+        "cuda": [{"path": "default", "device_id": 3}],
     }
 
     with patch(f"{libtuner.__name__}.ireert.get_driver") as mock_get_driver:
@@ -289,7 +289,14 @@ def test_fetch_available_devices_success():
         mock_get_driver.side_effect = get_mock_driver
 
         actual_output = libtuner.fetch_available_devices(drivers)
-        expected_output = ["hip://0", "local-sync://default", "cuda://default"]
+        expected_output = [
+            "hip://ABCD",
+            "hip://0",
+            "local-sync://default",
+            "local-sync://1",
+            "cuda://default",
+            "cuda://2",
+        ]
 
         assert actual_output == expected_output
 
@@ -297,9 +304,9 @@ def test_fetch_available_devices_success():
 def test_fetch_available_devices_failure():
     drivers = ["hip", "local-sync", "cuda"]
     mock_devices = {
-        "hip": [{"path": "0"}],
+        "hip": [{"path": "ABCD", "device_id": 1}],
         "local-sync": ValueError("Failed to initialize"),
-        "cuda": [{"path": "default"}],
+        "cuda": [{"path": "default", "device_id": 1}],
     }
 
     with patch(f"{libtuner.__name__}.ireert.get_driver") as mock_get_driver:
@@ -320,7 +327,7 @@ def test_fetch_available_devices_failure():
             mock_get_driver.side_effect = get_mock_driver
 
             actual_output = libtuner.fetch_available_devices(drivers)
-            expected_output = ["hip://0", "cuda://default"]
+            expected_output = ["hip://ABCD", "hip://0", "cuda://default", "cuda://0"]
 
             assert actual_output == expected_output
             mock_handle_error.assert_called_once_with(

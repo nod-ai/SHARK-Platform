@@ -136,9 +136,10 @@ def main():
     libtuner.setup_logging(args, path_config)
     print(path_config.run_log, end="\n\n")
 
-    print("Validating devices")
-    libtuner.validate_devices(args.devices)
-    print("Validation successful!\n")
+    if not args.dry_run:
+        print("Validating devices")
+        libtuner.validate_devices(args.devices)
+        print("Validation successful!\n")
 
     print("Generating candidates...")
     candidates = libtuner.generate_candidates(args, path_config, candidate_trackers)

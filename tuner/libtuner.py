@@ -293,6 +293,9 @@ def fetch_available_devices(drivers: list[str]) -> list[str]:
             all_device_ids.extend(
                 f"{driver_name}://{device['path']}" for device in devices
             )
+            all_device_ids.extend(
+                f"{driver_name}://{device['device_id'] - 1}" for device in devices
+            )
         except ValueError as e:
             handle_error(
                 condition=True,
