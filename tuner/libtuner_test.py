@@ -7,7 +7,7 @@
 import argparse
 import pytest
 from unittest.mock import call, patch, MagicMock
-import libtuner
+from . import libtuner
 
 """
 Usage: python -m pytest test_libtuner.py
@@ -218,9 +218,11 @@ def test_parse_model_benchmark_results():
         return float(self.result_str) if self.result_str else None
 
     # Mock IREEBenchmarkResult to return wanted benchmark times
-    with patch("libtuner.IREEBenchmarkResult.get_mean_time", new=mock_get_mean_time):
+    with patch(
+        f"{libtuner.__name__}.IREEBenchmarkResult.get_mean_time", new=mock_get_mean_time
+    ):
         # Mock handle_error to avoid actual logging during tests
-        with patch("libtuner.handle_error") as mock_handle_error:
+        with patch(f"{libtuner.__name__}.handle_error") as mock_handle_error:
             dump_list = libtuner.parse_model_benchmark_results(
                 candidate_trackers, candidate_results, baseline_results
             )
@@ -277,7 +279,7 @@ def test_fetch_available_devices_success():
         "cuda": [{"path": "default"}],
     }
 
-    with patch("libtuner.ireert.get_driver") as mock_get_driver:
+    with patch(f"{libtuner.__name__}.ireert.get_driver") as mock_get_driver:
         mock_driver = MagicMock()
 
         def get_mock_driver(name):
@@ -300,8 +302,8 @@ def test_fetch_available_devices_failure():
         "cuda": [{"path": "default"}],
     }
 
-    with patch("libtuner.ireert.get_driver") as mock_get_driver:
-        with patch("libtuner.handle_error") as mock_handle_error:
+    with patch(f"{libtuner.__name__}.ireert.get_driver") as mock_get_driver:
+        with patch(f"{libtuner.__name__}.handle_error") as mock_handle_error:
             mock_driver = MagicMock()
 
             def get_mock_driver(name):
@@ -333,7 +335,7 @@ def test_parse_devices():
     user_devices_str = "hip://0, local-sync://default, cuda://default"
     expected_output = ["hip://0", "local-sync://default", "cuda://default"]
 
-    with patch("libtuner.handle_error") as mock_handle_error:
+    with patch(f"{libtuner.__name__}.handle_error") as mock_handle_error:
         actual_output = libtuner.parse_devices(user_devices_str)
         assert actual_output == expected_output
 
@@ -349,7 +351,7 @@ def test_parse_devices_with_invalid_input():
         "cuda://default",
     ]
 
-    with patch("libtuner.handle_error") as mock_handle_error:
+    with patch(f"{libtuner.__name__}.handle_error") as mock_handle_error:
         actual_output = libtuner.parse_devices(user_devices_str)
         assert actual_output == expected_output
 
@@ -364,12 +366,12 @@ def test_validate_devices():
     user_devices = ["hip://0", "local-sync://default"]
     user_drivers = {"hip", "local-sync"}
 
-    with patch("libtuner.extract_driver_names", return_value=user_drivers):
+    with patch(f"{libtuner.__name__}.extract_driver_names", return_value=user_drivers):
         with patch(
-            "libtuner.fetch_available_devices",
+            f"{libtuner.__name__}.fetch_available_devices",
             return_value=["hip://0", "local-sync://default"],
         ):
-            with patch("libtuner.handle_error") as mock_handle_error:
+            with patch(f"{libtuner.__name__}.handle_error") as mock_handle_error:
                 libtuner.validate_devices(user_devices)
                 assert all(
                     call[1]["condition"] is False
@@ -381,12 +383,12 @@ def test_validate_devices_with_invalid_device():
     user_devices = ["hip://0", "local-sync://default", "cuda://default"]
     user_drivers = {"hip", "local-sync", "cuda"}
 
-    with patch("libtuner.extract_driver_names", return_value=user_drivers):
+    with patch(f"{libtuner.__name__}.extract_driver_names", return_value=user_drivers):
         with patch(
-            "libtuner.fetch_available_devices",
+            f"{libtuner.__name__}.fetch_available_devices",
             return_value=["hip://0", "local-sync://default"],
         ):
-            with patch("libtuner.handle_error") as mock_handle_error:
+            with patch(f"{libtuner.__name__}.handle_error") as mock_handle_error:
                 libtuner.validate_devices(user_devices)
                 expected_call = call(
                     condition=True,

@@ -29,16 +29,16 @@ from pathlib import Path
 import time
 import multiprocessing
 import queue
-import candidate_gen
 from tqdm import tqdm
 import re
 import hashlib
 from dataclasses import dataclass, field
 from typing import Type, Optional, Callable, Iterable, Any
 import pickle
-import iree.runtime as ireert
 import random
 from abc import ABC, abstractmethod
+import iree.runtime as ireert
+from . import candidate_gen
 
 
 # Default values for num_candidates and devices, change it as needed
