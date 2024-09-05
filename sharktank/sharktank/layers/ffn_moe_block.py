@@ -74,7 +74,11 @@ class FFNMOE(ThetaLayer):
 def extract_ffn_layer(
     merged_tensor: DefaultPrimitiveTensor, layer_name: str, expert_idx: int
 ):
+    # fetches the block_idx from merged_tensor_name. e.g. blk.0.ffn_gate_exps.weight
+    expert_layer_name = (
+        f"blk.{merged_tensor.name.split('.')[1]}.{layer_name}.{expert_idx}.weight"
+    )
     expert_tensor = DefaultPrimitiveTensor(
-        name="", data=merged_tensor.as_torch()[expert_idx]
+        name=expert_layer_name, data=merged_tensor.as_torch()[expert_idx]
     )
     return expert_tensor
