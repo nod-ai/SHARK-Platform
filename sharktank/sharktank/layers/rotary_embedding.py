@@ -18,7 +18,6 @@ class RotaryEmbeddingLayer(BaseLayer):
         self,
         *,
         rope_dimension_count: int,
-        rope_freq_base: float,
         max_seqlen: int,
         rope_freq_base: Optional[float] = 10000.0,
         device: Optional[torch.device] = None,
