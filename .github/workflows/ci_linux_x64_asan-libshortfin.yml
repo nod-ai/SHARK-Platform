@@ -164,8 +164,6 @@ jobs:
 
     - name: Run ctest
       if: ${{ !cancelled() }}
-      env:
-        CTEST_OUTPUT_ON_FAILURE: 1
       run: |
         cd ${{ env.LIBSHORTFIN_DIR }}/build
         ctest --timeout 30 --output-on-failure
