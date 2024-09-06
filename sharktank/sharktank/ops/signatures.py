@@ -18,6 +18,7 @@ from ._registry import *
 
 __all__ = [
     "all_gather",
+    "all_reduce",
     "cat",
     "conv2d",
     "elementwise",
@@ -38,6 +39,7 @@ __all__ = [
     "scaled_dot_product_attention",
     "sharded_cat",
     "sharded_sum",
+    "transfer_to_logical_device",
     "unshard",
 ]
 
@@ -46,6 +48,7 @@ IntOrSequenceInt = Union[int, Sequence[int]]
 
 @overridable
 def all_gather(maybe_sharded: AnyTensor, *, dim: int | None = None) -> AnyTensor:
+    "Gather/concatenate on all devices along dimension `dim`."
     ...
 
 
@@ -56,6 +59,23 @@ def _all_gather_trampoline(
     tensors = (maybe_sharded,)
     for override in d.find_overrides(tensors):
         result = override(maybe_sharded, dim=dim)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(tensors)
+
+
+@overridable
+def all_reduce(tensor: AnyTensor) -> AnyTensor:
+    "Reduce on all devices."
+    ...
+
+
+@all_reduce.trampoline
+def _all_reduce_trampoline(d: SignatureDispatcher, tensor: AnyTensor):
+    tensors = (tensor,)
+    for override in d.find_overrides(tensors):
+        result = override(tensor)
         if result is not NotImplemented:
             return override, result
     else:
@@ -610,6 +630,25 @@ def _sharded_sum_trampoline(d: SignatureDispatcher, maybe_sharded: AnyTensor):
     tensors = (maybe_sharded,)
     for override in d.find_overrides(tensors):
         result = override(maybe_sharded)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(tensors)
+
+
+@overridable
+def transfer_to_logical_device(tensor: AnyTensor, ordinal: int) -> AnyTensor:
+    """Transfer the tensor to a device with ordinal `ordinal`."""
+    ...
+
+
+@transfer_to_logical_device.trampoline
+def _transfer_to_logical_device(
+    d: SignatureDispatcher, tensor: AnyTensor, ordinal: int
+):
+    tensors = (tensor,)
+    for override in d.find_overrides(tensors):
+        result = override(tensor, ordinal)
         if result is not NotImplemented:
             return override, result
     else:

@@ -18,6 +18,7 @@ from ..types import PrimitiveTensor, QuantizedTensor
 
 __all__ = [
     "AllOfExprs",
+    "AllOfExprsVariadic",
     "AllOfType",
     "AnyOfType",
     "IsOfType",
@@ -65,7 +66,8 @@ class BoolTypeExpr:
 
 
 class AllOfExprs(BoolTypeExpr):
-    """Returns True if all types match their respective boolean type expression.
+    """Returns True if all type arguments match their respective boolean type
+    expression.
 
     ```python
     # True. int == int and str in (float, str).
@@ -83,6 +85,38 @@ class AllOfExprs(BoolTypeExpr):
             if len(types) < len(self._exprs):
                 return False
             return all([e(t) for e, t in zip(self._exprs, types)])
+
+        super().__init__(expr)
+
+
+class AllOfExprsVariadic(BoolTypeExpr):
+    """Returns True if all type arguments match their respective boolean type
+    expression and any remaining trailing arguments match the last type expression.
+
+    ```python
+    # True. int == int
+    # str in (float, str).
+    # float in (float, str).
+    AllOfExprsVariadic(IsOfType(int), IsOfType(float, str))(int, str, float)
+
+     # False. str is not in (int, float).
+    AllOfExprsVariadic(IsOfType(int), IsOfType(int, float))(int, float, str, int)
+    ```
+    """
+
+    def __init__(self, *exprs: BoolTypeExpr):
+        if len(exprs) == 0:
+            raise ValueError("At least one expression is required.")
+        self._exprs = list(exprs)
+
+        def expr(*types: type):
+            if len(types) < len(self._exprs):
+                return False
+            exprs = self._exprs
+            if len(types) > len(exprs):
+                # pad with the trailing expression.
+                exprs = exprs + ([exprs[-1]] * (len(types) - len(self._exprs)))
+            return all([e(t) for e, t in zip(exprs, types)])
 
         super().__init__(expr)
 
