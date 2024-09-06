@@ -26,9 +26,37 @@ CPP_PREBUILT_BINARY_DIR = "@libshortfin_BINARY_DIR@"
 SETUPPY_DIR = os.path.realpath(os.path.dirname(__file__))
 
 
+
 def is_cpp_prebuilt():
     return CPP_PREBUILT == "TRUE"
 
+def getenv_bool(key, default_value="OFF"):
+    value = os.getenv(key, default_value)
+    return value.upper() in ["ON", "1", "TRUE"]
+
+ENABLE_TRACY = getenv_bool("SHORTFIN_BUILD_TRACY", "OFF" if is_cpp_prebuilt() else "ON")
+if ENABLE_TRACY:
+    print(
+        "*** Enabling Tracy instrumentation (disable with SHORTFIN_BUILD_TRACY=OFF)",
+        file=sys.stderr,
+    )
+else:
+    print(
+        "*** Tracy instrumentation not enabled (enable with SHORTFIN_BUILD_TRACY=ON)",
+        file=sys.stderr,
+    )
+ENABLE_TRACY_TOOLS = getenv_bool("SHORTFIN_BUILD_TRACY_TOOLS")
+if ENABLE_TRACY_TOOLS:
+    print("*** Enabling Tracy tools (may error if missing deps)", file=sys.stderr)
+else:
+    print(
+        "*** Tracy tools not enabled (enable with SHORTFIN_BUILD_TRACY_TOOLS=ON)",
+        file=sys.stderr,
+    )
+
+if ENABLE_TRACY and is_cpp_prebuilt():
+    print("Error: Tracy instrumentation cannot be enabled in prebuilt mode.")
+    sys.exit(1)
 
 if is_cpp_prebuilt():
     print("setup.py running in pre-built mode:", file=sys.stderr)
@@ -38,15 +66,23 @@ else:
     print("setup.py running in cmake build mode:", file=sys.stderr)
     # setup.py is in the source directory.
     SOURCE_DIR = Path(SETUPPY_DIR)
-    BINARY_DIR = Path(os.path.join(SETUPPY_DIR, "build", "b"))
+    # Note that setuptools always builds into a "build" directory that
+    # is a sibling of setup.py, so we just colonize a sub-directory of that
+    # by default.
+    BINARY_DIR = Path(os.path.join(SETUPPY_DIR, "build", "b", "d"))
+
+TRACY_BINARY_DIR = Path(os.path.join(SETUPPY_DIR, "build", "b", "t"))
 
 print(f"  SOURCE_DIR = {SOURCE_DIR}", file=sys.stderr)
 print(f"  BINARY_DIR = {BINARY_DIR}", file=sys.stderr)
+if ENABLE_TRACY:
+    print(f"  TRACY_BINARY_DIR = {BINARY_DIR}", file=sys.stderr)
 
 # Due to a quirk of setuptools, that package_dir map must only contain
 # paths relative to the directory containing setup.py. Why? No one knows.
 REL_SOURCE_DIR = SOURCE_DIR.relative_to(SETUPPY_DIR, walk_up=True)
 REL_BINARY_DIR = BINARY_DIR.relative_to(SETUPPY_DIR, walk_up=True)
+REL_TRACY_BINARY_DIR = BINARY_DIR.relative_to(SETUPPY_DIR, walk_up=True)
 
 
 class CMakeExtension(Extension):
@@ -105,73 +141,109 @@ def maybe_nuke_cmake_cache(cmake_build_dir):
     with open(PYTHON_STAMP_FILE, "wt") as f:
         f.write(expected_stamp_contents)
 
+def build_cmake_configuration(CMAKE_BUILD_DIR: Path, extra_cmake_args=()):
+    cfg = os.getenv("SHORTFIN_CMAKE_BUILD_TYPE", "Release")
+
+    # Configure CMake.
+    os.makedirs(CMAKE_BUILD_DIR, exist_ok=True)
+    maybe_nuke_cmake_cache(CMAKE_BUILD_DIR)
+    print(f"CMake build dir: {CMAKE_BUILD_DIR}", file=sys.stderr)
+    cmake_args = [
+        "-GNinja",
+        "--log-level=VERBOSE",
+        "-DSHORTFIN_BUNDLE_DEPS=ON",
+        f"-DCMAKE_BUILD_TYPE={cfg}",
+        "-DSHORTFIN_BUILD_PYTHON_BINDINGS=ON",
+        # TODO: This shouldn't be hardcoded... but shortfin doesn't
+        # compile without it.
+        "-DCMAKE_C_COMPILER=clang",
+        "-DCMAKE_CXX_COMPILER=clang++",
+    ] + list(extra_cmake_args)
+
+    # Only do a from-scratch configure if not already configured.
+    cmake_cache_file = os.path.join(CMAKE_BUILD_DIR, "CMakeCache.txt")
+    if not os.path.exists(cmake_cache_file):
+        print(f"Configuring with: {cmake_args}", file=sys.stderr)
+        subprocess.check_call(
+            ["cmake", SOURCE_DIR] + cmake_args, cwd=CMAKE_BUILD_DIR
+        )
+    else:
+        print(f"Not re-configing (already configured)", file=sys.stderr)
+
+    # Build.
+    subprocess.check_call(["cmake", "--build", "."], cwd=CMAKE_BUILD_DIR)
+    print("Build complete.", file=sys.stderr)
 
 class CMakeBuildPy(_build_py):
     def run(self):
         # The super-class handles the pure python build.
         super().run()
 
-        # Build using cmake if not in prebuild mode.
-        if not is_cpp_prebuilt():
+        # Only Build using cmake if not in prebuild mode.
+        if is_cpp_prebuilt():
+            return
 
-            # Build extension using cmake.
-            print("*****************************", file=sys.stderr)
-            print("* Building libshortfin      *", file=sys.stderr)
-            print("*****************************", file=sys.stderr)
+        self.build_default_configuration()
+        if ENABLE_TRACY:
+            self.build_tracy_configuration()
 
-            cfg = os.getenv("SHORTFIN_CMAKE_BUILD_TYPE", "Release")
+    def build_default_configuration(self):
+        # Build extension using cmake.
+        print("*********************************", file=sys.stderr)
+        print("* Building base libshortfin     *", file=sys.stderr)
+        print("*********************************", file=sys.stderr)
 
-            CMAKE_BUILD_DIR = BINARY_DIR
+        build_cmake_configuration(BINARY_DIR)
 
-            # Configure CMake.
-            os.makedirs(BINARY_DIR, exist_ok=True)
-            maybe_nuke_cmake_cache(CMAKE_BUILD_DIR)
-            print(f"CMake build dir: {CMAKE_BUILD_DIR}", file=sys.stderr)
-            cmake_args = [
-                "-GNinja",
-                "--log-level=VERBOSE",
-                "-DSHORTFIN_BUNDLE_DEPS=ON",
-                f"-DCMAKE_BUILD_TYPE={cfg}",
-                "-DSHORTFIN_BUILD_PYTHON_BINDINGS=ON",
-                # TODO: This shouldn't be hardcoded... but shortfin doesn't
-                # compile without it.
-                "-DCMAKE_C_COMPILER=clang",
-                "-DCMAKE_CXX_COMPILER=clang++",
-            ]
+        # We only take _shortfin_default from the build.
+        target_dir = os.path.join(
+            os.path.abspath(self.build_lib), "_shortfin_default"
+        )
+        print(f"Building in target: {target_dir}", file=sys.stderr)
+        os.makedirs(target_dir, exist_ok=True)
+        print("Copying build to target.", file=sys.stderr)
+        if os.path.exists(target_dir):
+            shutil.rmtree(target_dir)
+        shutil.copytree(
+            os.path.join(
+                BINARY_DIR,
+                "bindings",
+                "python",
+                "_shortfin_default",
+            ),
+            target_dir,
+            symlinks=False,
+        )
 
-            # Only do a from-scratch configure if not already configured.
-            cmake_cache_file = os.path.join(CMAKE_BUILD_DIR, "CMakeCache.txt")
-            if not os.path.exists(cmake_cache_file):
-                print(f"Configuring with: {cmake_args}", file=sys.stderr)
-                subprocess.check_call(
-                    ["cmake", SOURCE_DIR] + cmake_args, cwd=CMAKE_BUILD_DIR
-                )
-            else:
-                print(f"Not re-configing (already configured)", file=sys.stderr)
+    def build_tracy_configuration(self):
+        # Build extension using cmake.
+        print("*********************************", file=sys.stderr)
+        print("* Building tracy libshortfin    *", file=sys.stderr)
+        print("*********************************", file=sys.stderr)
 
-            # Build.
-            subprocess.check_call(["cmake", "--build", "."], cwd=CMAKE_BUILD_DIR)
-            print("Build complete.", file=sys.stderr)
+        build_cmake_configuration(TRACY_BINARY_DIR)
 
-            # We only take _shortfin_default from the build.
-            target_dir = os.path.join(
-                os.path.abspath(self.build_lib), "_shortfin_default"
-            )
-            print(f"Building in target: {target_dir}", file=sys.stderr)
-            os.makedirs(target_dir, exist_ok=True)
-            print("Copying build to target.", file=sys.stderr)
-            if os.path.exists(target_dir):
-                shutil.rmtree(target_dir)
-            shutil.copytree(
-                os.path.join(
-                    CMAKE_BUILD_DIR,
-                    "bindings",
-                    "python",
-                    "_shortfin_default",
-                ),
-                target_dir,
-                symlinks=False,
-            )
+        # We only take _shortfin_tracy from the build.
+        target_dir = os.path.join(
+            os.path.abspath(self.build_lib), "_shortfin_tracy"
+        )
+        print(f"Building in target: {target_dir}", file=sys.stderr)
+        os.makedirs(target_dir, exist_ok=True)
+        print("Copying build to target.", file=sys.stderr)
+        if os.path.exists(target_dir):
+            shutil.rmtree(target_dir)
+        shutil.copytree(
+            os.path.join(
+                TRACY_BINARY_DIR,
+                "bindings",
+                "python",
+                # TODO: We should be copying _shortfin_tracy, when we build it.
+                "_shortfin_default",
+            ),
+            target_dir,
+            symlinks=False,
+        )
+
 
 
 PYTHON_SOURCE_DIR = REL_SOURCE_DIR / "bindings" / "python"
