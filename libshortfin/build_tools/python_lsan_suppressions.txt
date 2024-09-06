@@ -1,2 +1,3 @@
 leak:PyUnicode_New
+leak:_PyUnicodeWriter_PrepareInternal
 leak:_PyUnicodeWriter_Finish
