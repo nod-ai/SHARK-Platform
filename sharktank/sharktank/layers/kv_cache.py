@@ -293,21 +293,64 @@ class PagedKVCache(BaseKVCache):
         page_table = self.unflatten_page_table(state)  # 6D
         bs, *_ = seq_positions.shape
         assert len(cache_partitions) == self.cache_partition_count
-        for i in range(bs):
-            position = seq_positions[i]
-            # TODO: Let's clamp to the allowable range so that we don't need
-            # an assert.
-            page_id = page_ids[i, :].index_select(0, position // self.block_seq_stride)
-            page_offset = position % self.block_seq_stride
-            for partition_index in range(self.cache_partition_count):
-                cache_partition = cache_partitions[partition_index]
-                indices = (
-                    page_id,
-                    torch.tensor([transformer_block_index], device=device),
-                    torch.tensor([partition_index], device=device),
-                    page_offset.unsqueeze(0),
-                )
-                page_table.index_put_(indices=indices, values=cache_partition[i, 0])
+        
+        partition_count = len(cache_partitions)
+
+        # [bs, partitions, atten_head_count, attn_head_dim]
+        cache_partitions = torch.concat(cache_partitions, dim=1)
+        
+        # [bs, 1]
+        page_index = seq_positions // self.block_seq_stride
+
+        page_id = torch.gather(page_ids, dim=1, index=page_index.unsqueeze(1))
+        page_offset = (seq_positions % self.block_seq_stride).unsqueeze(1)
+
+        # [1, partitions]
+        partitions = torch.arange(0, self.cache_partition_count).unsqueeze(0)
+
+        # [bs, partitions]
+        page_id = page_id.repeat(1, partition_count)
+        transformer_block = torch.full((bs, partition_count), transformer_block_index, device=device)
+        page_offset = page_offset.repeat(1, partition_count)
+        partitions = partitions.repeat(bs, 1)
+
+        indices = (page_id, transformer_block, partitions, page_offset)
+        page_table.index_put_(indices=indices, values=cache_partitions)
+
+        return
+
+        # print('page_table before', page_table.shape, page_table.dtype)
+        # print('seq_positions', seq_positions.shape, seq_positions.dtype)
+        # print('page_ids', page_ids.shape, page_ids.dtype)
+
+
+        # for i in range(bs):
+        #     position = seq_positions[i]
+        #     # TODO: Let's clamp to the allowable range so that we don't need
+        #     # an assert.
+        #     page_id = page_ids[i, :].index_select(0, position // self.block_seq_stride)
+        #     page_offset = position % self.block_seq_stride
+            
+        #     for partition_index in range(self.cache_partition_count):
+        #         cache_partition = cache_partitions[partition_index]
+        #         indices = (
+        #             page_id,
+        #             torch.tensor([transformer_block_index], device=device),
+        #             torch.tensor([partition_index], device=device),
+        #             page_offset.unsqueeze(0),
+        #         )
+        #         # print('indices', indices)
+        #         # print('page_table', torch.nonzero(page_table).shape)
+        #         # print('page_table', torch.nonzero(page_table))
+        #         # print('position, page_id, page_offset, partition_index, cache_partition', position, page_id, page_offset, partition_index, cache_partition.shape)
+
+        #         # print('page_table', page_table[indices])
+        #         # print('before', not torch.all(page_table[indices]==cache_partition[i, 0]))
+
+        #         page_table.index_put_(indices=indices, values=cache_partition[i, 0])
+                # print('after', not torch.all(page_table[indices]==cache_partition[i, 0]))
+
+                # print('compare', torch.all(page_table==pt))
 
     def write(
         self,

@@ -24,38 +24,6 @@ from sharktank.layers import causal_llm
 # TODO: Should be using a base class with the protocol supported.
 from ..models.llama.llama import LlamaModelConfig, PagedLlamaAttentionBlock
 
-def transact_cache_direct(
-        cache_state: list[torch.Tensor],
-        xk_cache_update: torch.Tensor,
-        xv_cache_update: torch.Tensor,
-        kv_seq_len: int,
-        start_positions: Optional[torch.Tensor] = None,
-    ):
-
-    block_index = 0
-
-    bs, batch_seq_len, _, _ = xk_cache_update.shape
-    cache_k = cache_state[block_index * 2]
-    cache_v = cache_state[block_index * 2 + 1]
-
-    if start_positions is None:
-        # Prefill. Write the entire cache.
-        cache_k[:, :batch_seq_len] = xk_cache_update
-        cache_v[:, :batch_seq_len] = xv_cache_update
-        return xk_cache_update, xv_cache_update
-    else:
-        # Decode. Write a single timestep.
-        # TODO: This needs to be reworked with index ops.
-        assert xk_cache_update.shape[1] == 1
-        assert xv_cache_update.shape[1] == 1
-        max_start_pos = 0
-        for row_index in range(bs):
-            row_start_pos = start_positions[row_index].item()
-            max_start_pos = max(row_start_pos, max_start_pos)
-            cache_k[row_index, row_start_pos] = xk_cache_update[row_index, 0]
-            cache_v[row_index, row_start_pos] = xv_cache_update[row_index, 0]
-        return cache_k[:, :kv_seq_len], cache_v[:, :kv_seq_len]
-
 def paged_attention(
         attention_block: PagedLlamaAttentionBlock,
         xq: torch.Tensor,
@@ -87,7 +55,7 @@ def paged_attention(
             xv_temp=xv_temp,
         )
     elif attention_block.cache.is_direct:
-        xk, xv = transact_cache_direct(
+        xk, xv = attention_block.transact_cache_direct(
             xk_cache_update=xk,
             xv_cache_update=xv,
             start_positions=start_positions,
@@ -95,7 +63,7 @@ def paged_attention(
             cache_state=cache_state,
         )
     else:
-        raise NotImplementedError(f"Unsupported KV cache type: {type(self.cache)}")
+        raise NotImplementedError(f"Unsupported KV cache type: {type(cache)}")
 
     # Expand kv heads for GQA.
     gqa_n_rep = attention_block.head_count // attention_block.head_count_kv
