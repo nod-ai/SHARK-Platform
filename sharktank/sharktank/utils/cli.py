@@ -106,6 +106,8 @@ def get_input_dataset(args) -> Dataset:
     if "irpa" in data_files:
         return Dataset.load(data_files["irpa"], file_type="irpa")
 
+    raise ValueError(f'Dataset format unsupported. Must be "gguf" or "irpa".')
+
 
 def get_tokenizer(args) -> tokenizer.InferenceTokenizer:
     """Gets a tokenizer based on arguments.

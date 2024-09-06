@@ -18,7 +18,7 @@ class Sharding(ABC):
 
 
 class TensorSharding(Sharding):
-    def __init__(self, *, shard_count: int):
+    def __init__(self, shard_count: int):
         super().__init__()
         self.shard_count = shard_count
 
@@ -29,7 +29,7 @@ class Unsharded(TensorSharding):
 
 
 class Replicated(TensorSharding):
-    def __init__(self, *, shard_count: int):
+    def __init__(self, shard_count: int):
         super().__init__(shard_count=shard_count)
 
 
@@ -37,6 +37,17 @@ class Split(TensorSharding):
     def __init__(self, *, shard_count: int, shard_dim: int):
         super().__init__(shard_count=shard_count)
         self.shard_dim = shard_dim
+
+
+class Ignore(TensorSharding):
+    """When a theta is sharded, a tensor or a branch with this sharding type will be
+    ignored.
+    It will not appear in the resulting sharded theta.
+    This is not strictly a TensorSharding. It will terminate further traversal of a
+    branch of a theta tree as well."""
+
+    def __init__(self):
+        super().__init__(shard_count=0)
 
 
 class ThetaSharding(dict):
@@ -49,7 +60,15 @@ class ThetaSharding(dict):
         for k, v in d.items():
             d[k] = tree.map_nodes(
                 tree=v,
-                f=lambda x: x if isinstance(x, TensorSharding) else ThetaSharding(x),
+                f=lambda x: x
+                if isinstance(
+                    x,
+                    (
+                        TensorSharding,
+                        ThetaSharding,
+                    ),
+                )
+                else ThetaSharding(x),
             )
         super().__init__(d)
 
@@ -89,6 +108,27 @@ class Conv2DSplitOutputChannelSharding(ThetaLayerSharding):
         )
 
 
+class FFNSharding(ThetaLayerSharding):
+    def __init__(self, shard_count: int):
+        super().__init__()
+        self.shard_count = shard_count
+
+    def theta_sharding(self) -> ThetaSharding:
+        return ThetaSharding(
+            {
+                "ffn_gate": LinearSplitParallelWeightAndBiasSharding(
+                    shard_count=self.shard_count
+                ).theta_sharding(),
+                "ffn_up": LinearSplitParallelWeightAndBiasSharding(
+                    shard_count=self.shard_count
+                ).theta_sharding(),
+                "ffn_down": LinearSplitReductionDimSharding(
+                    shard_count=self.shard_count
+                ).theta_sharding(),
+            }
+        )
+
+
 class GroupNormSplitChannelSharding(ThetaLayerSharding):
     def __init__(self, shard_count: int):
         super().__init__()
@@ -103,8 +143,11 @@ class GroupNormSplitChannelSharding(ThetaLayerSharding):
         )
 
 
-class LinearReplicatedInputSplitWeightAndBiasSharding(ThetaLayerSharding):
+class LinearSplitParallelWeightAndBiasSharding(ThetaLayerSharding):
     def __init__(self, shard_count: int, weight_and_bias_spit_dim: int = 0):
+        """Split one parallel dimension for both the weight and bias.
+        Since the weight is transposed before multiplying, the weight parallel
+        dimension is the same as the output(bias) dimension."""
         super().__init__()
         self.shard_count = shard_count
         self.weight_and_bias_spit_dim = weight_and_bias_spit_dim
@@ -121,5 +164,51 @@ class LinearReplicatedInputSplitWeightAndBiasSharding(ThetaLayerSharding):
                     shard_count=self.shard_count,
                     shard_dim=self.weight_and_bias_spit_dim,
                 ),
+            }
+        )
+
+
+class LinearSplitReductionDimSharding(ThetaLayerSharding):
+    def __init__(self, shard_count: int):
+        super().__init__()
+        self.shard_count = shard_count
+
+    def theta_sharding(self) -> ThetaSharding:
+        return ThetaSharding(
+            {
+                "premul_input": Replicated(shard_count=self.shard_count),
+                "weight": Split(
+                    shard_count=self.shard_count,
+                    shard_dim=1,
+                ),
+                "bias": Replicated(
+                    shard_count=self.shard_count,
+                ),
+            }
+        )
+
+
+class RmsNormReplicatedSharding(ThetaLayerSharding):
+    def __init__(self, shard_count: int):
+        super().__init__()
+        self.shard_count = shard_count
+
+    def theta_sharding(self) -> ThetaSharding:
+        return ThetaSharding(
+            {
+                "weight": Replicated(shard_count=self.shard_count),
+            }
+        )
+
+
+class TokenEmbeddingLayerReplicatedSharding(ThetaLayerSharding):
+    def __init__(self, shard_count: int):
+        super().__init__()
+        self.shard_count = shard_count
+
+    def theta_sharding(self) -> ThetaSharding:
+        return ThetaSharding(
+            {
+                "weight": Replicated(shard_count=self.shard_count),
             }
         )

@@ -4,11 +4,13 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-from typing import Optional
+from typing import Optional, Union
 
 import torch
 
 from .base import BaseLayer
+from .. import ops
+from ..types import SplitPrimitiveTensor, ReplicatedTensor, unbox_tensor
 
 
 class RotaryEmbeddingLayer(BaseLayer):
@@ -23,6 +25,7 @@ class RotaryEmbeddingLayer(BaseLayer):
         device: Optional[torch.device] = None,
         use_hf: bool = False,
         static_tables: bool = True,
+        tensor_parallelism_size: int = 1,
     ):
         super().__init__()
         # Force static_tables until compiler limitations are solved.
@@ -33,9 +36,10 @@ class RotaryEmbeddingLayer(BaseLayer):
         self.max_seqlen = max_seqlen
         self.use_hf = use_hf
         self.rope_freq_base = rope_freq_base if rope_freq_base is not None else 10000.0
+        self.tensor_parallelism_size = tensor_parallelism_size
         if static_tables:
-            self.register_buffer(
-                "static_rotary_embed_table", self._create_rotary_embed_table()
+            ops.module_register_buffer(
+                self, "static_rotary_embed_table", self._create_rotary_embed_table()
             )
         else:
             self.static_rotary_embed_table = None
@@ -47,7 +51,55 @@ class RotaryEmbeddingLayer(BaseLayer):
         else:
             return self.static_rotary_embed_table
 
-    def forward(self, *, xq: torch.Tensor, xk: torch.Tensor, start_index: int):
+    def forward(
+        self,
+        *,
+        xq: Union[torch.Tensor, SplitPrimitiveTensor],
+        xk: Union[torch.Tensor, SplitPrimitiveTensor],
+        start_index: int,
+    ):
+        if isinstance(xq, SplitPrimitiveTensor):
+            assert (
+                isinstance(xk, SplitPrimitiveTensor)
+                and xq.shard_count == xk.shard_count
+                and xk.shard_dim == xq.shard_dim
+            )
+            assert (
+                isinstance(self.rotary_embed_table, ReplicatedTensor)
+                and xq.shard_count == self.rotary_embed_table.shard_count
+            )
+            xqk_shards = [
+                self.forward_unsharded(
+                    xq=unbox_tensor(xq_shard),
+                    xk=unbox_tensor(xk_shard),
+                    start_index=start_index,
+                    rotary_embed_table=unbox_tensor(rotary_embed_table_shard),
+                )
+                for xq_shard, xk_shard, rotary_embed_table_shard in zip(
+                    xq.shards, xk.shards, self.rotary_embed_table.shards
+                )
+            ]
+            xq_shards = [xqk[0] for xqk in xqk_shards]
+            xk_shards = [xqk[1] for xqk in xqk_shards]
+            xq = SplitPrimitiveTensor(ts=xq_shards, shard_dim=xq.shard_dim)
+            xk = SplitPrimitiveTensor(ts=xk_shards, shard_dim=xk.shard_dim)
+            return xq, xk
+        else:
+            return self.forward_unsharded(
+                xq=xq,
+                xk=xk,
+                start_index=start_index,
+                rotary_embed_table=self.rotary_embed_table,
+            )
+
+    def forward_unsharded(
+        self,
+        *,
+        xq: torch.Tensor,
+        xk: torch.Tensor,
+        start_index: int,
+        rotary_embed_table: torch.Tensor,
+    ):
         # xq_, xk_ shape: bs, sl, _, dim
         # freqs_cis shape: max_sl, dim
 
@@ -97,7 +149,7 @@ class RotaryEmbeddingLayer(BaseLayer):
         _, sl, _, dim = xq_.shape
 
         # Offset the table based on starting position.
-        freqs_cis = self.rotary_embed_table[start_index : start_index + sl, :]
+        freqs_cis = rotary_embed_table[start_index : start_index + sl, :]
         assert freqs_cis.shape[-1] == dim
         assert (
             freqs_cis.shape[0] >= sl
@@ -139,7 +191,7 @@ class RotaryEmbeddingLayer(BaseLayer):
         )
 
     def compute_batch_mask(
-        self, start_positions: torch.Tensor, batch_seq_len: int
+        self, start_positions: Union[torch.Tensor, ReplicatedTensor], batch_seq_len: int
     ) -> torch.Tensor:
         """Computes a mask for a batch that can be repeatedly applied.
 
@@ -163,6 +215,45 @@ class RotaryEmbeddingLayer(BaseLayer):
         return broadcast_freqs_cis
 
     def apply_batched_mask(
+        self,
+        *,
+        xq: Union[torch.Tensor, SplitPrimitiveTensor],
+        xk: Union[torch.Tensor, SplitPrimitiveTensor],
+        mask: Union[torch.Tensor, ReplicatedTensor],
+    ):
+        if isinstance(xq, SplitPrimitiveTensor):
+            assert (
+                isinstance(xk, SplitPrimitiveTensor)
+                and xq.shard_count == xk.shard_count
+                and xk.shard_dim == xq.shard_dim
+            )
+            assert (
+                isinstance(self.rotary_embed_table, ReplicatedTensor)
+                and xq.shard_count == self.rotary_embed_table.shard_count
+            )
+            assert (
+                isinstance(mask, ReplicatedTensor)
+                and mask.shard_count == xq.shard_count
+            )
+            xqk_shards = [
+                self.apply_batched_mask_unsharded(
+                    xq=unbox_tensor(xq_shard),
+                    xk=unbox_tensor(xk_shard),
+                    mask=unbox_tensor(mask_shard),
+                )
+                for xq_shard, xk_shard, mask_shard in zip(
+                    xq.shards, xk.shards, mask.shards
+                )
+            ]
+            xq_shards = [xqk[0] for xqk in xqk_shards]
+            xk_shards = [xqk[1] for xqk in xqk_shards]
+            xq = SplitPrimitiveTensor(ts=xq_shards, shard_dim=xq.shard_dim)
+            xk = SplitPrimitiveTensor(ts=xk_shards, shard_dim=xk.shard_dim)
+            return xq, xk
+        else:
+            return self.apply_batched_mask_unsharded(xq=xq, xk=xk, mask=mask)
+
+    def apply_batched_mask_unsharded(
         self, *, xq: torch.Tensor, xk: torch.Tensor, mask: torch.Tensor
     ):
         """Applies the embedding to a ragged batch of queries and keys.
@@ -199,5 +290,9 @@ class RotaryEmbeddingLayer(BaseLayer):
             if self.use_hf
             else torch.polar(torch.ones_like(freqs), freqs)
         )
+
+        if self.tensor_parallelism_size > 1:
+            # Replicate across all devices, the data is not a lot and the computation is cheap.
+            freqs_cis = ops.replicate(freqs_cis, self.tensor_parallelism_size)
 
         return freqs_cis

@@ -4,7 +4,7 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-from typing import Sequence
+from typing import Sequence, Optional
 from ..types.tensors import AnyTensor
 
 
@@ -53,3 +53,12 @@ def broadcast_dims(
     ranks = [len(shape) for shape in shaped_or_shape]
     broadcast_rank = max(ranks)
     return [dim + max(0, broadcast_rank - rank) for dim, rank in zip(dims, ranks)]
+
+
+def unbroadcast_dim(dim: int, shapes: Sequence[Sequence[int]]) -> Optional[int]:
+    """Returns the dimension in `shapes[0]` such that it would correspond to `dim`
+    after broadcasting the shapes `shapes`."""
+    ranks = [len(shape) for shape in shapes]
+    broadcast_rank = max(ranks)
+    res = dim - max(0, broadcast_rank - ranks[0])
+    return None if res < 0 else res
