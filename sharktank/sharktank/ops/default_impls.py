@@ -88,11 +88,30 @@ def elementwise_binary(operator, x, y):
         IsOfType(Tensor, InferenceTensor, Number),
     )
 )
-def elementwise_multi_args(operator, x, y, *args):
-    x = unbox_tensor(x)
-    if isinstance(y, PrimitiveTensor):
-        y = unbox_tensor(y)
-    return elementwise(operator, elementwise(operator, x, y), *args)
+def elementwise_variadic(operator, x, y, *args):
+    """Folds by successively applying the binary operator from left to right until
+    exhaustion.
+
+    Match a variable number of tensor/number arguments with at least 3 such arguments.
+
+    Example matches
+    ```
+    (Tensor, Tensor, Tensor)
+    (Tensor, DefaultPrimitiveTensor, float),
+    (SplitPrimitiveTensor, ReplicatedTensor, int, Tensor)
+    ```
+
+    Will not match
+    ```
+    (Tensor)
+    (Tensor, Tensor)
+    (int, Tensor, Tensor)
+    ```
+    """
+    res = elementwise(operator, x, y)
+    for arg in args:
+        res = elementwise(operator, res, arg)
+    return res
 
 
 # Embedding Lookup

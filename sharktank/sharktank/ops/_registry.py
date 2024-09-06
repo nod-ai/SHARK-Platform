@@ -114,7 +114,8 @@ class AllOfExprsVariadic(BoolTypeExpr):
                 return False
             exprs = self._exprs
             if len(types) > len(exprs):
-                exprs = exprs + [exprs[-1]] * (len(types) - len(self._exprs))
+                # pad with the trailing expression.
+                exprs = exprs + ([exprs[-1]] * (len(types) - len(self._exprs)))
             return all([e(t) for e, t in zip(exprs, types)])
 
         super().__init__(expr)
