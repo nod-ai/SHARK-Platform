@@ -88,7 +88,7 @@ def conv2d_all_split(
         input.is_replicated or input.shard_dim == 1
     ), "Only sharding of input channel dimension is supported"
     assert (
-        weight.shard_dim == 0 and bias.shard_dim == 0
+        bias is None or weight.shard_dim == 0 and bias.shard_dim == 0
     ), "Only sharding of output channel dimension is supported"
 
     # TODO: allow for implementation where we don't all-gather, but gather
@@ -146,7 +146,7 @@ def conv2d_replicated_input_split_weight_and_bias(
     assert input.shard_count == weight.shard_count
     assert bias is None or weight.shard_count == bias.shard_count
     assert (
-        weight.shard_dim == 0 and bias.shard_dim == 0
+        bias is None or weight.shard_dim == 0 and bias.shard_dim == 0
     ), "Only sharding of output channel dimension is supported"
     assert groups == 1
 
@@ -189,7 +189,8 @@ def conv2d_split_weight_and_bias(
     accum_dtype,
 ) -> SplitPrimitiveTensor:
     assert accum_dtype is None, "accum_dtype not supported"
-    assert weight.shard_count == bias.shard_count
+    if bias is not None:
+        assert weight.shard_count == bias.shard_count
 
     # Output channels dimension is split.
     if weight.shard_dim == 0 and groups == 1:

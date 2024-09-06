@@ -1,3 +1,5 @@
+import unittest
+
 # Copyright 2024 Advanced Micro Devices, Inc.
 #
 # Licensed under the Apache License v2.0 with LLVM Exceptions.
@@ -6,16 +8,19 @@
 
 from pathlib import Path
 import tempfile
-
 import torch
-
-
 from shark_turbine import aot
-from sharktank.models.punet.testing import make_resnet_block_2d_theta
-from sharktank.models.punet.layers import ResnetBlock2D
-from sharktank.models.punet.sharding import ResnetBlock2DSplitOutputChannelsSharding
+from sharktank.models.punet.layers import Conv2DLayer
 from sharktank import ops
-from sharktank.types import *
+from sharktank.types import (
+    Dataset,
+    DefaultPrimitiveTensor,
+    Theta,
+    ShardedTensor,
+    SplitPrimitiveTensor,
+    unbox_tensor,
+)
+from sharktank.types.sharding import Conv2DSplitOutputChannelSharding
 import iree.runtime
 from typing import List, Optional
 import os
@@ -44,11 +49,9 @@ def compile_iree_module(
 # This run function should be way shorter.
 def run_iree_module(
     sharded_input_image: ShardedTensor,
-    sharded_input_time_emb: ShardedTensor,
     module_path: str,
     parameters_path: str,
 ) -> ShardedTensor:
-    assert sharded_input_image.shard_count == sharded_input_time_emb.shard_count
     shard_count = sharded_input_image.shard_count
     hal_driver = iree.runtime.get_driver("local-task")
     vm_instance = iree.runtime.VmInstance()
@@ -87,12 +90,6 @@ def run_iree_module(
         )
         for i in range(shard_count)
     ]
-    module_input_args += [
-        iree.runtime.asdevicearray(
-            devices[i], sharded_input_time_emb.shards[i].as_torch().to("cpu").numpy()
-        )
-        for i in range(shard_count)
-    ]
 
     vm_function = vm_module.lookup_function("main")
     invoker = iree.runtime.FunctionInvoker(
@@ -107,45 +104,35 @@ def run_iree_module(
     return SplitPrimitiveTensor(ts=shards, shard_dim=1)
 
 
-def run_test_sharded_resnet_block_with_iree(
+def run_test_sharded_conv2d_with_iree(
     mlir_path: Path, module_path: Path, parameters_path: Path, caching: bool
 ):
     torch.set_default_dtype(torch.float32)
+    torch.manual_seed(123456)
     batches = 2
     in_channels = 6
-    out_channels = [12, 8]
+    out_channels = 8
     height = 11
     width = 13
     kernel_height = 5
     kernel_width = 5
-    input_time_emb_shape = [batches, 8]
-    norm_groups = 2
-    eps = 0.01
     shard_count = 2
-
-    torch.manual_seed(123456)
-
-    input_image = torch.rand(
-        batches,
-        in_channels,
-        height,
-        width,
-    )
-    input_time_emb = torch.rand(input_time_emb_shape)
-
-    unsharded_theta = make_resnet_block_2d_theta(
-        in_channels=in_channels,
-        out_channels=out_channels,
-        kernel_height=kernel_height,
-        kernel_width=kernel_width,
-        input_time_emb_channels=input_time_emb_shape[1],
+    unsharded_theta = Theta(
+        {
+            "weight": DefaultPrimitiveTensor(
+                data=torch.rand(
+                    out_channels,
+                    in_channels,
+                    kernel_height,
+                    kernel_width,
+                )
+            ),
+        }
     )
     unsharded_theta.rename_tensors_to_paths()
 
     if not caching or not os.path.exists(parameters_path):
-        sharding_spec = ResnetBlock2DSplitOutputChannelsSharding(
-            shard_count=shard_count
-        )
+        sharding_spec = Conv2DSplitOutputChannelSharding(shard_count=shard_count)
         sharded_theta = ops.reshard(unsharded_theta, sharding_spec)
 
         # Roundtrip the dataset, which anchors the tensors as parameters to be loaded
@@ -155,58 +142,37 @@ def run_test_sharded_resnet_block_with_iree(
 
     sharded_dataset = Dataset.load(parameters_path)
 
-    sharded_resnet_block = ResnetBlock2D(
-        theta=sharded_dataset.root_theta,
-        groups=norm_groups,
-        eps=eps,
-        non_linearity="relu",
-        output_scale_factor=None,
-        dropout=0.0,
-        temb_channels=input_time_emb_shape[1],
-        time_embedding_norm="default",
+    input_image = torch.rand(
+        batches,
+        in_channels,
+        height,
+        width,
     )
-    sharded_input_image = ops.reshard_split(input_image, dim=1, count=shard_count)
-    sharded_input_time_emb = ops.replicate(input_time_emb, count=shard_count)
-    expected_result = sharded_resnet_block(sharded_input_image, sharded_input_time_emb)
 
-    # Verify as a sanity check that the sharded torch model matches the result
-    # of the unsharded torch model.
-    unsharded_resnet_block = ResnetBlock2D(
-        theta=unsharded_theta,
-        groups=norm_groups,
-        eps=eps,
-        non_linearity="relu",
-        output_scale_factor=None,
-        dropout=0.0,
-        temb_channels=input_time_emb_shape[1],
-        time_embedding_norm="default",
-    )
-    unsharded_result = unsharded_resnet_block(input_image, input_time_emb)
-    torch.testing.assert_close(unsharded_result, ops.unshard(expected_result))
+    sharded_torch_module = Conv2DLayer(sharded_dataset.root_theta, padding=(0, 0))
+    sharded_input_image = ops.reshard_split(input_image, dim=1, count=shard_count)
+    expected_result = sharded_torch_module(sharded_input_image)
 
     if not caching or not os.path.exists(module_path):
-        exported_resnet_block = aot.export(
-            sharded_resnet_block,
-            args=(
-                sharded_input_image,
-                sharded_input_time_emb,
-            ),
+        exported_module = aot.export(
+            sharded_torch_module,
+            args=(sharded_input_image,),
         )
-        exported_resnet_block.save_mlir(mlir_path)
+        exported_module.save_mlir(mlir_path)
 
         compile_iree_module(
-            export_output=exported_resnet_block,
+            export_output=exported_module,
             module_path=module_path,
             shard_count=shard_count,
         )
 
     actual_result = run_iree_module(
         sharded_input_image=sharded_input_image,
-        sharded_input_time_emb=sharded_input_time_emb,
         module_path=module_path,
         parameters_path=parameters_path,
     )
     assert len(actual_result.shards) == len(expected_result.shards)
+    assert actual_result.shard_dim == expected_result.shard_dim
     # TODO: reenable this check once numerical issues are resolved.
     # See https://github.com/iree-org/iree/issues/18283
     # for actual_shard, expected_shard in zip(
@@ -216,23 +182,17 @@ def run_test_sharded_resnet_block_with_iree(
     #         unbox_tensor(actual_shard), unbox_tensor(expected_shard)
     #     )
 
-    global vm_context
-    del vm_context
 
-
-def test_sharded_resnet_block_with_iree(
+def test_sharded_conv2d_with_iree(
     mlir_path: Optional[Path],
     module_path: Optional[Path],
     parameters_path: Optional[Path],
     caching: bool,
 ):
-    """Test sharding, exportation and execution with IREE local-task of a Resnet block.
-    The result is compared against execution with torch.
-    The model is tensor sharded across 2 devices.
-    """
+    """Test sharding, exporting and running with IREE a 2D convolution layer."""
 
     with tempfile.TemporaryDirectory(
-        # TODO: verify hypothesis and remove ignore_cleanup_errors=True
+        # TODO: verify hypothesis and remove ignore_cleanup_errors=True after a fix.
         # torch.export.export is spawning some processes that don't exit when the
         # function returns, this causes some objects to not get destroyed, which
         # in turn holds files params.rank0.irpa and params.rank1.irpa open.
@@ -247,6 +207,6 @@ def test_sharded_resnet_block_with_iree(
             if parameters_path is None
             else parameters_path
         )
-        run_test_sharded_resnet_block_with_iree(
+        run_test_sharded_conv2d_with_iree(
             mlir_path, module_path, parameters_path, caching
         )
