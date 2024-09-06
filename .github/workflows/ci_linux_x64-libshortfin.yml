@@ -85,6 +85,7 @@ jobs:
       # TODO: Switch to `pip install -r requirements.txt -e libshortfin/`.
       run: |
         pip install -r ${{ env.LIBSHORTFIN_DIR }}/requirements-tests.txt
+        pip install -r ${{ env.LIBSHORTFIN_DIR }}/requirements-iree-compiler.txt
         pip freeze
 
     - name: Build libshortfin (full)
