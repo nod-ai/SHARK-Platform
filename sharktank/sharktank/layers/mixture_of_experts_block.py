@@ -170,6 +170,7 @@ class PreGatherMoeBlock(ThetaLayer):
         router_weights, top_k_experts = torch.topk(
             router_weights, self.expert_used_count, dim=-1
         )
+
         router_weights /= router_weights.sum(dim=-1, keepdim=True)
         router_weights = router_weights.to(ffn_input.dtype)
 

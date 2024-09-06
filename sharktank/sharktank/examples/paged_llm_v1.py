@@ -18,6 +18,7 @@ from ..types import *
 
 # TODO: Should be using a base class with the protocol supported.
 from ..models.mixtral.mixtral import *
+from ..models.grok.grok import *
 from ..models.llama.llama import *
 from ..utils.debugging import trace_tensor
 from ..utils.tokenizer import InferenceTokenizer, load_tokenizer
@@ -239,7 +240,7 @@ def main():
     )
 
     if config.hp.expert_count:
-        model = PagedMixtralModelV1(dataset.root_theta, config)
+        model = PagedGrokModelV1(dataset.root_theta, config)
     else:
         model = PagedLlamaModelV1(dataset.root_theta, config)
     if args.save_intermediates_path:
