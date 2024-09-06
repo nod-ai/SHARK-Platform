@@ -16,8 +16,9 @@ from numbers import Number
 
 from ..types import PrimitiveTensor, QuantizedTensor, InferenceTensor
 from ..types.tensors import unbox_tensor, AnyTensor
-from ._registry import AllOfType, AllOfExprs, IsOfType
+from ._registry import AllOfType, AllOfExprs, AllOfExprsVariadic, IsOfType
 from .signatures import *
+import shark_turbine.ops.iree
 
 
 @cat.override(AllOfType(Tensor, PrimitiveTensor))
@@ -78,6 +79,20 @@ def elementwise_binary(operator, x, y):
     if isinstance(y, PrimitiveTensor):
         y = unbox_tensor(y)
     return operator(x, y)
+
+
+@elementwise.override(
+    AllOfExprsVariadic(
+        IsOfType(Tensor, InferenceTensor),
+        IsOfType(Tensor, InferenceTensor, Number),
+        IsOfType(Tensor, InferenceTensor, Number),
+    )
+)
+def elementwise_multi_args(operator, x, y, *args):
+    x = unbox_tensor(x)
+    if isinstance(y, PrimitiveTensor):
+        y = unbox_tensor(y)
+    return elementwise(operator, elementwise(operator, x, y), *args)
 
 
 # Embedding Lookup
@@ -232,6 +247,13 @@ def rms_norm_Tensor_QuantizedTensor(
 def permute(tensor: Tensor, dims: List[int]):
     torch_tensor = unbox_tensor(tensor)
     return torch.permute(torch_tensor, dims)
+
+
+@transfer_to_logical_device.override(Tensor)
+def transfer_to_logical_device_default(tensor: Tensor, ordinal: int):
+    return shark_turbine.ops.iree.transfer_to_logical_device(
+        f"{ordinal}", unbox_tensor(tensor)
+    )
 
 
 # Sharded default impls (do nothing).
