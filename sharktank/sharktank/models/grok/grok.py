@@ -13,13 +13,14 @@ import torch.nn as nn
 
 
 from ...layers import *
+from ...layers.mixture_of_experts_block import PreGatherMoeBlock
 from ...types import Theta
 
 torch.set_printoptions(profile="full")
 
 __all__ = [
     "LlamaModelConfig",
-    "PagedMixtralModelV1",
+    "PagedGrokModelV1",
 ]
 
 ################################################################################
@@ -28,7 +29,7 @@ __all__ = [
 
 
 @dataclass
-class GrokModelConfig:
+class LlamaModelConfig:
     hp: configs.LlamaHParams
 
     # Block sequence stride for a paged KV cache. This must divide evenly
@@ -100,7 +101,7 @@ class PagedGrokModelV1(BaseCausalLMModel):
     Various samplers and schedulers can be interleaved throughout.
     """
 
-    def __init__(self, theta: Theta, config: GrokModelConfig):
+    def __init__(self, theta: Theta, config: LlamaModelConfig):
         hp = config.hp
         super().__init__(
             theta,
