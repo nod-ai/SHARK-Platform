@@ -1,4 +1,5 @@
 pytest
 requests
 fastapi
+onnx
 uvicorn
