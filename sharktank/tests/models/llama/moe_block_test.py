@@ -10,21 +10,20 @@ from typing import List
 import torch
 from shark_turbine.aot import *
 from sharktank.models.llama.testing import make_moe_block_theta, make_rand_torch
-from sharktank.layers.mixture_of_experts_block import SparseMoeBlock
+from sharktank.layers.mixture_of_experts_block import PreGatherMoeBlock
 from sharktank import ops
 
 
 class SparseMoeBlockTest(unittest.TestCase):
-    @unittest.skip("Skip test until grok implementation")
     def test(self):
-        model = SparseMoeBlock(
+        model = PreGatherMoeBlock(
             theta=make_moe_block_theta()("blk.0"),
             expert_count=8,
             expert_used_count=2,
             rms_epsilon=1e-5,
         )
         fxb = FxProgramsBuilder(model)
-        input = make_rand_torch((2, 16, 6144))
+        input = make_rand_torch((2, 32, 6144))
 
         @fxb.export_program(name="moe_block", args=(input,))
         def _(model, input: torch.Tensor) -> torch.Tensor:
