@@ -173,4 +173,4 @@ jobs:
       run: |
         eval "$(pyenv init -)"
         cd ${{ env.LIBSHORTFIN_DIR }}
-        pytest -m "not requires_amd_gpu" -s
+        pytest -s

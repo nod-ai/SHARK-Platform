@@ -148,6 +148,13 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
           "initialization");
     }
   }
+  void AssertRunning() {
+    if (!initialized_ || shutdown_) {
+      throw std::logic_error(
+          "System manipulation methods can only be called when initialized and "
+          "not shutdown");
+    }
+  }
 
   // Allocates a process in the process table and returns its new pid.
   // This is done on process construction. Note that it acquires the

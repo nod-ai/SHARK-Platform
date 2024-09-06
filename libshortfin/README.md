@@ -61,6 +61,20 @@ does mean that the C++ core of the library must always be built with the
 Python bindings to test the most behavior. Given the target of the project,
 this is not considered to be a significant issue.
 
+### Python tests
+
+Run platform independent tests only:
+
+```
+pytest tests/
+```
+
+Run tests including for a specific platform:
+
+```
+pytest tests/ --system amdgpu
+```
+
 # Production Library Building
 
 In order to build a production library, additional build steps are typically

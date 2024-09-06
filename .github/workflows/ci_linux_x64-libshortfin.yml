@@ -107,7 +107,7 @@ jobs:
         cd ${{ env.LIBSHORTFIN_DIR }}/build
         ctest --timeout 30 --output-on-failure
         cd ${{ env.LIBSHORTFIN_DIR }}
-        pytest -s -v -m "not requires_amd_gpu"
+        pytest -s
 
     - name: Build libshortfin (host-only)
       run: |
