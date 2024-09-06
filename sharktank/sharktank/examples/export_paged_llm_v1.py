@@ -45,6 +45,11 @@ def main():
         help="Include verbose logging",
         action="store_true",
     )
+    parser.add_argument(
+        "--strict",
+        help="Enables strictness during export",
+        action="store_true",
+    )
 
     args = cli.parse(parser)
     dataset = cli.get_input_dataset(args)
@@ -117,6 +122,7 @@ def main():
             name=f"prefill_bs{bs}",
             args=(tokens, seq_lens, seq_block_ids, cache_state),
             dynamic_shapes=dynamic_shapes,
+            strict=args.strict,
         )
         def _(model, tokens, seq_lens, seq_block_ids, cache_state):
             sl = tokens.shape[1]
@@ -174,6 +180,7 @@ def main():
                 cache_state,
             ),
             dynamic_shapes=dynamic_shapes,
+            strict=args.strict,
         )
         def _(
             model,
