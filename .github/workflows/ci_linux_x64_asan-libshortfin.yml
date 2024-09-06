@@ -76,8 +76,10 @@ jobs:
     needs: [setup-python-asan]
     runs-on: ubuntu-24.04
     env:
-      # TODO(#151): Don't ignore ODR violations
-      ASAN_OPTIONS: detect_odr_violation=0
+      # We can't count on being leak free in general (i.e. pip, etc) so disable
+      # leak checker by default. Here we suppress any ASAN features needed to
+      # pass the build. Test configuration is done specially just for that step.
+      ASAN_OPTIONS: detect_leaks=0,detect_odr_violation=0
       LSAN_OPTIONS: suppressions=${{ github.workspace }}/libshortfin/build_tools/python_lsan_suppressions.txt
     steps:
     - name: Install dependencies
@@ -170,7 +172,10 @@ jobs:
 
     - name: Run pytest
       if: ${{ !cancelled() }}
+      env:
+        # TODO(#151): Don't ignore ODR violations
+        ASAN_OPTIONS: detect_odr_violation=0
       run: |
         eval "$(pyenv init -)"
         cd ${{ env.LIBSHORTFIN_DIR }}
-        pytest -m "not requires_amd_gpu" -s
+        pytest -s

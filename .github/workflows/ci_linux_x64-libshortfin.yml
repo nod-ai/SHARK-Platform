@@ -85,6 +85,7 @@ jobs:
       # TODO: Switch to `pip install -r requirements.txt -e libshortfin/`.
       run: |
         pip install -r ${{ env.LIBSHORTFIN_DIR }}/requirements-tests.txt
+        pip install -r ${{ env.LIBSHORTFIN_DIR }}/requirements-iree-compiler.txt
         pip freeze
 
     - name: Build libshortfin (full)
@@ -107,7 +108,7 @@ jobs:
         cd ${{ env.LIBSHORTFIN_DIR }}/build
         ctest --timeout 30 --output-on-failure
         cd ${{ env.LIBSHORTFIN_DIR }}
-        pytest -s -v -m "not requires_amd_gpu"
+        pytest -s
 
     - name: Build libshortfin (host-only)
       run: |
