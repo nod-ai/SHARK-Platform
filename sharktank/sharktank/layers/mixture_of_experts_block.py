@@ -167,14 +167,14 @@ class PreGatherMoeBlock(ThetaLayer):
         router_weights = F.softmax(router_logits, dim=1, dtype=torch.float)
 
         # Select top k experts from router weights
-        router_weights, top_k_experts = torch.topk(
+        expert_gate, top_k_experts = torch.topk(
             router_weights, self.expert_used_count, dim=-1
         )
 
-        router_weights /= router_weights.sum(dim=-1, keepdim=True)
-        router_weights = router_weights.to(ffn_input.dtype)
+        # router_weights /= router_weights.sum(dim=-1, keepdim=True)
+        # router_weights = router_weights.to(ffn_input.dtype)
 
-        moe_output = self.mix(ffn_input, top_k_experts)
+        moe_output = self.mix(ffn_input, top_k_experts, expert_gate)
         moe_output = moe_output.reshape(batch_size, sequence_length, feature_dim)
 
         moe_output = self.layer_output_norm(moe_output)
