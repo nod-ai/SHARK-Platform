@@ -7,17 +7,17 @@
 """
 Sample Usage:
 
-python -m tuner.examples.punet.punet_autotune benchmark.mlir --lhs-dims=bmk --rhs-dims=bkn --tile-dims=*mnk --devices=hip://0,hip://1 --num-candidates=64
+python -m tuner.examples.punet benchmark.mlir --lhs-dims=bmk --rhs-dims=bkn --tile-dims=*mnk --devices=hip://0,hip://1 --num-candidates=64
 
 
 Recommended Trial Run:
 
-python -m tuner.examples.punet.punet_autotune benchmark.mlir --num-candidates=1
+python -m tuner.examples.punet benchmark.mlir --num-candidates=1
 
 
 Dry Run Test (no gpu requried):
 
-python -m tuner.examples.punet.punet_autotune benchmark.mlir --num-candidates=64 --num-model-candidates=10 --dry-run
+python -m tuner.examples.punet benchmark.mlir --num-candidates=64 --num-model-candidates=10 --dry-run
 
 """
 
@@ -185,7 +185,3 @@ def main():
         libtuner.logging.debug(candidate)
         if args.verbose:
             print(candidate)
-
-
-if __name__ == "__main__":
-    main()
