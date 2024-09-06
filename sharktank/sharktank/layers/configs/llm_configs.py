@@ -109,8 +109,8 @@ class LlamaHParams:
             embedding_length=_int_prop(p, f"{name_prefix}.embedding_length"),
             block_count=_int_prop(p, f"{name_prefix}.block_count"),
             feed_forward_length=_int_prop(p, f"{name_prefix}.feed_forward_length"),
-            attn_head_dim=_int_prop(p, f"{name_prefix}.rope.dimension_count"),
-            rope_dimension_count=_int_prop(p, f"{name_prefix}.rope.dimension_count"),
+            attn_head_dim=128,  # _int_prop(p, f"{name_prefix}.rope.dimension_count"),
+            rope_dimension_count=128,  # _int_prop(p, f"{name_prefix}.rope.dimension_count"),
             attention_head_count=attention_head_count,
             attention_layer_norm_rms_epsilon=_float_prop(
                 p, f"{name_prefix}.attention.layer_norm_rms_epsilon"
