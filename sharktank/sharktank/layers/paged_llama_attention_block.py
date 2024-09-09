@@ -38,6 +38,7 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         rms_epsilon: float,
         use_hf: bool = False,
         attention_kernel: str = "decomposed",
+        use_grok: bool = False,
     ):
         super().__init__(theta)
         self.add_module(
@@ -55,6 +56,7 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         self.head_count_kv = head_count_kv
         self.use_hf = use_hf
         self.attention_kernel = attention_kernel
+        self.use_grok = use_grok
 
     def forward(
         self,
@@ -147,6 +149,8 @@ class PagedLlamaAttentionBlock(ThetaLayer):
                 self.head_dim
             )
             self.assert_not_nan(attn_weights)
+            if self.use_grok:
+                attn_weights = 30 * torch.tanh(attn_weights * (0.08838834764831845 / 30.0))
 
             # Apply attention mask.
             self.trace_tensor("attn_weights", attn_weights, values=False)
