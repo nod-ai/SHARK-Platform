@@ -391,21 +391,41 @@ class PagedKVCache(BaseKVCache):
             transformer_block_index * transformer_block_stride
         )
 
-        def write_cache_partition(index: int, part: torch.Tensor):
-            part_block_view = part.reshape(blocked_shape)
-            subblock_ids = (
-                (base_subblock_ids + index) if index > 0 else base_subblock_ids
-            )
-            # TODO: Potentially clamp all page 0 indices to the mask value.
-            # Or even better, require that the ids are replicated such that access is
-            # legal.
-            # Now for each of the k/v attn_block_ids, which have been adjusted to
-            # index into the sub-pages, we flatten to do a linear index_select
-            # copy of the sub-blocks by collapsing the first two dims so we have
-            # a linear list.
-            subblock_table.index_copy_(
-                0, subblock_ids.flatten(0, 1), part_block_view.flatten(0, 1)
-            )
-
+        part_block_views = []
+        subblock_ids_kv = []
         for index, partition in enumerate(cache_partitions):
-            write_cache_partition(index, partition)
+            part_block_view = partition.reshape(blocked_shape).flatten(0, 1)
+            part_block_views.append(part_block_view)
+
+            subblock_ids = (
+                    (base_subblock_ids + index) if index > 0 else base_subblock_ids
+            ).flatten(0, 1)
+            subblock_ids_kv.append(subblock_ids)
+            
+            # print('fused', part_block_view.shape, subblock_ids)
+
+        subblock_ids = torch.concat(subblock_ids_kv)
+        part_block_view = torch.concat(part_block_views, dim=0)
+
+        subblock_table.index_copy_(
+                    0, subblock_ids, part_block_view
+        )
+
+        # def write_cache_partition(index: int, part: torch.Tensor):
+        #     part_block_view = part.reshape(blocked_shape)
+        #     subblock_ids = (
+        #         (base_subblock_ids + index) if index > 0 else base_subblock_ids
+        #     )
+        #     # TODO: Potentially clamp all page 0 indices to the mask value.
+        #     # Or even better, require that the ids are replicated such that access is
+        #     # legal.
+        #     # Now for each of the k/v attn_block_ids, which have been adjusted to
+        #     # index into the sub-pages, we flatten to do a linear index_select
+        #     # copy of the sub-blocks by collapsing the first two dims so we have
+        #     # a linear list.
+        #     subblock_table.index_copy_(
+        #         0, subblock_ids.flatten(0, 1), part_block_view.flatten(0, 1)
+        #     )
+
+        # for index, partition in enumerate(cache_partitions):
+        #     write_cache_partition(index, partition)
