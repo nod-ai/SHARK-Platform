@@ -1,4 +1,4 @@
-# Copyright 2024 Advanced Micro Devices, Inc
+# Copyright 2024 Advanced Micro Devices, Inc.
 #
 # Licensed under the Apache License v2.0 with LLVM Exceptions. See
 # https://llvm.org/LICENSE.txt for license information. SPDX-License-Identifier:
@@ -12,7 +12,9 @@ shortfin_cc_component(
   HDRS
     async.h
     device.h
+    messaging.h
     process.h
+    program.h
     worker.h
     scheduler.h
     scope.h
@@ -20,7 +22,9 @@ shortfin_cc_component(
   SRCS
     async.cc
     device.cc
+    messaging.cc
     process.cc
+    program.cc
     worker.cc
     scheduler.cc
     scope.cc
@@ -33,4 +37,5 @@ shortfin_cc_component(
     iree_hal_hal
     iree_modules_hal_hal
     iree_vm_vm
+    iree_vm_bytecode_module
 )

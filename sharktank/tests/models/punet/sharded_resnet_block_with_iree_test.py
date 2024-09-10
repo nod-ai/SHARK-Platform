@@ -1,4 +1,4 @@
-# Copyright 2024 Advanced Micro Devices, Inc
+# Copyright 2024 Advanced Micro Devices, Inc.
 #
 # Licensed under the Apache License v2.0 with LLVM Exceptions.
 # See https://llvm.org/LICENSE.txt for license information.
@@ -40,6 +40,8 @@ def compile_iree_module(
     export_output.compile(save_to=module_path, target_backends=None)
 
 
+# TODO: improve IREE's Python API to be more concise in a multi-device context.
+# This run function should be way shorter.
 def run_iree_module(
     sharded_input_image: ShardedTensor,
     sharded_input_time_emb: ShardedTensor,
@@ -206,6 +208,7 @@ def run_test_sharded_resnet_block_with_iree(
     )
     assert len(actual_result.shards) == len(expected_result.shards)
     # TODO: reenable this check once numerical issues are resolved.
+    # See https://github.com/iree-org/iree/issues/18283
     # for actual_shard, expected_shard in zip(
     #     actual_result.shards, expected_result.shards
     # ):

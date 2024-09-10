@@ -1,4 +1,4 @@
-# Copyright 2024 Advanced Micro Devices, Inc
+# Copyright 2024 Advanced Micro Devices, Inc.
 #
 # Licensed under the Apache License v2.0 with LLVM Exceptions.
 # See https://llvm.org/LICENSE.txt for license information.
@@ -30,7 +30,6 @@ from ..utils.math import ceildiv
 from shark_turbine.aot import (
     ExternalTensorTrait,
 )
-from shark_turbine.ops.iree import transfer_to_logical_device
 from ..utils import tree as tree_utils
 
 from ..utils.io import ShardedArchiveBuilder
@@ -283,6 +282,21 @@ class InferenceTensor(ABC):
         from ..ops import elementwise
 
         return elementwise(torch.add, self, rhs)
+
+    def __radd__(self, lhs):
+        # Assumes commutative addition due to torch.elementwise not handling numbers on
+        # the lhs.
+        return self.__add__(lhs)
+
+    def __mul__(self, rhs):
+        from ..ops import elementwise
+
+        return elementwise(torch.mul, self, rhs)
+
+    def __rmul__(self, lhs):
+        # Assumes commutative multiplication due to torch.elementwise not handling
+        # numbers on the lhs.
+        return self.__mul__(lhs)
 
 
 REGISTERED_INFERENCE_TENSOR_CLASSES: dict[str, Type[InferenceTensor]] = {}
@@ -603,13 +617,15 @@ class ShardedTensorBase(ShardedTensor):
         name: str = UnnamedTensorName,
         shape: Optional[list[int]],
     ):
+        from ..ops import transfer_to_logical_device
+
         assert len(ts) > 0
         assert shard_dim is None or len(ts[0].shape) > shard_dim
         super().__init__(name=name, shape=shape, shard_dim=shard_dim)
         self._shards: tuple[DefaultPrimitiveTensor] = tuple(
             DefaultPrimitiveTensor(
                 name=f"{name}.shard.{i}",
-                data=transfer_to_logical_device(f"{i}", unbox_tensor(t)),
+                data=transfer_to_logical_device(t, i),
             )
             for i, t in enumerate(ts)
         )
@@ -852,6 +868,8 @@ class ReplicatedTensor(ShardedTensor):
         will be replicated that many times.
         """
 
+        from ..ops import transfer_to_logical_device
+
         if isinstance(ts, torch.Tensor):
             assert shard_count is not None
             ts = [ts] * shard_count
@@ -869,7 +887,7 @@ class ReplicatedTensor(ShardedTensor):
         self._shards: tuple[DefaultPrimitiveTensor] = tuple(
             DefaultPrimitiveTensor(
                 name=f"{name}.shard.{i}",
-                data=transfer_to_logical_device(f"{i}", unbox_tensor(t)),
+                data=transfer_to_logical_device(t, i),
             )
             for i, t in enumerate(ts)
         )

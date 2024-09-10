@@ -1,4 +1,4 @@
-# Copyright 2024 Advanced Micro Devices, Inc
+# Copyright 2024 Advanced Micro Devices, Inc.
 #
 # Licensed under the Apache License v2.0 with LLVM Exceptions.
 # See https://llvm.org/LICENSE.txt for license information.
@@ -57,6 +57,7 @@ class DirectCacheLlamaModelV1(ThetaLayer):
             "attention_embedding",
             RotaryEmbeddingLayer(
                 rope_dimension_count=hp.rope_dimension_count,
+                rope_freq_base=hp.rope_freq_base,
                 max_seqlen=hp.context_length,
             ),
         )

@@ -1,4 +1,4 @@
-# Copyright 2024 Advanced Micro Devices, Inc
+# Copyright 2024 Advanced Micro Devices, Inc.
 #
 # Licensed under the Apache License v2.0 with LLVM Exceptions.
 # See https://llvm.org/LICENSE.txt for license information.
@@ -8,6 +8,7 @@ import unittest
 
 import torch
 import torch.nn.functional as F
+from parameterized import parameterized
 
 from sharktank import ops
 from sharktank.types import *
@@ -32,6 +33,26 @@ class BroadcastDimsTest(unittest.TestCase):
         res = ops.broadcast_dims(dims, tensors)
         assert res[0] == 0
         assert res[1] == 2
+
+
+class ElementwiseTest(unittest.TestCase):
+    @parameterized.expand(
+        [
+            (torch.add,),
+            (torch.div,),
+            (torch.fmin,),
+            (torch.fmax,),
+            (torch.sub),
+        ]
+    )
+    def testMultiArgOperators(self, operator):
+        a = torch.rand(2, 3, 4, dtype=torch.float32)
+        b = torch.rand(2, 3, 4, dtype=torch.float32)
+        c = torch.rand(2, 3, 4, dtype=torch.float32)
+        d = torch.rand(2, 3, 4, dtype=torch.float32)
+        expected_result = operator(operator(operator(a, b), c), d)
+        actual_result = ops.elementwise(operator, a, b, c, d)
+        torch.testing.assert_close(actual_result, expected_result)
 
 
 class EqualTest(unittest.TestCase):
@@ -88,6 +109,18 @@ class EmbeddingLookupTest(unittest.TestCase):
     def testQuantizedTensorRhs(self):
         # TODO: Implement me. Quantized embedding lookup NYI completely.
         ...
+
+
+class GemmTest(unittest.TestCase):
+    def testGemm(self):
+        a = torch.tensor([[1, 2], [3, 4]])
+        b = torch.tensor([[5, 6], [7, 8]])
+        c = torch.tensor([[9, 10], [11, 12]])
+        alpha = 2
+        beta = 3
+        expected = alpha * a @ b.T + beta * c
+        result = ops.gemm(a, b, c, alpha, beta, False, True)
+        torch.testing.assert_close(result, expected)
 
 
 class MatmulTest(unittest.TestCase):

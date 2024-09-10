@@ -1,4 +1,4 @@
-// Copyright 2024 Advanced Micro Devices, Inc
+// Copyright 2024 Advanced Micro Devices, Inc.
 //
 // Licensed under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -9,6 +9,9 @@
 
 #include <functional>
 #include <string>
+#include <typeindex>
+#include <typeinfo>
+#include <unordered_map>
 #include <vector>
 
 #include "iree/base/loop_sync.h"
@@ -38,19 +41,67 @@ class SHORTFIN_API Worker {
     Options(iree_allocator_t allocator, std::string name)
         : allocator(allocator), name(name) {}
   };
-  using Factory = std::function<std::unique_ptr<Worker>(Options options)>;
+
+  // Some clients need dedicated space within the worker to manage their
+  // interactions. This can be encapsulated as an Extension and allocated
+  // on the worker. Extensions are only available from on the worker and
+  // can be retrieved by type when getting access to the current Worker on
+  // a thread.
+  class SHORTFIN_API Extension {
+   public:
+    Extension(Worker &worker) noexcept : worker_(worker) {}
+    Extension(const Extension &) = delete;
+    Extension(Extension &&) = delete;
+    Extension &operator=(const Extension &) = delete;
+    virtual ~Extension() noexcept;
+
+    Worker &worker() { return worker_; }
+
+    // Called on the worker thread when started
+    virtual void OnThreadStart() noexcept;
+    virtual void OnThreadStop() noexcept;
+
+    // If shutdown involves a blocking wait, these callbacks will be called
+    // just before and just after the potential for blocking. This can be
+    // used to release locks.
+    virtual void OnBeforeShutdownWait() noexcept;
+    virtual void OnAfterShutdownWait() noexcept;
+
+   private:
+    Worker &worker_;
+  };
 
   Worker(Options options);
   Worker(const Worker &) = delete;
-  virtual ~Worker();
+  Worker &operator=(const Worker &) = delete;
+  Worker(Worker &&) = delete;
+  ~Worker();
 
   const Options &options() const { return options_; }
   const std::string_view name() const { return options_.name; }
+  iree_loop_t loop() { return loop_; }
   std::string to_s();
+
+  // Gets the Worker that is active for the current thread or nullptr if none.
+  static Worker *GetCurrent() noexcept;
+
+  // Gets a typed extension for the Worker that is active for the current
+  // thread or nullptr if no worker is active.
+  template <typename ExtensionTy>
+  static ExtensionTy *GetCurrentExtension() noexcept;
+
+  // Sets a typed extension on the worker. This must be done prior to Start()
+  // is called.
+  template <typename ExtensionTy>
+  void SetExtension(std::unique_ptr<ExtensionTy> ext);
+
+  // Gets a typed extension or nullptr if one has not been set.
+  template <typename ExtensionTy>
+  ExtensionTy *GetExtension() noexcept;
 
   void Start();
   void Kill();
-  virtual void WaitForShutdown();
+  void WaitForShutdown();
 
   // Runs on the current thread. This is used instead of Start() when
   // owned_thread is false.
@@ -90,8 +141,8 @@ class SHORTFIN_API Worker {
   iree_time_t ConvertRelativeTimeoutToDeadlineNs(iree_duration_t timeout_ns);
 
  protected:
-  virtual void OnThreadStart();
-  virtual void OnThreadStop();
+  void OnThreadStart();
+  void OnThreadStop();
 
  private:
   int RunOnThread();
@@ -115,7 +166,32 @@ class SHORTFIN_API Worker {
   iree_loop_sync_t *loop_sync_;
   iree_loop_t loop_;
   std::vector<std::function<void()>> next_thunks_;
+  std::unordered_map<std::type_index, std::unique_ptr<Extension>> extensions_;
 };
+
+template <typename ExtensionTy>
+inline void Worker::SetExtension(std::unique_ptr<ExtensionTy> ext) {
+  auto [it, inserted] =
+      extensions_.try_emplace(typeid(ExtensionTy), std::move(ext));
+  if (!inserted) {
+    throw std::logic_error("Duplicate worker extension set");
+  }
+}
+
+template <typename ExtensionTy>
+inline ExtensionTy *Worker::GetExtension() noexcept {
+  auto it = extensions_.find(typeid(ExtensionTy));
+  if (it == extensions_.end()) return nullptr;
+  return static_cast<ExtensionTy *>(it->second.get());
+}
+
+template <typename ExtensionTy>
+inline ExtensionTy *Worker::GetCurrentExtension() noexcept {
+  Worker *current = GetCurrent();
+  if (!current) [[unlikely]]
+    return nullptr;
+  return current->GetExtension<ExtensionTy>();
+}
 
 }  // namespace shortfin::local
 

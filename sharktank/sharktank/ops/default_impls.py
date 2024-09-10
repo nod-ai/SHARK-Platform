@@ -1,4 +1,4 @@
-# Copyright 2024 Advanced Micro Devices, Inc
+# Copyright 2024 Advanced Micro Devices, Inc.
 #
 # Licensed under the Apache License v2.0 with LLVM Exceptions.
 # See https://llvm.org/LICENSE.txt for license information.
@@ -7,16 +7,18 @@
 # This file contains overrides of the standard ops for normal torch and
 # generic primitive/quantized types.
 
-from typing import Optional, List, Sequence
+from typing import Optional, List, Sequence, Union
 
 import torch
 from torch import Tensor, dtype
 import torch.nn.functional as F
+from numbers import Number
 
-from ..types import PrimitiveTensor, QuantizedTensor
-from ..types.tensors import unbox_tensor
-from ._registry import AllOfType
+from ..types import PrimitiveTensor, QuantizedTensor, InferenceTensor
+from ..types.tensors import unbox_tensor, AnyTensor
+from ._registry import AllOfType, AllOfExprs, AllOfExprsVariadic, IsOfType
 from .signatures import *
+import shark_turbine.ops.iree
 
 
 @cat.override(AllOfType(Tensor, PrimitiveTensor))
@@ -60,7 +62,6 @@ def conv2d_default(
 conv2d.override(Tensor, Tensor, Tensor, auto_dequant=True)(conv2d_default)
 conv2d.override(Tensor, Tensor, auto_dequant=True)(conv2d_default)
 
-
 # Elementwise
 @elementwise.override(Tensor)
 def elementwise_unary(operator, x):
@@ -68,11 +69,49 @@ def elementwise_unary(operator, x):
     return operator(x)
 
 
-@elementwise.override(Tensor, Tensor)
+@elementwise.override(
+    AllOfExprs(
+        IsOfType(Tensor, PrimitiveTensor), IsOfType(Tensor, PrimitiveTensor, Number)
+    )
+)
 def elementwise_binary(operator, x, y):
     x = unbox_tensor(x)
-    y = unbox_tensor(y)
+    if isinstance(y, PrimitiveTensor):
+        y = unbox_tensor(y)
     return operator(x, y)
+
+
+@elementwise.override(
+    AllOfExprsVariadic(
+        IsOfType(Tensor, InferenceTensor),
+        IsOfType(Tensor, InferenceTensor, Number),
+        IsOfType(Tensor, InferenceTensor, Number),
+    )
+)
+def elementwise_variadic(operator, x, y, *args):
+    """Folds by successively applying the binary operator from left to right until
+    exhaustion.
+
+    Match a variable number of tensor/number arguments with at least 3 such arguments.
+
+    Example matches
+    ```
+    (Tensor, Tensor, Tensor)
+    (Tensor, DefaultPrimitiveTensor, float),
+    (SplitPrimitiveTensor, ReplicatedTensor, int, Tensor)
+    ```
+
+    Will not match
+    ```
+    (Tensor)
+    (Tensor, Tensor)
+    (int, Tensor, Tensor)
+    ```
+    """
+    res = elementwise(operator, x, y)
+    for arg in args:
+        res = elementwise(operator, res, arg)
+    return res
 
 
 # Embedding Lookup
@@ -92,6 +131,31 @@ def embedding_lookup_Tensor_QuantizedTensor(
 @equal.override(Tensor, Tensor)
 def equal_default(a, b) -> bool:
     return torch.equal(unbox_tensor(a), unbox_tensor(b))
+
+
+@gemm.override(AllOfType(Tensor, InferenceTensor))
+def gemm(
+    a: AnyTensor,
+    b: AnyTensor,
+    c: Optional[AnyTensor],
+    alpha: Optional[Union[Number, AnyTensor]],
+    beta: Optional[Union[Number, AnyTensor]],
+    transa: bool,
+    transb: bool,
+) -> bool:
+    if transa:
+        a = a.T
+    if transb:
+        b = b.T
+    res = matmul(a, b)
+    if alpha is not None:
+        res = alpha * res
+    if c is not None:
+        if beta is not None:
+            res = res + beta * c
+        else:
+            res = res + c
+    return res
 
 
 # Group norm.
@@ -202,6 +266,13 @@ def rms_norm_Tensor_QuantizedTensor(
 def permute(tensor: Tensor, dims: List[int]):
     torch_tensor = unbox_tensor(tensor)
     return torch.permute(torch_tensor, dims)
+
+
+@transfer_to_logical_device.override(Tensor)
+def transfer_to_logical_device_default(tensor: Tensor, ordinal: int):
+    return shark_turbine.ops.iree.transfer_to_logical_device(
+        f"{ordinal}", unbox_tensor(tensor)
+    )
 
 
 # Sharded default impls (do nothing).

@@ -1,4 +1,4 @@
-# Copyright 2024 Advanced Micro Devices, Inc
+# Copyright 2024 Advanced Micro Devices, Inc.
 #
 # Licensed under the Apache License v2.0 with LLVM Exceptions.
 # See https://llvm.org/LICENSE.txt for license information.
@@ -17,8 +17,11 @@ from torch import Tensor
 from ..types import PrimitiveTensor, QuantizedTensor
 
 __all__ = [
+    "AllOfExprs",
+    "AllOfExprsVariadic",
     "AllOfType",
     "AnyOfType",
+    "IsOfType",
     "overridable",
     "SignatureDispatcher",
     "BoolTypeExpr",
@@ -60,6 +63,62 @@ class BoolTypeExpr:
 
     def __call__(self, *args: type) -> bool:
         return self._expr(*args)
+
+
+class AllOfExprs(BoolTypeExpr):
+    """Returns True if all type arguments match their respective boolean type
+    expression.
+
+    ```python
+    # True. int == int and str in (float, str).
+    AllOfExprs(IsOfType(int), IsOfType(float, str))(int, str)
+
+     # False. str is not in (int, float).
+    AllOfExprs(IsOfType(int), IsOfType(int, float))(int, str)
+    ```
+    """
+
+    def __init__(self, *exprs: BoolTypeExpr):
+        self._exprs = exprs
+
+        def expr(*types: type):
+            if len(types) < len(self._exprs):
+                return False
+            return all([e(t) for e, t in zip(self._exprs, types)])
+
+        super().__init__(expr)
+
+
+class AllOfExprsVariadic(BoolTypeExpr):
+    """Returns True if all type arguments match their respective boolean type
+    expression and any remaining trailing arguments match the last type expression.
+
+    ```python
+    # True. int == int
+    # str in (float, str).
+    # float in (float, str).
+    AllOfExprsVariadic(IsOfType(int), IsOfType(float, str))(int, str, float)
+
+     # False. str is not in (int, float).
+    AllOfExprsVariadic(IsOfType(int), IsOfType(int, float))(int, float, str, int)
+    ```
+    """
+
+    def __init__(self, *exprs: BoolTypeExpr):
+        if len(exprs) == 0:
+            raise ValueError("At least one expression is required.")
+        self._exprs = list(exprs)
+
+        def expr(*types: type):
+            if len(types) < len(self._exprs):
+                return False
+            exprs = self._exprs
+            if len(types) > len(exprs):
+                # pad with the trailing expression.
+                exprs = exprs + ([exprs[-1]] * (len(types) - len(self._exprs)))
+            return all([e(t) for e, t in zip(exprs, types)])
+
+        super().__init__(expr)
 
 
 class AllOfType(BoolTypeExpr):
@@ -107,6 +166,9 @@ class AnyOfType(BoolTypeExpr):
             )
 
         super().__init__(expr)
+
+
+IsOfType = AllOfType
 
 
 class SignatureDispatcher:
@@ -201,7 +263,7 @@ class SignatureDispatcher:
         ):
             if len(override_type_spec) > 1:
                 raise TypeError(
-                    "Override with multiple arguments not allowed when using BoolTypeExpr."
+                    f"Override with multiple arguments not allowed when using BoolTypeExpr. Type spec: {override_type_spec}"
                 )
             return True
         return False

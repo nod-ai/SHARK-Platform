@@ -1,4 +1,4 @@
-// Copyright 2024 Advanced Micro Devices, Inc
+// Copyright 2024 Advanced Micro Devices, Inc.
 //
 // Licensed under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -13,7 +13,13 @@
 
 namespace shortfin {
 
-TEST(BlockingExecutor, concurrent_tasks) {
+class BlockingExecutorTest : public testing::Test {
+ protected:
+  void SetUp() override {}
+  void TearDown() override { iree::detail::LogLiveRefs(); }
+};
+
+TEST_F(BlockingExecutorTest, concurrent_tasks) {
   {
     std::atomic<int> tasks_run{0};
 
@@ -33,7 +39,7 @@ TEST(BlockingExecutor, concurrent_tasks) {
   }
 }
 
-TEST(BlockingExecutor, inhibit_when_shutdown) {
+TEST_F(BlockingExecutorTest, inhibit_when_shutdown) {
   {
     std::atomic<int> tasks_run{0};
 
@@ -46,6 +52,7 @@ TEST(BlockingExecutor, inhibit_when_shutdown) {
     }
 
     executor.Kill(/*wait=*/true);
+    logging::info("Killed");
 
     // New work should be inhibited.
     try {
@@ -57,7 +64,7 @@ TEST(BlockingExecutor, inhibit_when_shutdown) {
   }
 }
 
-TEST(BlockingExecutor, warn_deadline) {
+TEST_F(BlockingExecutorTest, warn_deadline) {
   {
     std::atomic<int> tasks_run{0};
 
@@ -75,7 +82,7 @@ TEST(BlockingExecutor, warn_deadline) {
   }
 }
 
-TEST(BlockingExecutor, threads_recycle) {
+TEST_F(BlockingExecutorTest, threads_recycle) {
   {
     std::atomic<int> tasks_run{0};
 

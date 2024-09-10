@@ -1,4 +1,4 @@
-# Copyright 2024 Advanced Micro Devices, Inc
+# Copyright 2024 Advanced Micro Devices, Inc.
 #
 # Licensed under the Apache License v2.0 with LLVM Exceptions.
 # See https://llvm.org/LICENSE.txt for license information.
@@ -16,6 +16,7 @@ from sharktank.types import *
 
 # TODO: Should be using a base class with the protocol supported.
 from ..models.llama.llama import LlamaModelConfig, PagedLlamaModelV1
+from ..models.mixtral.mixtral import *
 
 
 def main():
@@ -31,7 +32,7 @@ def main():
     parser.add_argument(
         "--output-config",
         help="Output file path for exported config file",
-        default="/tmp/batch_llama_v1.json",
+        default="tmp/batch_llama_v1.json",
     )
     parser.add_argument(
         "--bs",
@@ -44,14 +45,23 @@ def main():
         help="Include verbose logging",
         action="store_true",
     )
+    parser.add_argument(
+        "--strict",
+        help="Enables strictness during export",
+        action="store_true",
+    )
 
     args = cli.parse(parser)
     dataset = cli.get_input_dataset(args)
 
     hp = configs.LlamaHParams.from_gguf_props(dataset.properties)
     llama_config = LlamaModelConfig(hp)
+    llama_config.static_tables = False  # Rely on the compiler for hoisting tables.
     llama_config.kv_cache_type = "direct" if args.bs == [1] else "paged"
-    model = PagedLlamaModelV1(dataset.root_theta, llama_config)
+    if llama_config.hp.expert_count:
+        model = PagedMixtralModelV1(dataset.root_theta, llama_config)
+    else:
+        model = PagedLlamaModelV1(dataset.root_theta, llama_config)
 
     def generate_params_json(hp, prefill_bs: list[int], decode_bs: list[int]):
         return {
@@ -112,6 +122,7 @@ def main():
             name=f"prefill_bs{bs}",
             args=(tokens, seq_lens, seq_block_ids, cache_state),
             dynamic_shapes=dynamic_shapes,
+            strict=args.strict,
         )
         def _(model, tokens, seq_lens, seq_block_ids, cache_state):
             sl = tokens.shape[1]
@@ -169,6 +180,7 @@ def main():
                 cache_state,
             ),
             dynamic_shapes=dynamic_shapes,
+            strict=args.strict,
         )
         def _(
             model,

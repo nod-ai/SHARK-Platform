@@ -1,4 +1,4 @@
-// Copyright 2024 Advanced Micro Devices, Inc
+// Copyright 2024 Advanced Micro Devices, Inc.
 //
 // Licensed under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -59,9 +59,18 @@ void BlockingExecutor::Kill(bool wait, iree_timeout_t warn_timeout) {
       iree::slim_mutex_lock_guard g(control_mu_);
       last_live_thread_count = live_thread_count_;
       total_thread_count = created_thread_count_;
+      // If transitioned to 0 live threads, there is a short period of time
+      // that can exist between the scan of the free list above and a task
+      // getting scheduled. Therefore, the first time we hit this condition,
+      // enter the inhibited state, which denies further scheduling. Then
+      // the next time we encounter no live threads, that will be a true
+      // count.
       if (live_thread_count_ == 0) {
-        inhibit_ = true;
-        break;
+        if (inhibit_) {
+          break;
+        } else {
+          inhibit_ = true;
+        }
       }
     }
 

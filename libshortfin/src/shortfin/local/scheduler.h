@@ -1,4 +1,4 @@
-// Copyright 2024 Advanced Micro Devices, Inc
+// Copyright 2024 Advanced Micro Devices, Inc.
 //
 // Licensed under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -83,12 +83,34 @@ class SHORTFIN_API TimelineResource {
     Ref() : res_(nullptr) {}
     explicit Ref(TimelineResource *res) : res_(res) { res_->Retain(); }
     Ref(const Ref &other) : res_(other.res_) { res_->Retain(); }
-    void operator=(const Ref &other) = delete;
-    Ref(Ref &&other) : res_(other.res_) { other.res_ = nullptr; }
-    ~Ref() {
-      if (res_) res_->Release();
+    Ref &operator=(const Ref &other) {
+      if (other.res_ != res_) {
+        reset();
+        if (other.res_) {
+          other.res_->Retain();
+          res_ = other.res_;
+        }
+      }
+      return *this;
     }
+    Ref &operator=(Ref &&other) {
+      if (other.res_ != res_) {
+        reset();
+        res_ = other.res_;
+        other.res_ = nullptr;
+      }
+      return *this;
+    }
+    Ref(Ref &&other) : res_(other.res_) { other.res_ = nullptr; }
+    ~Ref() { reset(); }
     TimelineResource *operator->() { return res_; }
+
+    void reset() {
+      if (res_) {
+        res_->Release();
+        res_ = nullptr;
+      }
+    }
 
    private:
     TimelineResource *res_;
@@ -120,14 +142,21 @@ class SHORTFIN_API TimelineResource {
     return iree_hal_fence_semaphore_list(use_barrier_fence_);
   }
 
+  iree_allocator_t host_allocator();
+
  private:
-  TimelineResource(iree_allocator_t host_allocator, size_t semaphore_capacity);
+  TimelineResource(std::shared_ptr<Scope> scope, size_t semaphore_capacity);
+  ~TimelineResource();
   void Retain() { refcnt_++; }
   void Release() {
     if (--refcnt_ == 0) delete this;
   }
 
   int refcnt_ = 0;
+
+  // Back reference to the owning scope.
+  std::shared_ptr<Scope> scope_;
+
   // Non-owning mutation barrier semaphore and timepoint. The fact that this
   // is a single semaphore is an implementation detail that may be generalized
   // in the future should it be necessary to track multiple write sources.
@@ -147,7 +176,11 @@ class SHORTFIN_API Account {
   Account(Scheduler &scheduler, Device *device);
   Device *device() const { return device_; }
   iree_hal_device_t *hal_device() { return hal_device_; }
+
   size_t semaphore_count() const { return 1; }
+  // Gets a unique integer id for this account. Currently just the address of
+  // the sem, but can be derived from any owned entity.
+  uintptr_t id() const { return reinterpret_cast<uintptr_t>(sem_.get()); }
 
   // Accesses the active command buffer. This will only be non-null if a
   // pending transaction has been set up (i.e. via AppendCommandBuffer).
@@ -161,6 +194,7 @@ class SHORTFIN_API Account {
   // Queue timeline.
   iree_hal_semaphore_t *timeline_sem() { return sem_; }
   uint64_t timeline_idle_timepoint() { return idle_timepoint_; }
+  uint64_t timeline_acquire_timepoint() { return ++idle_timepoint_; }
 
   // Returns a future that is satisfied when the timeline of this account
   // reaches its current idle timepoint (i.e. all currently pending work
@@ -171,11 +205,13 @@ class SHORTFIN_API Account {
   void Initialize();
   void Reset();
   Scheduler &scheduler_;
+  iree::hal_semaphore_ptr sem_;
+  iree::hal_fence_ptr active_deps_;
+  iree::hal_command_buffer_ptr active_command_buffer_;
+
   Device *device_;
   iree_hal_device_t *hal_device_;
   TransactionType active_tx_type_ = TransactionType::NONE;
-  iree::hal_fence_ptr active_deps_;
-  iree::hal_command_buffer_ptr active_command_buffer_;
   iree_hal_queue_affinity_t active_queue_affinity_bits_;
 
   // Timepoint at which this device is considered idle, inclusive of any
@@ -193,14 +229,14 @@ class SHORTFIN_API Account {
   // an eventual submission would submit a duplicate timepoint). This
   // timepoint is only valid for the local sem_.
   uint64_t idle_timepoint_ = 0;
-  iree::hal_semaphore_ptr sem_;
   friend class Scheduler;
 };
 
 // Handles scheduling state for a scope.
 class SHORTFIN_API Scheduler {
  public:
-  Scheduler(System &system) : system_(system) {}
+  Scheduler(System &system);
+  ~Scheduler();
 
   TransactionMode transaction_mode() const { return tx_mode_; }
 
@@ -219,15 +255,20 @@ class SHORTFIN_API Scheduler {
                            std::function<void(Account &)> callback);
 
   // Flushes any pending accounts that have accumulated commands.
-  void Flush();
+  iree_status_t FlushWithStatus() noexcept;
+  void Flush() { SHORTFIN_THROW_IF_ERROR(FlushWithStatus()); }
 
   // Gets a fresh TimelineResource which can be used for tracking resource
   // read/write and setting barriers. Note that these are all allocated fresh
   // on each call today but may be pooled in the future.
-  TimelineResource::Ref NewTimelineResource(iree_allocator_t host_allocator) {
+  TimelineResource::Ref NewTimelineResource(std::shared_ptr<Scope> scope) {
     return TimelineResource::Ref(
-        new TimelineResource(host_allocator, semaphore_count_));
+        new TimelineResource(std::move(scope), semaphore_count_));
   }
+
+  // Creates a new fence with capacity for all semaphores that are extant at
+  // the point of the call.
+  iree::hal_fence_ptr NewFence();
 
   System &system() { return system_; }
 

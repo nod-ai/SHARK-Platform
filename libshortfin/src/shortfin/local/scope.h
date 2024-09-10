@@ -1,4 +1,4 @@
-// Copyright 2024 Advanced Micro Devices, Inc
+// Copyright 2024 Advanced Micro Devices, Inc.
 //
 // Licensed under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -13,6 +13,7 @@
 
 #include "shortfin/local/async.h"
 #include "shortfin/local/device.h"
+#include "shortfin/local/program.h"
 #include "shortfin/local/scheduler.h"
 #include "shortfin/support/stl_extras.h"
 
@@ -27,19 +28,25 @@ class SHORTFIN_API Worker;
 // needed to do thing with some slice of device queues.
 class SHORTFIN_API ScopedDevice {
  public:
+  ScopedDevice() = default;
   ScopedDevice(Scope &scope, DeviceAffinity affinity)
-      : scope_(scope), affinity_(affinity) {}
+      : scope_(&scope), affinity_(affinity) {}
   ScopedDevice(Scope &scope, Device *device)
-      : scope_(scope), affinity_(device) {}
+      : scope_(&scope), affinity_(device) {}
+  ScopedDevice(const ScopedDevice &other)
+      : scope_(other.scope_), affinity_(other.affinity_) {}
 
-  Scope &scope() const { return scope_; }
+  Scope &scope() const {
+    assert(scope_ && "scope must not be null");
+    return *scope_;
+  }
   DeviceAffinity affinity() const { return affinity_; }
   Device *raw_device() const { return affinity_.device(); }
 
   std::string to_s() const { return affinity().to_s(); }
 
   bool operator==(const ScopedDevice &other) const {
-    return (&scope_ == &other.scope_) && affinity_ == other.affinity_;
+    return (scope_ == other.scope_) && affinity_ == other.affinity_;
   }
 
   // Returns a future which will be satisfied when the primary device timeline
@@ -48,7 +55,7 @@ class SHORTFIN_API ScopedDevice {
   CompletionEvent OnSync(bool flush = true);
 
  private:
-  Scope &scope_;
+  Scope *scope_ = nullptr;
   DeviceAffinity affinity_;
 };
 
@@ -79,9 +86,13 @@ class SHORTFIN_API Scope : public std::enable_shared_from_this<Scope> {
   Scope(const Scope &) = delete;
   // Ensure polymorphic.
   virtual ~Scope();
+  std::string to_s() const;
 
   // All scopes are created as shared pointers.
   std::shared_ptr<Scope> shared_ptr() { return shared_from_this(); }
+
+  // The host allocator.
+  iree_allocator_t host_allocator() { return host_allocator_; }
 
   // The worker that this scope is bound to.
   Worker &worker() { return worker_; }
@@ -118,26 +129,26 @@ class SHORTFIN_API Scope : public std::enable_shared_from_this<Scope> {
   }
   detail::Scheduler &scheduler() { return scheduler_; }
   detail::TimelineResource::Ref NewTimelineResource() {
-    return scheduler().NewTimelineResource(host_allocator_);
+    return scheduler().NewTimelineResource(shared_ptr());
   }
 
  private:
   void AddDevice(std::string_view device_class, Device *device);
   void Initialize();  // Called after all devices are added.
 
-  iree_allocator_t host_allocator_;
+  // Back reference to owning system.
+  std::shared_ptr<System> system_;
   string_interner interner_;
+  iree_allocator_t host_allocator_;
+  detail::Scheduler scheduler_;
+  Worker &worker_;
+
   // Map of `<device_class>` to the count of that class contained.
   std::unordered_map<std::string_view, int> device_class_count_;
   // Ordered devices.
   std::vector<Device *> devices_;
   // Map of `<device_class><index>` to Device.
   std::unordered_map<std::string_view, Device *> named_devices_;
-  detail::Scheduler scheduler_;
-
-  // Back reference to owning system.
-  std::shared_ptr<System> system_;
-  Worker &worker_;
 };
 
 }  // namespace shortfin::local

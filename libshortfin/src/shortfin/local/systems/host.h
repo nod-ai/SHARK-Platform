@@ -1,4 +1,4 @@
-// Copyright 2024 Advanced Micro Devices, Inc
+// Copyright 2024 Advanced Micro Devices, Inc.
 //
 // Licensed under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -51,7 +51,9 @@ class SHORTFIN_API HostCPUSystemBuilder : public HostSystemBuilder {
   // a driver created from InitializeHostCPUDriver().
   void InitializeHostCPUDevices(System& lsys, iree_hal_driver_t* driver);
 
-  struct {
+  struct Deps {
+    Deps(iree_allocator_t host_allocator);
+    ~Deps();
     iree_task_topology_t task_topology_options;
     iree_task_executor_options_t task_executor_options;
     iree_hal_task_device_params_t task_params;

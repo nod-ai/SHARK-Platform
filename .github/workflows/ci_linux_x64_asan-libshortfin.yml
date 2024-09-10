@@ -1,0 +1,165 @@
+# Copyright 2024 Advanced Micro Devices, Inc.
+#
+# Licensed under the Apache License v2.0 with LLVM Exceptions.
+# See https://llvm.org/LICENSE.txt for license information.
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+
+name: CI - libshortfin - ASan
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/ci_linux_x64_asan-libshortfin.yml'
+      - 'libshortfin/**'
+
+permissions:
+  contents: read
+
+env:
+  PYENV_ROOT: ${{ github.workspace }}/pyenv
+  PYENV_REF: 9ecd803bffaffb949fbdd8c70cb086227f6a3202 # v2.4.10
+  PYTHON_VER: 3.12.3
+  CACHE_ASAN_VER: 2
+  CACHE_DEPS_VER: 1
+  IREE_SOURCE_DIR: ${{ github.workspace }}/iree
+  LIBSHORTFIN_DIR: ${{ github.workspace }}/libshortfin/
+
+jobs:
+  setup-python-asan:
+    name: Setup Python ASan
+    runs-on: ubuntu-24.04
+    env:
+      # The Python build process leaks. Here we just disable leak checking vs
+      # being more precise.
+      ASAN_OPTIONS: detect_leaks=0
+
+    steps:
+    - name: Cache Python ASan
+      id: cache-python-asan
+      uses: actions/cache@0c45773b623bea8c8e75f6c82b208c3cf94ea4f9 # v4.0.2
+      with:
+        path: ${{ env.PYENV_ROOT }}
+        key: ${{ runner.os }}-python-asan-${{ env.PYENV_REF }}-${{ env.PYTHON_VER }}-v${{ env.CACHE_ASAN_VER }}
+        lookup-only: 'true'
+
+    - name: Install dependencies
+      if: steps.cache-python-asan.outputs.cache-hit != 'true'
+      run: |
+        sudo apt update
+        sudo apt install clang lld cmake ninja-build
+        sudo apt install build-essential libssl-dev zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev curl git libncursesw5-dev xz-utils tk-dev libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev
+
+    - name: Checkout pyenv
+      if: steps.cache-python-asan.outputs.cache-hit != 'true'
+      uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      with:
+        repository: pyenv/pyenv
+        ref: ${{ env.PYENV_REF }}
+        path: ${{ env.PYENV_ROOT }}
+
+    - name: Install pyenv & Python
+      if: steps.cache-python-asan.outputs.cache-hit != 'true'
+      run: |
+        cd ${{ env.PYENV_ROOT }}
+        src/configure && make -C src
+        export PATH=${{ env.PYENV_ROOT }}/bin:$PATH && eval "$(pyenv init -)"
+        CC=clang-18 CXX=clang++-18 LDFLAGS="-lstdc++" PYTHON_CONFIGURE_OPTS="--with-address-sanitizer" pyenv install -v ${{ env.PYTHON_VER }}
+        pyenv global ${{ env.PYTHON_VER }}
+
+
+  build-and-test:
+    name: Build and test libshortfin
+    needs: [setup-python-asan]
+    runs-on: ubuntu-24.04
+    env:
+      # We can't count on being leak free in general (i.e. pip, etc) so disable
+      # leak checker by default. Here we suppress any ASAN features needed to
+      # pass the build. Test configuration is done specially just for that step.
+      ASAN_OPTIONS: detect_leaks=0,detect_odr_violation=0
+      LSAN_OPTIONS: suppressions=${{ github.workspace }}/libshortfin/build_tools/python_lsan_suppressions.txt
+    steps:
+    - name: Install dependencies
+      run: |
+        sudo apt update
+        sudo apt install clang lld cmake ninja-build
+
+    - name: Checkout repository
+      uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      with:
+        submodules: false
+
+    - name: Checkout IREE repo
+      uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      with:
+        repository: iree-org/iree
+        path: ${{ env.IREE_SOURCE_DIR }}
+        submodules: false
+        ref: candidate-20240904.1006
+
+    - name: Initalize IREE submodules
+      run : |
+        cd ${{ env.IREE_SOURCE_DIR }}
+        git submodule update --init --depth 1 -- third_party/benchmark
+        git submodule update --init --depth 1 -- third_party/cpuinfo/
+        git submodule update --init --depth 1 -- third_party/flatcc
+        git submodule update --init --depth 1 -- third_party/googletest
+        git submodule update --init --depth 1 -- third_party/hip-build-deps/
+
+    - name: Restore Python dependencies cache
+      id: cache-python-deps-restore
+      uses: actions/cache/restore@0c45773b623bea8c8e75f6c82b208c3cf94ea4f9 # v4.0.2
+      with:
+        path: ${{ env.PYENV_ROOT }}
+        key: ${{ runner.os }}-python-deps-${{ hashFiles('libshortfin/requirements-tests.txt') }}-v${{ env.CACHE_DEPS_VER }}
+
+    - name: Restore Python ASan cache
+      id: cache-python-asan
+      if: steps.cache-python-deps-restore.outputs.cache-hit != 'true'
+      uses: actions/cache/restore@0c45773b623bea8c8e75f6c82b208c3cf94ea4f9 # v4.0.2
+      with:
+        path: ${{ env.PYENV_ROOT }}
+        key: ${{ runner.os }}-python-asan-${{ env.PYENV_REF }}-${{ env.PYTHON_VER }}-v${{ env.CACHE_ASAN_VER }}
+
+    - name: Set path
+      run:
+        echo "${{ env.PYENV_ROOT }}/bin" >> $GITHUB_PATH
+
+    - name: Install Python dependencies
+      if: steps.cache-python-deps-restore.outputs.cache-hit != 'true'
+      run: |
+        eval "$(pyenv init -)"
+        pip install -r ${{ env.LIBSHORTFIN_DIR }}/requirements-tests.txt
+        pip install -r ${{ env.LIBSHORTFIN_DIR }}/requirements-iree-compiler.txt
+        pip freeze
+
+    - name: Save Python dependencies cache
+      if: steps.cache-python-deps-restore.outputs.cache-hit != 'true'
+      id: cache-python-deps-save
+      uses: actions/cache/save@0c45773b623bea8c8e75f6c82b208c3cf94ea4f9 # v4.0.2
+      with:
+        path: ${{ env.PYENV_ROOT }}
+        key: ${{ steps.cache-python-deps-restore.outputs.cache-primary-key }}
+
+    - name: Build libshortfin
+      run: |
+        eval "$(pyenv init -)"
+        cd ${{ env.LIBSHORTFIN_DIR }}
+        SHORTFIN_IREE_SOURCE_DIR="${{ env.IREE_SOURCE_DIR }}" \
+        SHORTFIN_ENABLE_ASAN=ON \
+        SHORTFIN_DEV_MODE=ON \
+        SHORTFIN_RUN_CTESTS=ON \
+        pip install -v -e .
+
+    - name: Run pytest
+      if: ${{ !cancelled() }}
+      env:
+        # TODO(#151): Don't ignore ODR violations
+        ASAN_OPTIONS: detect_odr_violation=0
+      run: |
+        eval "$(pyenv init -)"
+        cd ${{ env.LIBSHORTFIN_DIR }}
+        pytest -s

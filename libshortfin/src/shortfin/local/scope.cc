@@ -1,4 +1,4 @@
-// Copyright 2024 Advanced Micro Devices, Inc
+// Copyright 2024 Advanced Micro Devices, Inc.
 //
 // Licensed under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -20,10 +20,11 @@ namespace shortfin::local {
 
 Scope::Scope(std::shared_ptr<System> system, Worker &worker,
              std::span<const std::pair<std::string_view, Device *>> devices)
-    : host_allocator_(system->host_allocator()),
-      scheduler_(*system),
-      system_(std::move(system)),
+    : system_(std::move(system)),
+      host_allocator_(system_->host_allocator()),
+      scheduler_(*system_),
       worker_(worker) {
+  logging::construct("Scope", this);
   for (auto &it : devices) {
     AddDevice(it.first, it.second);
   }
@@ -32,17 +33,23 @@ Scope::Scope(std::shared_ptr<System> system, Worker &worker,
 
 Scope::Scope(std::shared_ptr<System> system, Worker &worker,
              std::span<Device *const> devices)
-    : host_allocator_(system->host_allocator()),
-      scheduler_(*system),
-      system_(std::move(system)),
+    : system_(std::move(system)),
+      host_allocator_(system_->host_allocator()),
+      scheduler_(*system_),
       worker_(worker) {
+  logging::construct("Scope", this);
   for (auto *device : devices) {
     AddDevice(device->address().logical_device_class, device);
   }
   Initialize();
 }
 
-Scope::~Scope() = default;
+Scope::~Scope() { logging::destruct("Scope", this); }
+
+std::string Scope::to_s() const {
+  return fmt::format("Scope(worker='{}', devices=[{}])", worker_.name(),
+                     fmt::join(device_names(), ", "));
+}
 
 void Scope::Initialize() { scheduler_.Initialize(devices_); }
 
