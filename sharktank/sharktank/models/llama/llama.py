@@ -47,6 +47,9 @@ class LlamaModelConfig:
     # Dtype to use for attention.
     attention_dtype: torch.dtype = torch.float16
 
+    # Which attention kernel to use.
+    attention_kernel: str = "decomposed"
+
     # Indicates if running with HuggingFace implementation and ensures
     # numerical equivalency to HuggingFace's LLaMa if true (by modifying
     # rotary embedding).
@@ -128,6 +131,7 @@ class PagedLlamaModelV1(BaseCausalLMModel):
         self.cache = config.create_kv_cache()
         self.activation_dtype = config.activation_dtype
         self.use_hf = config.use_hf
+        self.attention_kernel = config.attention_kernel
 
         self.add_module(
             "token_embedding",
@@ -163,6 +167,7 @@ class PagedLlamaModelV1(BaseCausalLMModel):
                     head_count_kv=hp.attention_head_count_kv,
                     rms_epsilon=hp.attention_layer_norm_rms_epsilon,
                     use_hf=self.use_hf,
+                    attention_kernel=self.attention_kernel,
                 )
                 for n in range(hp.block_count)
             ]
@@ -297,6 +302,7 @@ class AttentionFFNBlock(ThetaLayer):
         head_count_kv: int,
         rms_epsilon: float,
         use_hf: bool = False,
+        attention_kernel: str = "decomposed",
     ):
         super().__init__(theta)
         self.add_module(
@@ -310,6 +316,7 @@ class AttentionFFNBlock(ThetaLayer):
                 head_count_kv=head_count_kv,
                 rms_epsilon=rms_epsilon,
                 use_hf=use_hf,
+                attention_kernel=attention_kernel,
             ),
         )
         self.add_module(
