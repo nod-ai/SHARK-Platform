@@ -133,6 +133,13 @@ def equal_default(a, b) -> bool:
     return torch.equal(unbox_tensor(a), unbox_tensor(b))
 
 
+@flatten.override(Tensor)
+def flatten_default(
+    input: Union[PrimitiveTensor, Tensor], start_dim: int, end_dim: int
+) -> Tensor:
+    return torch.flatten(unbox_tensor(input), start_dim, end_dim)
+
+
 @gemm.override(AllOfType(Tensor, InferenceTensor))
 def gemm(
     a: AnyTensor,
@@ -240,6 +247,11 @@ def scaled_dot_product_attention(q, k, v, a) -> Tensor:
     return torch.nn.functional.scaled_dot_product_attention(
         q, k, v, attn_mask=a, dropout_p=0.0, is_causal=False
     )
+
+
+@reshape.override(Tensor)
+def reshape_default(input: Union[PrimitiveTensor, Tensor], shape: List[int]) -> Tensor:
+    return torch.reshape(unbox_tensor(input), shape)
 
 
 # RMS norm

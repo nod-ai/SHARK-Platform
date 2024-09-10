@@ -6,12 +6,14 @@
 
 import torch
 from torch import Tensor
-from typing import List, Optional, Sequence
+from typing import List, Optional, Sequence, Union
 import itertools
 from numbers import Number
+import numpy as np
 
 from ..types import (
     AnyTensor,
+    BlockCyclicSplitTensor,
     DefaultPrimitiveTensor,
     InferenceTensor,
     ReplicatedTensor,
@@ -24,7 +26,7 @@ from ..types import (
 from ..types.tensors import unbox_tensor
 from ._registry import AllOfType
 from .signatures import *
-from .shape import broadcast_dims
+from .shape import broadcast_dims, flatten_shape
 
 
 @all_gather.override(SplitPrimitiveTensor)
@@ -318,6 +320,25 @@ def equal_split(a: SplitPrimitiveTensor, b: AnyTensor) -> bool:
     return a.is_deep_equal(b)
 
 
+@flatten.override(SplitPrimitiveTensor)
+def flatten_sharded_split_tensor(
+    input: SplitPrimitiveTensor, start_dim: int, end_dim: int
+) -> Union[SplitPrimitiveTensor, BlockCyclicSplitTensor]:
+    end_dim_deduced = end_dim if end_dim >= 0 else len(input.shape) - 1
+    flatten_dim_len = end_dim_deduced - start_dim + 1
+    # Is not flattening a the split dim or is the degenerate case of flattening a single dimension.
+    if (
+        input.shard_dim < start_dim
+        or end_dim_deduced > input.shard_dim
+        or flatten_dim_len == 1
+    ):
+        shards = [flatten(shard, start_dim, end_dim) for shard in input.shards]
+        return SplitPrimitiveTensor(shard_dim=input.shard_dim, ts=shards)
+
+    flattened_shape = flatten_shape(input.shape, start_dim, end_dim)
+    assert False, "TODO"
+
+
 @group_norm_affine.override(
     SplitPrimitiveTensor, SplitPrimitiveTensor, SplitPrimitiveTensor
 )
@@ -561,6 +582,20 @@ def replicate_replicated(input: ReplicatedTensor, *, count: int) -> ReplicatedTe
 def replicate_unsharded(input, *, count: int) -> ReplicatedTensor:
     torch_input = unbox_tensor(input)
     return ReplicatedTensor(ts=torch_input, shard_count=count)
+
+
+@reshape.override(SplitPrimitiveTensor)
+def reshape_sharded_split_tensor(
+    input: SplitPrimitiveTensor, shape: List[int]
+) -> Union[SplitPrimitiveTensor, BlockCyclicSplitTensor]:
+    if (
+        len(input.shape) == len(shape)
+        and input.shape[input.shard_dim] == shape[input.shard_dim]
+    ):
+        shards = [reshape(shard, shape) for shard in input.shards]
+        return SplitPrimitiveTensor(shard_dim=input.shard_dim, ts=shards, shape=shape)
+
+    assert (False, "TODO")
 
 
 @reshard.override(Tensor, sharding.Split)

@@ -24,6 +24,7 @@ __all__ = [
     "elementwise",
     "embedding_lookup",
     "equal",
+    "flatten",
     "gemm",
     "group_norm_affine",
     "layer_norm",
@@ -33,6 +34,7 @@ __all__ = [
     "permute",
     "rms_norm",
     "replicate",
+    "reshape",
     "reshard",
     "reshard_split",
     "reshard_like",
@@ -226,6 +228,25 @@ def _equal_trampoline(d: SignatureDispatcher, a: AnyTensor, b: AnyTensor):
     tensors = (a,)
     for override in d.find_overrides(tensors):
         result = override(a, b)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(tensors)
+
+
+@overridable
+def flatten(input: AnyTensor, start_dim: int = 0, end_dim: int = -1) -> AnyTensor:
+    """Flattens input by reshaping it into a one-dimensional tensor."""
+    ...
+
+
+@flatten.trampoline
+def _flatten_trampoline(
+    d: SignatureDispatcher, input: AnyTensor, start_dim: int, end_dim: int
+):
+    tensors = (input,)
+    for override in d.find_overrides(tensors):
+        result = override(input, start_dim, end_dim)
         if result is not NotImplemented:
             return override, result
     else:
@@ -527,6 +548,25 @@ def _scaled_dot_product_attention(
             return override, result
     else:
         d.fail(tensors)
+
+
+@overridable
+def reshape(input: AnyTensor, shape: List[int]) -> AnyTensor:
+    """Returns a tensor with the same data and number of elements as input, but with
+    the specified shape.
+    """
+    ...
+
+
+@reshape.trampoline
+def _reshape_trampoline(d: SignatureDispatcher, input, shape) -> AnyTensor:
+    dispatch_args = input
+    for override in d.find_overrides(dispatch_args):
+        result = override(input, shape)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(dispatch_args)
 
 
 @overridable
