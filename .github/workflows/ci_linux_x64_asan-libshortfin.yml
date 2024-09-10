@@ -147,6 +147,7 @@ jobs:
     - name: Build libshortfin
       run: |
         eval "$(pyenv init -)"
+        cd ${{ env.LIBSHORTFIN_DIR }}
         SHORTFIN_IREE_SOURCE_DIR="${{ env.IREE_SOURCE_DIR }}" \
         SHORTFIN_ENABLE_ASAN=ON \
         SHORTFIN_DEV_MODE=ON \
