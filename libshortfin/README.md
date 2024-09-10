@@ -1,6 +1,12 @@
 # libshortfin - SHARK C++ inference library
 
-## Native Dev Builds
+Build options
+
+1. Native C++ build
+2. Python release build
+3. Python dev build
+
+## Native C++ Builds
 
 ```
 cmake -GNinja -S. -Bbuild \
@@ -8,21 +14,17 @@ cmake -GNinja -S. -Bbuild \
     -DCMAKE_LINKER_TYPE=LLD
 ```
 
+If Python bindings are enabled in this mode (`-DSHORTFIN_BUILD_PYTHON_BINDINGS=ON`),
+then `pip install -e build/` will install from the build dir (and support
+build/continue).
+
+## Python Release Builds
+
+```
+pip install -v -e .
+```
+
 ## Python Dev Builds
-
-If using a Python based development flow, there are two options:
-
-1. `pip install -e` based.
-2. Build with cmake as above and `-DSHORTFIN_BUILD_PYTHON_BINDINGS=ON` and then
-   from the `build/` directory, run `pip install -v -e .` to create an
-   editable install that will update as you build the C++ project.
-
-If predominantly developing with a C++ based flow, the second option is
-recommended. Your python install should track any source file changes or
-builds without further interaction. Re-installing will be necessary if package
-structure changes significantly.
-
-For pure Python based dev, everything can be done from pip:
 
 ```
 # Install build system pre-reqs (since we are building in dev mode, this
@@ -37,18 +39,28 @@ pip install setuptools wheel
 # version, which is usually quite recent.
 pip install cmake ninja
 
-# Optional env vars:
-#   SHORTFIN_IREE_SOURCE_DIR=$(pwd)/../../iree
-# Note that the `--no-build-isolation` flag is useful in development setups
-# because it does not create an intermediate venv that will keep later
-# invocations of cmake/ninja from working at the command line. If just doing
-# a one-shot build, it can be ommitted.
 SHORTFIN_DEV_MODE=ON pip install --no-build-isolation -v -e .
+```
+
+Note that the `--no-build-isolation` flag is useful in development setups
+because it does not create an intermediate venv that will keep later
+invocations of cmake/ninja from working at the command line. If just doing
+a one-shot build, it can be ommitted.
 
 Once built the first time, `cmake`, `ninja`, and `ctest` commands can be run
 directly from `build/cmake` and changes will apply directly to the next
 process launch.
-```
+
+Several optional environment variables can be used with setup.py:
+
+* `SHORTFIN_CMAKE_BUILD_TYPE=Debug` : Sets the CMAKE_BUILD_TYPE. Defaults to
+  `Debug` for dev mode and `Release` otherwise.
+* `SHORTFIN_ENABLE_ASAN=ON` : Enables an ASAN build. Requires a Python runtime
+  setup that is ASAN clean (either by env vars to preload libraries or set
+  suppressions or a dev build of Python with ASAN enabled).
+* `SHORTFIN_IREE_SOURCE_DIR=$(pwd)/../../iree`
+* `SHORTFIN_RUN_CTESTS=ON` : Runs `ctest` as part of the build. Useful for CI
+  as it uses the version of ctest installed in the pip venv.
 
 ## Running Tests
 
