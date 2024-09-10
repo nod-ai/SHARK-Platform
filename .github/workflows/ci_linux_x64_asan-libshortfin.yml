@@ -147,26 +147,11 @@ jobs:
     - name: Build libshortfin
       run: |
         eval "$(pyenv init -)"
-        mkdir ${{ env.LIBSHORTFIN_DIR }}/build
-        cd ${{ env.LIBSHORTFIN_DIR }}/build
-        cmake -GNinja \
-          -DCMAKE_BUILD_TYPE=Debug \
-          -DCMAKE_C_COMPILER=clang-18 \
-          -DCMAKE_CXX_COMPILER=clang++-18 \
-          -DCMAKE_LINKER_TYPE=LLD \
-          -DSHORTFIN_BUNDLE_DEPS=ON \
-          -DSHORTFIN_IREE_SOURCE_DIR=${{ env.IREE_SOURCE_DIR }} \
-          -DSHORTFIN_BUILD_PYTHON_BINDINGS=ON \
-          -DSHORTFIN_ENABLE_ASAN=ON \
-          ..
-        cmake --build . --target all
+        SHORTFIN_IREE_SOURCE_DIR="${{ env.IREE_SOURCE_DIR }}" \
+        SHORTFIN_ENABLE_ASAN=ON \
+        SHORTFIN_DEV_MODE=ON \
+        SHORTFIN_RUN_CTESTS=ON \
         pip install -v -e .
-
-    - name: Run ctest
-      if: ${{ !cancelled() }}
-      run: |
-        cd ${{ env.LIBSHORTFIN_DIR }}/build
-        ctest --timeout 30 --output-on-failure
 
     - name: Run pytest
       if: ${{ !cancelled() }}

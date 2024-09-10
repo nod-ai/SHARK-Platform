@@ -15,6 +15,35 @@ from setuptools.command.build_ext import build_ext as _build_ext
 from setuptools.command.build_py import build_py as _build_py
 
 
+def get_env_boolean(name: str, default_value: bool = False) -> bool:
+    svalue = os.getenv(name)
+    if svalue is None:
+        return default_value
+    svalue = svalue.upper()
+    if svalue in ["1", "ON", "TRUE"]:
+        return True
+    elif svalue in ["0", "OFF", "FALSE"]:
+        return False
+    else:
+        print(f"WARNING: {name} env var cannot be interpreted as a boolean value")
+        return default_value
+
+
+def get_env_cmake_option(name: str, default_value: bool = False) -> str:
+    svalue = os.getenv(name)
+    if not svalue:
+        svalue = "ON" if default_value else "OFF"
+    return f"-D{name}={svalue}"
+
+
+def add_env_cmake_setting(args, env_name: str, cmake_name=None) -> str:
+    svalue = os.getenv(env_name)
+    if svalue is not None:
+        if not cmake_name:
+            cmake_name = env_name
+        args.append(f"-D{cmake_name}={svalue}")
+
+
 # This file can be generated into the build directory to allow an arbitrary
 # CMake built version of the project to be installed into a venv for development.
 # This can be detected if the CPP_PREBUILT global contains the string
@@ -30,18 +59,24 @@ def is_cpp_prebuilt():
     return CPP_PREBUILT == "TRUE"
 
 
+DEV_MODE = False
+
 if is_cpp_prebuilt():
-    print("setup.py running in pre-built mode:", file=sys.stderr)
+    print("setup.py running in pre-built mode:")
     SOURCE_DIR = Path(CPP_PREBUILT_SOURCE_DIR)
     BINARY_DIR = Path(CPP_PREBUILT_BINARY_DIR)
 else:
-    print("setup.py running in cmake build mode:", file=sys.stderr)
+    print("setup.py running in cmake build mode:")
     # setup.py is in the source directory.
     SOURCE_DIR = Path(SETUPPY_DIR)
-    BINARY_DIR = Path(os.path.join(SETUPPY_DIR, "build", "b"))
+    BINARY_DIR = Path(os.path.join(SETUPPY_DIR, "build"))
+    DEV_MODE = get_env_boolean("SHORTFIN_DEV_MODE")
 
-print(f"  SOURCE_DIR = {SOURCE_DIR}", file=sys.stderr)
-print(f"  BINARY_DIR = {BINARY_DIR}", file=sys.stderr)
+print(f"  SOURCE_DIR = {SOURCE_DIR}")
+print(f"  BINARY_DIR = {BINARY_DIR}")
+
+if DEV_MODE:
+    print(f"  DEV MODE ENABLED: Building debug with clang/lld and other dev settings")
 
 # Due to a quirk of setuptools, that package_dir map must only contain
 # paths relative to the directory containing setup.py. Why? No one knows.
@@ -98,7 +133,7 @@ def maybe_nuke_cmake_cache(cmake_build_dir):
     # Mismatch or not found. Clean it.
     cmake_cache_file = os.path.join(cmake_build_dir, "CMakeCache.txt")
     if os.path.exists(cmake_cache_file):
-        print("Removing CMakeCache.txt because Python version changed", file=sys.stderr)
+        print("Removing CMakeCache.txt because Python version changed")
         os.remove(cmake_cache_file)
 
     # And write.
@@ -115,67 +150,70 @@ class CMakeBuildPy(_build_py):
         if not is_cpp_prebuilt():
 
             # Build extension using cmake.
-            print("*****************************", file=sys.stderr)
-            print("* Building libshortfin      *", file=sys.stderr)
-            print("*****************************", file=sys.stderr)
+            print("::group::Building libshortfin")
 
-            cfg = os.getenv("SHORTFIN_CMAKE_BUILD_TYPE", "Release")
+            cfg = os.getenv(
+                "SHORTFIN_CMAKE_BUILD_TYPE", "Debug" if DEV_MODE else "Release"
+            )
 
-            CMAKE_BUILD_DIR = BINARY_DIR
+            # TODO: Should build default and tracing version to different dirs.
+            CMAKE_BUILD_DIR = BINARY_DIR / "cmake"
 
             # Configure CMake.
-            os.makedirs(BINARY_DIR, exist_ok=True)
-            maybe_nuke_cmake_cache(CMAKE_BUILD_DIR)
-            print(f"CMake build dir: {CMAKE_BUILD_DIR}", file=sys.stderr)
+            os.makedirs(CMAKE_BUILD_DIR, exist_ok=True)
+            if not DEV_MODE:
+                maybe_nuke_cmake_cache(CMAKE_BUILD_DIR)
+            print(f"CMake build dir: {CMAKE_BUILD_DIR}")
             cmake_args = [
                 "-GNinja",
                 "--log-level=VERBOSE",
                 "-DSHORTFIN_BUNDLE_DEPS=ON",
                 f"-DCMAKE_BUILD_TYPE={cfg}",
                 "-DSHORTFIN_BUILD_PYTHON_BINDINGS=ON",
-                # TODO: This shouldn't be hardcoded... but shortfin doesn't
-                # compile without it.
-                "-DCMAKE_C_COMPILER=clang",
-                "-DCMAKE_CXX_COMPILER=clang++",
+                f"-DPython3_EXECUTABLE={sys.executable}",
             ]
+
+            if DEV_MODE:
+                cmake_args.extend(
+                    [
+                        "-DCMAKE_C_COMPILER=clang",
+                        "-DCMAKE_CXX_COMPILER=clang++",
+                        "-DCMAKE_LINKER_TYPE=LLD",
+                    ]
+                )
+
+            add_env_cmake_setting(cmake_args, "SHORTFIN_IREE_SOURCE_DIR")
+            add_env_cmake_setting(cmake_args, "SHORTFIN_ENABLE_ASAN")
 
             # Only do a from-scratch configure if not already configured.
             cmake_cache_file = os.path.join(CMAKE_BUILD_DIR, "CMakeCache.txt")
             if not os.path.exists(cmake_cache_file):
-                print(f"Configuring with: {cmake_args}", file=sys.stderr)
+                print(f"Configuring with: {cmake_args}")
                 subprocess.check_call(
                     ["cmake", SOURCE_DIR] + cmake_args, cwd=CMAKE_BUILD_DIR
                 )
             else:
-                print(f"Not re-configing (already configured)", file=sys.stderr)
+                print(f"Not re-configing (already configured)")
 
             # Build.
             subprocess.check_call(["cmake", "--build", "."], cwd=CMAKE_BUILD_DIR)
-            print("Build complete.", file=sys.stderr)
+            print("Build complete.")
+            print("::endgroup::")
 
-            # We only take _shortfin_default from the build.
-            target_dir = os.path.join(
-                os.path.abspath(self.build_lib), "_shortfin_default"
-            )
-            print(f"Building in target: {target_dir}", file=sys.stderr)
-            os.makedirs(target_dir, exist_ok=True)
-            print("Copying build to target.", file=sys.stderr)
-            if os.path.exists(target_dir):
-                shutil.rmtree(target_dir)
-            shutil.copytree(
-                os.path.join(
-                    CMAKE_BUILD_DIR,
-                    "bindings",
-                    "python",
-                    "_shortfin_default",
-                ),
-                target_dir,
-                symlinks=False,
-            )
+            # Optionally run CTests.
+            if get_env_boolean("SHORTFIN_RUN_CTESTS", False):
+                print("Running ctests...")
+                print("::group::Run CTests")
+                subprocess.check_call(
+                    ["ctest", "--timeout", "30", "--output-on-failure"],
+                    cwd=CMAKE_BUILD_DIR,
+                )
+                print("::endgroup::")
 
 
-PYTHON_SOURCE_DIR = REL_SOURCE_DIR / "bindings" / "python"
-PYTHON_BINARY_DIR = REL_BINARY_DIR / "bindings" / "python"
+PYTHON_SOURCE_DIR = REL_SOURCE_DIR / "python"
+# TODO: Need multiple binary dirs for different build variants.
+PYTHON_BINARY_DIR = REL_BINARY_DIR / "cmake" / "python"
 
 # We need some directories to exist before setup.
 def populate_built_package(abs_dir):
