@@ -24,21 +24,22 @@ from sharktank.layers import causal_llm
 # TODO: Should be using a base class with the protocol supported.
 from ..models.llama.llama import LlamaModelConfig, PagedLlamaAttentionBlock
 
-def paged_attention(
-        attention_block: PagedLlamaAttentionBlock,
-        xq: torch.Tensor,
-        xk: torch.Tensor,
-        xv: torch.Tensor,
-        is_causal: bool,
-        seq_block_ids: torch.Tensor,
-        start_positions: Optional[torch.Tensor] = None,
-        attention_mask: Optional[torch.Tensor] = None,
-        cache_state: list[torch.Tensor] = None,
-        xk_temp: Optional[torch.Tensor] = None,
-        xv_temp: Optional[torch.Tensor] = None,
-    ):
 
-    bs, batch_seq_len, _,_ = xq.shape
+def paged_attention(
+    attention_block: PagedLlamaAttentionBlock,
+    xq: torch.Tensor,
+    xk: torch.Tensor,
+    xv: torch.Tensor,
+    is_causal: bool,
+    seq_block_ids: torch.Tensor,
+    start_positions: Optional[torch.Tensor] = None,
+    attention_mask: Optional[torch.Tensor] = None,
+    cache_state: list[torch.Tensor] = None,
+    xk_temp: Optional[torch.Tensor] = None,
+    xv_temp: Optional[torch.Tensor] = None,
+):
+
+    bs, batch_seq_len, _, _ = xq.shape
 
     # Full sequence length.
     kv_seq_len = seq_block_ids.shape[1] * attention_block.cache.block_seq_stride
@@ -85,27 +86,30 @@ def paged_attention(
     xq = xq.transpose(1, 2)
     keys = xk.transpose(1, 2)
     values = xv.transpose(1, 2)
-    attn_output = F.scaled_dot_product_attention(xq, keys, values, attn_mask=attention_mask, is_causal=is_causal)
+    attn_output = F.scaled_dot_product_attention(
+        xq, keys, values, attn_mask=attention_mask, is_causal=is_causal
+    )
     attn_output = attn_output.transpose(1, 2).reshape(bs, batch_seq_len, -1)
     return attn_output
 
-def run_llama(
-        model: PagedLlamaAttentionBlock,
-        config: LlamaModelConfig, 
-        phase: str,
-        xq: torch.Tensor,
-        xk: torch.Tensor,
-        xv: torch.Tensor,
-        # [1, 1, batch_seq_len, batch_seq_len]
-        attention_mask: torch.Tensor,
-        # [bs, batch_seq_len // block_seq_stride]
-        seq_block_ids: torch.Tensor,
-        cache_state: list[torch.Tensor],
-        # [bs] of starting positions
-        start_positions: Optional[torch.Tensor] = None,
-    ):
 
-    if phase == 'decode':
+def run_llama(
+    model: PagedLlamaAttentionBlock,
+    config: LlamaModelConfig,
+    phase: str,
+    xq: torch.Tensor,
+    xk: torch.Tensor,
+    xv: torch.Tensor,
+    # [1, 1, batch_seq_len, batch_seq_len]
+    attention_mask: torch.Tensor,
+    # [bs, batch_seq_len // block_seq_stride]
+    seq_block_ids: torch.Tensor,
+    cache_state: list[torch.Tensor],
+    # [bs] of starting positions
+    start_positions: Optional[torch.Tensor] = None,
+):
+
+    if phase == "decode":
         bs, _, _, _ = xq.shape
 
         # Allocate per-block temporary K/V tensors. These temporaries hold
@@ -130,27 +134,28 @@ def run_llama(
             dtype=config.activation_dtype,
             device=config.device,
         )
-    elif phase == 'prefill':
-        xk_temp=None
-        xv_temp=None
+    elif phase == "prefill":
+        xk_temp = None
+        xv_temp = None
     else:
         raise ValueError("'phase' argument needs to be either 'prefill' or 'decode'")
 
     h = paged_attention(
-            model,
-            xq=xq,
-            xk=xk,
-            xv=xv,
-            is_causal=config.is_causal,
-            start_positions=start_positions,
-            attention_mask=attention_mask,
-            cache_state=cache_state,
-            seq_block_ids=seq_block_ids,
-            xk_temp=xk_temp,
-            xv_temp=xv_temp,
+        model,
+        xq=xq,
+        xk=xk,
+        xv=xv,
+        is_causal=config.is_causal,
+        start_positions=start_positions,
+        attention_mask=attention_mask,
+        cache_state=cache_state,
+        seq_block_ids=seq_block_ids,
+        xk_temp=xk_temp,
+        xv_temp=xv_temp,
     )
 
     return h
+
 
 def main():
     from ..utils import cli
@@ -191,16 +196,16 @@ def main():
     # hp = configs.LlamaHParams.from_gguf_props(dataset.properties)
 
     hp = configs.LlamaHParams(
-            context_length=4096,
-            embedding_length=4096,
-            block_count=32,
-            feed_forward_length=11008,
-            attn_head_dim=128,
-            rope_dimension_count=128,
-            attention_head_count=32,
-            attention_layer_norm_rms_epsilon=9.999999747378752e-06,
-            attention_head_count_kv=32,
-        )
+        context_length=4096,
+        embedding_length=4096,
+        block_count=32,
+        feed_forward_length=11008,
+        attn_head_dim=128,
+        rope_dimension_count=128,
+        attention_head_count=32,
+        attention_layer_norm_rms_epsilon=9.999999747378752e-06,
+        attention_head_count_kv=32,
+    )
 
     llama_config = LlamaModelConfig(hp)
     llama_config.kv_cache_type = "direct" if args.bs == [1] else "paged"
@@ -208,25 +213,26 @@ def main():
     llama_config.is_causal = args.is_causal
 
     attention_block_theta = make_attention_block_theta(
-            feature_dim=llama_config.hp.attention_head_count * llama_config.hp.attn_head_dim,
-            ffn_dim=llama_config.hp.feed_forward_length,
-            dtype=llama_config.attention_dtype,
-        )
+        feature_dim=llama_config.hp.attention_head_count
+        * llama_config.hp.attn_head_dim,
+        ffn_dim=llama_config.hp.feed_forward_length,
+        dtype=llama_config.attention_dtype,
+    )
 
     causal_model = causal_llm.BaseCausalLMModel(
-            attention_block_theta, context_length=llama_config.hp.context_length
-        )
+        attention_block_theta, context_length=llama_config.hp.context_length
+    )
 
     model = PagedLlamaAttentionBlock(
-                theta=attention_block_theta,
-                block_index=0,
-                cache=llama_config.create_kv_cache(),
-                head_count=llama_config.hp.attention_head_count,
-                head_dim=llama_config.hp.attn_head_dim,
-                head_count_kv=llama_config.hp.attention_head_count_kv,
-                rms_epsilon=llama_config.hp.attention_layer_norm_rms_epsilon,
-                use_hf=False,
-            )
+        theta=attention_block_theta,
+        block_index=0,
+        cache=llama_config.create_kv_cache(),
+        head_count=llama_config.hp.attention_head_count,
+        head_dim=llama_config.hp.attn_head_dim,
+        head_count_kv=llama_config.hp.attention_head_count_kv,
+        rms_epsilon=llama_config.hp.attention_layer_norm_rms_epsilon,
+        use_hf=False,
+    )
 
     def generate_params_json(hp, prefill_bs: list[int], decode_bs: list[int]):
         return {
@@ -297,7 +303,7 @@ def main():
             h = run_llama(
                 model=model,
                 config=llama_config,
-                phase='prefill',
+                phase="prefill",
                 xq=q,
                 xk=k,
                 xv=v,
@@ -352,8 +358,8 @@ def main():
         )
         def _(
             model,
-            q, 
-            k, 
+            q,
+            k,
             v,
             seq_lens,
             start_positions,
@@ -365,15 +371,14 @@ def main():
                 attention_mask = None
             else:
                 input_mask = causal_model.input_mask(
-                seq_lens, seq_block_ids.shape[1] * model.cache.block_seq_stride
+                    seq_lens, seq_block_ids.shape[1] * model.cache.block_seq_stride
                 )
                 attention_mask = causal_model.decode_attention_mask(input_mask)
-
 
             h = run_llama(
                 model=model,
                 config=llama_config,
-                phase='decode',
+                phase="decode",
                 xq=q,
                 xk=k,
                 xv=v,
@@ -390,18 +395,20 @@ def main():
         generate_batch_prefill(bs)
         generate_batch_decode(bs)
         bsizes.append(bs)
-    config = generate_params_json(hp, bsizes, bsizes)
-    print("GENERATED!")
 
     if args.verbose:
         for name, ep in fxb.programs.items():
             print(f"EXPORT {name}:\n{ep}")
+
+    config = generate_params_json(hp, bsizes, bsizes)
+    print("GENERATED!")
 
     print("Exporting")
     output = export(fxb)
     print(f"Saving to '{args.output_mlir}'")
     output.save_mlir(args.output_mlir)
     json.dump(config, open(args.output_config, "w"))
+
 
 if __name__ == "__main__":
     main()
