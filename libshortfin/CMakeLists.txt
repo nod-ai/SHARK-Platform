@@ -4,7 +4,7 @@
 # https://llvm.org/LICENSE.txt for license information. SPDX-License-Identifier:
 # Apache-2.0 WITH LLVM-exception
 
-cmake_minimum_required(VERSION 3.28)
+cmake_minimum_required(VERSION 3.29)
 
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
   message(
@@ -138,7 +138,7 @@ if (NOT SHORTFIN_IREE_SOURCE_DIR AND SHORTFIN_BUNDLE_DEPS)
   )
   FetchContent_GetProperties(iree)
   if(NOT iree_POPULATED)
-    FetchContent_Populate(iree)
+    FetchContent_MakeAvailable(iree)
   endif()
   set(SHORTFIN_IREE_SOURCE_DIR ${iree_SOURCE_DIR})
 endif()
@@ -184,7 +184,7 @@ add_subdirectory(src)
 
 if(SHORTFIN_BUILD_PYTHON_BINDINGS)
   find_package(Python 3.8 COMPONENTS Interpreter Development.Module REQUIRED)
-  add_subdirectory(bindings/python)
+  add_subdirectory(python)
   set(SHORTFIN_PYTHON_CPP_PREBUILT "TRUE") # See setup.py.
   configure_file(setup.py setup.py @ONLY)
   configure_file(pyproject.toml pyproject.toml COPYONLY)
