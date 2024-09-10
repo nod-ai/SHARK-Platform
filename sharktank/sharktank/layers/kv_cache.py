@@ -296,6 +296,7 @@ class PagedKVCache(BaseKVCache):
         
         partition_count = len(cache_partitions)
 
+        cache_partitions_list = cache_partitions
         # [bs, partitions, atten_head_count, attn_head_dim]
         cache_partitions = torch.concat(cache_partitions, dim=1)
         
@@ -318,39 +319,6 @@ class PagedKVCache(BaseKVCache):
         page_table.index_put_(indices=indices, values=cache_partitions)
 
         return
-
-        # print('page_table before', page_table.shape, page_table.dtype)
-        # print('seq_positions', seq_positions.shape, seq_positions.dtype)
-        # print('page_ids', page_ids.shape, page_ids.dtype)
-
-
-        # for i in range(bs):
-        #     position = seq_positions[i]
-        #     # TODO: Let's clamp to the allowable range so that we don't need
-        #     # an assert.
-        #     page_id = page_ids[i, :].index_select(0, position // self.block_seq_stride)
-        #     page_offset = position % self.block_seq_stride
-            
-        #     for partition_index in range(self.cache_partition_count):
-        #         cache_partition = cache_partitions[partition_index]
-        #         indices = (
-        #             page_id,
-        #             torch.tensor([transformer_block_index], device=device),
-        #             torch.tensor([partition_index], device=device),
-        #             page_offset.unsqueeze(0),
-        #         )
-        #         # print('indices', indices)
-        #         # print('page_table', torch.nonzero(page_table).shape)
-        #         # print('page_table', torch.nonzero(page_table))
-        #         # print('position, page_id, page_offset, partition_index, cache_partition', position, page_id, page_offset, partition_index, cache_partition.shape)
-
-        #         # print('page_table', page_table[indices])
-        #         # print('before', not torch.all(page_table[indices]==cache_partition[i, 0]))
-
-        #         page_table.index_put_(indices=indices, values=cache_partition[i, 0])
-                # print('after', not torch.all(page_table[indices]==cache_partition[i, 0]))
-
-                # print('compare', torch.all(page_table==pt))
 
     def write(
         self,
@@ -402,30 +370,9 @@ class PagedKVCache(BaseKVCache):
             ).flatten(0, 1)
             subblock_ids_kv.append(subblock_ids)
             
-            # print('fused', part_block_view.shape, subblock_ids)
-
         subblock_ids = torch.concat(subblock_ids_kv)
         part_block_view = torch.concat(part_block_views, dim=0)
 
         subblock_table.index_copy_(
                     0, subblock_ids, part_block_view
         )
-
-        # def write_cache_partition(index: int, part: torch.Tensor):
-        #     part_block_view = part.reshape(blocked_shape)
-        #     subblock_ids = (
-        #         (base_subblock_ids + index) if index > 0 else base_subblock_ids
-        #     )
-        #     # TODO: Potentially clamp all page 0 indices to the mask value.
-        #     # Or even better, require that the ids are replicated such that access is
-        #     # legal.
-        #     # Now for each of the k/v attn_block_ids, which have been adjusted to
-        #     # index into the sub-pages, we flatten to do a linear index_select
-        #     # copy of the sub-blocks by collapsing the first two dims so we have
-        #     # a linear list.
-        #     subblock_table.index_copy_(
-        #         0, subblock_ids.flatten(0, 1), part_block_view.flatten(0, 1)
-        #     )
-
-        # for index, partition in enumerate(cache_partitions):
-        #     write_cache_partition(index, partition)

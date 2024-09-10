@@ -29,8 +29,8 @@ def paged_attention(
         xq: torch.Tensor,
         xk: torch.Tensor,
         xv: torch.Tensor,
+        is_causal: bool,
         seq_block_ids: torch.Tensor,
-        start_index: Optional[int] = None,
         start_positions: Optional[torch.Tensor] = None,
         attention_mask: Optional[torch.Tensor] = None,
         cache_state: list[torch.Tensor] = None,
@@ -85,7 +85,7 @@ def paged_attention(
     xq = xq.transpose(1, 2)
     keys = xk.transpose(1, 2)
     values = xv.transpose(1, 2)
-    attn_output = F.scaled_dot_product_attention(xq, keys, values, attn_mask=None, is_causal=False)
+    attn_output = F.scaled_dot_product_attention(xq, keys, values, attn_mask=attention_mask, is_causal=is_causal)
     attn_output = attn_output.transpose(1, 2).reshape(bs, batch_seq_len, -1)
     return attn_output
 
@@ -141,8 +141,8 @@ def run_llama(
             xq=xq,
             xk=xk,
             xv=xv,
+            is_causal=config.is_causal,
             start_positions=start_positions,
-            start_index=0,
             attention_mask=attention_mask,
             cache_state=cache_state,
             seq_block_ids=seq_block_ids,
@@ -179,6 +179,12 @@ def main():
         action="store_true",
     )
 
+    parser.add_argument(
+        "--is-causal",
+        help="Enable Causal attention",
+        action="store_true",
+    )
+
     args = cli.parse(parser)
 
     # dataset = cli.get_input_dataset(args)
@@ -199,6 +205,7 @@ def main():
     llama_config = LlamaModelConfig(hp)
     llama_config.kv_cache_type = "direct" if args.bs == [1] else "paged"
     llama_config.bs = args.bs
+    llama_config.is_causal = args.is_causal
 
     attention_block_theta = make_attention_block_theta(
             feature_dim=llama_config.hp.attention_head_count * llama_config.hp.attn_head_dim,
@@ -279,9 +286,14 @@ def main():
             args=example_args,
         )
         def _(model, q, k, v, seq_lens, seq_block_ids, cache_state):
-            sl = tokens.shape[1]
-            input_mask = causal_model.input_mask(seq_lens, sl)
-            attention_mask = causal_model.attention_mask(input_mask)
+
+            if not llama_config.is_causal:
+                attention_mask = None
+            else:
+                sl = tokens.shape[1]
+                input_mask = causal_model.input_mask(seq_lens, sl)
+                attention_mask = causal_model.attention_mask(input_mask)
+
             h = run_llama(
                 model=model,
                 config=llama_config,
@@ -348,10 +360,15 @@ def main():
             seq_block_ids,
             cache_state,
         ):
-            input_mask = causal_model.input_mask(
+
+            if not llama_config.is_causal:
+                attention_mask = None
+            else:
+                input_mask = causal_model.input_mask(
                 seq_lens, seq_block_ids.shape[1] * model.cache.block_seq_stride
-            )
-            attention_mask = causal_model.decode_attention_mask(input_mask)
+                )
+                attention_mask = causal_model.decode_attention_mask(input_mask)
+
 
             h = run_llama(
                 model=model,
@@ -376,9 +393,9 @@ def main():
     config = generate_params_json(hp, bsizes, bsizes)
     print("GENERATED!")
 
-    # if args.verbose:
-    #     for name, ep in fxb.programs.items():
-    #         print(f"EXPORT {name}:\n{ep}")
+    if args.verbose:
+        for name, ep in fxb.programs.items():
+            print(f"EXPORT {name}:\n{ep}")
 
     print("Exporting")
     output = export(fxb)
