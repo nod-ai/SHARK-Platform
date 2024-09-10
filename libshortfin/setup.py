@@ -65,11 +65,14 @@ if is_cpp_prebuilt():
     print("setup.py running in pre-built mode:")
     SOURCE_DIR = Path(CPP_PREBUILT_SOURCE_DIR)
     BINARY_DIR = Path(CPP_PREBUILT_BINARY_DIR)
+    CMAKE_BUILD_DIR = BINARY_DIR
 else:
     print("setup.py running in cmake build mode:")
     # setup.py is in the source directory.
     SOURCE_DIR = Path(SETUPPY_DIR)
     BINARY_DIR = Path(os.path.join(SETUPPY_DIR, "build"))
+    # TODO: Should build default and tracing version to different dirs.
+    CMAKE_BUILD_DIR = BINARY_DIR / "cmake"
     DEV_MODE = get_env_boolean("SHORTFIN_DEV_MODE")
 
 print(f"  SOURCE_DIR = {SOURCE_DIR}")
@@ -82,6 +85,7 @@ if DEV_MODE:
 # paths relative to the directory containing setup.py. Why? No one knows.
 REL_SOURCE_DIR = SOURCE_DIR.relative_to(SETUPPY_DIR, walk_up=True)
 REL_BINARY_DIR = BINARY_DIR.relative_to(SETUPPY_DIR, walk_up=True)
+REL_CMAKE_BUILD_DIR = CMAKE_BUILD_DIR.relative_to(SETUPPY_DIR, walk_up=True)
 
 
 class CMakeExtension(Extension):
@@ -150,14 +154,10 @@ class CMakeBuildPy(_build_py):
         if not is_cpp_prebuilt():
 
             # Build extension using cmake.
-            print("::group::Building libshortfin")
-
+            print("Building libshortfin")
             cfg = os.getenv(
                 "SHORTFIN_CMAKE_BUILD_TYPE", "Debug" if DEV_MODE else "Release"
             )
-
-            # TODO: Should build default and tracing version to different dirs.
-            CMAKE_BUILD_DIR = BINARY_DIR / "cmake"
 
             # Configure CMake.
             os.makedirs(CMAKE_BUILD_DIR, exist_ok=True)
@@ -198,22 +198,19 @@ class CMakeBuildPy(_build_py):
             # Build.
             subprocess.check_call(["cmake", "--build", "."], cwd=CMAKE_BUILD_DIR)
             print("Build complete.")
-            print("::endgroup::")
 
             # Optionally run CTests.
             if get_env_boolean("SHORTFIN_RUN_CTESTS", False):
                 print("Running ctests...")
-                print("::group::Run CTests")
                 subprocess.check_call(
                     ["ctest", "--timeout", "30", "--output-on-failure"],
                     cwd=CMAKE_BUILD_DIR,
                 )
-                print("::endgroup::")
 
 
 PYTHON_SOURCE_DIR = REL_SOURCE_DIR / "python"
 # TODO: Need multiple binary dirs for different build variants.
-PYTHON_BINARY_DIR = REL_BINARY_DIR / "cmake" / "python"
+PYTHON_DEFAULT_BINARY_DIR = REL_CMAKE_BUILD_DIR / "python"
 
 # We need some directories to exist before setup.
 def populate_built_package(abs_dir):
@@ -228,7 +225,7 @@ def populate_built_package(abs_dir):
         pass
 
 
-populate_built_package(os.path.join(PYTHON_BINARY_DIR / "_shortfin_default"))
+populate_built_package(os.path.join(PYTHON_DEFAULT_BINARY_DIR / "_shortfin_default"))
 
 setup(
     name="shortfin",
@@ -244,7 +241,7 @@ setup(
     zip_safe=False,
     package_dir={
         "_shortfin": str(PYTHON_SOURCE_DIR / "_shortfin"),
-        "_shortfin_default": str(PYTHON_BINARY_DIR / "_shortfin_default"),
+        "_shortfin_default": str(PYTHON_DEFAULT_BINARY_DIR / "_shortfin_default"),
         # TODO: Conditionally map additional native library variants.
         "shortfin": str(PYTHON_SOURCE_DIR / "shortfin"),
     },
