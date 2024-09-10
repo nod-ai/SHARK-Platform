@@ -27,28 +27,30 @@ import sys
 # Config
 ################################################################################
 
+
 @dataclass
 class RefLlamaModelConfig:
-    context_length=4096
-    embedding_length=4096
-    block_count=32
-    feed_forward_length=11008
-    rope_dimension_count=128
-    attention_head_count=32
-    attn_head_dim=128
-    attention_layer_norm_rms_epsilon=9.999999747378752e-06
-    attention_head_count_kv=32
+    context_length = 4096
+    embedding_length = 4096
+    block_count = 32
+    feed_forward_length = 11008
+    rope_dimension_count = 128
+    attention_head_count = 32
+    attn_head_dim = 128
+    attention_layer_norm_rms_epsilon = 9.999999747378752e-06
+    attention_head_count_kv = 32
 
     # local params
     sl = 1
     start_index = 0
     q_len = 1
     feature_dim = 4096
-    kv_seq_len = 1 
+    kv_seq_len = 1
     head_dim = 128
 
     # Dtype to use for general FP activations not otherwise configured.
     activation_dtype: torch.dtype = torch.float16
+
 
 class LlamaAttentionBlock(torch.nn.Module):
     """Implements a self attention layer in the style of Llama."""
@@ -109,9 +111,12 @@ class LlamaAttentionBlock(torch.nn.Module):
         keys = keys.transpose(1, 2)
         values = values.transpose(1, 2)
 
-        attn_output = F.scaled_dot_product_attention(xq, keys, values, attn_mask=attention_mask, is_causal=is_causal)
+        attn_output = F.scaled_dot_product_attention(
+            xq, keys, values, attn_mask=attention_mask, is_causal=is_causal
+        )
         attn_output = attn_output.transpose(1, 2).reshape(bs, q_len, -1)
         return attn_output
+
 
 def main(args: list[str]):
 
@@ -209,11 +214,11 @@ def main(args: list[str]):
                 xv=v,
                 cache_k=block_cache_k,
                 cache_v=block_cache_v,
-                is_causal = False,
+                is_causal=False,
                 attention_mask=attention_mask,
             )
             return h
-        
+
         bsizes.append(bs)
 
     config = generate_params_json(hp, bsizes)
@@ -228,7 +233,7 @@ def main(args: list[str]):
     print(f"Saving to '{args.output_mlir}'")
     output.save_mlir(args.output_mlir)
     json.dump(config, open(args.output_config, "w"))
-    
+
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))

@@ -293,13 +293,13 @@ class PagedKVCache(BaseKVCache):
         page_table = self.unflatten_page_table(state)  # 6D
         bs, *_ = seq_positions.shape
         assert len(cache_partitions) == self.cache_partition_count
-        
+
         partition_count = len(cache_partitions)
 
         cache_partitions_list = cache_partitions
         # [bs, partitions, atten_head_count, attn_head_dim]
         cache_partitions = torch.concat(cache_partitions, dim=1)
-        
+
         # [bs, 1]
         page_index = seq_positions // self.block_seq_stride
 
@@ -311,7 +311,9 @@ class PagedKVCache(BaseKVCache):
 
         # [bs, partitions]
         page_id = page_id.repeat(1, partition_count)
-        transformer_block = torch.full((bs, partition_count), transformer_block_index, device=device)
+        transformer_block = torch.full(
+            (bs, partition_count), transformer_block_index, device=device
+        )
         page_offset = page_offset.repeat(1, partition_count)
         partitions = partitions.repeat(bs, 1)
 
@@ -366,13 +368,11 @@ class PagedKVCache(BaseKVCache):
             part_block_views.append(part_block_view)
 
             subblock_ids = (
-                    (base_subblock_ids + index) if index > 0 else base_subblock_ids
+                (base_subblock_ids + index) if index > 0 else base_subblock_ids
             ).flatten(0, 1)
             subblock_ids_kv.append(subblock_ids)
-            
+
         subblock_ids = torch.concat(subblock_ids_kv)
         part_block_view = torch.concat(part_block_views, dim=0)
 
-        subblock_table.index_copy_(
-                    0, subblock_ids, part_block_view
-        )
+        subblock_table.index_copy_(0, subblock_ids, part_block_view)
