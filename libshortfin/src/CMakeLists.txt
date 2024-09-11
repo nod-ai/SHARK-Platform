@@ -20,7 +20,7 @@ endif()
 
 shortfin_public_library(
   NAME
-    shortfin
+  ${SHORTFIN_LINK_LIBRARY_NAME}
   COMPONENTS
     shortfin_array
     shortfin_local
@@ -29,4 +29,7 @@ shortfin_public_library(
     ${_INIT_INTERNAL_DEPS}
 )
 
-set_target_properties(shortfin PROPERTIES VERSION ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR} SOVERSION ${SOVERSION})
+set_target_properties(${SHORTFIN_LINK_LIBRARY_NAME}
+                       PROPERTIES
+                       VERSION ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}
+                       SOVERSION ${SOVERSION})

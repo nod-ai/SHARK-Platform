@@ -43,10 +43,19 @@ set(SHORTFIN_IREE_SOURCE_DIR "" CACHE FILEPATH "Path to IREE source")
 # Options for building static or dynamic libraries.
 option(SHORTFIN_BUILD_STATIC "Builds static libraries" OFF)
 option(SHORTFIN_BUILD_DYNAMIC "Builds dynamic libraries" ON)
-cmake_dependent_option(SHORTFIN_LINK_DYNAMIC "Links internal binaries against static libshortfin.a" ON "SHORTFIN_BUILD_DYNAMIC" OFF)
 if(NOT SHORTFIN_BUILD_STATIC AND NOT SHORTFIN_BUILD_DYNAMIC)
   message(FATAL_ERROR "One of SHORTFIN_BUILD_STATIC or SHORTFIN_BUILD_DYNAMIC must be ON")
 endif()
+# Since dynamic build is the default option, if someone specifies they want
+# a static build, and both options are on, we should build a static build.
+if (SHORTFIN_BUILD_STATIC)
+  if (SHORTFIN_BUILD_DYNAMIC)
+    message(STATUS "Both SHORTFIN_BUILD_DYNAMIC and SHORTFIN_BUILD_STATIC specified, choosing static build")
+  endif()
+  set(SHORTFIN_BUILD_DYNAMIC OFF)
+endif()
+# Link static/dynamic based on build type.
+cmake_dependent_option(SHORTFIN_LINK_DYNAMIC "Links internal binaries against static libshortfin.a" ON "SHORTFIN_BUILD_DYNAMIC" OFF)
 message(STATUS "Shortfin build static = ${SHORTFIN_BUILD_STATIC}, dynamic = ${SHORTFIN_BUILD_DYNAMIC}")
 if(SHORTFIN_LINK_DYNAMIC)
   message(STATUS "Dynamic linking to shortfin")

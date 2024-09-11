@@ -27,9 +27,9 @@ function(shortfin_public_library)
   if(SHORTFIN_BUILD_STATIC)
     # Static library.
     shortfin_components_to_static_libs(_STATIC_COMPONENTS ${_RULE_COMPONENTS})
-    add_library("${_RULE_NAME}-static" STATIC)
+    add_library("${_RULE_NAME}" STATIC)
     target_link_libraries(
-      "${_RULE_NAME}-static" PUBLIC ${_STATIC_COMPONENTS}
+      "${_RULE_NAME}" PUBLIC ${_STATIC_COMPONENTS}
     )
   endif()
 
