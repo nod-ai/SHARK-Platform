@@ -126,37 +126,38 @@ endif()
 
 ## iree runtime
 
-if (NOT SHORTFIN_IREE_SOURCE_DIR AND SHORTFIN_BUNDLE_DEPS)
+# Set IREE build flags
+set(IREE_BUILD_COMPILER OFF)
+set(IREE_BUILD_TESTS OFF)
+set(IREE_BUILD_SAMPLES OFF)
+# Disable missing submodules error because we are only building the runtime.
+set(IREE_ERROR_ON_MISSING_SUBMODULES OFF)
+# Only enable local_sync/local_task/hip drivers for now.
+set(IREE_HAL_DRIVER_DEFAULTS OFF)
+set(IREE_HAL_DRIVER_LOCAL_SYNC ON)
+set(IREE_HAL_DRIVER_LOCAL_TASK ON)
+if(SHORTFIN_SYSTEMS_AMDGPU)
+  set(IREE_HAL_DRIVER_HIP ON)
+endif()
+
+if(SHORTFIN_IREE_SOURCE_DIR)
+  add_subdirectory(${SHORTFIN_IREE_SOURCE_DIR} shortfin_iree SYSTEM EXCLUDE_FROM_ALL)
+elseif (SHORTFIN_BUNDLE_DEPS)
   FetchContent_Declare(
-    iree
+    shortfin_iree
     GIT_REPOSITORY https://github.com/iree-org/iree.git
     GIT_TAG candidate-20240904.1006
     # TODO: We shouldn't have to pull googletest when we are not building tests.
     #       This needs to be fixed with IREE.
     GIT_SUBMODULES "third_party/benchmark third_party/cpuinfo third_party/flatcc third_party/hip-build-deps third_party/googletest"
     GIT_SHALLOW TRUE
+    SYSTEM
+    EXCLUDE_FROM_ALL
   )
-  FetchContent_GetProperties(iree)
-  if(NOT iree_POPULATED)
-    FetchContent_MakeAvailable(iree)
+  FetchContent_GetProperties(shortfin_iree)
+  if(NOT shortfin_iree_POPULATED)
+    FetchContent_MakeAvailable(shortfin_iree)
   endif()
-  set(SHORTFIN_IREE_SOURCE_DIR ${iree_SOURCE_DIR})
-endif()
-
-if(SHORTFIN_IREE_SOURCE_DIR)
-  set(IREE_BUILD_COMPILER OFF)
-  set(IREE_BUILD_TESTS OFF)
-  set(IREE_BUILD_SAMPLES OFF)
-  # Disable missing submodules error because we are only building the runtime.
-  set(IREE_ERROR_ON_MISSING_SUBMODULES OFF)
-  # Only enable local_sync/local_task/hip drivers for now.
-  set(IREE_HAL_DRIVER_DEFAULTS OFF)
-  set(IREE_HAL_DRIVER_LOCAL_SYNC ON)
-  set(IREE_HAL_DRIVER_LOCAL_TASK ON)
-  if(SHORTFIN_SYSTEMS_AMDGPU)
-    set(IREE_HAL_DRIVER_HIP ON)
-  endif()
-  add_subdirectory(${SHORTFIN_IREE_SOURCE_DIR} shortfin_iree SYSTEM EXCLUDE_FROM_ALL)
 else()
   # Try to find iree using find_package
   find_package(IREERuntime)
@@ -165,7 +166,7 @@ endif()
 # tests
 
 if(SHORTFIN_BUILD_TESTS)
-  if (NOT SHORTFIN_IREE_SOURCE_DIR)
+  if (NOT SHORTFIN_BUNDLE_DEPS AND NOT SHORTFIN_IREE_SOURCE_DIR)
     # For now we use gtest shipped alongside with IREE.
     FetchContent_Declare(
       googletest
