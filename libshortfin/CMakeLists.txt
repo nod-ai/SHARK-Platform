@@ -37,6 +37,7 @@ endif()
 option(SHORTFIN_BUILD_PYTHON_BINDINGS "Builds Python Bindings" OFF)
 option(SHORTFIN_BUILD_TESTS "Builds C++ tests" ON)
 option(SHORTFIN_BUNDLE_DEPS "Download dependencies instead of using system libraries" ON)
+option(SHORTFIN_ENABLE_TRACING "Enable runtime tracing for iree and shortfin" OFF)
 
 set(SHORTFIN_IREE_SOURCE_DIR "" CACHE FILEPATH "Path to IREE source")
 
@@ -140,7 +141,9 @@ if (SHORTFIN_IREE_SOURCE_DIR OR SHORTFIN_BUNDLE_DEPS)
   if(SHORTFIN_SYSTEMS_AMDGPU)
     set(IREE_HAL_DRIVER_HIP ON)
   endif()
-endif()
+  if (SHORTFIN_ENABLE_TRACING)
+    set(IREE_ENABLE_RUNTIME_TRACING ON)
+  endif()
 
 if(SHORTFIN_IREE_SOURCE_DIR)
   add_subdirectory(${SHORTFIN_IREE_SOURCE_DIR} shortfin_iree SYSTEM EXCLUDE_FROM_ALL)
@@ -149,9 +152,7 @@ elseif (SHORTFIN_BUNDLE_DEPS)
     shortfin_iree
     GIT_REPOSITORY https://github.com/iree-org/iree.git
     GIT_TAG candidate-20240904.1006
-    # TODO: We shouldn't have to pull googletest when we are not building tests.
-    #       This needs to be fixed with IREE.
-    GIT_SUBMODULES "third_party/benchmark third_party/cpuinfo third_party/flatcc third_party/hip-build-deps third_party/googletest"
+    GIT_SUBMODULES ${IREE_SUBMODULES}
     GIT_SHALLOW TRUE
     SYSTEM
     EXCLUDE_FROM_ALL
