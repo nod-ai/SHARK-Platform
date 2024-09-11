@@ -126,24 +126,8 @@ endif()
 
 ## iree runtime
 
-if (NOT SHORTFIN_IREE_SOURCE_DIR AND SHORTFIN_BUNDLE_DEPS)
-  FetchContent_Declare(
-    iree
-    GIT_REPOSITORY https://github.com/iree-org/iree.git
-    GIT_TAG candidate-20240904.1006
-    # TODO: We shouldn't have to pull googletest when we are not building tests.
-    #       This needs to be fixed with IREE.
-    GIT_SUBMODULES "third_party/benchmark third_party/cpuinfo third_party/flatcc third_party/hip-build-deps third_party/googletest"
-    GIT_SHALLOW TRUE
-  )
-  FetchContent_GetProperties(iree)
-  if(NOT iree_POPULATED)
-    FetchContent_MakeAvailable(iree)
-  endif()
-  set(SHORTFIN_IREE_SOURCE_DIR ${iree_SOURCE_DIR})
-endif()
-
-if(SHORTFIN_IREE_SOURCE_DIR)
+if (SHORTFIN_IREE_SOURCE_DIR OR SHORTFIN_BUNDLE_DEPS)
+  # Set IREE build flags, if we are building from source
   set(IREE_BUILD_COMPILER OFF)
   set(IREE_BUILD_TESTS OFF)
   set(IREE_BUILD_SAMPLES OFF)
@@ -156,7 +140,26 @@ if(SHORTFIN_IREE_SOURCE_DIR)
   if(SHORTFIN_SYSTEMS_AMDGPU)
     set(IREE_HAL_DRIVER_HIP ON)
   endif()
+endif()
+
+if(SHORTFIN_IREE_SOURCE_DIR)
   add_subdirectory(${SHORTFIN_IREE_SOURCE_DIR} shortfin_iree SYSTEM EXCLUDE_FROM_ALL)
+elseif (SHORTFIN_BUNDLE_DEPS)
+  FetchContent_Declare(
+    shortfin_iree
+    GIT_REPOSITORY https://github.com/iree-org/iree.git
+    GIT_TAG candidate-20240904.1006
+    # TODO: We shouldn't have to pull googletest when we are not building tests.
+    #       This needs to be fixed with IREE.
+    GIT_SUBMODULES "third_party/benchmark third_party/cpuinfo third_party/flatcc third_party/hip-build-deps third_party/googletest"
+    GIT_SHALLOW TRUE
+    SYSTEM
+    EXCLUDE_FROM_ALL
+  )
+  FetchContent_GetProperties(shortfin_iree)
+  if(NOT shortfin_iree_POPULATED)
+    FetchContent_MakeAvailable(shortfin_iree)
+  endif()
 else()
   # Try to find iree using find_package
   find_package(IREERuntime)
@@ -165,7 +168,7 @@ endif()
 # tests
 
 if(SHORTFIN_BUILD_TESTS)
-  if (NOT SHORTFIN_IREE_SOURCE_DIR)
+  if (NOT SHORTFIN_BUNDLE_DEPS AND NOT SHORTFIN_IREE_SOURCE_DIR)
     # For now we use gtest shipped alongside with IREE.
     FetchContent_Declare(
       googletest
