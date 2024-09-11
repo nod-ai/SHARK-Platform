@@ -198,7 +198,7 @@ def main():
     hp = configs.LlamaHParams(
         context_length=4096,
         embedding_length=4096,
-        block_count=32,
+        block_count=1,
         feed_forward_length=11008,
         attn_head_dim=128,
         rope_dimension_count=128,

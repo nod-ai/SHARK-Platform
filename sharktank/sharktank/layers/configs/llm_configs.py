@@ -34,13 +34,10 @@ class LlamaHParams:
     block_count: int
     feed_forward_length: int
     rope_dimension_count: int
-    rope_freq_base: float
     attention_head_count: int
     attn_head_dim: int
     attention_layer_norm_rms_epsilon: float
     attention_head_count_kv: int
-    expert_count: int
-    expert_used_count: int
 
     @staticmethod
     def from_gguf_props(p: dict[str, Any]):
