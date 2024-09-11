@@ -246,6 +246,7 @@ def populate_built_package(abs_dir):
 
 
 populate_built_package(os.path.join(PYTHON_DEFAULT_BINARY_DIR / "_shortfin_default"))
+populate_built_package(os.path.join(PYTHON_DEFAULT_BINARY_DIR / "_shortfin_tracy"))
 
 setup(
     name="shortfin",
@@ -262,11 +263,13 @@ setup(
     package_dir={
         "_shortfin": str(PYTHON_SOURCE_DIR / "_shortfin"),
         "_shortfin_default": str(PYTHON_DEFAULT_BINARY_DIR / "_shortfin_default"),
+        "_shortfin_tracy": str(PYTHON_DEFAULT_BINARY_DIR / "_shortfin_tracy"),
         # TODO: Conditionally map additional native library variants.
         "shortfin": str(PYTHON_SOURCE_DIR / "shortfin"),
     },
     ext_modules=[
-        CMakeExtension("_shortfin_default.lib")
+        CMakeExtension("_shortfin_default.lib"),
+        CMakeExtension("_shortfin_tracy.lib")
         # TODO: Conditionally map additional native library variants.
     ],
     cmdclass={
