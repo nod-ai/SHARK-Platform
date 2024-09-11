@@ -207,6 +207,26 @@ class CMakeBuildPy(_build_py):
                     cwd=CMAKE_BUILD_DIR,
                 )
 
+            # Copy non-python binaries generated during the build.
+            target_dir = os.path.join(
+                os.path.abspath(self.build_lib), "_shortfin_default"
+            )
+
+            print(f"Building in target: {target_dir}")
+            os.makedirs(target_dir, exist_ok=True)
+            print("Copying build to target.")
+            if os.path.exists(target_dir):
+                shutil.rmtree(target_dir)
+            shutil.copytree(
+                os.path.join(
+                    CMAKE_BUILD_DIR,
+                    "python",
+                    "_shortfin_default",
+                ),
+                target_dir,
+                symlinks=False,
+            )
+
 
 PYTHON_SOURCE_DIR = REL_SOURCE_DIR / "python"
 # TODO: Need multiple binary dirs for different build variants.
