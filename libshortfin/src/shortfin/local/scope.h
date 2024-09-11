@@ -19,9 +19,9 @@
 
 namespace shortfin::local {
 
-class SHORTFIN_API Scope;
-class SHORTFIN_API System;
-class SHORTFIN_API Worker;
+class Scope;
+class System;
+class Worker;
 
 // Wraps a Scope and a DeviceAffinity together. This is used in all
 // Scope based APIs as a short-hand for "device" as it contains everything
@@ -106,7 +106,7 @@ class SHORTFIN_API Scope : public std::enable_shared_from_this<Scope> {
   const std::unordered_map<std::string_view, Device *> named_devices() const {
     return named_devices_;
   }
-  Device *raw_device(int index) const;
+  Device *raw_device(std::size_t index) const;
   Device *raw_device(Device *device) const { return device; }
   const std::vector<Device *> &raw_devices() const { return devices_; }
   std::vector<std::string_view> device_names() const;

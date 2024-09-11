@@ -22,7 +22,7 @@ namespace shortfin::local {
 // Message
 // -------------------------------------------------------------------------- //
 
-class SHORTFIN_API Message;
+class Message;
 namespace detail {
 
 struct MessageRefOwner {
@@ -135,8 +135,8 @@ using MessageFuture = TypedFuture<Message::Ref>;
 // Queue
 // -------------------------------------------------------------------------- //
 
-class SHORTFIN_API QueueReader;
-class SHORTFIN_API QueueWriter;
+class QueueReader;
+class QueueWriter;
 
 // Queues are the primary form of communication in shortfin for exchanging
 // messages. They are inherently thread safe and coupled with the async/worker
