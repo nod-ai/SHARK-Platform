@@ -86,6 +86,7 @@ def paged_attention(
     xq = xq.transpose(1, 2)
     keys = xk.transpose(1, 2)
     values = xv.transpose(1, 2)
+    attention_mask = None
     attn_output = F.scaled_dot_product_attention(
         xq, keys, values, attn_mask=attention_mask, is_causal=is_causal
     )
@@ -293,7 +294,7 @@ def main():
         )
         def _(model, q, k, v, seq_lens, seq_block_ids, cache_state):
 
-            if not llama_config.is_causal:
+            if llama_config.is_causal:
                 attention_mask = None
             else:
                 sl = tokens.shape[1]
@@ -367,7 +368,7 @@ def main():
             cache_state,
         ):
 
-            if not llama_config.is_causal:
+            if llama_config.is_causal:
                 attention_mask = None
             else:
                 input_mask = causal_model.input_mask(
