@@ -126,18 +126,20 @@ endif()
 
 ## iree runtime
 
-# Set IREE build flags
-set(IREE_BUILD_COMPILER OFF)
-set(IREE_BUILD_TESTS OFF)
-set(IREE_BUILD_SAMPLES OFF)
-# Disable missing submodules error because we are only building the runtime.
-set(IREE_ERROR_ON_MISSING_SUBMODULES OFF)
-# Only enable local_sync/local_task/hip drivers for now.
-set(IREE_HAL_DRIVER_DEFAULTS OFF)
-set(IREE_HAL_DRIVER_LOCAL_SYNC ON)
-set(IREE_HAL_DRIVER_LOCAL_TASK ON)
-if(SHORTFIN_SYSTEMS_AMDGPU)
-  set(IREE_HAL_DRIVER_HIP ON)
+if (SHORTFIN_IREE_SOURCE_DIR OR SHORTFIN_BUNDLE_DEPS)
+  # Set IREE build flags, if we are building from source
+  set(IREE_BUILD_COMPILER OFF)
+  set(IREE_BUILD_TESTS OFF)
+  set(IREE_BUILD_SAMPLES OFF)
+  # Disable missing submodules error because we are only building the runtime.
+  set(IREE_ERROR_ON_MISSING_SUBMODULES OFF)
+  # Only enable local_sync/local_task/hip drivers for now.
+  set(IREE_HAL_DRIVER_DEFAULTS OFF)
+  set(IREE_HAL_DRIVER_LOCAL_SYNC ON)
+  set(IREE_HAL_DRIVER_LOCAL_TASK ON)
+  if(SHORTFIN_SYSTEMS_AMDGPU)
+    set(IREE_HAL_DRIVER_HIP ON)
+  endif()
 endif()
 
 if(SHORTFIN_IREE_SOURCE_DIR)
