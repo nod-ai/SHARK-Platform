@@ -60,7 +60,7 @@ def make_moe_block_theta(feature_dim=1024, ffn_dim=6144, num_experts=8) -> Theta
     return Theta(
         {
             "blk.0.ffn_gate_inp.weight": DefaultPrimitiveTensor(
-                data=make_rand_torch((8, ffn_dim))
+                data=make_rand_torch((num_experts, ffn_dim))
             ),
             "blk.0.ffn_norm.weight": DefaultPrimitiveTensor(
                 data=make_rand_torch((ffn_dim))
@@ -69,13 +69,13 @@ def make_moe_block_theta(feature_dim=1024, ffn_dim=6144, num_experts=8) -> Theta
                 data=make_rand_torch((ffn_dim))
             ),
             "blk.0.ffn_gate_exps.weight": DefaultPrimitiveTensor(
-                data=make_rand_torch((8, feature_dim * num_experts, ffn_dim))
+                data=make_rand_torch((num_experts, feature_dim * num_experts, ffn_dim))
             ),
             "blk.0.ffn_up_exps.weight": DefaultPrimitiveTensor(
-                data=make_rand_torch((8, feature_dim * num_experts, ffn_dim))
+                data=make_rand_torch((num_experts, feature_dim * num_experts, ffn_dim))
             ),
             "blk.0.ffn_down_exps.weight": DefaultPrimitiveTensor(
-                data=make_rand_torch((8, ffn_dim, feature_dim * num_experts))
+                data=make_rand_torch((num_experts, ffn_dim, feature_dim * num_experts))
             ),
         }
     )
