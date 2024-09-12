@@ -30,7 +30,6 @@ from ..utils.math import ceildiv
 from shark_turbine.aot import (
     ExternalTensorTrait,
 )
-from shark_turbine.ops.iree import transfer_to_logical_device
 from ..utils import tree as tree_utils
 
 from ..utils.io import ShardedArchiveBuilder
@@ -618,13 +617,15 @@ class ShardedTensorBase(ShardedTensor):
         name: str = UnnamedTensorName,
         shape: Optional[list[int]],
     ):
+        from ..ops import transfer_to_logical_device
+
         assert len(ts) > 0
         assert shard_dim is None or len(ts[0].shape) > shard_dim
         super().__init__(name=name, shape=shape, shard_dim=shard_dim)
         self._shards: tuple[DefaultPrimitiveTensor] = tuple(
             DefaultPrimitiveTensor(
                 name=f"{name}.shard.{i}",
-                data=transfer_to_logical_device(f"{i}", unbox_tensor(t)),
+                data=transfer_to_logical_device(t, i),
             )
             for i, t in enumerate(ts)
         )
@@ -867,6 +868,8 @@ class ReplicatedTensor(ShardedTensor):
         will be replicated that many times.
         """
 
+        from ..ops import transfer_to_logical_device
+
         if isinstance(ts, torch.Tensor):
             assert shard_count is not None
             ts = [ts] * shard_count
@@ -884,7 +887,7 @@ class ReplicatedTensor(ShardedTensor):
         self._shards: tuple[DefaultPrimitiveTensor] = tuple(
             DefaultPrimitiveTensor(
                 name=f"{name}.shard.{i}",
-                data=transfer_to_logical_device(f"{i}", unbox_tensor(t)),
+                data=transfer_to_logical_device(t, i),
             )
             for i, t in enumerate(ts)
         )

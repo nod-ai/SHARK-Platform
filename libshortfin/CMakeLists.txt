@@ -4,7 +4,7 @@
 # https://llvm.org/LICENSE.txt for license information. SPDX-License-Identifier:
 # Apache-2.0 WITH LLVM-exception
 
-cmake_minimum_required(VERSION 3.28)
+cmake_minimum_required(VERSION 3.29)
 
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
   message(
@@ -37,6 +37,7 @@ endif()
 option(SHORTFIN_BUILD_PYTHON_BINDINGS "Builds Python Bindings" OFF)
 option(SHORTFIN_BUILD_TESTS "Builds C++ tests" ON)
 option(SHORTFIN_BUNDLE_DEPS "Download dependencies instead of using system libraries" ON)
+option(SHORTFIN_ENABLE_TRACING "Enable runtime tracing for iree and shortfin" OFF)
 
 set(SHORTFIN_IREE_SOURCE_DIR "" CACHE FILEPATH "Path to IREE source")
 
@@ -126,24 +127,8 @@ endif()
 
 ## iree runtime
 
-if (NOT SHORTFIN_IREE_SOURCE_DIR AND SHORTFIN_BUNDLE_DEPS)
-  FetchContent_Declare(
-    iree
-    GIT_REPOSITORY https://github.com/iree-org/iree.git
-    GIT_TAG candidate-20240904.1006
-    # TODO: We shouldn't have to pull googletest when we are not building tests.
-    #       This needs to be fixed with IREE.
-    GIT_SUBMODULES "third_party/benchmark third_party/cpuinfo third_party/flatcc third_party/hip-build-deps third_party/googletest"
-    GIT_SHALLOW TRUE
-  )
-  FetchContent_GetProperties(iree)
-  if(NOT iree_POPULATED)
-    FetchContent_Populate(iree)
-  endif()
-  set(SHORTFIN_IREE_SOURCE_DIR ${iree_SOURCE_DIR})
-endif()
-
-if(SHORTFIN_IREE_SOURCE_DIR)
+if (SHORTFIN_IREE_SOURCE_DIR OR SHORTFIN_BUNDLE_DEPS)
+  # Set IREE build flags, if we are building from source
   set(IREE_BUILD_COMPILER OFF)
   set(IREE_BUILD_TESTS OFF)
   set(IREE_BUILD_SAMPLES OFF)
@@ -156,7 +141,43 @@ if(SHORTFIN_IREE_SOURCE_DIR)
   if(SHORTFIN_SYSTEMS_AMDGPU)
     set(IREE_HAL_DRIVER_HIP ON)
   endif()
+  if (SHORTFIN_ENABLE_TRACING)
+    set(IREE_ENABLE_RUNTIME_TRACING ON)
+    # When using shared libraries there are some issues that need to be
+    # explored more on static initialization order. Something is getting
+    # initialized and is emitting tracy events before tracy objects are
+    # initialized. This can point to some shared library overloading allocation
+    # functions and making them emit tracy events, which are further used in
+    # some static allocation. See https://github.com/wolfpld/tracy/issues/196
+    # for a similar issue and discussion. Using the workaround suggested in
+    # that issue for now. Note that this does not happen when using static
+    # libraries.
+    set(TRACY_DELAYED_INIT ON CACHE BOOL "Enable delayed init for tracy")
+  endif()
+endif()
+
+if(SHORTFIN_IREE_SOURCE_DIR)
   add_subdirectory(${SHORTFIN_IREE_SOURCE_DIR} shortfin_iree SYSTEM EXCLUDE_FROM_ALL)
+elseif (SHORTFIN_BUNDLE_DEPS)
+  # TODO: We shouldn't have to pull googletest when we are not building tests.
+  #       This needs to be fixed with IREE.
+  set(IREE_SUBMODULES "third_party/benchmark third_party/cpuinfo third_party/flatcc third_party/hip-build-deps third_party/googletest")
+  if (SHORTFIN_ENABLE_TRACING)
+    set(IREE_SUBMODULES "${IREE_SUBMODULES} third_party/tracy")
+  endif()
+  FetchContent_Declare(
+    shortfin_iree
+    GIT_REPOSITORY https://github.com/iree-org/iree.git
+    GIT_TAG candidate-20240904.1006
+    GIT_SUBMODULES ${IREE_SUBMODULES}
+    GIT_SHALLOW TRUE
+    SYSTEM
+    EXCLUDE_FROM_ALL
+  )
+  FetchContent_GetProperties(shortfin_iree)
+  if(NOT shortfin_iree_POPULATED)
+    FetchContent_MakeAvailable(shortfin_iree)
+  endif()
 else()
   # Try to find iree using find_package
   find_package(IREERuntime)
@@ -165,7 +186,7 @@ endif()
 # tests
 
 if(SHORTFIN_BUILD_TESTS)
-  if (NOT SHORTFIN_IREE_SOURCE_DIR)
+  if (NOT SHORTFIN_BUNDLE_DEPS AND NOT SHORTFIN_IREE_SOURCE_DIR)
     # For now we use gtest shipped alongside with IREE.
     FetchContent_Declare(
       googletest
@@ -184,7 +205,7 @@ add_subdirectory(src)
 
 if(SHORTFIN_BUILD_PYTHON_BINDINGS)
   find_package(Python 3.8 COMPONENTS Interpreter Development.Module REQUIRED)
-  add_subdirectory(bindings/python)
+  add_subdirectory(python)
   set(SHORTFIN_PYTHON_CPP_PREBUILT "TRUE") # See setup.py.
   configure_file(setup.py setup.py @ONLY)
   configure_file(pyproject.toml pyproject.toml COPYONLY)
