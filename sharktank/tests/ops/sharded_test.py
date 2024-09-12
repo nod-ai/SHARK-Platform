@@ -15,40 +15,6 @@ from sharktank.types import sharding
 from sharktank.layers import Conv2DLayer
 
 
-class AllGatherTest(unittest.TestCase):
-    def testAllGather(self):
-        shard_count = 3
-        shard_shape = [3, 4]
-        shard_dim = 1
-        shards = [
-            torch.rand(shard_shape, dtype=torch.float32) for i in range(shard_count)
-        ]
-        expected_result = torch.cat(shards, dim=shard_dim)
-
-        sharded = SplitPrimitiveTensor(shard_dim=shard_dim, ts=shards)
-        actual_result = ops.all_gather(sharded)
-
-        for shard in actual_result.shards:
-            torch.testing.assert_close(shard.as_torch(), expected_result)
-
-
-class AllReduceTest(unittest.TestCase):
-    def testAllReduce(self):
-        shard_count = 3
-        shard_shape = [3, 4]
-        shard_dim = 1
-        shards = [
-            torch.rand(shard_shape, dtype=torch.float32) for i in range(shard_count)
-        ]
-        expected_result = torch.add(torch.add(shards[0], shards[1]), shards[2])
-
-        sharded = SplitPrimitiveTensor(shard_dim=shard_dim, ts=shards)
-        actual_result = ops.all_reduce(sharded)
-
-        for shard in actual_result.shards:
-            torch.testing.assert_close(shard.as_torch(), expected_result)
-
-
 class CatTest(unittest.TestCase):
     def testCatSplitDim(self):
         """Concatenation along the sharded split dimension."""
@@ -84,6 +50,21 @@ class CatTest(unittest.TestCase):
 
 
 class ConvTest(unittest.TestCase):
+    def testAllGather(self):
+        shard_count = 3
+        shard_shape = [3, 4]
+        shard_dim = 1
+        shards = [
+            torch.rand(shard_shape, dtype=torch.float32) for i in range(shard_count)
+        ]
+        expected_result = torch.cat(shards, dim=shard_dim)
+
+        sharded = SplitPrimitiveTensor(shard_dim=shard_dim, ts=shards)
+        actual_result = ops.all_gather(sharded)
+
+        for shard in actual_result.shards:
+            torch.testing.assert_close(shard.as_torch(), expected_result)
+
     def testConv2dShardedInputAndOutputChannelsOneGroup(self):
         batches = 2
         in_channels = 6

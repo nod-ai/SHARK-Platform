@@ -16,14 +16,14 @@
 
 namespace shortfin::local {
 
-class Scope;
-class ScopedDevice;
-class System;
+class SHORTFIN_API Scope;
+class SHORTFIN_API ScopedDevice;
+class SHORTFIN_API System;
 
 namespace detail {
 
-class Account;
-class Scheduler;
+class SHORTFIN_API Account;
+class SHORTFIN_API Scheduler;
 
 // Transactions are accumulated into a command buffer by type and in
 // auto-flush mode, the command buffer is submitted upon a change of type.

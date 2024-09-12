@@ -9,7 +9,7 @@ Usage: python -m pytest candidate_gen_test.py
 """
 
 import pytest
-from . import candidate_gen
+import candidate_gen
 
 
 def test_get_shaped_type_element_bitwidth():

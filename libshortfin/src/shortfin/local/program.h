@@ -22,8 +22,8 @@
 
 namespace shortfin::local {
 
-class Scope;
-class System;
+class SHORTFIN_API Scope;
+class SHORTFIN_API System;
 
 enum class ProgramInvocationModel {
   // Uses the coarse-fences invocation model. In this model, the last two

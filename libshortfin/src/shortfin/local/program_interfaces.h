@@ -16,7 +16,7 @@
 
 namespace shortfin::local {
 
-class ProgramInvocation;
+class SHORTFIN_API ProgramInvocation;
 
 // The type of barrier that should be managed for a program resource.
 enum class ProgramResourceBarrier {

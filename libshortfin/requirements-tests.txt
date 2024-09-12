@@ -1,9 +1,4 @@
 pytest
 requests
 fastapi
-onnx
 uvicorn
-
-# Libraries needed to build in dev setups.
-setuptools
-wheel
