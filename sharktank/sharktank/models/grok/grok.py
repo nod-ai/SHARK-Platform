@@ -80,7 +80,7 @@ class LlamaModelConfig:
 
 
 class PagedGrokModelV1(BaseCausalLMModel):
-    """MixtralModel with a paged KV cache and supporting variable sequence
+    """Grok model with a paged KV cache and supporting variable sequence
     length batched inference.
 
     As both the caching and batching setup is complicated, this model variant
@@ -177,12 +177,12 @@ class PagedGrokModelV1(BaseCausalLMModel):
         self._assert_device(*cache_state, dtype=self.activation_dtype)
         h = self.token_embedding(tokens)
         h *= 78.38367176906169
-        self.trace_tensor("mixtral.token_embedding", h)
+        self.trace_tensor("grok.token_embedding", h)
 
         # Iterate over attention blocks.
         for block_idx, block in enumerate(self.attn_blocks):
             if block_idx == 0:
-                self.trace_tensor(f"mixtral.attn_block.{block_idx}.input", h)
+                self.trace_tensor(f"grok.attn_block.{block_idx}.input", h)
 
             if block.__class__.__name__ == "PagedLlamaAttentionBlock":
                 h = block(
@@ -193,12 +193,12 @@ class PagedGrokModelV1(BaseCausalLMModel):
                     cache_state=cache_state,
                     seq_block_ids=seq_block_ids,
                 )
-                self.trace_tensor(f"mixtral.attn_block.{block_idx}.output", h)
+                self.trace_tensor(f"grok.attn_block.{block_idx}.output", h)
             elif block.__class__.__name__ == "PreGatherMoeBlock":
                 h = block(
                     h,
                 )
-                self.trace_tensor(f"mixtral.moe_block.{block_idx}.output", h)
+                self.trace_tensor(f"grok.moe_block.{block_idx}.output", h)
 
         h = self.output_norm(h)
         logits = self.output_lm_head(h)
@@ -228,7 +228,7 @@ class PagedGrokModelV1(BaseCausalLMModel):
         embedding_batch_mask = self.attention_embedding.compute_batch_mask(
             start_positions, batch_seq_len=1
         )
-        self.trace_tensor("mixtral.embedding_batch_mask", embedding_batch_mask)
+        self.trace_tensor("grok.embedding_batch_mask", embedding_batch_mask)
 
         # Allocate per-block temporary K/V tensors. These temporaries hold
         # one block's K/V state for the maximum context length.
@@ -255,12 +255,12 @@ class PagedGrokModelV1(BaseCausalLMModel):
 
         h = self.token_embedding(tokens)
         h *= 78.38367176906169
-        self.trace_tensor("mixtral.token_embedding", h)
+        self.trace_tensor("grok.token_embedding", h)
 
         # Iterate over attention blocks.
         for block_idx, block in enumerate(self.attn_blocks):
             if block_idx == 0:
-                self.trace_tensor(f"mixtral.attn_block.{block_idx}.input", h)
+                self.trace_tensor(f"grok.attn_block.{block_idx}.input", h)
 
             if block.__class__.__name__ == "PagedLlamaAttentionBlock":
                 h = block(
@@ -274,12 +274,12 @@ class PagedGrokModelV1(BaseCausalLMModel):
                     xk_temp=xk_temp,
                     xv_temp=xv_temp,
                 )
-                self.trace_tensor(f"mixtral.attn_block.{block_idx}.output", h)
+                self.trace_tensor(f"grok.attn_block.{block_idx}.output", h)
             elif block.__class__.__name__ == "PreGatherMoeBlock":
                 h = block(
                     h,
                 )
-                self.trace_tensor(f"mixtral.moe_block.{block_idx}.output", h)
+                self.trace_tensor(f"grok.moe_block.{block_idx}.output", h)
 
         h = self.output_norm(h)
         logits = self.output_lm_head(h)
