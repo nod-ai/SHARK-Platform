@@ -130,8 +130,13 @@ class PreGatherMoeBlock(ThetaLayer):
         expert_count: int,
         expert_used_count: int,
         rms_epsilon: float,
+        use_grok: bool = False,
     ):
         super().__init__(theta)
+
+        self.expert_count = expert_count
+        self.expert_used_count = expert_used_count
+        self.use_grok = use_grok
 
         # Add router gate
         self.add_module("ffn_gate_inp", LinearLayer(theta("ffn_gate_inp")))
@@ -141,17 +146,15 @@ class PreGatherMoeBlock(ThetaLayer):
             "ffn_norm", RMSNormLayer(theta("ffn_norm"), epsilon=rms_epsilon)
         )
 
-        # Add FFN output norm
-        self.add_module(
-            "layer_output_norm",
-            RMSNormLayer(theta("layer_output_norm"), epsilon=rms_epsilon),
-        )
+        # Add FFN output norm layer for Grok
+        if self.use_grok:
+            self.add_module(
+                "layer_output_norm",
+                RMSNormLayer(theta("layer_output_norm"), epsilon=rms_epsilon),
+            )
 
         # Add expert_count x FFN
-        self.mix = PreGatherFFNMOE(theta)
-
-        self.expert_count = expert_count
-        self.expert_used_count = expert_used_count
+        self.experts = PreGatherFFNMOE(theta)
 
     def forward(
         self,
@@ -171,11 +174,14 @@ class PreGatherMoeBlock(ThetaLayer):
             router_weights, self.expert_used_count, dim=-1
         )
 
-        # router_weights /= router_weights.sum(dim=-1, keepdim=True)
-        # router_weights = router_weights.to(ffn_input.dtype)
+        if not self.use_grok:
+            expert_gate /= expert_gate.sum(dim=-1, keepdim=True)
+            expert_gate = expert_gate.to(ffn_input.dtype)
 
-        moe_output = self.mix(ffn_input, top_k_experts, expert_gate)
+        moe_output = self.experts(ffn_input, top_k_experts, expert_gate)
         moe_output = moe_output.reshape(batch_size, sequence_length, feature_dim)
 
-        moe_output = self.layer_output_norm(moe_output)
+        if self.use_grok:
+            moe_output = self.layer_output_norm(moe_output)
+
         return h + moe_output
