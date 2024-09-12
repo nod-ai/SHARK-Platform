@@ -41,6 +41,10 @@ function(shortfin_public_library)
     target_link_libraries(
       "${_RULE_NAME}" PUBLIC ${_DYLIB_COMPONENTS}
     )
+    set_target_properties("${_RULE_NAME}" PROPERTIES
+      VERSION ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}
+      SOVERSION ${SOVERSION}
+    )
   endif()
 endfunction()
 
