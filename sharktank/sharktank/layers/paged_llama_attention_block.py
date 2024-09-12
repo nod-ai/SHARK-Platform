@@ -46,10 +46,12 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         self.add_module("attn_k", LinearLayer(theta("attn_k")))
         self.add_module("attn_v", LinearLayer(theta("attn_v")))
         self.add_module("attn_output", LinearLayer(theta("attn_output")))
-        self.add_module(
-            "attn_output_norm",
-            RMSNormLayer(theta("attn_output_norm"), epsilon=rms_epsilon),
-        )
+
+        if self.use_grok:
+            self.add_module(
+                "attn_output_norm",
+                RMSNormLayer(theta("attn_output_norm"), epsilon=rms_epsilon),
+            )
 
         self.block_index = block_index
         self.cache = cache
@@ -145,9 +147,9 @@ class PagedLlamaAttentionBlock(ThetaLayer):
 
         # Flash attention.
         if not self.use_grok:
-            attn_weights = torch.matmul(
-                xq, keys.transpose(2, 3)
-            )  # / math.sqrt(self.head_dim)
+            attn_weights = torch.matmul(xq, keys.transpose(2, 3)) / math.sqrt(
+                self.head_dim
+            )
         elif self.use_grok:
             attn_weights = torch.matmul(xq, keys.transpose(2, 3))
             attn_weights = 30.0 * torch.tanh(
@@ -168,7 +170,8 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         # Project.
         attn_output = self.attn_output(attn_output)
 
-        attn_output = self.attn_output_norm(attn_output)
+        if self.use_grok:
+            attn_output = self.attn_output_norm(attn_output)
 
         # Remainder of the block.
         h = h + attn_output
