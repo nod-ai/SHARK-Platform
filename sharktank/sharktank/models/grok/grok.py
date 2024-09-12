@@ -273,7 +273,7 @@ class PagedGrokModelV1(BaseCausalLMModel):
                     xv_temp=xv_temp,
                 )
                 self.trace_tensor(f"mixtral.attn_block.{block_idx}.output", h)
-            elif block.__class__.__name__ == "SparseMoeBlock":
+            elif block.__class__.__name__ == "PreGatherMoeBlock":
                 h = block(
                     h,
                 )
