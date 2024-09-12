@@ -125,6 +125,7 @@ class PagedGrokModelV1(BaseCausalLMModel):
                 rope_freq_base=hp.rope_freq_base,
                 max_seqlen=hp.context_length,
                 device=self.device,
+                use_hf=True,
             ),
         )
         self.add_module(
@@ -147,7 +148,6 @@ class PagedGrokModelV1(BaseCausalLMModel):
                     head_dim=hp.attn_head_dim,
                     head_count_kv=hp.attention_head_count_kv,
                     rms_epsilon=hp.attention_layer_norm_rms_epsilon,
-                    use_hf=True,
                     use_grok=True,
                 )
             )
@@ -176,6 +176,7 @@ class PagedGrokModelV1(BaseCausalLMModel):
         self._assert_device(seq_block_ids)
         self._assert_device(*cache_state, dtype=self.activation_dtype)
         h = self.token_embedding(tokens)
+        h *= 78.38367176906169
         self.trace_tensor("mixtral.token_embedding", h)
 
         # Iterate over attention blocks.
@@ -201,6 +202,7 @@ class PagedGrokModelV1(BaseCausalLMModel):
 
         h = self.output_norm(h)
         logits = self.output_lm_head(h)
+        logits = logits * 0.5773502691896257
         return logits
 
     def decode(

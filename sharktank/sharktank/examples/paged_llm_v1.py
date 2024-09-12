@@ -272,6 +272,7 @@ def main():
             )
         print(f":: Result tokens: {batch.results}")
         batch.print_current_results()
+        counter += 1
 
 
 if __name__ == "__main__":

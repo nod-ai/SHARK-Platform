@@ -36,7 +36,6 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         head_dim: int,
         head_count_kv: int,
         rms_epsilon: float,
-        use_hf: bool = False,
         use_grok: bool = False,
     ):
         super().__init__(theta)
@@ -57,7 +56,6 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         self.head_count = head_count
         self.head_dim = head_dim
         self.head_count_kv = head_count_kv
-        self.use_hf = use_hf
         self.use_grok = use_grok
 
     def forward(
@@ -128,7 +126,6 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         gqa_n_rep = self.head_count // self.head_count_kv
         assert gqa_n_rep > 0
         if gqa_n_rep > 1:
-
             def repeat_kv(x: torch.Tensor) -> torch.Tensor:
                 bs, slen, n_kv_heads, head_dim = x.shape
                 return (
@@ -146,9 +143,11 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         values = xv.transpose(1, 2)
 
         # Flash attention.
-        attn_weights = torch.matmul(xq, keys.transpose(2, 3)) / math.sqrt(self.head_dim)
-        if self.use_grok:
-            attn_weights = 30 * torch.tanh(attn_weights * (0.08838834764831845 / 30.0))
+        if not self.use_grok:
+            attn_weights = torch.matmul(xq, keys.transpose(2, 3)) #/ math.sqrt(self.head_dim)
+        elif self.use_grok:
+            attn_weights = torch.matmul(xq, keys.transpose(2, 3)) 
+            attn_weights = 30.0 * torch.tanh(attn_weights * (0.08838834764831845 / 30.0))
         self.assert_not_nan(attn_weights)
 
         # Apply attention mask.
