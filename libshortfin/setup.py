@@ -44,6 +44,13 @@ def add_env_cmake_setting(args, env_name: str, cmake_name=None) -> str:
         args.append(f"-D{cmake_name}={svalue}")
 
 
+def combine_dicts(*ds):
+    result = {}
+    for d in ds:
+        result.update(d)
+    return result
+
+
 # This file can be generated into the build directory to allow an arbitrary
 # CMake built version of the project to be installed into a venv for development.
 # This can be detected if the CPP_PREBUILT global contains the string
@@ -60,19 +67,32 @@ def is_cpp_prebuilt():
 
 
 DEV_MODE = False
+ENABLE_TRACY = get_env_boolean("SHORTFIN_ENABLE_TRACING", False)
+
+if ENABLE_TRACY:
+    print(
+        "*** Enabling Tracy instrumentation (disable with SHORTFIN_BUILD_TRACING=OFF)",
+    )
+else:
+    print(
+        "*** Tracy instrumentation not enabled (enable with SHORTFIN_BUILD_TRACING=ON)",
+    )
+
 
 if is_cpp_prebuilt():
     print("setup.py running in pre-built mode:")
     SOURCE_DIR = Path(CPP_PREBUILT_SOURCE_DIR)
     BINARY_DIR = Path(CPP_PREBUILT_BINARY_DIR)
-    CMAKE_BUILD_DIR = BINARY_DIR
+    CMAKE_DEFAULT_BUILD_DIR = BINARY_DIR
+    CMAKE_TRACY_BUILD_DIR = BINARY_DIR
 else:
     print("setup.py running in cmake build mode:")
     # setup.py is in the source directory.
     SOURCE_DIR = Path(SETUPPY_DIR)
     BINARY_DIR = Path(os.path.join(SETUPPY_DIR, "build"))
     # TODO: Should build default and tracing version to different dirs.
-    CMAKE_BUILD_DIR = BINARY_DIR / "cmake"
+    CMAKE_DEFAULT_BUILD_DIR = BINARY_DIR / "cmake" / "default"
+    CMAKE_TRACY_BUILD_DIR = BINARY_DIR / "cmake" / "tracy"
     DEV_MODE = get_env_boolean("SHORTFIN_DEV_MODE")
 
 print(f"  SOURCE_DIR = {SOURCE_DIR}")
@@ -85,7 +105,10 @@ if DEV_MODE:
 # paths relative to the directory containing setup.py. Why? No one knows.
 REL_SOURCE_DIR = SOURCE_DIR.relative_to(SETUPPY_DIR, walk_up=True)
 REL_BINARY_DIR = BINARY_DIR.relative_to(SETUPPY_DIR, walk_up=True)
-REL_CMAKE_BUILD_DIR = CMAKE_BUILD_DIR.relative_to(SETUPPY_DIR, walk_up=True)
+REL_CMAKE_DEFAULT_BUILD_DIR = CMAKE_DEFAULT_BUILD_DIR.relative_to(
+    SETUPPY_DIR, walk_up=True
+)
+REL_CMAKE_TRACY_BUILD_DIR = CMAKE_TRACY_BUILD_DIR.relative_to(SETUPPY_DIR, walk_up=True)
 
 
 class CMakeExtension(Extension):
@@ -145,92 +168,127 @@ def maybe_nuke_cmake_cache(cmake_build_dir):
         f.write(expected_stamp_contents)
 
 
+def build_cmake_configuration(CMAKE_BUILD_DIR: Path, extra_cmake_args=[]):
+    # Build extension using cmake.
+    cfg = os.getenv("SHORTFIN_CMAKE_BUILD_TYPE", "Debug" if DEV_MODE else "Release")
+
+    # Configure CMake.
+    os.makedirs(CMAKE_BUILD_DIR, exist_ok=True)
+    if not DEV_MODE:
+        maybe_nuke_cmake_cache(CMAKE_BUILD_DIR)
+    print(f"CMake build dir: {CMAKE_BUILD_DIR}")
+    cmake_args = [
+        "-GNinja",
+        "--log-level=VERBOSE",
+        "-DSHORTFIN_BUNDLE_DEPS=ON",
+        f"-DCMAKE_BUILD_TYPE={cfg}",
+        "-DSHORTFIN_BUILD_PYTHON_BINDINGS=ON",
+        f"-DPython3_EXECUTABLE={sys.executable}",
+    ] + extra_cmake_args
+
+    if DEV_MODE:
+        cmake_args.extend(
+            [
+                "-DCMAKE_C_COMPILER=clang",
+                "-DCMAKE_CXX_COMPILER=clang++",
+                "-DCMAKE_LINKER_TYPE=LLD",
+            ]
+        )
+
+    add_env_cmake_setting(cmake_args, "SHORTFIN_IREE_SOURCE_DIR")
+    add_env_cmake_setting(cmake_args, "SHORTFIN_ENABLE_ASAN")
+
+    # Only do a from-scratch configure if not already configured.
+    cmake_cache_file = os.path.join(CMAKE_BUILD_DIR, "CMakeCache.txt")
+    if not os.path.exists(cmake_cache_file):
+        print(f"Configuring with: {cmake_args}")
+        subprocess.check_call(["cmake", SOURCE_DIR] + cmake_args, cwd=CMAKE_BUILD_DIR)
+    else:
+        print(f"Not re-configing (already configured)")
+
+    # Build.
+    subprocess.check_call(["cmake", "--build", "."], cwd=CMAKE_BUILD_DIR)
+    print("Build complete.")
+
+    # Optionally run CTests.
+    if get_env_boolean("SHORTFIN_RUN_CTESTS", False):
+        print("Running ctests...")
+        subprocess.check_call(
+            ["ctest", "--timeout", "30", "--output-on-failure"],
+            cwd=CMAKE_BUILD_DIR,
+        )
+
+
 class CMakeBuildPy(_build_py):
     def run(self):
         # The super-class handles the pure python build.
         super().run()
 
-        # Build using cmake if not in prebuild mode.
-        if not is_cpp_prebuilt():
+        # Only build using cmake if not in prebuild mode.
+        if is_cpp_prebuilt():
+            return
 
-            # Build extension using cmake.
-            print("Building libshortfin")
-            cfg = os.getenv(
-                "SHORTFIN_CMAKE_BUILD_TYPE", "Debug" if DEV_MODE else "Release"
-            )
+        self.build_default_configuration()
+        if ENABLE_TRACY:
+            self.build_tracy_configuration()
 
-            # Configure CMake.
-            os.makedirs(CMAKE_BUILD_DIR, exist_ok=True)
-            if not DEV_MODE:
-                maybe_nuke_cmake_cache(CMAKE_BUILD_DIR)
-            print(f"CMake build dir: {CMAKE_BUILD_DIR}")
-            cmake_args = [
-                "-GNinja",
-                "--log-level=VERBOSE",
-                "-DSHORTFIN_BUNDLE_DEPS=ON",
-                f"-DCMAKE_BUILD_TYPE={cfg}",
-                "-DSHORTFIN_BUILD_PYTHON_BINDINGS=ON",
-                f"-DPython3_EXECUTABLE={sys.executable}",
-            ]
+    def build_default_configuration(self):
+        print("  *********************************")
+        print("  * Building base libshortfin     *")
+        print("  *********************************")
 
-            if DEV_MODE:
-                cmake_args.extend(
-                    [
-                        "-DCMAKE_C_COMPILER=clang",
-                        "-DCMAKE_CXX_COMPILER=clang++",
-                        "-DCMAKE_LINKER_TYPE=LLD",
-                    ]
-                )
+        build_cmake_configuration(CMAKE_DEFAULT_BUILD_DIR)
 
-            add_env_cmake_setting(cmake_args, "SHORTFIN_IREE_SOURCE_DIR")
-            add_env_cmake_setting(cmake_args, "SHORTFIN_ENABLE_ASAN")
+        # Copy non-python binaries generated during the build.
+        target_dir = os.path.join(os.path.abspath(self.build_lib), "_shortfin_default")
 
-            # Only do a from-scratch configure if not already configured.
-            cmake_cache_file = os.path.join(CMAKE_BUILD_DIR, "CMakeCache.txt")
-            if not os.path.exists(cmake_cache_file):
-                print(f"Configuring with: {cmake_args}")
-                subprocess.check_call(
-                    ["cmake", SOURCE_DIR] + cmake_args, cwd=CMAKE_BUILD_DIR
-                )
-            else:
-                print(f"Not re-configing (already configured)")
+        print(f"Building in target: {target_dir}")
+        os.makedirs(target_dir, exist_ok=True)
+        print("Copying build to target.")
+        if os.path.exists(target_dir):
+            shutil.rmtree(target_dir)
+        shutil.copytree(
+            os.path.join(
+                CMAKE_DEFAULT_BUILD_DIR,
+                "python",
+                "_shortfin_default",
+            ),
+            target_dir,
+            symlinks=False,
+        )
 
-            # Build.
-            subprocess.check_call(["cmake", "--build", "."], cwd=CMAKE_BUILD_DIR)
-            print("Build complete.")
+    def build_tracy_configuration(self):
+        print("  *********************************")
+        print("  * Building tracy libshortfin    *")
+        print("  *********************************")
 
-            # Optionally run CTests.
-            if get_env_boolean("SHORTFIN_RUN_CTESTS", False):
-                print("Running ctests...")
-                subprocess.check_call(
-                    ["ctest", "--timeout", "30", "--output-on-failure"],
-                    cwd=CMAKE_BUILD_DIR,
-                )
+        build_cmake_configuration(
+            CMAKE_TRACY_BUILD_DIR, ["-DSHORTFIN_ENABLE_TRACING=ON"]
+        )
 
-            # Copy non-python binaries generated during the build.
-            target_dir = os.path.join(
-                os.path.abspath(self.build_lib), "_shortfin_default"
-            )
+        # Copy non-python binaries generated during the build.
+        target_dir = os.path.join(os.path.abspath(self.build_lib), "_shortfin_tracy")
 
-            print(f"Building in target: {target_dir}")
-            os.makedirs(target_dir, exist_ok=True)
-            print("Copying build to target.")
-            if os.path.exists(target_dir):
-                shutil.rmtree(target_dir)
-            shutil.copytree(
-                os.path.join(
-                    CMAKE_BUILD_DIR,
-                    "python",
-                    "_shortfin_default",
-                ),
-                target_dir,
-                symlinks=False,
-            )
+        print(f"Building in target: {target_dir}")
+        os.makedirs(target_dir, exist_ok=True)
+        print("Copying build to target.")
+        if os.path.exists(target_dir):
+            shutil.rmtree(target_dir)
+        shutil.copytree(
+            os.path.join(
+                CMAKE_TRACY_BUILD_DIR,
+                "python",
+                "_shortfin_tracy",
+            ),
+            target_dir,
+            symlinks=False,
+        )
 
 
 PYTHON_SOURCE_DIR = REL_SOURCE_DIR / "python"
-# TODO: Need multiple binary dirs for different build variants.
-PYTHON_DEFAULT_BINARY_DIR = REL_CMAKE_BUILD_DIR / "python"
+PYTHON_DEFAULT_BINARY_DIR = REL_CMAKE_DEFAULT_BUILD_DIR / "python"
+PYTHON_TRACY_BINARY_DIR = REL_CMAKE_TRACY_BUILD_DIR / "python"
+
 
 # We need some directories to exist before setup.
 def populate_built_package(abs_dir):
@@ -246,29 +304,39 @@ def populate_built_package(abs_dir):
 
 
 populate_built_package(os.path.join(PYTHON_DEFAULT_BINARY_DIR / "_shortfin_default"))
+if ENABLE_TRACY:
+    populate_built_package(os.path.join(PYTHON_TRACY_BINARY_DIR / "_shortfin_tracy"))
 
 setup(
     name="shortfin",
     version="0.9",
     description="Shortfin native library implementation",
     author="SHARK Authors",
-    packages=[
-        "_shortfin",
-        "_shortfin_default",
-        # TODO: Conditionally map additional native library variants.
-        "shortfin",
-    ],
+    packages=(
+        [
+            "_shortfin",
+            "_shortfin_default",
+            "shortfin",
+        ]
+        + (["_shortfin_tracy"] if ENABLE_TRACY else [])
+    ),
     zip_safe=False,
-    package_dir={
-        "_shortfin": str(PYTHON_SOURCE_DIR / "_shortfin"),
-        "_shortfin_default": str(PYTHON_DEFAULT_BINARY_DIR / "_shortfin_default"),
-        # TODO: Conditionally map additional native library variants.
-        "shortfin": str(PYTHON_SOURCE_DIR / "shortfin"),
-    },
-    ext_modules=[
-        CMakeExtension("_shortfin_default.lib")
-        # TODO: Conditionally map additional native library variants.
-    ],
+    package_dir=combine_dicts(
+        {
+            "_shortfin": str(PYTHON_SOURCE_DIR / "_shortfin"),
+            "_shortfin_default": str(PYTHON_DEFAULT_BINARY_DIR / "_shortfin_default"),
+            "shortfin": str(PYTHON_SOURCE_DIR / "shortfin"),
+        },
+        (
+            ({"_shortfin_tracy": str(PYTHON_TRACY_BINARY_DIR / "_shortfin_tracy")})
+            if ENABLE_TRACY
+            else {}
+        ),
+    ),
+    ext_modules=(
+        [CMakeExtension("_shortfin_default.lib")]
+        + ([CMakeExtension("_shortfin_tracy.lib")] if ENABLE_TRACY else [])
+    ),
     cmdclass={
         "build": CustomBuild,
         "build_ext": NoopBuildExtension,
