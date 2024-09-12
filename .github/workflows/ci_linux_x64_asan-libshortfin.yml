@@ -76,8 +76,10 @@ jobs:
     needs: [setup-python-asan]
     runs-on: ubuntu-24.04
     env:
-      # TODO(#151): Don't ignore ODR violations
-      ASAN_OPTIONS: detect_odr_violation=0
+      # We can't count on being leak free in general (i.e. pip, etc) so disable
+      # leak checker by default. Here we suppress any ASAN features needed to
+      # pass the build. Test configuration is done specially just for that step.
+      ASAN_OPTIONS: detect_leaks=0,detect_odr_violation=0
       LSAN_OPTIONS: suppressions=${{ github.workspace }}/libshortfin/build_tools/python_lsan_suppressions.txt
     steps:
     - name: Install dependencies
@@ -145,32 +147,19 @@ jobs:
     - name: Build libshortfin
       run: |
         eval "$(pyenv init -)"
-        mkdir ${{ env.LIBSHORTFIN_DIR }}/build
-        cd ${{ env.LIBSHORTFIN_DIR }}/build
-        cmake -GNinja \
-          -DCMAKE_BUILD_TYPE=Debug \
-          -DCMAKE_C_COMPILER=clang-18 \
-          -DCMAKE_CXX_COMPILER=clang++-18 \
-          -DCMAKE_LINKER_TYPE=LLD \
-          -DSHORTFIN_BUNDLE_DEPS=ON \
-          -DSHORTFIN_IREE_SOURCE_DIR=${{ env.IREE_SOURCE_DIR }} \
-          -DSHORTFIN_BUILD_PYTHON_BINDINGS=ON \
-          -DSHORTFIN_ENABLE_ASAN=ON \
-          ..
-        cmake --build . --target all
+        cd ${{ env.LIBSHORTFIN_DIR }}
+        SHORTFIN_IREE_SOURCE_DIR="${{ env.IREE_SOURCE_DIR }}" \
+        SHORTFIN_ENABLE_ASAN=ON \
+        SHORTFIN_DEV_MODE=ON \
+        SHORTFIN_RUN_CTESTS=ON \
         pip install -v -e .
-
-    - name: Run ctest
-      if: ${{ !cancelled() }}
-      env:
-        CTEST_OUTPUT_ON_FAILURE: 1
-      run: |
-        cd ${{ env.LIBSHORTFIN_DIR }}/build
-        ctest --timeout 30 --output-on-failure
 
     - name: Run pytest
       if: ${{ !cancelled() }}
+      env:
+        # TODO(#151): Don't ignore ODR violations
+        ASAN_OPTIONS: detect_odr_violation=0
       run: |
         eval "$(pyenv init -)"
         cd ${{ env.LIBSHORTFIN_DIR }}
-        pytest -m "not requires_amd_gpu" -s
+        pytest -s

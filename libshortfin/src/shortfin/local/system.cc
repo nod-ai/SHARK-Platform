@@ -61,31 +61,28 @@ System::~System() {
 
 void System::Shutdown() {
   // Stop workers.
-  std::vector<std::unique_ptr<Worker>> local_workers;
   {
     iree::slim_mutex_lock_guard guard(lock_);
     if (!initialized_ || shutdown_) return;
     shutdown_ = true;
-    workers_by_name_.clear();
-    local_workers.swap(workers_);
   }
 
   // Worker drain and shutdown.
-  for (auto &worker : local_workers) {
+  for (auto &worker : workers_) {
     worker->Kill();
   }
-  for (auto &worker : local_workers) {
+  for (auto &worker : workers_) {
     if (worker->options().owned_thread) {
       worker->WaitForShutdown();
     }
   }
   blocking_executor_.Kill();
-  local_workers.clear();
 }
 
 std::shared_ptr<Scope> System::CreateScope(Worker &worker,
                                            std::span<Device *const> devices) {
   iree::slim_mutex_lock_guard guard(lock_);
+  AssertRunning();
   return std::make_shared<Scope>(shared_ptr(), worker, devices);
 }
 
@@ -102,6 +99,7 @@ void System::InitializeNodes(int node_count) {
 
 Queue &System::CreateQueue(Queue::Options options) {
   iree::slim_mutex_lock_guard guard(lock_);
+  AssertRunning();
   if (queues_by_name_.count(options.name) != 0) {
     throw std::invalid_argument(fmt::format(
         "Cannot create queue with duplicate name '{}'", options.name));
@@ -140,6 +138,7 @@ Worker &System::CreateWorker(Worker::Options options) {
   Worker *unowned_worker;
   {
     iree::slim_mutex_lock_guard guard(lock_);
+    AssertRunning();
     if (options.name == std::string_view("__init__")) {
       throw std::invalid_argument(
           "Cannot create worker '__init__' (reserved name)");
@@ -161,6 +160,7 @@ Worker &System::CreateWorker(Worker::Options options) {
 
 Worker &System::init_worker() {
   iree::slim_mutex_lock_guard guard(lock_);
+  AssertRunning();
   auto found_it = workers_by_name_.find("__init__");
   if (found_it != workers_by_name_.end()) {
     return *found_it->second;
@@ -207,6 +207,7 @@ void System::FinishInitialization() {
 
 int64_t System::AllocateProcess(detail::BaseProcess *p) {
   iree::slim_mutex_lock_guard guard(lock_);
+  AssertRunning();
   int pid = next_pid_++;
   processes_by_pid_[pid] = p;
   return pid;

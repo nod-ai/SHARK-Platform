@@ -12,9 +12,6 @@ addopts = [
     "-ra",
     "--import-mode=importlib",
 ]
-markers = [
-    "requires_amd_gpu: tests that require and AMD GPU (deselect with '-m \"not requires_amd_gpu\"')",
-]
 testpaths = [
     "tests",
 ]

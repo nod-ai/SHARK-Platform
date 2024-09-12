@@ -7,7 +7,7 @@
 import pytest
 
 
-@pytest.mark.requires_amd_gpu
+@pytest.mark.system("amdgpu")
 def test_create_amd_gpu_system():
     from _shortfin import lib as sfl
 

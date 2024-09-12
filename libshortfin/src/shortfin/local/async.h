@@ -16,7 +16,7 @@
 
 namespace shortfin::local {
 
-class SHORTFIN_API Worker;
+class Worker;
 
 // CompletionEvents are the most basic form of awaitable object. They
 // encapsulate a native iree_wait_source_t (which multiplexes any supported

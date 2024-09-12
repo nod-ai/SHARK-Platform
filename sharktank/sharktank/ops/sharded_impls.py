@@ -31,15 +31,30 @@ from .shape import broadcast_dims
 def all_gather_split(
     input: SplitPrimitiveTensor, *, dim: int | None
 ) -> ReplicatedTensor:
-    assert (
-        dim is None
-    ), "gather dimension other than `input.shard_dim` is not supported."
-    # TODO: figure out how to avoid common sub-expression elimination to not
-    # merge all these into one.
-    # Even if we place each resulting shard inside of ReplicatedTensor on a
-    # distinct logical device with an explicit operation, CSE should still
-    # collapse them.
-    shards = [sharded_cat(input) for i in range(input.shard_count)]
+    dim = input.shard_dim if dim is None else dim
+    # For each device move the shards to it and do a concatenation.
+    # If we don't move first, common sub-expression elimination is free to collapse all
+    # concatenations into one and then copy to all devices, which is not what we want.
+    shards = [
+        cat([transfer_to_logical_device(shard, i) for shard in input.shards], dim=dim)
+        for i in range(input.shard_count)
+    ]
+    return ReplicatedTensor(ts=shards)
+
+
+@all_reduce.override(SplitPrimitiveTensor)
+def all_reduce_split(
+    input: SplitPrimitiveTensor,
+) -> ReplicatedTensor:
+    # For each device move the shards to it and do a reduction.
+    # If we don't move first, common sub-expression elimination is free to collapse all
+    # reductions into one and then copy to all devices, which is not what we want.
+    shards = [
+        elementwise(
+            torch.add, *[transfer_to_logical_device(shard, i) for shard in input.shards]
+        )
+        for i in range(input.shard_count)
+    ]
     return ReplicatedTensor(ts=shards)
 
 
@@ -88,7 +103,7 @@ def conv2d_all_split(
         input.is_replicated or input.shard_dim == 1
     ), "Only sharding of input channel dimension is supported"
     assert (
-        weight.shard_dim == 0 and bias.shard_dim == 0
+        bias is None or weight.shard_dim == 0 and bias.shard_dim == 0
     ), "Only sharding of output channel dimension is supported"
 
     # TODO: allow for implementation where we don't all-gather, but gather
@@ -146,7 +161,7 @@ def conv2d_replicated_input_split_weight_and_bias(
     assert input.shard_count == weight.shard_count
     assert bias is None or weight.shard_count == bias.shard_count
     assert (
-        weight.shard_dim == 0 and bias.shard_dim == 0
+        bias is None or weight.shard_dim == 0 and bias.shard_dim == 0
     ), "Only sharding of output channel dimension is supported"
     assert groups == 1
 
@@ -189,7 +204,8 @@ def conv2d_split_weight_and_bias(
     accum_dtype,
 ) -> SplitPrimitiveTensor:
     assert accum_dtype is None, "accum_dtype not supported"
-    assert weight.shard_count == bias.shard_count
+    if bias is not None:
+        assert weight.shard_count == bias.shard_count
 
     # Output channels dimension is split.
     if weight.shard_dim == 0 and groups == 1:
@@ -691,13 +707,13 @@ def reshard_like_split_to_split(
     return tensor
 
 
-# Sharded sum.
-
-
 @sharded_cat.override(SplitPrimitiveTensor)
 def sharded_cat_unsharded(maybe_sharded: SplitPrimitiveTensor):
     shard_ts = [t.as_torch() for t in maybe_sharded.shards]
     return torch.cat(shard_ts, dim=maybe_sharded.shard_dim)
+
+
+# Sharded sum.
 
 
 def _sharded_sum_sharded(tensor: ShardedTensor) -> Tensor:
@@ -708,13 +724,13 @@ def _sharded_sum_sharded(tensor: ShardedTensor) -> Tensor:
 
 
 @sharded_sum.override(SplitPrimitiveTensor)
-def sharded_sum_split(maybe_sharded: SplitPrimitiveTensor):
+def sharded_sum_split(maybe_sharded: SplitPrimitiveTensor) -> Tensor:
     # TODO: Should implement as an all reduce.
     return _sharded_sum_sharded(maybe_sharded)
 
 
 @sharded_sum.override(UnreducedTensor)
-def sharded_sum_unreduced(maybe_sharded: UnreducedTensor):
+def sharded_sum_unreduced(maybe_sharded: UnreducedTensor) -> Tensor:
     return _sharded_sum_sharded(maybe_sharded)
 
 
