@@ -39,6 +39,14 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         use_grok: bool = False,
     ):
         super().__init__(theta)
+
+        self.block_index = block_index
+        self.cache = cache
+        self.head_count = head_count
+        self.head_dim = head_dim
+        self.head_count_kv = head_count_kv
+        self.use_grok = use_grok
+
         self.add_module(
             "attn_norm", RMSNormLayer(theta("attn_norm"), epsilon=rms_epsilon)
         )
@@ -52,13 +60,6 @@ class PagedLlamaAttentionBlock(ThetaLayer):
                 "attn_output_norm",
                 RMSNormLayer(theta("attn_output_norm"), epsilon=rms_epsilon),
             )
-
-        self.block_index = block_index
-        self.cache = cache
-        self.head_count = head_count
-        self.head_dim = head_dim
-        self.head_count_kv = head_count_kv
-        self.use_grok = use_grok
 
     def forward(
         self,
