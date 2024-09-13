@@ -72,8 +72,8 @@ Device *Scope::raw_device(std::string_view name) const {
   return it->second;
 }
 
-Device *Scope::raw_device(int ordinal) const {
-  if (ordinal < 0 || ordinal >= devices_.size()) {
+Device *Scope::raw_device(std::size_t ordinal) const {
+  if (ordinal >= devices_.size()) {
     throw std::invalid_argument(
         fmt::format("Device ordinal ({}) out of bounds", ordinal));
   }
