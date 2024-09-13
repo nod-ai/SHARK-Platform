@@ -240,9 +240,13 @@ def main():
     )
 
     if config.hp.expert_count:
-        model = PagedGrokModelV1(dataset.root_theta, config)
+        if config.hp.model_arch == "grok":
+            model = PagedGrokModelV1(dataset.root_theta, config)
+        else:
+            model = PagedMixtralModelV1(dataset.root_theta, config)
     else:
         model = PagedLlamaModelV1(dataset.root_theta, config)
+
     if args.save_intermediates_path:
         from ..utils.patching import SaveModuleResultTensorsPatch
 

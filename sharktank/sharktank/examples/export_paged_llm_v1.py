@@ -60,8 +60,12 @@ def main():
     llama_config.use_hf = False
     llama_config.static_tables = False  # Rely on the compiler for hoisting tables.
     llama_config.kv_cache_type = "direct" if args.bs == [1] else "paged"
+
     if llama_config.hp.expert_count:
-        model = PagedGrokModelV1(dataset.root_theta, llama_config)
+        if llama_config.hp.model_arch == "grok":
+            model = PagedGrokModelV1(dataset.root_theta, llama_config)
+        else:
+            model = PagedMixtralModelV1(dataset.root_theta, llama_config)
     else:
         model = PagedLlamaModelV1(dataset.root_theta, llama_config)
 
