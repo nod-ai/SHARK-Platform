@@ -433,7 +433,9 @@ class QuantizedTensor(InferenceTensor, Generic[QuantizedLayoutT]):
         it should override this method to implement properly or raise
         NotImplementedError.
         """
-        return PlanarQuantizedTensor(self.name, self.shape, self.unpack())
+        return PlanarQuantizedTensor(
+            name=self.name, shape=self.shape, layout=self.unpack()
+        )
 
     def add_to_archive(self, builder: ShardedArchiveBuilder) -> InferenceTensorMetadata:
         """By default all QuantizedTensors serialize as a generic PlanarQuantizedTensor.
