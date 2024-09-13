@@ -19,7 +19,7 @@ class RotaryEmbeddingLayer(BaseLayer):
         *,
         rope_dimension_count: int,
         max_seqlen: int,
-        rope_freq_base: Optional[float] = None,
+        rope_freq_base: float,
         device: Optional[torch.device] = None,
         use_hf: bool = False,
         static_tables: bool = True,
@@ -32,7 +32,7 @@ class RotaryEmbeddingLayer(BaseLayer):
         self.rope_dimension_count = rope_dimension_count
         self.max_seqlen = max_seqlen
         self.use_hf = use_hf
-        self.rope_freq_base = rope_freq_base if rope_freq_base is not None else 10000.0
+        self.rope_freq_base = rope_freq_base
         if static_tables:
             self.register_buffer(
                 "static_rotary_embed_table", self._create_rotary_embed_table()
