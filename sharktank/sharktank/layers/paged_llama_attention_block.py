@@ -174,7 +174,6 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         if self.use_grok:
             attn_output = self.attn_output_norm(attn_output)
 
-        # Remainder of the block.
         h = h + attn_output
 
         return h
