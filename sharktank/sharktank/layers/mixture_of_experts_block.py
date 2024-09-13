@@ -154,7 +154,7 @@ class PreGatherMoeBlock(ThetaLayer):
             )
 
         # Add expert_count x FFN
-        self.experts = PreGatherFFNMOE(theta)
+        self.experts = PreGatherFFNMOE(theta, use_grok=self.use_grok)
 
     def forward(
         self,
@@ -174,9 +174,8 @@ class PreGatherMoeBlock(ThetaLayer):
             router_weights, self.expert_used_count, dim=-1
         )
 
-        if not self.use_grok:
-            expert_gate /= expert_gate.sum(dim=-1, keepdim=True)
-            expert_gate = expert_gate.to(ffn_input.dtype)
+        expert_gate /= expert_gate.sum(dim=-1, keepdim=True)
+        expert_gate = expert_gate.to(ffn_input.dtype)
 
         moe_output = self.experts(ffn_input, top_k_experts, expert_gate)
         moe_output = moe_output.reshape(batch_size, sequence_length, feature_dim)
