@@ -396,11 +396,11 @@ void BindLocal(py::module_ &m) {
       .def(
           "device",
           [](local::System &self, std::string_view key) {
-            auto it = self.named_devices().find(key);
-            if (it == self.named_devices().end()) {
+            local::Device *device = self.FindDeviceByName(key);
+            if (!device) {
               throw std::invalid_argument(fmt::format("No device '{}'", key));
             }
-            return it->second;
+            return device;
           },
           py::rv_policy::reference_internal)
       .def(
@@ -758,28 +758,30 @@ void BindLocal(py::module_ &m) {
       // happens, the owner struct is replaced and any C++ side reference counts
       // are turned into Python reference counts. Once transferred, only Python
       // reference counting is used, even if referenced from the C++ side.
-      py::intrusive_ptr<local::Message>(
-          [](local::Message *self, PyObject *self_py) noexcept {
-            local::detail::MessageRefOwner owner(
-                +[](local::detail::MessageRefOwner::Request req,
-                    const local::Message &msg) {
-                  py::gil_scoped_acquire g;
-                  PyObject *msg_object = reinterpret_cast<PyObject *>(
-                      local::detail::MessageRefOwner::access_ref_data(msg));
-                  if (req == local::detail::MessageRefOwner::Request::RETAIN) {
-                    py::handle(msg_object).inc_ref();
-                  } else {
-                    py::handle(msg_object).dec_ref();
-                  }
-                });
-            intptr_t orig_ref_data =
-                owner.set_owner(*self, reinterpret_cast<intptr_t>(self_py));
-            // Transfer any prior C++ references to the Python side (less 1
-            // since we start with a live reference).
-            for (int i = 0; i < orig_ref_data - 1; ++i) {
-              py::handle(self_py).inc_ref();
-            }
-          }))
+      py::intrusive_ptr<local::Message>([](local::Message *self,
+                                           PyObject *self_py) noexcept {
+        local::detail::MessageLifetimeController owner(
+            +[](local::detail::MessageLifetimeController::Request req,
+                const local::Message &msg) {
+              py::gil_scoped_acquire g;
+              PyObject *msg_object = reinterpret_cast<PyObject *>(
+                  local::detail::MessageLifetimeController::AccessOwnedRefData(
+                      msg));
+              if (req ==
+                  local::detail::MessageLifetimeController::Request::RETAIN) {
+                py::handle(msg_object).inc_ref();
+              } else {
+                py::handle(msg_object).dec_ref();
+              }
+            });
+        intptr_t orig_ref_data =
+            owner.TakeOwnership(*self, reinterpret_cast<intptr_t>(self_py));
+        // Transfer any prior C++ references to the Python side (less 1
+        // since we start with a live reference).
+        for (int i = 0; i < orig_ref_data - 1; ++i) {
+          py::handle(self_py).inc_ref();
+        }
+      }))
       .def(py::init<>());
 
   py::class_<local::Queue>(m, "Queue")

@@ -16,8 +16,6 @@ namespace shortfin::local {
 
 template class TypedFuture<Message::Ref>;
 
-Message::~Message() = default;
-
 // -------------------------------------------------------------------------- //
 // Queue
 // -------------------------------------------------------------------------- //

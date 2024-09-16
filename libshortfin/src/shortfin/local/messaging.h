@@ -25,15 +25,29 @@ namespace shortfin::local {
 class Message;
 namespace detail {
 
-struct MessageRefOwner {
-  MessageRefOwner() : Control(nullptr) {}
+// Message lifetime by default is managed by an internal reference count
+// system. However, since Messages often need to be owned by some third
+// party system with its own notion of lifetime, it is possible to provide
+// a custom lifetime controller. This can only be done once, typically on
+// construction by a proxy system.
+struct MessageLifetimeController {
+  MessageLifetimeController() : Control(nullptr) {}
   enum class Request { RETAIN, RELEASE };
-  MessageRefOwner(void (*Control)(Request req, const Message &msg))
+  MessageLifetimeController(void (*Control)(Request req, const Message &msg))
       : Control(Control) {}
   void (*Control)(Request req, const Message &msg);
   operator bool() { return Control != nullptr; }
-  static intptr_t &access_ref_data(const Message &msg);
-  intptr_t set_owner(const Message &msg, intptr_t ref_data);
+  // Takes ownership of the Message using this ownership controller, providing
+  // new ref_data that will be stored in the message and accessed from then
+  // on without internal locking. Returns the existing reference count at the
+  // time of transfer.
+  intptr_t TakeOwnership(const Message &msg, intptr_t ref_data);
+  // Accessed the ref_data memory within the Message. This is only valid
+  // if ownership has been transferred to a lifetime controller, and it is
+  // accessed without locking. This method purely exists to add some static
+  // thread/access safety.
+  static intptr_t &AccessOwnedRefData(const Message &msg)
+      SHORTFIN_THREAD_ANNOTATION_ATTRIBUTE(no_thread_safety_analysis);
 };
 
 }  // namespace detail
@@ -58,7 +72,7 @@ class SHORTFIN_API Message {
   Message(const Message &) = delete;
   Message(Message &&) = delete;
   Message &operator=(const Message &) = delete;
-  virtual ~Message();
+  virtual ~Message() = default;
 
   // RAII class for holding a reference to a Message.
   class Ref {
@@ -104,10 +118,11 @@ class SHORTFIN_API Message {
   };
 
  protected:
+  mutable iree::slim_mutex lock_;
   // Guard a scope with the fine grained lock.
-  iree::slim_mutex_lock_guard lock_guard() const {
-    return iree::slim_mutex_lock_guard(lock_);
-  }
+  // iree::slim_mutex_lock_guard lock_guard() const {
+  //   return iree::slim_mutex_lock_guard(lock_);
+  // }
   // Manual retain and release. Callers must assume that the Message is no
   // longer valid after any call to Release() where they do not hold a known
   // reference.
@@ -121,10 +136,10 @@ class SHORTFIN_API Message {
   // sized field that the allocator can use at it sees fit. Both fields
   // are managed within a lock_ scope and are optimized for single threaded
   // access and cross-thread transfers with coarse references.
-  mutable iree::slim_mutex lock_;
-  mutable intptr_t ref_data_ = 1;
-  mutable detail::MessageRefOwner owner_;
-  friend struct detail::MessageRefOwner;
+  mutable intptr_t ref_data_ SHORTFIN_GUARDED_BY(lock_) = 1;
+  mutable detail::MessageLifetimeController lifetime_controller_
+      SHORTFIN_GUARDED_BY(lock_);
+  friend struct detail::MessageLifetimeController;
 };
 
 // Future specialization for Message::Ref.
@@ -227,37 +242,50 @@ class SHORTFIN_API QueueReader {
 // Message allocation detail
 // -------------------------------------------------------------------------- //
 
-inline intptr_t &detail::MessageRefOwner::access_ref_data(const Message &msg) {
+inline intptr_t &detail::MessageLifetimeController::AccessOwnedRefData(
+    const Message &msg) {
   return msg.ref_data_;
 }
 
-inline intptr_t detail::MessageRefOwner::set_owner(const Message &msg,
-                                                   intptr_t ref_data) {
-  auto g = msg.lock_guard();
-  assert(!msg.owner_ && "Message ref owner transfer more than once");
-  msg.owner_ = *this;
+inline intptr_t detail::MessageLifetimeController::TakeOwnership(
+    const Message &msg, intptr_t ref_data) {
+  iree::slim_mutex_lock_guard g(msg.lock_);
+  assert(!msg.lifetime_controller_ &&
+         "Message ref owner transfer more than once");
+  msg.lifetime_controller_ = *this;
   intptr_t orig_ref_data = msg.ref_data_;
   msg.ref_data_ = ref_data;
   return orig_ref_data;
 }
 
 inline void Message::Retain() const {
-  auto g = lock_guard();
-  if (owner_) {
-    owner_.Control(detail::MessageRefOwner::Request::RETAIN, *this);
+  iree::slim_mutex_lock_guard g(lock_);
+  if (lifetime_controller_) {
+    lifetime_controller_.Control(
+        detail::MessageLifetimeController::Request::RETAIN, *this);
   } else {
     ref_data_ += 1;
   }
 }
 
 inline void Message::Release() const {
-  auto g = lock_guard();
-  if (owner_) {
-    owner_.Control(detail::MessageRefOwner::Request::RELEASE, *this);
+  // Since the destructor of the lock asserts that it is not held, we must
+  // manually release the lock prior to an action that may result in
+  // destruction. As such, just manage lock manually/carefully vs using RAII.
+  lock_.Lock();
+  auto *local_controller = &lifetime_controller_;
+  if (*local_controller) {
+    lock_.Unlock();
+    local_controller->Control(
+        detail::MessageLifetimeController::Request::RELEASE, *this);
+    return;
+  } else if (--ref_data_ == 0) {
+    lock_.Unlock();
+    delete this;
+    return;
   } else {
-    if (--ref_data_ == 0) {
-      delete this;
-    }
+    lock_.Unlock();
+    return;
   }
 }
 

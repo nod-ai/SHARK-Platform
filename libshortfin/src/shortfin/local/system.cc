@@ -61,17 +61,21 @@ System::~System() {
 
 void System::Shutdown() {
   // Stop workers.
+  std::vector<Worker *> local_workers;
   {
     iree::slim_mutex_lock_guard guard(lock_);
     if (!initialized_ || shutdown_) return;
     shutdown_ = true;
+    for (auto &w : workers_) {
+      local_workers.push_back(w.get());
+    }
   }
 
   // Worker drain and shutdown.
-  for (auto &worker : workers_) {
+  for (auto &worker : local_workers) {
     worker->Kill();
   }
-  for (auto &worker : workers_) {
+  for (auto &worker : local_workers) {
     if (worker->options().owned_thread) {
       worker->WaitForShutdown();
     }
@@ -87,6 +91,7 @@ std::shared_ptr<Scope> System::CreateScope(Worker &worker,
 }
 
 void System::InitializeNodes(int node_count) {
+  iree::slim_mutex_lock_guard guard(lock_);
   AssertNotInitialized();
   if (!nodes_.empty()) {
     throw std::logic_error("System::InitializeNodes called more than once");
@@ -178,6 +183,7 @@ Worker &System::init_worker() {
 
 void System::InitializeHalDriver(std::string_view moniker,
                                  iree::hal_driver_ptr driver) {
+  iree::slim_mutex_lock_guard guard(lock_);
   AssertNotInitialized();
   auto &slot = hal_drivers_[moniker];
   if (slot) {
@@ -188,6 +194,7 @@ void System::InitializeHalDriver(std::string_view moniker,
 }
 
 void System::InitializeHalDevice(std::unique_ptr<Device> device) {
+  iree::slim_mutex_lock_guard guard(lock_);
   AssertNotInitialized();
   auto device_name = device->name();
   auto [it, success] = named_devices_.try_emplace(device_name, device.get());
@@ -197,6 +204,14 @@ void System::InitializeHalDevice(std::unique_ptr<Device> device) {
   }
   devices_.push_back(device.get());
   retained_devices_.push_back(std::move(device));
+}
+
+Device *System::FindDeviceByName(std::string_view name) {
+  auto it = named_devices_.find(name);
+  if (it == named_devices_.end()) {
+    return nullptr;
+  }
+  return it->second;
 }
 
 void System::FinishInitialization() {
