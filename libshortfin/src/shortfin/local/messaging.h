@@ -119,10 +119,6 @@ class SHORTFIN_API Message {
 
  protected:
   mutable iree::slim_mutex lock_;
-  // Guard a scope with the fine grained lock.
-  // iree::slim_mutex_lock_guard lock_guard() const {
-  //   return iree::slim_mutex_lock_guard(lock_);
-  // }
   // Manual retain and release. Callers must assume that the Message is no
   // longer valid after any call to Release() where they do not hold a known
   // reference.
