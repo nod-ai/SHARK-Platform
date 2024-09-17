@@ -121,3 +121,13 @@ def test_xtensor_types(scope, dtype, code, py_value, expected_str):
     r = repr(ary)
     print("__repr__ =", r)
     assert expected_str in r, f"Expected '{expected_str}' in '{r}'"
+
+def test_view(lsys, device):
+    async def main():
+        src = sfnp.device_array(device, [2, 4], sfnp.uint8)
+        src.fill(b"\0\1\2\3")
+
+        view1 = src.view(offsets=[0, 1], sizes=[1, 3])
+        assert str(view1) == "{{1, 2, 3}}"
+
+    lsys.run(main())
