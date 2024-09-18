@@ -99,30 +99,33 @@ py::object CreateMappingObject(mapping **out_cpp_mapping) {
   return py_mapping;
 }
 
-device_array PyDeviceArrayView(device_array &array, py::list offsets,
-                               py::list sizes) {
+device_array PyDeviceArrayView(device_array &array, py::args keys) {
   size_t rank = array.shape().size();
   Dims c_offsets(rank, 0);
   Dims c_sizes(array.shape_container());
-  if (offsets.size() > rank || sizes.size() > rank) {
+
+  if (keys.size() > rank) {
     throw std::invalid_argument(
         "Cannot create view into device_array greater than its rank");
   }
-  for (size_t idx = 0; py::handle key : offsets) {
-    if (py::isinstance<iree_device_size_t>(key)) {
+
+  for (size_t idx = 0; py::handle key : keys) {
+    if (py::isinstance<py::slice>(key)) {
+      // Slice key.
+      auto slice = py::cast<py::slice>(key);
+      auto [start, stop, step, length] = slice.compute(c_sizes[idx]);
+      if (step != 1) {
+        throw std::logic_error("view does not support strided slices");
+      }
+      c_offsets[idx] = start;
+      c_sizes[idx] = length;
+    } else if (py::isinstance<iree_device_size_t>(key)) {
       // Integer key.
       c_offsets[idx] = py::cast<iree_device_size_t>(key);
+      c_sizes[idx] = 1;
     } else {
-      throw std::logic_error("Cannot cast offset to size_t");
-    }
-    idx += 1;
-  }
-  for (size_t idx = 0; py::handle key : sizes) {
-    if (py::isinstance<iree_device_size_t>(key)) {
-      // Integer key.
-      c_sizes[idx] = py::cast<iree_device_size_t>(key);
-    } else {
-      throw std::logic_error("Cannot cast key to size_t");
+      throw std::invalid_argument(
+          "Args to view must either be integer indices or slices");
     }
     idx += 1;
   }
@@ -325,8 +328,7 @@ void BindArray(py::module_ &m) {
            DOCSTRING_ARRAY_COPY_FROM)
       .def("copy_to", &device_array::copy_to, py::arg("dest_array"),
            DOCSTRING_ARRAY_COPY_TO)
-      .def("view", PyDeviceArrayView, DOCSTRING_ARRAY_VIEW, py::kw_only(),
-           py::arg("offsets"), py::arg("sizes"))
+      .def("view", PyDeviceArrayView, DOCSTRING_ARRAY_VIEW)
       .def("__repr__", &device_array::to_s)
       .def("__str__", [](device_array &self) -> std::string {
         auto contents = self.contents_to_s();
