@@ -45,33 +45,33 @@ function(shortfin_python_stubs build_type)
 
 endfunction()
 
-function(shortfin_python_stubs build_variant output_root)
+function(shortfin_python_stubs build_variant)
+  set(output_root "${CMAKE_CURRENT_BINARY_DIR}/_shortfin_${build_variant}")
   file(MAKE_DIRECTORY ${output_root})
   nanobind_add_stub(
     shortfin_python_extension_stub_lib_${build_variant}
-    MODULE _shortfin_default.lib
+    MODULE _shortfin_${build_variant}.lib
     OUTPUT ${output_root}/lib/__init__.pyi
     DEPENDS shortfin_python_extension
   )
 
   nanobind_add_stub(
     shortfin_python_extension_stub_array_${build_variant}
-    MODULE _shortfin_default.lib.array
+    MODULE _shortfin_${build_variant}.lib.array
     OUTPUT ${output_root}/lib/array.pyi
     DEPENDS shortfin_python_extension
   )
 
   nanobind_add_stub(
     shortfin_python_extension_stub_local_${build_variant}
-    MODULE _shortfin_default.lib.local
+    MODULE _shortfin_${build_variant}.lib.local
     OUTPUT ${output_root}/lib/local.pyi
     DEPENDS shortfin_python_extension
   )
 endfunction()
 
-# Generate the same stubs against the default build for each variant but
-# output the files to the right package.
-shortfin_python_stubs(default ${CMAKE_CURRENT_BINARY_DIR}/_shortfin_default)
 if (SHORTFIN_ENABLE_TRACING)
-  shortfin_python_stubs(tracy ${CMAKE_CURRENT_BINARY_DIR}/_shortfin_tracy)
+  shortfin_python_stubs(tracy)
+else()
+  shortfin_python_stubs(default)
 endif()
