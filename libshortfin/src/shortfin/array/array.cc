@@ -11,6 +11,7 @@
 #include "fmt/core.h"
 #include "fmt/ranges.h"
 #include "shortfin/array/xtensor_bridge.h"
+#include "shortfin/support/logging.h"
 
 namespace shortfin::array {
 

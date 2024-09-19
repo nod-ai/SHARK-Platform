@@ -22,6 +22,7 @@
 
 namespace shortfin::local {
 
+class BaseProgramParameters;
 class Scope;
 class System;
 
@@ -126,6 +127,8 @@ class SHORTFIN_API ProgramInvocation {
   std::pair<iree_hal_semaphore_t *, uint64_t> coarse_signal() {
     return std::make_pair(signal_sem_, signal_timepoint_);
   }
+
+  std::string to_s();
 
  private:
   ProgramInvocation();
@@ -233,6 +236,12 @@ class SHORTFIN_API ProgramModule {
   static ProgramModule Load(System &system, const std::filesystem::path &path,
                             bool mmap = true);
 
+  // Creates a ProgramModule that will provide the given list of parameters
+  // to modules loaded after it. In IREE parlance, this produces an
+  // 'io_parameters' VM module.
+  static ProgramModule ParameterProvider(
+      System &system, std::span<BaseProgramParameters *> params);
+
   // Gets the name of all exported functions.
   std::vector<std::string> exports() const;
 
@@ -288,6 +297,61 @@ class SHORTFIN_API Program {
   std::shared_ptr<Scope> scope_;
   iree::vm_context_ptr vm_context_;
   friend class Scope;
+};
+
+// Base class for classes that can be interpreted as a provider of program
+// parameters.
+class SHORTFIN_API BaseProgramParameters {
+ public:
+  BaseProgramParameters() = default;
+  BaseProgramParameters(const BaseProgramParameters &) = delete;
+  BaseProgramParameters &operator=(const BaseProgramParameters &) = delete;
+  virtual ~BaseProgramParameters();
+
+  operator iree_io_parameter_provider_t *() { return provider_.get(); }
+
+ protected:
+  iree::io_parameter_provider_ptr provider_;
+};
+
+// Pool of parameters that can be made available to ProgramModules. Each
+// instance represents a unique "parameter scope" name which corresponds to
+// some set of parameters that one or more ProgramModules were compiled to
+// depend on.
+//
+// This class wraps the lower level iree_io_parameter_provider_t and a single
+// iree_io_parameter_index_t. While the underlying APIs have many ways that
+// they can be composed, populated and manipulated, this facility presumes
+// that has been done elsewhere and primarily targets referencing them from
+// somewhere statically known. More advanced use cases will be served by
+// additional APIs.
+class SHORTFIN_API StaticProgramParameters : public BaseProgramParameters {
+ public:
+  StaticProgramParameters(
+      System &system, std::string_view parameter_scope,
+      iree_host_size_t max_concurrent_operations =
+          IREE_IO_PARAMETER_INDEX_PROVIDER_DEFAULT_MAX_CONCURRENT_OPERATIONS);
+
+  struct LoadOptions {
+    // File format. If empty, then it is inferred from the file name or
+    // contents. Can be one of "irpa", "gguf", "safetensors", etc.
+    std::string format;
+
+    // Whether the backing file can be read.
+    bool readable = true;
+    // Whether the backing file can be written.
+    bool writable = false;
+    // Whether to mmap the file.
+    bool mmap = true;
+  };
+  // Load parameters from a supported file format, applying no name
+  // transformation.
+  void Load(std::filesystem::path file_path, LoadOptions options);
+  void Load(std::filesystem::path file_path) { Load(file_path, LoadOptions()); }
+
+ private:
+  iree_allocator_t host_allocator_;
+  iree::io_parameter_index_ptr index_;
 };
 
 }  // namespace shortfin::local

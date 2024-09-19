@@ -8,7 +8,9 @@
 
 #include "fmt/core.h"
 #include "fmt/std.h"
+#include "iree/io/formats/parser_registry.h"
 #include "iree/modules/hal/module.h"
+#include "iree/modules/io/parameters/module.h"
 #include "iree/vm/bytecode/module.h"
 #include "shortfin/local/scope.h"
 #include "shortfin/local/system.h"
@@ -106,6 +108,26 @@ ProgramModule ProgramModule::Load(System &system,
   return ProgramModule(std::move(module));
 }
 
+ProgramModule ProgramModule::ParameterProvider(
+    System &system, std::span<BaseProgramParameters *> params) {
+  std::vector<iree_io_parameter_provider_t *> providers;
+  providers.reserve(params.size());
+  for (auto *param : params) {
+    iree_io_parameter_provider_t *provider = *param;
+    if (!provider) {
+      throw std::logic_error(
+          "Cannot pass uninitialized parameters to ParameterProvider");
+    }
+    providers.push_back(provider);
+  }
+
+  iree::vm_module_ptr module;
+  SHORTFIN_THROW_IF_ERROR(iree_io_parameters_module_create(
+      system.vm_instance(), providers.size(), providers.data(),
+      system.host_allocator(), module.for_output()));
+  return ProgramModule(std::move(module));
+}
+
 std::string_view ProgramModule::name() const {
   return to_string_view(iree_vm_module_name(vm_module_));
 }
@@ -141,8 +163,8 @@ Program Program::Load(std::shared_ptr<Scope> scope,
   std::vector<iree_hal_device_t *> raw_devices;
 
   // By default, bind all devices in the scope in order to the program.
-  for (Device *d : scope->raw_devices()) {
-    raw_devices.push_back(d->hal_device());
+  for (auto &it : scope->raw_devices()) {
+    raw_devices.push_back(it.second->hal_device());
   }
 
   // Add a HAL module.
@@ -531,6 +553,73 @@ void ProgramInvocation::DeviceSelect(DeviceAffinity device_affinity) {
   SHORTFIN_SCHED_LOG("Invocation {}: DeviceSelect {}",
                      static_cast<void *>(this), device_affinity.to_s());
   device_selection_ |= device_affinity;
+}
+
+std::string ProgramInvocation::to_s() {
+  return fmt::format("ProgramInvocation({}: result_size={})",
+                     (scheduled_ ? "SCHEDULED" : "NOT_SCHEDULED"),
+                     results_size());
+}
+
+// -------------------------------------------------------------------------- //
+// BaseProgramParameters
+// -------------------------------------------------------------------------- //
+
+BaseProgramParameters::~BaseProgramParameters() = default;
+
+// -------------------------------------------------------------------------- //
+// StaticProgramParameters
+// -------------------------------------------------------------------------- //
+
+StaticProgramParameters::StaticProgramParameters(
+    System &system, std::string_view parameter_scope,
+    iree_host_size_t max_concurrent_operations)
+    : host_allocator_(system.host_allocator()) {
+  SHORTFIN_THROW_IF_ERROR(
+      iree_io_parameter_index_create(host_allocator_, index_.for_output()));
+  SHORTFIN_THROW_IF_ERROR(iree_io_parameter_index_provider_create(
+      to_iree_string_view(parameter_scope), index_, max_concurrent_operations,
+      host_allocator_, provider_.for_output()));
+}
+
+void StaticProgramParameters::Load(std::filesystem::path file_path,
+                                   LoadOptions options) {
+  // Default format from extension.
+  if (options.format.empty()) {
+    options.format = file_path.extension();
+  }
+
+  // Open file.
+  iree_file_read_flags_t read_flags = IREE_FILE_READ_FLAG_DEFAULT;
+  if (options.mmap) {
+    read_flags = IREE_FILE_READ_FLAG_MMAP;
+  } else {
+    read_flags = IREE_FILE_READ_FLAG_PRELOAD;
+  }
+  iree_file_contents_t *file_contents = nullptr;
+  SHORTFIN_THROW_IF_ERROR(iree_file_read_contents(
+      file_path.c_str(), read_flags, host_allocator_, &file_contents));
+  iree_io_file_handle_release_callback_t release_callback = {
+      +[](void *user_data, iree_io_file_handle_primitive_t handle_primitive) {
+        iree_file_contents_t *file_contents = (iree_file_contents_t *)user_data;
+        iree_file_contents_free(file_contents);
+      },
+      file_contents,
+  };
+
+  // Wrap contents.
+  iree::io_file_handle_ptr file_handle;
+  iree_status_t status = iree_io_file_handle_wrap_host_allocation(
+      IREE_IO_FILE_ACCESS_READ, file_contents->buffer, release_callback,
+      host_allocator_, file_handle.for_output());
+  if (!iree_status_is_ok(status)) {
+    iree_file_contents_free(file_contents);
+    SHORTFIN_THROW_IF_ERROR(status);
+  }
+
+  // Parse.
+  SHORTFIN_THROW_IF_ERROR(iree_io_parse_file_index(
+      to_iree_string_view(options.format), file_handle.get(), index_.get()));
 }
 
 }  // namespace shortfin::local

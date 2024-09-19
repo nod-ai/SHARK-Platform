@@ -7,6 +7,7 @@
 #ifndef SHORTFIN_SUPPORT_LOGGING_H
 #define SHORTFIN_SUPPORT_LOGGING_H
 
+#include "shortfin/support/api.h"
 #include "spdlog/spdlog.h"
 
 #if !defined(SHORTFIN_LOG_LIFETIMES)
@@ -22,6 +23,8 @@
 #endif
 
 namespace shortfin::logging {
+
+SHORTFIN_API void InitializeFromEnv();
 
 // TODO: Re-export doesn't really work like this. Need to define API
 // exported trampolines for cross library use.

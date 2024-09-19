@@ -102,20 +102,26 @@ void System::InitializeNodes(int node_count) {
   }
 }
 
-Queue &System::CreateQueue(Queue::Options options) {
-  iree::slim_mutex_lock_guard guard(lock_);
-  AssertRunning();
-  if (queues_by_name_.count(options.name) != 0) {
-    throw std::invalid_argument(fmt::format(
-        "Cannot create queue with duplicate name '{}'", options.name));
+QueuePtr System::CreateQueue(Queue::Options options) {
+  if (options.name.empty()) {
+    // Fast, lock-free path for anonymous queue creation.
+    return Queue::Create(std::move(options));
+  } else {
+    // Lock and allocate a named queue.
+    iree::slim_mutex_lock_guard guard(lock_);
+    AssertRunning();
+    if (queues_by_name_.count(options.name) != 0) {
+      throw std::invalid_argument(fmt::format(
+          "Cannot create queue with duplicate name '{}'", options.name));
+    }
+    queues_.push_back(Queue::Create(std::move(options)));
+    Queue *unowned_queue = queues_.back().get();
+    queues_by_name_[unowned_queue->options().name] = unowned_queue;
+    return *unowned_queue;
   }
-  queues_.push_back(std::make_unique<Queue>(std::move(options)));
-  Queue *unowned_queue = queues_.back().get();
-  queues_by_name_[unowned_queue->options().name] = unowned_queue;
-  return *unowned_queue;
 }
 
-Queue &System::named_queue(std::string_view name) {
+QueuePtr System::named_queue(std::string_view name) {
   iree::slim_mutex_lock_guard guard(lock_);
   auto it = queues_by_name_.find(name);
   if (it == queues_by_name_.end()) {

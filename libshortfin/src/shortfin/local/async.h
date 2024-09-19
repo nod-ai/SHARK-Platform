@@ -153,6 +153,7 @@ class SHORTFIN_API VoidFuture : public Future {
   void set_success() {
     iree::slim_mutex_lock_guard g(state_->lock_);
     SetSuccessWithLockHeld();
+    IssueCallbacksWithLockHeld();
   }
 };
 

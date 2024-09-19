@@ -199,7 +199,7 @@ class SHORTFIN_API Account {
   // Returns a future that is satisfied when the timeline of this account
   // reaches its current idle timepoint (i.e. all currently pending work
   // is complete).
-  CompletionEvent OnSync();
+  VoidFuture OnSync();
 
  private:
   void Initialize();
@@ -273,7 +273,8 @@ class SHORTFIN_API Scheduler {
   System &system() { return system_; }
 
  private:
-  void Initialize(std::span<Device *const> devices);
+  void Initialize(
+      std::span<const std::pair<std::string_view, Device *>> devices);
   System &system_;
 
   // Each distinct hal device gets an account.
