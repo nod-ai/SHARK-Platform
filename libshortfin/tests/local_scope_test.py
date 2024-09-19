@@ -32,11 +32,8 @@ def test_raw_device_access(scope):
     assert isinstance(first_device, sfl.local.host.HostCPUDevice)
     assert first_device is scope.raw_device(first_name)  # By name
     print(first_device)
-    devices = scope.raw_devices
-    named_devices = scope.named_devices
+    named_devices = scope.devices_dict
     assert first_name in named_devices
-    assert devices[0] is named_devices[first_name]
-    assert devices[0] is first_device
     with pytest.raises(ValueError):
         scope.raw_device("cpu1")
     with pytest.raises(ValueError):
@@ -54,6 +51,8 @@ def test_devices_collection_access(scope):
         scope.devices.cpu1
     with pytest.raises(ValueError):
         scope.devices[1]
+    iter_list = list(scope.devices)
+    assert iter_list == [scope.device(0)]
 
 
 def test_device_affinity_repr(scope):

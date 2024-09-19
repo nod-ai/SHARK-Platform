@@ -625,8 +625,17 @@ void BindLocal(py::module_ &m) {
           py::arg("mmap") = true);
 
   struct DevicesSet {
-    DevicesSet(py::dict devices_dict) : devices_dict(std::move(devices_dict)) {}
-    py::dict devices_dict;
+    DevicesSet(py::object scope_obj, std::optional<size_t> index = {})
+        : scope_obj(std::move(scope_obj)), index(index) {}
+    py::object KeepAlive(local::ScopedDevice device) {
+      py::object device_obj = py::cast(device);
+      py::detail::keep_alive(/*nurse=*/device_obj.ptr(),
+                             /*patient=*/scope_obj.ptr());
+      return device_obj;
+    }
+    local::Scope &scope() { return py::cast<local::Scope &>(scope_obj); }
+    py::object scope_obj;
+    std::optional<size_t> index;
   };
   py::class_<local::Scope>(m, "Scope")
       .def("__repr__", &local::Scope::to_s)
@@ -643,9 +652,7 @@ void BindLocal(py::module_ &m) {
           },
           py::rv_policy::reference_internal)
       .def_prop_ro("devices",
-                   [](py::handle self_obj) {
-                     return DevicesSet(self_obj.attr("devices_dict"));
-                   })
+                   [](py::object self) { return DevicesSet(std::move(self)); })
       .def_prop_ro("devices_dict",
                    [](py::handle self_obj) {
                      local::Scope &self = py::cast<local::Scope &>(self_obj);
@@ -684,22 +691,34 @@ void BindLocal(py::module_ &m) {
 
   py::class_<DevicesSet>(m, "_ScopeDevicesSet")
       .def("__iter__",
+           [](DevicesSet &self) { return DevicesSet(self.scope_obj, 0); })
+      .def("__next__",
            [](DevicesSet &self) {
-             return self.devices_dict.attr("values")().attr("__iter__")();
-           })
-      .def("__len__", [](DevicesSet &self) { return self.devices_dict.size(); })
-      .def("__getitem__",
-           [](DevicesSet &self, py::handle key) {
-             if (py::isinstance<py::str>(key)) {
-               return self.devices_dict[key];
-             } else {
-               return self.devices_dict.attr("values")()[key];
+             auto &scope = self.scope();
+             if (!self.index || *self.index >= scope.raw_devices().size()) {
+               // Blurgh: Exception as flow control is not cheap. There is a
+               // very obnoxious way to make this not be exception based but
+               // this is a minority path.
+               throw py::stop_iteration();
              }
+             return self.KeepAlive(scope.device((*self.index)++));
            })
-      .def("__getattr__", [](DevicesSet &self, py::handle key) {
-        return self.devices_dict[key];
-      });
+      .def("__len__",
+           [](DevicesSet &self) { return self.scope().raw_devices().size(); })
+      .def("__getitem__",
+           [](DevicesSet &self, size_t index) {
+             return self.KeepAlive(self.scope().device(index));
+           })
+      .def("__getitem__",
+           [](DevicesSet &self, std::string_view name) {
+             return self.KeepAlive(self.scope().device(name));
+           })
+      .def("__getattr__",
+           [](DevicesSet &self, std::string_view name) -> py::object {
+             return self.KeepAlive(self.scope().device(name));
+           });
 
+  ;
   py::class_<local::Worker>(m, "Worker", py::is_weak_referenceable())
       .def_prop_ro("loop",
                    [](local::Worker &self) {
