@@ -264,6 +264,23 @@ Dataset(
     ),
 ).alias_to("mixtral_8x7b_q8_0_gguf")
 
+Dataset(
+    "amd-shark/llama-quant-models",
+    (
+        RemoteFile(
+            "gguf",
+            "amd-shark/llama-quant-models",
+            "llama8b_f16.gguf",
+        ),
+        RemoteFile(
+            "tokenizer_config.json",
+            "amd-shark/llama-quant-models",
+            "tokenizer_config.json",
+            extra_filenames=["tokenizer.json"],
+        ),
+    ),
+).alias_to("llama3_8B_f16")
+
 ################################################################################
 # Tool entrypoint
 ################################################################################
