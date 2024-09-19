@@ -37,7 +37,7 @@ def test_storage_constructor(lsys, device):
         ary = sfnp.device_array(s, [2, 4], sfnp.uint8)
         assert ary.dtype == sfnp.uint8
         assert ary.shape == [2, 4]
-        assert str(ary) == "{{0, 1, 2, 3},\n {0, 1, 2, 3}}"
+        assert list(ary.items) == [0, 1, 2, 3, 0, 1, 2, 3]
         assert ary.device == device
         assert ary.storage == s
 
@@ -51,7 +51,7 @@ def test_device_constructor(lsys, device):
         await device
         assert ary.dtype == sfnp.uint8
         assert ary.shape == [2, 4]
-        assert str(ary) == "{{0, 1, 2, 3},\n {0, 1, 2, 3}}"
+        assert list(ary.items) == [0, 1, 2, 3, 0, 1, 2, 3]
         assert ary.device == device
 
     lsys.run(main())
@@ -64,7 +64,7 @@ def test_fill_copy_from_for_transfer(lsys, device):
         dst = src.for_transfer()
         dst.copy_from(src)
         await device
-        assert str(dst) == "{{0, 1, 2, 3},\n {0, 1, 2, 3}}"
+        assert list(dst.items) == [0, 1, 2, 3, 0, 1, 2, 3]
 
     lsys.run(main())
 
@@ -76,7 +76,7 @@ def test_fill_copy_to_for_transfer(lsys, device):
         dst = src.for_transfer()
         src.copy_to(dst)
         await device
-        assert str(dst) == "{{0, 1, 2, 3},\n {0, 1, 2, 3}}"
+        assert list(dst.items) == [0, 1, 2, 3, 0, 1, 2, 3]
 
     lsys.run(main())
 
@@ -124,24 +124,24 @@ def test_xtensor_types(scope, dtype, code, py_value, expected_str):
 
 
 @pytest.mark.parametrize(
-    "keys,expected_str",
+    "keys,expected",
     [
         # Simple indexing
-        ([0, 0], "{{0}}"),
+        ([0, 0], [0]),
         # Row indexing
-        ([0], "{{0, 1, 2, 3}}"),
+        ([0], [0, 1, 2, 3]),
         # Sliced indexing
-        ([1, slice(2, 4)], "{{2, 3}}"),
-        ([slice(1, 2), slice(2, 4)], "{{2, 3}}"),
+        ([1, slice(2, 4)], [2, 3]),
+        ([slice(1, 2), slice(2, 4)], [2, 3]),
     ],
 )
-def test_view(lsys, device, keys, expected_str):
+def test_view(lsys, device, keys, expected):
     async def main():
         src = sfnp.device_array(device, [4, 4], sfnp.uint8)
         src.fill(b"\0\1\2\3")
         view = src.view(*keys)
         await device
-        assert str(view) == expected_str
+        assert list(view.items) == expected
 
     lsys.run(main())
 

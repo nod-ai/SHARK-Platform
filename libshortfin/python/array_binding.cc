@@ -30,6 +30,19 @@ static const char DOCSTRING_ARRAY_FILL[] = R"(Fill an array with a value.
 Equivalent to `array.storage.fill(pattern)`.
 )";
 
+static const char DOCSTRING_ARRAY_ITEMS[] =
+    R"(Access contents as a Python array.
+
+When reading this attribute, an array.array will be constructed with the
+contents of the shortfin device_array. This supports a subset of element types
+(byte aligned integers, floats and doubles) corresponding to Python types.
+
+On write, the device_array will be mapped for write_discard and arbitrary
+Python types marshaled via array.array into its contents.
+
+This requires a mappable device_array, just like storage.data.
+)";
+
 static const char DOCSTRING_ARRAY_VIEW[] =
     R"(Create a view of an array.
 
@@ -133,9 +146,54 @@ device_array PyDeviceArrayView(device_array &array, py::args keys) {
   return array.view(c_offsets, c_sizes);
 }
 
+class Refs {
+ public:
+  std::unordered_map<iree_hal_element_type_t, py::object>
+      element_type_array_type_code_table =
+          CreateElementTypeArrayTypeCodeTable();
+  py::object array_array_ctor = py::module_::import_("array").attr("array");
+
+ private:
+  static std::unordered_map<iree_hal_element_type_t, py::object>
+  CreateElementTypeArrayTypeCodeTable() {
+    std::unordered_map<iree_hal_element_type_t, py::object> table;
+    // This is really gross. Python's array type codes are pegged to C types,
+    // which do not have portable sizes. We pick portablish things here and
+    // carp on mismatch.
+    auto add_type = [&](DType dt, const char *code, size_t size) {
+      if (dt.dense_byte_count() != size) {
+        throw std::invalid_argument(
+            fmt::format("Illegal native type size for dtype {}, type code {}. "
+                        "Native size mismatch: {} vs {}",
+                        dt.name(), code, dt.dense_byte_count(), size));
+      }
+      table[dt] = py::str(code);
+    };
+
+    // See table at https://docs.python.org/3/library/array.html
+    add_type(DType::int8(), "b", sizeof(char));
+    add_type(DType::sint8(), "b", sizeof(char));
+    add_type(DType::uint8(), "B", sizeof(unsigned char));
+    add_type(DType::int16(), "h", sizeof(signed short));
+    add_type(DType::sint16(), "h", sizeof(signed short));
+    add_type(DType::uint16(), "H", sizeof(unsigned short));
+    add_type(DType::int32(), "i", sizeof(signed int));
+    add_type(DType::sint32(), "i", sizeof(signed int));
+    add_type(DType::uint32(), "I", sizeof(unsigned int));
+    add_type(DType::int64(), "q", sizeof(signed long long));
+    add_type(DType::sint64(), "q", sizeof(signed long long));
+    add_type(DType::uint64(), "Q", sizeof(unsigned long long));
+    add_type(DType::float32(), "f", sizeof(float));
+    add_type(DType::float64(), "d", sizeof(double));
+    return table;
+  }
+};
+
 }  // namespace
 
 void BindArray(py::module_ &m) {
+  auto refs = std::make_shared<Refs>();
+
   py::class_<DType>(m, "DType")
       .def_prop_ro("is_boolean", &DType::is_boolean)
       .def_prop_ro("is_integer", &DType::is_integer)
@@ -329,6 +387,48 @@ void BindArray(py::module_ &m) {
       .def("copy_to", &device_array::copy_to, py::arg("dest_array"),
            DOCSTRING_ARRAY_COPY_TO)
       .def("view", PyDeviceArrayView, DOCSTRING_ARRAY_VIEW)
+      .def_prop_rw(
+          "items",
+          [refs](device_array &self) {
+            auto &table = refs->element_type_array_type_code_table;
+            auto it = table.find(self.dtype());
+            if (it == table.end()) {
+              throw std::invalid_argument(
+                  fmt::format("Python array.array type code not know for dtype "
+                              "{}: Cannot access items",
+                              self.dtype().name()));
+            }
+
+            mapping *cpp_mapping = nullptr;
+            py::object py_mapping = CreateMappingObject(&cpp_mapping);
+            *cpp_mapping = self.storage().map_read();
+            py::object py_bytes =
+                py::steal(PyBytes_FromObject(py_mapping.ptr()));
+            py::object items = refs->array_array_ctor(it->second, py_bytes);
+            return items;
+          },
+          [refs](device_array &self, py::handle initializer) {
+            auto &table = refs->element_type_array_type_code_table;
+            auto it = table.find(self.dtype());
+            if (it == table.end()) {
+              throw std::invalid_argument(
+                  fmt::format("Python array.array type code not know for dtype "
+                              "{}: Cannot access items",
+                              self.dtype().name()));
+            }
+
+            py::object items = refs->array_array_ctor(it->second, initializer);
+            PyBufferRequest src_info(items, PyBUF_SIMPLE);
+            auto dest_data = self.storage().map_write_discard();
+            if (src_info.view().len > dest_data.size()) {
+              throw std::invalid_argument(
+                  fmt::format("Cannot write {} bytes into buffer of {} bytes",
+                              src_info.view().len, dest_data.size()));
+            }
+            std::memcpy(dest_data.data(), src_info.view().buf,
+                        src_info.view().len);
+          },
+          DOCSTRING_ARRAY_ITEMS)
       .def("__repr__", &device_array::to_s)
       .def("__str__", [](device_array &self) -> std::string {
         auto contents = self.contents_to_s();
