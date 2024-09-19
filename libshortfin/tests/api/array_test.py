@@ -121,3 +121,41 @@ def test_xtensor_types(scope, dtype, code, py_value, expected_str):
     r = repr(ary)
     print("__repr__ =", r)
     assert expected_str in r, f"Expected '{expected_str}' in '{r}'"
+
+
+@pytest.mark.parametrize(
+    "keys,expected_str",
+    [
+        # Simple indexing
+        ([0, 0], "{{0}}"),
+        # Row indexing
+        ([0], "{{0, 1, 2, 3}}"),
+        # Sliced indexing
+        ([1, slice(2, 4)], "{{2, 3}}"),
+        ([slice(1, 2), slice(2, 4)], "{{2, 3}}"),
+    ],
+)
+def test_view(lsys, device, keys, expected_str):
+    async def main():
+        src = sfnp.device_array(device, [4, 4], sfnp.uint8)
+        src.fill(b"\0\1\2\3")
+        view = src.view(*keys)
+        await device
+        assert str(view) == expected_str
+
+    lsys.run(main())
+
+
+def test_view_unsupported(lsys, device):
+    async def main():
+        src = sfnp.device_array(device, [4, 4], sfnp.uint8)
+        src.fill(b"\0\1\2\3")
+
+        with pytest.raises(
+            ValueError,
+            match="Cannot create a view with dimensions following a spanning dim",
+        ):
+            view = src.view(slice(0, 2), 1)
+            await device
+
+    lsys.run(main())

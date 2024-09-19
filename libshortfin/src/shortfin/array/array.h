@@ -140,6 +140,11 @@ class SHORTFIN_API device_array
     return typed_mapping<EltTy>(data_w());
   }
 
+  // Creates a device array which aliases the backing storage by slicing. Only
+  // slice shapes that produce a dense view without strides are supported by
+  // this mechanism.
+  device_array view(Dims &indices, Dims &sizes);
+
   std::string to_s() const override;
 
  protected:
