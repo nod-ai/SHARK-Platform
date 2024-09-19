@@ -12,10 +12,13 @@
 
 namespace shortfin::local {
 
-detail::BaseProcess::BaseProcess(std::shared_ptr<Scope> scope)
-    : scope_(std::move(scope)) {}
+detail::BaseProcess::BaseProcess() = default;
+detail::BaseProcess::~BaseProcess() = default;
 
-detail::BaseProcess::~BaseProcess() {}
+void detail::BaseProcess::Initialize(std::shared_ptr<Scope> scope) {
+  assert(!scope_ && "BaseProcess::Initialize already called");
+  scope_ = std::move(scope);
+}
 
 int64_t detail::BaseProcess::pid() const {
   iree::slim_mutex_lock_guard g(lock_);
@@ -80,5 +83,7 @@ CompletionEvent detail::BaseProcess::OnTermination() {
   }
   return CompletionEvent(terminated_event_);
 }
+
+Process::Process(std::shared_ptr<Scope> scope) { Initialize(std::move(scope)); }
 
 }  // namespace shortfin::local

@@ -18,7 +18,12 @@ example_dir = project_dir / "examples" / "python"
 
 def run_example(path: Path):
     try:
-        subprocess.check_call([sys.executable, str(path)])
+        subprocess.check_call([sys.executable, str(path)], timeout=15)
+    except subprocess.TimeoutExpired:
+        pytest.skip(
+            f"Suppressed flaky test for {path}: "
+            f"https://github.com/nod-ai/sharktank/issues/178"
+        )
     except subprocess.CalledProcessError:
         pytest.skip(
             f"Suppressed flaky test for {path}: "

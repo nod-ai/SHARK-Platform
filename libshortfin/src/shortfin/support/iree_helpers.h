@@ -13,6 +13,7 @@
 #include "iree/base/api.h"
 #include "iree/base/internal/file_io.h"
 #include "iree/hal/api.h"
+#include "iree/io/parameter_index_provider.h"
 #include "iree/modules/hal/types.h"
 #include "iree/vm/api.h"
 #include "iree/vm/ref_cc.h"
@@ -169,6 +170,9 @@ SHORTFIN_IREE_DEF_PTR(hal_device);
 SHORTFIN_IREE_DEF_PTR(hal_driver);
 SHORTFIN_IREE_DEF_PTR(hal_fence);
 SHORTFIN_IREE_DEF_PTR(hal_semaphore);
+SHORTFIN_IREE_DEF_PTR(io_file_handle);
+SHORTFIN_IREE_DEF_PTR(io_parameter_index);
+SHORTFIN_IREE_DEF_PTR(io_parameter_provider);
 SHORTFIN_IREE_DEF_PTR(vm_context);
 SHORTFIN_IREE_DEF_PTR(vm_instance);
 SHORTFIN_IREE_DEF_PTR(vm_list);

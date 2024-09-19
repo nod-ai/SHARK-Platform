@@ -101,8 +101,9 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
   Device *FindDeviceByName(std::string_view name);
 
   // Queue access.
-  Queue &CreateQueue(Queue::Options options);
-  Queue &named_queue(std::string_view name);
+  QueuePtr CreateQueue(Queue::Options options);
+  QueuePtr CreateQueue() { return CreateQueue(Queue::Options()); }
+  QueuePtr named_queue(std::string_view name);
 
   // Access the system wide blocking executor thread pool. This can be used
   // to execute thunks that can block on a dedicated thread and is needed
@@ -192,7 +193,7 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
   BlockingExecutor blocking_executor_;
 
   // Queues.
-  std::vector<std::unique_ptr<Queue>> queues_ SHORTFIN_GUARDED_BY(lock_);
+  std::vector<std::shared_ptr<Queue>> queues_ SHORTFIN_GUARDED_BY(lock_);
   std::unordered_map<std::string_view, Queue *> queues_by_name_
       SHORTFIN_GUARDED_BY(lock_);
 

@@ -6,8 +6,12 @@
 
 from _shortfin import lib as _sfl
 
+# Set up logging.
+import shortfin.support.logging_setup as _logging_setup
+
 # Most classes from the native "local" namespace are aliased to the top
 # level of the public API.
+BaseProgramParameters = _sfl.local.BaseProgramParameters
 CompletionEvent = _sfl.local.CompletionEvent
 Device = _sfl.local.Device
 Message = _sfl.local.Message
@@ -23,8 +27,10 @@ QueueReader = _sfl.local.QueueReader
 QueueWriter = _sfl.local.QueueWriter
 Scope = _sfl.local.Scope
 ScopedDevice = _sfl.local.ScopedDevice
+StaticProgramParameters = _sfl.local.StaticProgramParameters
 System = _sfl.local.System
 SystemBuilder = _sfl.local.SystemBuilder
+VoidFuture = _sfl.local.VoidFuture
 Worker = _sfl.local.Worker
 
 # Array is auto-imported.
@@ -35,6 +41,7 @@ from . import amdgpu
 from . import host
 
 __all__ = [
+    "BaseProgramParameters",
     "CompletionEvent",
     "Device",
     "Message",
@@ -49,8 +56,10 @@ __all__ = [
     "QueueWriter",
     "Scope",
     "ScopedDevice",
+    "StaticProgramParameters",
     "System",
     "SystemBuilder",
+    "VoidFuture",
     "Worker",
     # System namespaces.
     "amdgpu",

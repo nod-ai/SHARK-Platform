@@ -195,6 +195,7 @@ void BindArray(py::module_ &m) {
   auto refs = std::make_shared<Refs>();
 
   py::class_<DType>(m, "DType")
+      .def_prop_ro("name", &DType::name)
       .def_prop_ro("is_boolean", &DType::is_boolean)
       .def_prop_ro("is_integer", &DType::is_integer)
       .def_prop_ro("is_float", &DType::is_float)
@@ -203,6 +204,7 @@ void BindArray(py::module_ &m) {
       .def_prop_ro("is_byte_aligned", &DType::is_byte_aligned)
       .def_prop_ro("dense_byte_count", &DType::dense_byte_count)
       .def("is_integer_bitwidth", &DType::is_integer_bitwidth)
+      .def("compute_dense_nd_size", &DType::compute_dense_nd_size)
       .def(py::self == py::self)
       .def("__repr__", &DType::name);
 
@@ -375,7 +377,6 @@ void BindArray(py::module_ &m) {
                    py::rv_policy::reference_internal)
       .def_prop_ro("storage", &device_array::storage,
                    py::rv_policy::reference_internal)
-
       .def(
           "fill",
           [](py::handle_t<device_array> self, py::handle buffer) {

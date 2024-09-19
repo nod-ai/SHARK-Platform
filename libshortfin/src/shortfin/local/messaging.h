@@ -8,6 +8,7 @@
 #define SHORTFIN_LOCAL_MESSAGING_H
 
 #include <deque>
+#include <memory>
 #include <optional>
 #include <string>
 
@@ -146,32 +147,52 @@ using MessageFuture = TypedFuture<Message::Ref>;
 // Queue
 // -------------------------------------------------------------------------- //
 
+class Queue;
 class QueueReader;
 class QueueWriter;
+
+namespace {
+struct QueueCreator;
+}
+
+using QueuePtr = std::shared_ptr<Queue>;
 
 // Queues are the primary form of communication in shortfin for exchanging
 // messages. They are inherently thread safe and coupled with the async/worker
 // system for enqueue/dequeue operations.
-class SHORTFIN_API Queue {
+class SHORTFIN_API Queue : public std::enable_shared_from_this<Queue> {
  public:
   struct Options {
-    // Queues are generally managed by the system with a global name.
+    // Queues are generally managed by the system with a global name. The
+    // the name is empty, then this is an anonymous queue.
     std::string name;
   };
-  Queue(Options options);
   Queue(const Queue &) = delete;
   Queue &operator=(const Queue &) = delete;
   Queue(Queue &&) = delete;
   ~Queue() = default;
 
+  operator QueuePtr() { return shared_from_this(); }
+
   const Options &options() const { return options_; }
   std::string to_s() const;
+
+  // Returns whether the queue is still open.
+  bool is_closed();
+
+  // Writes a message to the queue without any possible delay, possibly
+  // overriding capacity and throttling policy.
+  void WriteNoDelay(Message::Ref mr);
 
   // Closes the queue. All readers will return with a null message from here
   // on. Writers that attempt to write to the queue will throw an exception.
   void Close();
 
+ protected:
  private:
+  // Queues can only be created as shared by the System.
+  static QueuePtr Create(Options options);
+  Queue(Options options);
   mutable iree::slim_mutex lock_;
   Options options_;
   // Backlog of messages not yet sent to a reader. Messages are pushed on the
@@ -186,6 +207,8 @@ class SHORTFIN_API Queue {
 
   friend class QueueReader;
   friend class QueueWriter;
+  friend struct QueueCreator;
+  friend class System;
 };
 
 // Writes messages to a queue.
@@ -199,16 +222,18 @@ class SHORTFIN_API QueueWriter {
   QueueWriter(Queue &queue, Options options = {});
   ~QueueWriter();
 
+  Queue &queue() { return *queue_; }
+
   // Writes a message to the queue.
   // The write must be awaited as it can produce backpressure and failures.
   // TODO: This should be a Future<void> so that exceptions can propagate.
   CompletionEvent Write(Message::Ref mr);
 
   // Calls Close() on the backing queue.
-  void Close() { queue_.Close(); }
+  void Close() { queue_->Close(); }
 
  private:
-  Queue &queue_;
+  std::shared_ptr<Queue> queue_;
   Options options_;
 };
 
@@ -218,11 +243,13 @@ class SHORTFIN_API QueueReader {
   QueueReader(Queue &queue, Options options = {});
   ~QueueReader();
 
+  Queue &queue() { return *queue_; }
+
   // Reads a message from the queue.
   MessageFuture Read();
 
  private:
-  Queue &queue_;
+  std::shared_ptr<Queue> queue_;
   Options options_;
 
   // Reader state machine. If worker_ is non null, then there must be a

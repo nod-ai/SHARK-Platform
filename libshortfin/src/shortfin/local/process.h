@@ -26,7 +26,7 @@ namespace detail {
 // structure and external lifetime management.
 class SHORTFIN_API BaseProcess {
  public:
-  BaseProcess(std::shared_ptr<Scope> scope);
+  BaseProcess();
   BaseProcess(const BaseProcess &) = delete;
   virtual ~BaseProcess();
 
@@ -39,6 +39,14 @@ class SHORTFIN_API BaseProcess {
   CompletionEvent OnTermination();
 
  protected:
+  // Derived classes must arrange to call Initialize() before any operation
+  // is taken on the instance. In C++ subclasses, this will typically be done
+  // in the constructor, but for bindings, this can be separated.
+  void Initialize(std::shared_ptr<Scope> scope);
+
+  // Whether subclass initialization has been done.
+  bool is_initialized() const { return scope_.get(); }
+
   // Launches the process.
   void Launch();
 
@@ -73,7 +81,7 @@ class SHORTFIN_API BaseProcess {
 // driven fashion (i.e. cps, async/await, co-routines, etc).
 class SHORTFIN_API Process : public detail::BaseProcess {
  public:
-  using BaseProcess::BaseProcess;
+  Process(std::shared_ptr<Scope> scope);
 };
 
 }  // namespace shortfin::local

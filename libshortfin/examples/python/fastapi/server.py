@@ -67,9 +67,10 @@ class System:
                         )
                         await asyncio.sleep(0.01)
                     responder.stream_part(None)
-            except Exception as e:
-                responder.close_with_error()
+            except:
                 traceback.print_exc()
+            finally:
+                responder.ensure_response()
 
 
 @asynccontextmanager
