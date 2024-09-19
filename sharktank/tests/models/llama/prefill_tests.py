@@ -9,7 +9,6 @@ default_arguments = {
     "hf_dataset": "llama3_8B_f16",
     "tokenizer-config-json": Path("./tokenizer_config.json"),
     "prompt": ["I believe the meaning of life is"],
-    "kv-cache-type": "paged",
     "device": None,
     "activation-dtype": "float32",
 }
@@ -33,19 +32,22 @@ class Llama8BTest(unittest.TestCase):
             tokenizer_type="transformers",
         )
         self.prompts = default_arguments["prompt"]
-        self.config = LlamaModelConfig(
+
+    def createConfigModel(self, kv_cache_type):
+        return LlamaModelConfig(
             hp=configs.LlamaHParams.from_gguf_props(self.dataset.properties),
-            block_seq_stride=1,
-            kv_cache_type=default_arguments["kv-cache-type"],
+            block_seq_stride=16,
+            kv_cache_type=kv_cache_type,
             device=self.device,
             activation_dtype=self.activation_dtype,
             attention_dtype=self.activation_dtype,
         )
-        self.model = PagedLlamaModelV1(self.dataset.root_theta, self.config)
-        self.generator = TorchGenerator(self.model, self.tokenizer_config)
 
-    def testPrefillPaged(self):
-        batch = self.generator.begin_batch(self.prompts)
+    def runPrefill(self, kv_cache_type):
+        config = self.createConfigModel(kv_cache_type)
+        model = PagedLlamaModelV1(self.dataset.root_theta, config)
+        generator = TorchGenerator(model, self.tokenizer_config)
+        batch = generator.begin_batch(self.prompts)
         batch.prefill()
 
         llama_cpp_8b_prefill_token = [[311]]
@@ -64,6 +66,12 @@ class Llama8BTest(unittest.TestCase):
         torch.testing.assert_close(
             greedy_token_logit, llama_cpp_8b_prefill_token_logit, rtol=rtol, atol=atol
         )
+
+    def testPrefillPaged(self):
+        self.runPrefill("paged")
+
+    def testPrefillDirect(self):
+        self.runPrefill("direct")
 
 
 if __name__ == "__main__":
