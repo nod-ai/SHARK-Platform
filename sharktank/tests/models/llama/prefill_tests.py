@@ -5,17 +5,16 @@ from sharktank.utils import hf_datasets
 import unittest
 from pathlib import Path
 
-default_arguments = {
-    "hf_dataset": "llama3_8B_f16",
-    "tokenizer-config-json": Path("./tokenizer_config.json"),
-    "prompt": ["I believe the meaning of life is"],
-    "device": None,
-    "activation-dtype": "float32",
-}
-
 
 class Llama8BTest(unittest.TestCase):
     def setUp(self):
+        default_arguments = {
+            "hf_dataset": "llama3_8B_f16",
+            "tokenizer-config-json": Path("./tokenizer_config.json"),
+            "prompt": ["I believe the meaning of life is"],
+            "device": None,
+            "activation-dtype": "float32",
+        }
         self.device = (
             torch.device(default_arguments["device"])
             if default_arguments["device"]
