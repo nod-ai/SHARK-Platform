@@ -208,6 +208,22 @@ void Scheduler::AppendCommandBuffer(ScopedDevice &device,
     account.active_queue_affinity_bits_ = needed_affinity_bits;
     account.active_deps_ = std::move(new_active_deps);
     account.active_command_buffer_ = std::move(new_cb);
+
+    // Sence the command buffer will be submitted to signal the next
+    // timepoint on the main timeline, we must depend on its current value
+    // to be value (semaphores must strictly advance). This has the effect of
+    // serializing all submissions, which while correct, is not a particularly
+    // enlightened scheduling policy.
+    // TODO: Revisit this when scheduling is generalized and consider that such
+    // serialization be retained only as a debug feature.
+    iree_hal_semaphore_t *main_timeline_sem = account.sem_.get();
+    account.active_deps_extend(iree_hal_semaphore_list_t{
+        .count = 1,
+        .semaphores = &main_timeline_sem,
+        .payload_values = &account.idle_timepoint_,
+    });
+
+    // Signal an advance of the main timeline.
     account.idle_timepoint_ += 1;
     SHORTFIN_SCHED_LOG(
         "  : New command buffer (category={}, idle_timepoint={})", category,
