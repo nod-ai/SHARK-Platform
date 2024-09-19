@@ -339,6 +339,13 @@ NB_MODULE(lib, m) {
       });
 
   py::class_<iree::vm_opaque_ref>(m, "_OpaqueVmRef");
+
+  // Logging entrypoints.
+  m.def("log_debug", [](std::string_view sv) { logging::debug("{}", sv); });
+  m.def("log_info", [](std::string_view sv) { logging::info("{}", sv); });
+  m.def("log_warn", [](std::string_view sv) { logging::warn("{}", sv); });
+  m.def("log_error", [](std::string_view sv) { logging::error("{}", sv); });
+
   auto local_m = m.def_submodule("local");
   BindLocal(local_m);
   BindHostSystem(local_m);
