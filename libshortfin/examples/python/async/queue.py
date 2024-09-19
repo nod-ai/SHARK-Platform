@@ -55,7 +55,7 @@ class ReaderProcess(sf.Process):
 
 
 async def main():
-    queue = sf.Queue()
+    queue = lsys.create_queue()
     main_scope = lsys.create_scope()
     # TODO: Also test named queues.
     # queue = lsys.create_queue("infeed")
