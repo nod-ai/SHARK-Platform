@@ -140,13 +140,14 @@ def apply_per_layer_quant(
         weight_zp: Optional[torch.Tensor],
     ):
         # Our scale is the reciprocal of the quark scale
+        # We multiply scale by two to account for diff between fnuz and fn
         weight_quantizer = StaticScaledQuantizer(
-            scale=1.0 / weight_scale,
-            reciprocal_scale=weight_scale,
+            scale=1.0 / (weight_scale * 2.0),
+            reciprocal_scale=(weight_scale * 2.0),
             offset=None
             if (weight_zp is None or torch.count_nonzero(weight_zp) == 0)
             else weight_zp,
-            dtype=torch.float8_e4m3fn,
+            dtype=torch.float8_e4m3fnuz,
         )
         weight_quant = weight_quantizer.quantize(weight, name=weight_name)
         updated_tensors[weight_quant.name] = weight_quant
@@ -185,17 +186,17 @@ def apply_per_layer_quant(
         for name in names:
             updated_tensors[name] = StaticScaledQuantizer(
                 name=name,
-                scale=1.0 / output_quant_scale,
-                reciprocal_scale=output_quant_scale,
-                dtype=torch.float8_e4m3fn,
+                scale=1.0 / (output_quant_scale * 2.0),
+                reciprocal_scale=output_quant_scale * 2.0,
+                dtype=torch.float8_e4m3fnuz,
             )
         names = [f"{i}.qdq_input" for i in [q_name, k_name, v_name]]
         for name in names:
             updated_tensors[name] = StaticScaledQuantizer(
                 name=name,
-                scale=1.0 / input_quant_scale,
-                reciprocal_scale=input_quant_scale,
-                dtype=torch.float8_e4m3fn,
+                scale=1.0 / input_quant_scale * 2.0,
+                reciprocal_scale=input_quant_scale * 2.0,
+                dtype=torch.float8_e4m3fnuz,
             )
         # Remove the updated tensors from the original tree.
         root_theta.pop(layer_parent + ".q_proj")
@@ -338,7 +339,7 @@ def main(argv):
                 quant_theta,
                 layer_name,
                 updated_tensors,
-                n_head=head_count,
+                n_head=head_count[0],
                 split_sizes=split_sizes,
             )
 
