@@ -49,8 +49,7 @@ def test_invoke_mobilenet(lsys, scope, mobilenet_compiled_cpu_path):
         host_output = device_output.for_transfer()
         host_output.copy_from(device_output)
         await device
-        flat_output = array.array("f")
-        flat_output.frombytes(host_output.storage.data)
+        flat_output = host_output.items
         absmean = functools.reduce(
             lambda x, y: x + abs(y) / len(flat_output), flat_output, 0.0
         )
