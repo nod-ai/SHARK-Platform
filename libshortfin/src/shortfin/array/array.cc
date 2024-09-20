@@ -152,9 +152,9 @@ device_array device_array::view(Dims &offsets, Dims &sizes) {
       has_stride = true;
     }
 
-    new_dims[i] = slice_size;
     start_offset += row_stride * slice_offset;
-    span_size = row_stride * slice_size;
+    span_size -= row_stride * (new_dims[i] - slice_size);
+    new_dims[i] = slice_size;
   }
 
   return device_array(storage().subspan(start_offset, span_size),
