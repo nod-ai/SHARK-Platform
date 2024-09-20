@@ -496,20 +496,24 @@ void BindArray(py::module_ &m) {
       .def_prop_ro("shape", &base_array::shape);
   py::class_<device_array, base_array>(m, "device_array")
       .def("__init__", [](py::args, py::kwargs) {})
-      .def_static("__new__",
-                  [](py::handle py_type, class storage storage,
-                     std::span<const size_t> shape, DType dtype) {
-                    return custom_new_keep_alive<device_array>(
-                        py_type, /*keep_alive=*/storage.scope(), storage, shape,
-                        dtype);
-                  })
-      .def_static("__new__",
-                  [](py::handle py_type, local::ScopedDevice &device,
-                     std::span<const size_t> shape, DType dtype) {
-                    return custom_new_keep_alive<device_array>(
-                        py_type, /*keep_alive=*/device.scope(),
-                        device_array::for_device(device, shape, dtype));
-                  })
+      .def_static(
+          "__new__",
+          [](py::handle py_type, class storage storage,
+             std::span<const size_t> shape, DType dtype) {
+            return custom_new_keep_alive<device_array>(
+                py_type, /*keep_alive=*/storage.scope(), storage, shape, dtype);
+          },
+          py::arg("cls"), py::arg("storage"), py::arg("shape"),
+          py::arg("dtype"))
+      .def_static(
+          "__new__",
+          [](py::handle py_type, local::ScopedDevice &device,
+             std::span<const size_t> shape, DType dtype) {
+            return custom_new_keep_alive<device_array>(
+                py_type, /*keep_alive=*/device.scope(),
+                device_array::for_device(device, shape, dtype));
+          },
+          py::arg("cls"), py::arg("device"), py::arg("shape"), py::arg("dtype"))
       .def("__sfinv_marshal__",
            [](device_array *self, py::capsule inv_capsule, int barrier) {
              auto *inv =

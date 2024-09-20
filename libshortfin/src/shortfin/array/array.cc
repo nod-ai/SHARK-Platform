@@ -152,9 +152,13 @@ device_array device_array::view(Dims &offsets, Dims &sizes) {
       has_stride = true;
     }
 
-    new_dims[i] = slice_size;
+    // Since we are only narrowing a dense, row major slice, as we traverse
+    // the dims, we are narrowing the memory view at each step by advancing
+    // the beginning based on the requested offset and pulling the end in
+    // by the difference in size.
     start_offset += row_stride * slice_offset;
-    span_size = row_stride * slice_size;
+    span_size -= row_stride * (new_dims[i] - slice_size);
+    new_dims[i] = slice_size;
   }
 
   return device_array(storage().subspan(start_offset, span_size),

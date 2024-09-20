@@ -5,6 +5,7 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 import array
+import math
 import pytest
 
 import shortfin as sf
@@ -183,15 +184,46 @@ def test_typed_mapping(scope, dtype, value):
         ([slice(1, 2), slice(2, 4)], [2, 3]),
     ],
 )
-def test_view(lsys, device, keys, expected):
-    async def main():
-        src = sfnp.device_array(device, [4, 4], sfnp.uint8)
-        src.fill(b"\0\1\2\3")
-        view = src.view(*keys)
-        await device
-        assert list(view.items) == expected
+def test_view(device, keys, expected):
+    src = sfnp.device_array(device, [4, 4], sfnp.uint8)
+    with src.map(discard=True) as m:
+        m.fill(b"\0\1\2\3")
+    view = src.view(*keys)
+    assert list(view.items) == expected
 
-    lsys.run(main())
+
+def test_view_nd(device):
+    shape = [4, 16, 128]
+    data = [i for i in range(math.prod(shape))]
+    src = sfnp.device_array(device, [4, 16, 128], dtype=sfnp.uint32)
+    src.items = data
+
+    # Validate left justified indexing into the first dimension.
+    for i in range(4):
+        v = src.view(i)
+        v_items = v.items.tolist()
+        assert len(v_items) == 2048
+        assert v_items[0] == i * 2048
+        assert v_items[-1] == (i + 1) * 2048 - 1
+    for i in range(16):
+        v = src.view(1, i)
+        v_items = v.items.tolist()
+        assert len(v_items) == 128
+        assert v_items[0] == 2048 + i * 128
+        assert v_items[-1] == 2048 + (i + 1) * 128 - 1
+    for i in range(128):
+        v = src.view(1, 1, 1)
+        v_items = v.items.tolist()
+        assert len(v_items) == 1
+        assert v_items[0] == 2177
+
+    # Validate span.
+    for i in range(16):
+        v = src.view(slice(2, 4))
+        v_items = v.items.tolist()
+        assert len(v_items) == 4096
+        assert v_items[0] == 4096
+        assert v_items[-1] == 8191
 
 
 def test_view_unsupported(lsys, device):
