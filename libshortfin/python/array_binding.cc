@@ -35,7 +35,7 @@ update the contents.
 Equivalent to `array.storage.fill(pattern)`.
 )";
 
-static const char DOCSTRING_MAPPING_ITEMS[] =
+static const char DOCSTRING_ARRAY_ITEMS[] =
     R"(Convenience shorthand for map(...).items)";
 
 static const char DOCSTRING_ARRAY_MAP[] =
