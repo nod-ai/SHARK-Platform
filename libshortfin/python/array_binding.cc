@@ -27,20 +27,36 @@ Equivalent to `dest_array.storage.copy_from(source_array.storage)`.
 
 static const char DOCSTRING_ARRAY_FILL[] = R"(Fill an array with a value.
 
+Note that `fill` is asynchronous and may not be visible immediately. For immediate
+manipulation of host visible arrays, assign to the `items` property or use the
+`map(discard=True)` to get a mapping object which can be used to directly
+update the contents.
+
 Equivalent to `array.storage.fill(pattern)`.
 )";
 
-static const char DOCSTRING_ARRAY_ITEMS[] =
-    R"(Access contents as a Python array.
+static const char DOCSTRING_MAPPING_ITEMS[] =
+    R"(Convenience shorthand for map(...).items)";
 
-When reading this attribute, an array.array will be constructed with the
-contents of the shortfin device_array. This supports a subset of element types
-(byte aligned integers, floats and doubles) corresponding to Python types.
+static const char DOCSTRING_ARRAY_MAP[] =
+    R"(Create a typed mapping of the buffer contents in host memory.
 
-On write, the device_array will be mapped for write_discard and arbitrary
-Python types marshaled via array.array into its contents.
+Support kwargs of:
 
-This requires a mappable device_array, just like storage.data.
+read: Enables read access to the mapped memory.
+write: Enables write access to the mapped memory and will flush upon close
+  (for non-unified memory systems).
+discard: Indicates that the entire memory map should be treated as if it will
+  be overwritten. Initial contents will be undefined. Implies `write=True`.
+
+Mapping memory for access from the host requires a compatible buffer that has
+been created with host visibility (which includes host buffers).
+
+The returned mapping object is a context manager that will close/flush on
+exit. Alternatively, the `close()` method can be invoked explicitly.
+
+See also `storage.map()` which functions similarly but does not allow access
+to dtype specific functionality.
 )";
 
 static const char DOCSTRING_ARRAY_VIEW[] =
@@ -51,19 +67,29 @@ an aliased device_array that shares a subset of the storage. Only view()
 organizations that result in a row-major, dense array are currently supported.
 )";
 
-static const char DOCSTRING_STORAGE_DATA[] = R"(Access raw binary contents.
+static const char DOCSTRING_MAPPING_FILL[] =
+    R"(Fill the host mapping with a pattern.
 
-Accessing `foo = storage.data` is equivalent to `storage.data.map(read=True)`.
-The returned object is a context manager that will close on exit.
+The pattern can either be an object implementing the buffer protocol or a Python
+int/float if the mapping has a dtype. In this case, the numeric value will be
+converted to the appropriate typed pattern. Only dtypes supported by the
+array.array class are supported in this fashion.
 
-Assigning `storage.data = array.array("f", [1.0])` will copy that raw data
-from the source object using the buffer protocol. The source data must be
-less than or equal to the length of the storage object. Note that the entire
-storage is mapped as write-only/discardable, and writing less than the storage
-bytes leaves any unwritten contents in an undefined state.
+The pattern must evenly divide the mapping.
 
-As with `map`, this will only work on buffers that are host visible, which
-includes all host buffers and device buffers created with the necessary access.
+Note that like all methods on a mapping, any changes are immediately visible
+(whereas the `fill` method on the array and storage are async operations).
+)";
+
+static const char DOCSTRING_MAPPING_ITEMS[] =
+    R"(Access contents as a Python array.
+
+When reading this attribute, an array.array will be constructed with the
+contents of the mapping. This supports a subset of element types (byte aligned
+integers, floats and doubles) corresponding to Python types.
+
+On write, the mapping will be written with arbitrary Python types marshaled
+via array.array into its contents.
 )";
 
 static const char DOCSTRING_STORAGE_COPY_FROM[] =
@@ -92,25 +118,17 @@ read: Enables read access to the mapped memory.
 write: Enables write access to the mapped memory and will flush upon close
   (for non-unified memory systems).
 discard: Indicates that the entire memory map should be treated as if it will
-  be overwritten. Initial contents will be undefined.
+  be overwritten. Initial contents will be undefined. Implies `write=True`.
 
 Mapping memory for access from the host requires a compatible buffer that has
 been created with host visibility (which includes host buffers).
 
 The returned mapping object is a context manager that will close/flush on
 exit. Alternatively, the `close()` method can be invoked explicitly.
-)";
 
-// Does in-place creation of a mapping object and stores a pointer to the
-// contained array::mapping C++ object.
-py::object CreateMappingObject(mapping **out_cpp_mapping) {
-  py::object py_mapping = py::inst_alloc(py::type<mapping>());
-  mapping *cpp_mapping = py::inst_ptr<mapping>(py_mapping);
-  new (cpp_mapping) mapping();
-  py::inst_mark_ready(py_mapping);
-  *out_cpp_mapping = cpp_mapping;
-  return py_mapping;
-}
+See also `device_array.map()` which functions similarly but allows some
+additional dtype specific accessors.
+)";
 
 device_array PyDeviceArrayView(device_array &array, py::args keys) {
   size_t rank = array.shape().size();
@@ -189,6 +207,145 @@ class Refs {
   }
 };
 
+// Holder for a `mapping` class. Also holds additional metadata.
+class PyMapping {
+ public:
+  PyMapping() = default;
+  class mapping &mapping() { return mapping_; }
+  std::optional<DType> dtype() { return dtype_; }
+  void set_dtype(DType dtype) { dtype_ = dtype; }
+
+  void AssertValid() {
+    if (!mapping_) {
+      throw std::logic_error("Mapping has been closed");
+    }
+  }
+
+  void FillFromScalar(Refs *refs, py::handle value) {
+    if (!dtype()) {
+      throw std::invalid_argument(
+          "The `fill` method is only valid for typed mappings but "
+          "this does not have a dtype");
+    }
+    auto &table = refs->element_type_array_type_code_table;
+    auto it = table.find(*dtype());
+    if (it == table.end()) {
+      throw std::invalid_argument(
+          fmt::format("Python array.array type code not know for dtype "
+                      "{}: Cannot access items",
+                      dtype()->name()));
+    }
+    py::object pattern =
+        refs->array_array_ctor(it->second, py::make_tuple(value));
+    FillFromBuffer(pattern);
+  }
+
+  void FillFromBuffer(py::handle buffer) {
+    Py_buffer py_view;
+    int flags = PyBUF_FORMAT | PyBUF_ND;  // C-Contiguous ND.
+    if (PyObject_GetBuffer(buffer.ptr(), &py_view, flags) != 0) {
+      throw py::python_error();
+    }
+    PyBufferReleaser py_view_releaser(py_view);
+    if (mapping().size() % py_view.len != 0) {
+      throw std::invalid_argument(
+          fmt::format("Cannot fill mapping of size {} with pattern of "
+                      "size {} (it does not evenly divide)",
+                      mapping().size(), py_view.len));
+    }
+
+    // Specialize by fundamental sizes for fast-path implementations.
+    if (py_view.len == 1) {
+      std::memset(mapping().data(), *static_cast<char *>(py_view.buf),
+                  mapping().size());
+    } else if (py_view.len == 2) {
+      uint16_t v = *static_cast<uint16_t *>(py_view.buf);
+      uint16_t *begin =
+          static_cast<uint16_t *>(static_cast<void *>((mapping().data())));
+      std::fill(begin, begin + mapping().size() / sizeof(v), v);
+    } else if (py_view.len == 4) {
+      uint32_t v = *static_cast<uint32_t *>(py_view.buf);
+      uint32_t *begin =
+          static_cast<uint32_t *>(static_cast<void *>((mapping().data())));
+      std::fill(begin, begin + mapping().size() / sizeof(v), v);
+    } else if (py_view.len == 8) {
+      uint64_t v = *static_cast<uint64_t *>(py_view.buf);
+      uint64_t *begin =
+          static_cast<uint64_t *>(static_cast<void *>((mapping().data())));
+      std::fill(begin, begin + mapping().size() / sizeof(v), v);
+    } else {
+      // Slow path.
+      uint8_t *begin = mapping().data();
+      uint8_t *end = begin + mapping().size();
+      while (begin < end) {
+        std::memcpy(begin, py_view.buf, py_view.len);
+        begin += py_view.len;
+      }
+    }
+  }
+
+  py::object GetItems(py::handle self_obj, Refs *refs) {
+    if (!dtype()) {
+      throw std::invalid_argument(
+          "The `items` property is only valid for typed mappings but "
+          "this does not have a dtype");
+    }
+    AssertValid();
+    auto &table = refs->element_type_array_type_code_table;
+    auto it = table.find(*dtype());
+    if (it == table.end()) {
+      throw std::invalid_argument(
+          fmt::format("Python array.array type code not know for dtype "
+                      "{}: Cannot access items",
+                      dtype()->name()));
+    }
+    py::object py_bytes = py::steal(PyBytes_FromObject(self_obj.ptr()));
+    py::object items = refs->array_array_ctor(it->second, py_bytes);
+    return items;
+  }
+
+  void SetItems(Refs *refs, py::handle initializer) {
+    if (!dtype()) {
+      throw std::invalid_argument(
+          "The `items` property is only valid for typed mappings but "
+          "this does not have a dtype");
+    }
+    AssertValid();
+    auto &table = refs->element_type_array_type_code_table;
+    auto it = table.find(*dtype());
+    if (it == table.end()) {
+      throw std::invalid_argument(
+          fmt::format("Python array.array type code not know for dtype "
+                      "{}: Cannot access items",
+                      dtype()->name()));
+    }
+
+    py::object items = refs->array_array_ctor(it->second, initializer);
+    PyBufferRequest src_info(items, PyBUF_SIMPLE);
+    if (src_info.view().len > mapping().size()) {
+      throw std::invalid_argument(
+          fmt::format("Cannot write {} bytes into buffer of {} bytes",
+                      src_info.view().len, mapping().size()));
+    }
+    std::memcpy(mapping().data(), src_info.view().buf, src_info.view().len);
+  }
+
+ private:
+  class mapping mapping_;
+  std::optional<DType> dtype_;
+};
+
+// Does in-place creation of a mapping object and stores a pointer to the
+// contained array::mapping C++ object.
+py::object CreateMappingObject(PyMapping **out_cpp_mapping) {
+  py::object py_mapping = py::inst_alloc(py::type<PyMapping>());
+  PyMapping *cpp_mapping = py::inst_ptr<PyMapping>(py_mapping);
+  new (cpp_mapping) mapping();
+  py::inst_mark_ready(py_mapping);
+  *out_cpp_mapping = cpp_mapping;
+  return py_mapping;
+}
+
 }  // namespace
 
 void BindArray(py::module_ &m) {
@@ -254,65 +411,73 @@ void BindArray(py::module_ &m) {
           [](storage &self, bool read, bool write, bool discard) {
             int access = 0;
             if (read) access |= IREE_HAL_MEMORY_ACCESS_READ;
-            if (write) access |= IREE_HAL_MEMORY_ACCESS_WRITE;
+            if (write || discard) access |= IREE_HAL_MEMORY_ACCESS_WRITE;
             if (discard) access |= IREE_HAL_MEMORY_ACCESS_DISCARD;
             if (!access) {
               throw std::invalid_argument(
                   "One of the access flags must be set");
             }
-            mapping *cpp_mapping = nullptr;
+            PyMapping *cpp_mapping = nullptr;
             py::object py_mapping = CreateMappingObject(&cpp_mapping);
             self.map_explicit(
-                *cpp_mapping,
+                cpp_mapping->mapping(),
                 static_cast<iree_hal_memory_access_bits_t>(access));
             return py_mapping;
           },
           py::kw_only(), py::arg("read") = false, py::arg("write") = false,
           py::arg("discard") = false, DOCSTRING_STORAGE_MAP)
-      // The 'data' prop is a short-hand for accessing the backing storage
-      // in a one-shot manner (as for reading or writing). Getting the attribute
-      // will map for read and return a memory view (equiv to map(read=True)).
-      // On write, it will accept an object implementing the buffer protocol
-      // and write/discard the backing storage.
-      .def_prop_rw(
-          "data",
-          [](storage &self) {
-            mapping *cpp_mapping = nullptr;
-            py::object py_mapping = CreateMappingObject(&cpp_mapping);
-            *cpp_mapping = self.map_read();
-            return py_mapping;
-          },
-          [](storage &self, py::handle buffer_obj) {
-            PyBufferRequest src_info(buffer_obj, PyBUF_SIMPLE);
-            auto dest_data = self.map_write_discard();
-            if (src_info.view().len > dest_data.size()) {
-              throw std::invalid_argument(
-                  fmt::format("Cannot write {} bytes into buffer of {} bytes",
-                              src_info.view().len, dest_data.size()));
-            }
-            std::memcpy(dest_data.data(), src_info.view().buf,
-                        src_info.view().len);
-          },
-          DOCSTRING_STORAGE_DATA)
       .def(py::self == py::self)
       .def("__repr__", &storage::to_s);
 
   // mapping
-  auto mapping_class = py::class_<mapping>(m, "mapping");
-  mapping_class.def("close", &mapping::reset)
-      .def_prop_ro("valid", [](mapping &self) -> bool { return self; })
+  auto mapping_class = py::class_<PyMapping>(m, "mapping");
+  mapping_class.def("close", [](PyMapping &self) { self.mapping().reset(); })
+      .def_prop_ro("valid",
+                   [](PyMapping &self) -> bool { return self.mapping(); })
       .def("__enter__", [](py::object self_obj) { return self_obj; })
       .def(
           "__exit__",
-          [](mapping &self, py::handle exc_type, py::handle exc_value,
-             py::handle exc_tb) { self.reset(); },
+          [](PyMapping &self, py::handle exc_type, py::handle exc_value,
+             py::handle exc_tb) { self.mapping().reset(); },
           py::arg("exc_type").none(), py::arg("exc_value").none(),
-          py::arg("exc_tb").none());
+          py::arg("exc_tb").none())
+      .def(
+          "fill",
+          [refs](PyMapping &self, py::int_ value) {
+            self.AssertValid();
+            self.FillFromScalar(refs.get(), value);
+          },
+          py::arg("value"), DOCSTRING_MAPPING_FILL)
+      .def(
+          "fill",
+          [refs](PyMapping &self, py::float_ value) {
+            self.AssertValid();
+            self.FillFromScalar(refs.get(), value);
+          },
+          py::arg("value"), DOCSTRING_MAPPING_FILL)
+      .def(
+          "fill",
+          [](PyMapping &self, py::handle buffer) {
+            self.AssertValid();
+            self.FillFromBuffer(buffer);
+          },
+          py::arg("buffer"), DOCSTRING_MAPPING_FILL)
+      .def_prop_rw(
+          "items",
+          [refs](py::handle self_obj) {
+            PyMapping &self = py::cast<PyMapping &>(self_obj);
+            return self.GetItems(self_obj, refs.get());
+          },
+          [refs](PyMapping &self, py::handle initializer) {
+            self.SetItems(refs.get(), initializer);
+          },
+          DOCSTRING_MAPPING_ITEMS);
+
   struct MappingBufferHandler {
-    int operator()(mapping &self, Py_buffer *view, int flags) {
-      view->buf = self.data();
-      view->len = self.size();
-      view->readonly = !self.writable();
+    int operator()(PyMapping &self, Py_buffer *view, int flags) {
+      view->buf = self.mapping().data();
+      view->len = self.mapping().size();
+      view->readonly = !self.mapping().writable();
       view->itemsize = 1;
       view->format = (char *)"B";  // Byte
       view->ndim = 1;
@@ -323,7 +488,7 @@ void BindArray(py::module_ &m) {
       return 0;
     }
   };
-  BindBufferProtocol<mapping, MappingBufferHandler>(mapping_class);
+  BindBufferProtocol<PyMapping, MappingBufferHandler>(mapping_class);
 
   // base_array and subclasses
   py::class_<base_array>(m, "base_array")
@@ -388,48 +553,48 @@ void BindArray(py::module_ &m) {
       .def("copy_to", &device_array::copy_to, py::arg("dest_array"),
            DOCSTRING_ARRAY_COPY_TO)
       .def("view", PyDeviceArrayView, DOCSTRING_ARRAY_VIEW)
+      .def(
+          "map",
+          [](device_array &self, bool read, bool write, bool discard) {
+            int access = 0;
+            if (read) access |= IREE_HAL_MEMORY_ACCESS_READ;
+            if (write || discard) access |= IREE_HAL_MEMORY_ACCESS_WRITE;
+            if (discard) access |= IREE_HAL_MEMORY_ACCESS_DISCARD;
+            if (!access) {
+              throw std::invalid_argument(
+                  "One of the access flags must be set");
+            }
+            PyMapping *cpp_mapping = nullptr;
+            py::object py_mapping = CreateMappingObject(&cpp_mapping);
+            cpp_mapping->set_dtype(self.dtype());
+            self.storage().map_explicit(
+                cpp_mapping->mapping(),
+                static_cast<iree_hal_memory_access_bits_t>(access));
+            return py_mapping;
+          },
+          py::kw_only(), py::arg("read") = false, py::arg("write") = false,
+          py::arg("discard") = false, DOCSTRING_ARRAY_MAP)
       .def_prop_rw(
           "items",
           [refs](device_array &self) {
-            auto &table = refs->element_type_array_type_code_table;
-            auto it = table.find(self.dtype());
-            if (it == table.end()) {
-              throw std::invalid_argument(
-                  fmt::format("Python array.array type code not know for dtype "
-                              "{}: Cannot access items",
-                              self.dtype().name()));
-            }
-
-            mapping *cpp_mapping = nullptr;
-            py::object py_mapping = CreateMappingObject(&cpp_mapping);
-            *cpp_mapping = self.storage().map_read();
-            py::object py_bytes =
-                py::steal(PyBytes_FromObject(py_mapping.ptr()));
-            py::object items = refs->array_array_ctor(it->second, py_bytes);
-            return items;
+            PyMapping *mapping;
+            py::object mapping_obj = CreateMappingObject(&mapping);
+            mapping->set_dtype(self.dtype());
+            self.storage().map_explicit(
+                mapping->mapping(), static_cast<iree_hal_memory_access_bits_t>(
+                                        IREE_HAL_MEMORY_ACCESS_READ));
+            return mapping->GetItems(mapping_obj, refs.get());
           },
           [refs](device_array &self, py::handle initializer) {
-            auto &table = refs->element_type_array_type_code_table;
-            auto it = table.find(self.dtype());
-            if (it == table.end()) {
-              throw std::invalid_argument(
-                  fmt::format("Python array.array type code not know for dtype "
-                              "{}: Cannot access items",
-                              self.dtype().name()));
-            }
-
-            py::object items = refs->array_array_ctor(it->second, initializer);
-            PyBufferRequest src_info(items, PyBUF_SIMPLE);
-            auto dest_data = self.storage().map_write_discard();
-            if (src_info.view().len > dest_data.size()) {
-              throw std::invalid_argument(
-                  fmt::format("Cannot write {} bytes into buffer of {} bytes",
-                              src_info.view().len, dest_data.size()));
-            }
-            std::memcpy(dest_data.data(), src_info.view().buf,
-                        src_info.view().len);
+            PyMapping mapping;
+            mapping.set_dtype(self.dtype());
+            self.storage().map_explicit(
+                mapping.mapping(), static_cast<iree_hal_memory_access_bits_t>(
+                                       IREE_HAL_MEMORY_ACCESS_READ));
+            return mapping.SetItems(refs.get(), initializer);
           },
           DOCSTRING_ARRAY_ITEMS)
+
       .def("__repr__", &device_array::to_s)
       .def("__str__", [](device_array &self) -> std::string {
         auto contents = self.contents_to_s();

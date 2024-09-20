@@ -114,13 +114,51 @@ def test_shape_overflow(lsys, device):
 )
 def test_xtensor_types(scope, dtype, code, py_value, expected_str):
     ary = sfnp.device_array.for_host(scope.device(0), [2, 4], dtype)
-    ary.storage.data = array.array(code, [py_value] * 8)
+    with ary.map(discard=True) as m:
+        m.fill(py_value)
     s = str(ary)
     print("__str__ =", s)
     assert expected_str == s, f"Expected '{expected_str}' == '{s}'"
     r = repr(ary)
     print("__repr__ =", r)
     assert expected_str in r, f"Expected '{expected_str}' in '{r}'"
+
+
+@pytest.mark.parametrize(
+    "dtype,value,",
+    [
+        (sfnp.int8, 42),
+        (sfnp.int16, 42),
+        (sfnp.int32, 42),
+        (sfnp.int64, 42),
+        (sfnp.float32, 42.0),
+        (sfnp.float64, 42.0),
+    ],
+)
+def test_items(scope, dtype, value):
+    ary = sfnp.device_array.for_host(scope.device(0), [2, 4], dtype)
+    ary.items = [value] * 8
+    readback = ary.items.tolist()
+    assert readback == [value] * 8
+
+
+@pytest.mark.parametrize(
+    "dtype,value,",
+    [
+        (sfnp.int8, 42),
+        (sfnp.int16, 42),
+        (sfnp.int32, 42),
+        (sfnp.int64, 42),
+        (sfnp.float32, 42.0),
+        (sfnp.float64, 42.0),
+    ],
+)
+def test_typed_fill(scope, dtype, value):
+    ary = sfnp.device_array.for_host(scope.device(0), [2, 4], dtype)
+    with ary.map(discard=True) as m:
+        m.fill(value)
+    readback = ary.items.tolist()
+    assert readback == [value] * 8
 
 
 @pytest.mark.parametrize(
