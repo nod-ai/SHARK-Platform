@@ -21,6 +21,14 @@ class PrefillRequest(sf.Message):
         self._cache: AttnPageCache | None = None
         self._locked_pages: list[AttnPageEntry] | None = None
 
+    def cache_page_indices(self, max_len: int) -> list[int]:
+        if not self._locked_pages:
+            return []
+        indices = [p.index for p in self._locked_pages]
+        if len(indices) > max_len:
+            return indices[0:max_len]
+        return indices
+
     def free_cache_pages(self):
         cache = self._cache
         if cache:

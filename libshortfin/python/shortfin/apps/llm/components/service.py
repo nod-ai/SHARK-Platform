@@ -234,6 +234,8 @@ class PrefillExecutorProcess(sf.Process):
             # up to the seq_stride.
             bsl = max(len(r.input_token_ids) for r in self.prefill_requests)
             bsl = int(math.ceil(bsl / seq_stride) * seq_stride)
+            block_count = bsl // seq_stride
+            req_count = len(self.prefill_requests)
             logger.debug("Prefill bs=%d, bsl=%d", bs, bsl)
 
             # Prepare inputs.
@@ -241,35 +243,44 @@ class PrefillExecutorProcess(sf.Process):
             # device dependent.
             device0 = self.scope.device(0)
             int_dtype = sfnp.int64
-            zero = b"\0"
-            one = b"\0"
             tokens = sfnp.device_array.for_device(device0, [bs, bsl], int_dtype)
             seq_lens = sfnp.device_array.for_device(device0, [bs], int_dtype)
             seq_block_ids = sfnp.device_array.for_device(
-                device0, [bs, bsl // seq_stride], int_dtype
+                device0, [bs, block_count], int_dtype
             )
-
+            
+            # Populate tokens.
             tokens_host = tokens.for_transfer()
-            tokens_host.fill(one)
+            for i in range(bs):
+                with tokens_host.view(i).map(discard=True) as m:
+                    m.fill(0)
+                    if i < req_count:
+                        m.items = self.prefill_requests[i].input_token_ids
             tokens_host.copy_to(tokens)
-
-            seq_lens_host = seq_lens.for_transfer()
-            seq_lens_host.fill(zero)
-            seq_lens_host.copy_to(seq_lens)
-
-            seq_block_ids_host = seq_block_ids.for_transfer()
-            seq_block_ids_host.fill(zero)
-            seq_block_ids_host.copy_to(seq_block_ids)
-
-            await device0
             print("TOKENS:", tokens_host)
-            print("SEQ_LENS:", seq_lens)
-            print("SEQ_BLOCK_IDS:", seq_block_ids)
 
+            # Populate seq_lens.
+            seq_lens_host = seq_lens.for_transfer()
+            with seq_lens_host.map(discard=True) as m:
+                m.fill(0)
+                m.items = [len(req.input_token_ids) for req in self.prefill_requests]
+            seq_lens_host.copy_to(seq_lens)
+            print("LENS:", seq_lens_host)
+
+            # Populate cache pages.
+            seq_block_ids_host = seq_block_ids.for_transfer()
+            for i in range(bs):
+                with seq_block_ids_host.view(i).map(discard=True) as m:
+                    m.fill(0)
+                    if i < req_count:
+                        m.items = self.prefill_requests[i].cache_page_indices(block_count)
+            seq_block_ids_host.copy_to(seq_block_ids)
+            print("PAGES:", seq_block_ids_host)
+            
+            # Invoke.
             (logits,) = await fn(tokens, seq_lens, seq_block_ids, *self.page_tables)
-            print("LOGITS:", repr(logits))
             await device0
-            print("DEVICE IDLE")
+            logging.info("LOGITS: %r", repr(logits))
 
             for req in self.prefill_requests:
                 req.free_cache_pages()
