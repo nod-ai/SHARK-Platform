@@ -134,12 +134,18 @@ def apply_per_layer_quant(
     input_zp = _get_json_tensor("input_zp", dtype=None)
     if input_zp is not None:
         assert torch.count_nonzero(input_zp.float()) == 0
-    
+
     # Currently, there seems to be no standardization in `quant_params.json` for fields in every layer
     # across different quantization schemes (int8, fp8). int8 quantization was the first end-to-end tested
-    # quantization scheme so there's some defaults to that. 
-    quantization_type = qp.get("input_zp_dtype") if qp.get("input_zp_dtype") is not None else "torch.int8"
-    quantization_dtype = tensors._serialized_name_to_dtype(quantization_type.split(".")[-1])
+    # quantization scheme so there's some defaults to that.
+    quantization_type = (
+        qp.get("input_zp_dtype")
+        if qp.get("input_zp_dtype") is not None
+        else "torch.int8"
+    )
+    quantization_dtype = tensors._serialized_name_to_dtype(
+        quantization_type.split(".")[-1]
+    )
     if output_scale is not None:
         output_quantizer = StaticScaledQuantizer(
             name=f"{layer_name}.q_output",
@@ -180,9 +186,11 @@ def apply_per_layer_quant(
         weight_quantizer = StaticScaledQuantizer(
             scale=1.0 / weight_scale,
             reciprocal_scale=weight_scale,
-            offset=None
-            if (weight_zp is None or torch.count_nonzero(weight_zp) == 0)
-            else weight_zp,
+            offset=(
+                None
+                if (weight_zp is None or torch.count_nonzero(weight_zp) == 0)
+                else weight_zp
+            ),
             dtype=quantization_dtype,
         )
         weight_quant = weight_quantizer.quantize(weight, name=weight_name)
