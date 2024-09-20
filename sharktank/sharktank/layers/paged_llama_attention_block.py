@@ -262,8 +262,7 @@ class PagedLlamaAttentionBlock(ThetaLayer):
                     xv_cache_update,
                 ],
                 transformer_block_index=self.block_index,
-                seq_positions=start_positions
-                + 1,  # TODO: check if this is the correct index
+                seq_positions=start_positions,
                 page_ids=seq_block_ids,
             )
 
