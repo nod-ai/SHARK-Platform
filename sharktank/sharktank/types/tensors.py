@@ -1052,6 +1052,7 @@ _NAME_TO_DTYPE: dict[str, torch.dtype] = {
     "int32": torch.int32,
     "int64": torch.int64,
     "bool": torch.bool,
+    "float8_e4m3fnuz": torch.float8_e4m3fnuz,
 }
 
 

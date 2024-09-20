@@ -133,8 +133,13 @@ def apply_per_layer_quant(
     # for signed arithmetic.
     input_zp = _get_json_tensor("input_zp", dtype=None)
     if input_zp is not None:
-        assert torch.count_nonzero(input_zp) == 0
-
+        assert torch.count_nonzero(input_zp.float()) == 0
+    
+    # Currently, there seems to be no standardization in `quant_params.json` for fields in every layer
+    # across different quantization schemes (int8, fp8). int8 quantization was the first end-to-end tested
+    # quantization scheme so there's some defaults to that. 
+    quantization_type = qp.get("input_zp_dtype") if qp.get("input_zp_dtype") is not None else "torch.int8"
+    quantization_dtype = tensors._serialized_name_to_dtype(quantization_type.split(".")[-1])
     if output_scale is not None:
         output_quantizer = StaticScaledQuantizer(
             name=f"{layer_name}.q_output",
@@ -178,7 +183,7 @@ def apply_per_layer_quant(
             offset=None
             if (weight_zp is None or torch.count_nonzero(weight_zp) == 0)
             else weight_zp,
-            dtype=torch.int8,
+            dtype=quantization_dtype,
         )
         weight_quant = weight_quantizer.quantize(weight, name=weight_name)
         updated_tensors[weight_quant.name] = weight_quant
@@ -227,7 +232,7 @@ def apply_per_layer_quant(
             f"{layer_name}.to_v.weight", weight_v, weight_scale_v, weight_zp_v
         )
         updated_tensors[weight.name] = None
-        if bias is not None:
+        if bias is not None and quantization_dtype == torch.int8:
             bias_k, bias_v = bias.as_torch().chunk(2, dim=0)
             quantize_bias(
                 f"{layer_name}.to_k.bias", bias_k, input_scale, weight_scale_k
@@ -259,7 +264,7 @@ def apply_per_layer_quant(
             f"{layer_name}.to_v.weight", weight_v, weight_scale_v, weight_zp_v
         )
         updated_tensors[weight.name] = None
-        if bias is not None:
+        if bias is not None and quantization_dtype == torch.int8:
             bias_q, bias_k, bias_v = bias.as_torch().chunk(3, dim=0)
             quantize_bias(
                 f"{layer_name}.to_q.bias", bias_q, input_scale, weight_scale_q
@@ -284,7 +289,7 @@ def apply_per_layer_quant(
         name=f"{layer_name}.q_input",
         scale=1.0 / input_scale,
         reciprocal_scale=input_scale,
-        dtype=torch.int8,
+        dtype=quantization_dtype,
     )
     updated_tensors[input_quantizer.name] = input_quantizer
 
