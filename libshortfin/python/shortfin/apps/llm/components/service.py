@@ -248,7 +248,7 @@ class PrefillExecutorProcess(sf.Process):
             seq_block_ids = sfnp.device_array.for_device(
                 device0, [bs, block_count], int_dtype
             )
-            
+
             # Populate tokens.
             tokens_host = tokens.for_transfer()
             for i in range(bs):
@@ -257,7 +257,6 @@ class PrefillExecutorProcess(sf.Process):
                     if i < req_count:
                         m.items = self.prefill_requests[i].input_token_ids
             tokens_host.copy_to(tokens)
-            print("TOKENS:", tokens_host)
 
             # Populate seq_lens.
             seq_lens_host = seq_lens.for_transfer()
@@ -265,7 +264,6 @@ class PrefillExecutorProcess(sf.Process):
                 m.fill(0)
                 m.items = [len(req.input_token_ids) for req in self.prefill_requests]
             seq_lens_host.copy_to(seq_lens)
-            print("LENS:", seq_lens_host)
 
             # Populate cache pages.
             seq_block_ids_host = seq_block_ids.for_transfer()
@@ -273,22 +271,34 @@ class PrefillExecutorProcess(sf.Process):
                 with seq_block_ids_host.view(i).map(discard=True) as m:
                     m.fill(0)
                     if i < req_count:
-                        m.items = self.prefill_requests[i].cache_page_indices(block_count)
+                        m.items = self.prefill_requests[i].cache_page_indices(
+                            block_count
+                        )
             seq_block_ids_host.copy_to(seq_block_ids)
-            print("PAGES:", seq_block_ids_host)
-            
-            # Invoke.
-            (logits,) = await fn(tokens, seq_lens, seq_block_ids, *self.page_tables)
-            await device0
-            logging.info("LOGITS: %r", repr(logits))
 
-            for req in self.prefill_requests:
-                req.free_cache_pages()
+            # Invoke. Logits are of shape [bs, bsl, d].
+            (logits,) = await fn(tokens, seq_lens, seq_block_ids, *self.page_tables)
+
+            # Return results.
+            for i in range(req_count):
+                req = self.prefill_requests[i]
+                sl = len(req.input_token_ids)
+                if req.return_all_logits:
+                    logits_item = logits.view(i, slice(0, sl))
+                else:
+                    logits_item = logits.view(i, sl - 1)
+                if req.return_host_array:
+                    req.result_logits = logits_item.for_transfer()
+                    req.result_logits.copy_from(logits_item)
+                    await device0
+                else:
+                    req.result_logits = logits_item
                 req.done.set_success()
 
         except Exception as e:
             logger.exception("Fatal error in prefetch invocation")
             # TODO: Cancel and set error correctly
             for req in self.prefill_requests:
+                req.result_logits = None
                 req.free_cache_pages()
                 req.done.set_success()

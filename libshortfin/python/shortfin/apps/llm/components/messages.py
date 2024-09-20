@@ -5,6 +5,7 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 import shortfin as sf
+import shortfin.array as sfnp
 
 from .cache import AttnPageCache, AttnPageEntry
 
@@ -16,6 +17,19 @@ class PrefillRequest(sf.Message):
         super().__init__()
         self.input_token_ids = input_token_ids
         self.done = sf.VoidFuture()
+
+        # Response control.
+        # If True, return all sequence position logits. If False, return only
+        # the last.
+        self.return_all_logits: bool = False
+
+        # Move the result array to the host and sync to ensure data is
+        # available.
+        self.return_host_array: bool = True
+
+        # Result logits as [1, sl, d] where 1 is the preserved batch dim,
+        # sl is either 1 (not return_all_logits) or >=1 (return_all_logits).
+        self.result_logits: sfnp.device_array | None = None
 
         # Cache pages that have been locked for this request.
         self._cache: AttnPageCache | None = None

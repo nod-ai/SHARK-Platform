@@ -48,6 +48,8 @@ class GenerateItemProcess(sf.Process):
         self.client.batcher.submit(initial_prefill)
         await initial_prefill.done
 
+        print("LOGITS:", initial_prefill.result_logits)
+
         self.result_token_ids = self.input_token_ids
         self.client.stream_results(self)
 
