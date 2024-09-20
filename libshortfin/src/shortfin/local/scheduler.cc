@@ -60,31 +60,31 @@ void Account::active_deps_extend(iree_hal_semaphore_list_t sem_list) {
   }
 }
 
-CompletionEvent Account::OnSync() {
-  bool hack_has_working_wait_source = false;
-  if (hack_has_working_wait_source) {
-    return CompletionEvent(sem_, idle_timepoint_);
-  } else {
-    // TODO: Burn this path with fire! No attempt has been made to make this
-    // particularly good: the backend is being implemented now to export
-    // HAL semaphores via iree_hal_semaphore_await, and that should be used
-    // when supported. This is merely here so as to unblock local progress.
-    iree::shared_event::ref satisfied(false);
-    iree::hal_semaphore_ptr sem = sem_;
-    auto idle_timepoint = idle_timepoint_;
-    SHORTFIN_SCHED_LOG("OnSync::Wait({}@{})", static_cast<void *>(sem.get()),
-                       idle_timepoint);
-    scheduler_.system().blocking_executor().Schedule(
-        [sem = std::move(sem), idle_timepoint, satisfied]() {
-          iree_status_t status = iree_hal_semaphore_wait(
-              sem, idle_timepoint, iree_infinite_timeout());
-          IREE_CHECK_OK(status);
-          SHORTFIN_SCHED_LOG("OnSync::Complete({}@{})",
-                             static_cast<void *>(sem.get()), idle_timepoint);
-          satisfied->set();
-        });
-    return CompletionEvent(satisfied);
-  }
+VoidFuture Account::OnSync() {
+  // TODO: Burn this path with fire! No attempt has been made to make this
+  // particularly good: the backend is being implemented now to export
+  // HAL semaphores via iree_hal_semaphore_await, and that should be used
+  // when supported. This is merely here so as to unblock local progress.
+  // This should be something like:
+  // return CompletionEvent(sem_, idle_timepoint_);
+  iree::hal_semaphore_ptr sem = sem_;
+  auto idle_timepoint = idle_timepoint_;
+  SHORTFIN_SCHED_LOG("OnSync::Wait({}@{})", static_cast<void *>(sem.get()),
+                     idle_timepoint);
+  VoidFuture future;
+  scheduler_.system().blocking_executor().Schedule([sem = std::move(sem),
+                                                    idle_timepoint, future]() {
+    iree_status_t status =
+        iree_hal_semaphore_wait(sem, idle_timepoint, iree_infinite_timeout());
+    if (!iree_status_is_ok(status)) {
+      const_cast<VoidFuture &>(future).set_failure(status);
+    } else {
+      SHORTFIN_SCHED_LOG("OnSync::Complete({}@{})",
+                         static_cast<void *>(sem.get()), idle_timepoint);
+      const_cast<VoidFuture &>(future).set_success();
+    }
+  });
+  return future;
 }
 
 // -------------------------------------------------------------------------- //
@@ -131,9 +131,10 @@ Scheduler::~Scheduler() {
   }
 }
 
-void Scheduler::Initialize(std::span<Device *const> devices) {
-  for (Device *device : devices) {
-    accounts_.emplace_back(*this, device);
+void Scheduler::Initialize(
+    std::span<const std::pair<std::string_view, Device *>> devices) {
+  for (auto &it : devices) {
+    accounts_.emplace_back(*this, it.second);
   }
 
   for (Account &account : accounts_) {
@@ -207,6 +208,22 @@ void Scheduler::AppendCommandBuffer(ScopedDevice &device,
     account.active_queue_affinity_bits_ = needed_affinity_bits;
     account.active_deps_ = std::move(new_active_deps);
     account.active_command_buffer_ = std::move(new_cb);
+
+    // Sence the command buffer will be submitted to signal the next
+    // timepoint on the main timeline, we must depend on its current value
+    // to be value (semaphores must strictly advance). This has the effect of
+    // serializing all submissions, which while correct, is not a particularly
+    // enlightened scheduling policy.
+    // TODO: Revisit this when scheduling is generalized and consider that such
+    // serialization be retained only as a debug feature.
+    iree_hal_semaphore_t *main_timeline_sem = account.sem_.get();
+    account.active_deps_extend(iree_hal_semaphore_list_t{
+        .count = 1,
+        .semaphores = &main_timeline_sem,
+        .payload_values = &account.idle_timepoint_,
+    });
+
+    // Signal an advance of the main timeline.
     account.idle_timepoint_ += 1;
     SHORTFIN_SCHED_LOG(
         "  : New command buffer (category={}, idle_timepoint={})", category,

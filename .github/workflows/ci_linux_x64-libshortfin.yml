@@ -57,25 +57,6 @@ jobs:
         git submodule update --init --depth 1 -- third_party/googletest
         git submodule update --init --depth 1 -- third_party/hip-build-deps/
 
-    - name: Build IREE runtime
-      run: |
-        mkdir ${{ env.IREE_REPO_DIR }}/build
-        cd ${{ env.IREE_REPO_DIR }}/build
-        cmake -GNinja \
-          -DCMAKE_C_COMPILER=clang-18 \
-          -DCMAKE_CXX_COMPILER=clang++-18 \
-          -DIREE_ENABLE_LLD=ON \
-          -DIREE_ERROR_ON_MISSING_SUBMODULES=OFF \
-          -DIREE_HAL_DRIVER_DEFAULTS=OFF \
-          -DIREE_HAL_DRIVER_LOCAL_SYNC=ON \
-          -DIREE_HAL_DRIVER_LOCAL_TASK=ON \
-          -DIREE_HAL_DRIVER_HIP=ON \
-          -DIREE_BUILD_COMPILER=OFF \
-          -DIREE_BUILD_SAMPLES=OFF \
-          -DIREE_BUILD_TESTS=OFF \
-          ..
-        cmake --build . --target all
-
     - name: Setup Python
       uses: actions/setup-python@39cd14951b08e74b54015e9e001cdefcf80e669f # v5.1.1
       with:
@@ -85,6 +66,7 @@ jobs:
       # TODO: Switch to `pip install -r requirements.txt -e libshortfin/`.
       run: |
         pip install -r ${{ env.LIBSHORTFIN_DIR }}/requirements-tests.txt
+        pip install -r ${{ env.LIBSHORTFIN_DIR }}/requirements-iree-compiler.txt
         pip freeze
 
     - name: Build libshortfin (full)
@@ -96,7 +78,7 @@ jobs:
           -DCMAKE_CXX_COMPILER=clang++-18 \
           -DCMAKE_LINKER_TYPE=LLD \
           -DSHORTFIN_BUNDLE_DEPS=ON \
-          -DCMAKE_PREFIX_PATH=${{ env.IREE_REPO_DIR }}/build/lib/cmake/IREE \
+          -DSHORTFIN_IREE_SOURCE_DIR=${{ env.IREE_REPO_DIR }} \
           -DSHORTFIN_BUILD_PYTHON_BINDINGS=ON \
           ..
         cmake --build . --target all
@@ -107,7 +89,7 @@ jobs:
         cd ${{ env.LIBSHORTFIN_DIR }}/build
         ctest --timeout 30 --output-on-failure
         cd ${{ env.LIBSHORTFIN_DIR }}
-        pytest -s -v -m "not requires_amd_gpu"
+        pytest -s
 
     - name: Build libshortfin (host-only)
       run: |
@@ -119,7 +101,7 @@ jobs:
           -DCMAKE_C_COMPILER=clang-18 \
           -DCMAKE_CXX_COMPILER=clang++-18 \
           -DCMAKE_LINKER_TYPE=LLD \
-          -DCMAKE_PREFIX_PATH=${{ env.IREE_REPO_DIR }}/build/lib/cmake/IREE \
+          -DSHORTFIN_IREE_SOURCE_DIR=${{ env.IREE_REPO_DIR }} \
           -DSHORTFIN_BUILD_PYTHON_BINDINGS=ON \
           -DSHORTFIN_HAVE_AMDGPU=OFF \
           -DSHORTFIN_BUILD_STATIC=ON \

@@ -5,14 +5,22 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 import asyncio
+import logging
+
+from shortfin.support.deps import ShortfinDepNotFoundError
 
 try:
     from fastapi import Request, Response
     from fastapi.responses import StreamingResponse
 except ModuleNotFoundError as e:
-    raise ModuleNotFoundError(
-        "Shortfin fastapi interop requires fastapi to be installed"
-    ) from e
+    raise ShortfinDepNotFoundError(__name__, "fastapi") from e
+
+
+__all__ = [
+    "FastAPIResponder",
+]
+
+logger = logging.getLogger(__name__)
 
 
 class FastAPIResponder:
@@ -42,30 +50,32 @@ class FastAPIResponder:
         # Capture the running loop so that we can send responses back.
         self._loop = asyncio.get_running_loop()
         self.response = asyncio.Future(loop=self._loop)
-        self._responded = False
+        self.responded = False
         self._streaming_queue: asyncio.Queue | None = None
         self.is_disconnected = False
 
-    def close_with_error(self):
-        # Called in a failsafe fashion as part of exception handlers seeking to
-        # shutdown the response. If not yet responded, this will response with
-        # a status code of 500. If streaming, then None will be streamed.
-        if self._responded:
+    def ensure_response(self):
+        """Called as part of some finally type block to ensure responses are made."""
+        if self.responded:
             if self._streaming_queue:
+                logging.error("Streaming response not finished. Force finishing.")
                 self.stream_part(None)
         else:
+            logging.error("One-shot response not finished. Responding with error.")
             self.send_response(Response(status_code=500))
 
-    def send_response(self, response: Response):
+    def send_response(self, response: Response | bytes):
         """Sends a response back for this transaction.
 
         This is intended for sending single part responses back. See
         start_response() for sending back a streaming, multi-part response.
         """
-        assert not self._responded, "Response already sent"
+        assert not self.responded, "Response already sent"
         if self._loop.is_closed():
             raise IOError("Web server is shut down")
-        self._responded = True
+        self.responded = True
+        if not isinstance(response, Response):
+            response = Response(response)
         self._loop.call_soon_threadsafe(self.response.set_result, response)
 
     def start_response(self, **kwargs):
@@ -77,10 +87,10 @@ class FastAPIResponder:
         be used for bulk transfer (i.e. by scheduling on the webserver loop
         directly).
         """
-        assert not self._responded, "Response already sent"
+        assert not self.responded, "Response already sent"
         if self._loop.is_closed():
             raise IOError("Web server is shut down")
-        self._responded = True
+        self.responded = True
         self._streaming_queue = asyncio.Queue()
 
         async def gen(request, streaming_queue):

@@ -35,6 +35,8 @@ shortfin_cc_component(
     iree_base_base
     iree_base_loop_sync
     iree_hal_hal
+    iree_io_formats_parser_registry
+    iree_modules_io_parameters_parameters
     iree_modules_hal_hal
     iree_vm_vm
     iree_vm_bytecode_module

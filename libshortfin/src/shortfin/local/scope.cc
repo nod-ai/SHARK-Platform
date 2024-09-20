@@ -58,32 +58,30 @@ void Scope::AddDevice(std::string_view device_class, Device *device) {
   auto &count = device_class_count_[device_class];
   std::string_view device_name =
       interner_.intern(fmt::format("{}{}", device_class, count++));
-  named_devices_[device_name] = device;
-  devices_.push_back(device);
+  devices_.push_back(std::make_pair(device_name, device));
 }
 
 Device *Scope::raw_device(std::string_view name) const {
-  auto it = named_devices_.find(name);
-  if (it == named_devices_.end()) [[unlikely]] {
-    throw std::invalid_argument(
-        fmt::format("Device '{}' not found (available: {})", name,
-                    fmt::join(device_names(), ", ")));
+  for (auto &it : devices_) {
+    if (it.first == name) return it.second;
   }
-  return it->second;
+  throw std::invalid_argument(
+      fmt::format("Device '{}' not found (available: {})", name,
+                  fmt::join(device_names(), ", ")));
 }
 
-Device *Scope::raw_device(int ordinal) const {
-  if (ordinal < 0 || ordinal >= devices_.size()) {
+Device *Scope::raw_device(std::size_t ordinal) const {
+  if (ordinal >= devices_.size()) {
     throw std::invalid_argument(
         fmt::format("Device ordinal ({}) out of bounds", ordinal));
   }
-  return devices_[ordinal];
+  return devices_[ordinal].second;
 }
 
 std::vector<std::string_view> Scope::device_names() const {
   std::vector<std::string_view> names;
-  names.reserve(named_devices_.size());
-  for (auto &it : named_devices_) {
+  names.reserve(devices_.size());
+  for (auto &it : devices_) {
     names.push_back(it.first);
   }
   return names;
@@ -93,7 +91,7 @@ std::vector<std::string_view> Scope::device_names() const {
 // ScopedDevice
 // -------------------------------------------------------------------------- //
 
-CompletionEvent ScopedDevice::OnSync(bool flush) {
+VoidFuture ScopedDevice::OnSync(bool flush) {
   if (flush) {
     scope().scheduler().Flush();
   }

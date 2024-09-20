@@ -11,6 +11,7 @@
 #include "fmt/core.h"
 #include "fmt/ranges.h"
 #include "shortfin/array/xtensor_bridge.h"
+#include "shortfin/support/logging.h"
 
 namespace shortfin::array {
 
@@ -106,6 +107,58 @@ device_array device_array::CreateFromInvocationResultRef(
   return device_array(
       std::move(imported_storage), shape,
       DType::import_element_type(iree_hal_buffer_view_element_type(bv)));
+}
+
+device_array device_array::view(Dims &offsets, Dims &sizes) {
+  auto rank = shape().size();
+  if (offsets.size() != sizes.size() || offsets.empty() ||
+      offsets.size() > rank) {
+    throw std::invalid_argument(
+        "view offsets and sizes must be of equal size and be of a rank "
+        "<= the array rank");
+  }
+  if (rank == 0) {
+    throw std::invalid_argument("view cannot operate on rank 0 arrays");
+  }
+  // Compute row strides.
+  Dims row_stride_bytes(shape().size());
+  iree_device_size_t accum = dtype().dense_byte_count();
+  for (int i = rank - 1; i >= 0; --i) {
+    row_stride_bytes[i] = accum;
+    accum *= shape()[i];
+  }
+
+  Dims new_dims(shape_container());
+  bool has_stride = false;
+  iree_device_size_t start_offset = 0;
+  iree_device_size_t span_size = storage().byte_length();
+  for (size_t i = 0; i < offsets.size(); ++i) {
+    auto row_stride = row_stride_bytes[i];
+    auto dim_size = shape()[i];
+    auto slice_offset = offsets[i];
+    auto slice_size = sizes[i];
+    if (slice_offset >= dim_size || (slice_offset + slice_size) > dim_size) {
+      throw std::invalid_argument(
+          fmt::format("Cannot index ({}:{}) into dim size {} at position {}",
+                      slice_offset, slice_size, dim_size, i));
+    }
+    if (has_stride && (slice_offset > 0 || slice_size != dim_size)) {
+      throw std::invalid_argument(
+          fmt::format("Cannot create a view with dimensions following a "
+                      "spanning dim (at position {})",
+                      i));
+    }
+    if (slice_size > 1) {
+      has_stride = true;
+    }
+
+    new_dims[i] = slice_size;
+    start_offset += row_stride * slice_offset;
+    span_size = row_stride * slice_size;
+  }
+
+  return device_array(storage().subspan(start_offset, span_size),
+                      new_dims.span(), dtype());
 }
 
 }  // namespace shortfin::array

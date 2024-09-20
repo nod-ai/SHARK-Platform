@@ -19,9 +19,9 @@
 
 namespace shortfin::local {
 
-class SHORTFIN_API Scope;
-class SHORTFIN_API System;
-class SHORTFIN_API Worker;
+class Scope;
+class System;
+class Worker;
 
 // Wraps a Scope and a DeviceAffinity together. This is used in all
 // Scope based APIs as a short-hand for "device" as it contains everything
@@ -52,7 +52,7 @@ class SHORTFIN_API ScopedDevice {
   // Returns a future which will be satisfied when the primary device timeline
   // of this affinity set progresses to "now". This will be true when all
   // currently queued work on the device has been completed.
-  CompletionEvent OnSync(bool flush = true);
+  VoidFuture OnSync(bool flush = true);
 
  private:
   Scope *scope_ = nullptr;
@@ -103,12 +103,11 @@ class SHORTFIN_API Scope : public std::enable_shared_from_this<Scope> {
   // Device access.
   // Throws std::invalid_argument on lookup failure.
   Device *raw_device(std::string_view name) const;
-  const std::unordered_map<std::string_view, Device *> named_devices() const {
-    return named_devices_;
-  }
-  Device *raw_device(int index) const;
+  Device *raw_device(std::size_t index) const;
   Device *raw_device(Device *device) const { return device; }
-  const std::vector<Device *> &raw_devices() const { return devices_; }
+  std::span<const std::pair<std::string_view, Device *>> raw_devices() const {
+    return devices_;
+  }
   std::vector<std::string_view> device_names() const;
 
   // Variadic helper for making a DeviceAffinity from any of:
@@ -145,10 +144,8 @@ class SHORTFIN_API Scope : public std::enable_shared_from_this<Scope> {
 
   // Map of `<device_class>` to the count of that class contained.
   std::unordered_map<std::string_view, int> device_class_count_;
-  // Ordered devices.
-  std::vector<Device *> devices_;
-  // Map of `<device_class><index>` to Device.
-  std::unordered_map<std::string_view, Device *> named_devices_;
+  // Ordered devices named as `<device_class><index>`.
+  std::vector<std::pair<std::string_view, Device *>> devices_;
 };
 
 }  // namespace shortfin::local

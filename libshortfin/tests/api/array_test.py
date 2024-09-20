@@ -37,7 +37,7 @@ def test_storage_constructor(lsys, device):
         ary = sfnp.device_array(s, [2, 4], sfnp.uint8)
         assert ary.dtype == sfnp.uint8
         assert ary.shape == [2, 4]
-        assert str(ary) == "{{0, 1, 2, 3},\n {0, 1, 2, 3}}"
+        assert list(ary.items) == [0, 1, 2, 3, 0, 1, 2, 3]
         assert ary.device == device
         assert ary.storage == s
 
@@ -51,7 +51,7 @@ def test_device_constructor(lsys, device):
         await device
         assert ary.dtype == sfnp.uint8
         assert ary.shape == [2, 4]
-        assert str(ary) == "{{0, 1, 2, 3},\n {0, 1, 2, 3}}"
+        assert list(ary.items) == [0, 1, 2, 3, 0, 1, 2, 3]
         assert ary.device == device
 
     lsys.run(main())
@@ -64,7 +64,7 @@ def test_fill_copy_from_for_transfer(lsys, device):
         dst = src.for_transfer()
         dst.copy_from(src)
         await device
-        assert str(dst) == "{{0, 1, 2, 3},\n {0, 1, 2, 3}}"
+        assert list(dst.items) == [0, 1, 2, 3, 0, 1, 2, 3]
 
     lsys.run(main())
 
@@ -76,7 +76,7 @@ def test_fill_copy_to_for_transfer(lsys, device):
         dst = src.for_transfer()
         src.copy_to(dst)
         await device
-        assert str(dst) == "{{0, 1, 2, 3},\n {0, 1, 2, 3}}"
+        assert list(dst.items) == [0, 1, 2, 3, 0, 1, 2, 3]
 
     lsys.run(main())
 
@@ -114,10 +114,96 @@ def test_shape_overflow(lsys, device):
 )
 def test_xtensor_types(scope, dtype, code, py_value, expected_str):
     ary = sfnp.device_array.for_host(scope.device(0), [2, 4], dtype)
-    ary.storage.data = array.array(code, [py_value] * 8)
+    with ary.map(discard=True) as m:
+        m.fill(py_value)
     s = str(ary)
     print("__str__ =", s)
     assert expected_str == s, f"Expected '{expected_str}' == '{s}'"
     r = repr(ary)
     print("__repr__ =", r)
     assert expected_str in r, f"Expected '{expected_str}' in '{r}'"
+
+
+@pytest.mark.parametrize(
+    "dtype,value,",
+    [
+        (sfnp.int8, 42),
+        (sfnp.int16, 42),
+        (sfnp.int32, 42),
+        (sfnp.int64, 42),
+        (sfnp.float32, 42.0),
+        (sfnp.float64, 42.0),
+    ],
+)
+def test_items(scope, dtype, value):
+    ary = sfnp.device_array.for_host(scope.device(0), [2, 4], dtype)
+    ary.items = [value] * 8
+    readback = ary.items.tolist()
+    assert readback == [value] * 8
+
+
+@pytest.mark.parametrize(
+    "dtype,value,",
+    [
+        (sfnp.int8, 42),
+        (sfnp.int16, 42),
+        (sfnp.int32, 42),
+        (sfnp.int64, 42),
+        (sfnp.float32, 42.0),
+        (sfnp.float64, 42.0),
+    ],
+)
+def test_typed_mapping(scope, dtype, value):
+    ary = sfnp.device_array.for_host(scope.device(0), [2, 4], dtype)
+    with ary.map(discard=True) as m:
+        m.fill(value)
+    readback = ary.items.tolist()
+    assert readback == [value] * 8
+
+    # Map as read/write and validate.
+    with ary.map(read=True, write=True) as m:
+        new_values = m.items.tolist()
+        for i in range(len(new_values)):
+            new_values[i] += 1
+        m.items = new_values
+
+    readback = ary.items.tolist()
+    assert readback == [value + 1] * 8
+
+
+@pytest.mark.parametrize(
+    "keys,expected",
+    [
+        # Simple indexing
+        ([0, 0], [0]),
+        # Row indexing
+        ([0], [0, 1, 2, 3]),
+        # Sliced indexing
+        ([1, slice(2, 4)], [2, 3]),
+        ([slice(1, 2), slice(2, 4)], [2, 3]),
+    ],
+)
+def test_view(lsys, device, keys, expected):
+    async def main():
+        src = sfnp.device_array(device, [4, 4], sfnp.uint8)
+        src.fill(b"\0\1\2\3")
+        view = src.view(*keys)
+        await device
+        assert list(view.items) == expected
+
+    lsys.run(main())
+
+
+def test_view_unsupported(lsys, device):
+    async def main():
+        src = sfnp.device_array(device, [4, 4], sfnp.uint8)
+        src.fill(b"\0\1\2\3")
+
+        with pytest.raises(
+            ValueError,
+            match="Cannot create a view with dimensions following a spanning dim",
+        ):
+            view = src.view(slice(0, 2), 1)
+            await device
+
+    lsys.run(main())

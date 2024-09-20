@@ -26,6 +26,16 @@ HostCPUSystemBuilder::Deps::Deps(iree_allocator_t host_allocator) {
   iree_task_executor_options_initialize(&task_executor_options);
   iree_hal_task_device_params_initialize(&task_params);
   iree_task_topology_initialize(&task_topology_options);
+
+#ifndef NDEBUG
+  // TODO: In normal IREE programs, this is exposed as --task_abort_on_failure.
+  // It is a critical debug feature as it forces an eager program crash at
+  // the point encountered vs as a later, rolled up async status. Since it
+  // guards things that are API usage bugs in how we are using the runtime,
+  // from our perspective, it is assert like, and we treat it as such.
+  // However, it would be best to be independently controllable.
+  task_params.queue_scope_flags |= IREE_TASK_SCOPE_FLAG_ABORT_ON_FAILURE;
+#endif
 }
 
 HostCPUSystemBuilder::Deps::~Deps() {

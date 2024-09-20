@@ -55,8 +55,10 @@ class ReaderProcess(sf.Process):
 
 
 async def main():
-    queue = lsys.create_queue("infeed")
+    queue = lsys.create_queue()
     main_scope = lsys.create_scope()
+    # TODO: Also test named queues.
+    # queue = lsys.create_queue("infeed")
     w1 = lsys.create_worker("w1")
     w1_scope = lsys.create_scope(w1)
     await asyncio.gather(

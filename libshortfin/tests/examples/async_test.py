@@ -8,6 +8,7 @@
 # those as examples and launch them here.
 
 from pathlib import Path
+import pytest
 import subprocess
 import sys
 
@@ -16,7 +17,7 @@ example_dir = project_dir / "examples" / "python"
 
 
 def run_example(path: Path):
-    subprocess.check_call([sys.executable, str(path)])
+    subprocess.check_call([sys.executable, str(path)], timeout=60)
 
 
 def test_async_basic_asyncio():
