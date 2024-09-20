@@ -55,7 +55,7 @@ class Llama8BTest(BaseLlamaTest):
     def setUp(self):
         default_arguments = {
             "hf_dataset": "llama3_8B_f16",
-            "tokenizer-config-json": Path("./tokenizer_config.json"),
+            "tokenizer-config-json": Path("./llama3.1-8b/tokenizer_config.json"),
             "prompt": ["I believe the meaning of life is"],
             "device": None,
             "activation-dtype": "float32",

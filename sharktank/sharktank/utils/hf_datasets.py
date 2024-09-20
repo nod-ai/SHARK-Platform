@@ -270,13 +270,13 @@ Dataset(
         RemoteFile(
             "gguf",
             "amd-shark/llama-quant-models",
-            "llama8b_f16.gguf",
+            "llama3.1-8b/llama8b_f16.gguf",
         ),
         RemoteFile(
             "tokenizer_config.json",
             "amd-shark/llama-quant-models",
-            "tokenizer_config.json",
-            extra_filenames=["tokenizer.json"],
+            "llama3.1-8b/tokenizer_config.json",
+            extra_filenames=["llama3.1-8b/tokenizer.json"],
         ),
     ),
 ).alias_to("llama3_8B_f16")
