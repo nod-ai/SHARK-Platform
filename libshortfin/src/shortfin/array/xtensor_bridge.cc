@@ -8,6 +8,8 @@
 
 #include <sstream>
 
+#include "xtl/xhalf_float.hpp"
+
 namespace shortfin::array {
 
 namespace {
@@ -65,6 +67,7 @@ bool poly_xt_methods::inplace_new(uint8_t *inst_storage, DType dtype,
     POLY_XT_CASE(IREE_HAL_ELEMENT_TYPE_FLOAT_32, float);
     POLY_XT_CASE(IREE_HAL_ELEMENT_TYPE_INT_32, int32_t);
     POLY_XT_CASE(IREE_HAL_ELEMENT_TYPE_SINT_32, int32_t);
+    POLY_XT_CASE(IREE_HAL_ELEMENT_TYPE_FLOAT_16, half_float::half);
     POLY_XT_CASE(IREE_HAL_ELEMENT_TYPE_UINT_32, uint32_t);
     POLY_XT_CASE(IREE_HAL_ELEMENT_TYPE_INT_64, int64_t);
     POLY_XT_CASE(IREE_HAL_ELEMENT_TYPE_SINT_64, int64_t);
@@ -77,8 +80,6 @@ bool poly_xt_methods::inplace_new(uint8_t *inst_storage, DType dtype,
     POLY_XT_CASE(IREE_HAL_ELEMENT_TYPE_UINT_16, uint16_t);
     POLY_XT_CASE(IREE_HAL_ELEMENT_TYPE_FLOAT_64, double);
     POLY_XT_CASE(IREE_HAL_ELEMENT_TYPE_BOOL_8, bool);
-    // TODO: float16
-    // POLY_XT_CASE(IREE_HAL_ELEMENT_TYPE_FLOAT_16, TODO);
     // TODO: bfloat16
     // POLY_XT_CASE(IREE_HAL_ELEMENT_TYPE_BFLOAT_16, TODO);
     // TODO: complex64
