@@ -60,7 +60,6 @@ class LinearLayer(ThetaLayer):
         q_input = self.q_input
         qdq_input = self.qdq_input
         qdq_output = self.qdq_output
-        original_input = x.clone().detach()
         if self.premul_input is not None:
             x = ops.elementwise(torch.mul, x, self.premul_input)
 
