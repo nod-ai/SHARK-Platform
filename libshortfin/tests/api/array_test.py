@@ -153,12 +153,22 @@ def test_items(scope, dtype, value):
         (sfnp.float64, 42.0),
     ],
 )
-def test_typed_fill(scope, dtype, value):
+def test_typed_mapping(scope, dtype, value):
     ary = sfnp.device_array.for_host(scope.device(0), [2, 4], dtype)
     with ary.map(discard=True) as m:
         m.fill(value)
     readback = ary.items.tolist()
     assert readback == [value] * 8
+
+    # Map as read/write and validate.
+    with ary.map(read=True, write=True) as m:
+        new_values = m.items.tolist()
+        for i in range(len(new_values)):
+            new_values[i] += 1
+        m.items = new_values
+
+    readback = ary.items.tolist()
+    assert readback == [value + 1] * 8
 
 
 @pytest.mark.parametrize(

@@ -155,52 +155,22 @@ def test_map_discard(lsys, device):
     lsys.run(main())
 
 
-def test_mapping_fill1(lsys, device):
+@pytest.mark.parametrize(
+    "alloc_bytes,fill_value,expected_value",
+    [
+        (8, b"9", b"99999999"),
+        (8, b"98", b"98989898"),
+        (8, b"9876", b"98769876"),
+        (8, b"98765432", b"98765432"),
+        (20, b"9876543210", b"98765432109876543210"),
+    ],
+)
+def test_mapping_fill1(lsys, device, alloc_bytes, fill_value, expected_value):
     async def main():
-        src = sfnp.storage.allocate_host(device, 8)
+        src = sfnp.storage.allocate_host(device, alloc_bytes)
         with src.map(discard=True) as m:
-            m.fill(b"9")
-        assert bytes(src.map(read=True)) == b"99999999"
-
-    lsys.run(main())
-
-
-def test_mapping_fill2(lsys, device):
-    async def main():
-        src = sfnp.storage.allocate_host(device, 8)
-        with src.map(discard=True) as m:
-            m.fill(b"98")
-        assert bytes(src.map(read=True)) == b"98989898"
-
-    lsys.run(main())
-
-
-def test_mapping_fill4(lsys, device):
-    async def main():
-        src = sfnp.storage.allocate_host(device, 8)
-        with src.map(discard=True) as m:
-            m.fill(b"9876")
-        assert bytes(src.map(read=True)) == b"98769876"
-
-    lsys.run(main())
-
-
-def test_mapping_fill8(lsys, device):
-    async def main():
-        src = sfnp.storage.allocate_host(device, 8)
-        with src.map(discard=True) as m:
-            m.fill(b"98765432")
-        assert bytes(src.map(read=True)) == b"98765432"
-
-    lsys.run(main())
-
-
-def test_mapping_fill10(lsys, device):
-    async def main():
-        src = sfnp.storage.allocate_host(device, 20)
-        with src.map(discard=True) as m:
-            m.fill(b"9876543210")
-        assert bytes(src.map(read=True)) == b"98765432109876543210"
+            m.fill(fill_value)
+        assert bytes(src.map(read=True)) == expected_value
 
     lsys.run(main())
 
