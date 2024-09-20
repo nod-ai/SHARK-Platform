@@ -30,12 +30,12 @@ def device(scope):
 
 def test_allocate_host(device):
     s = sfnp.storage.allocate_host(device, 32)
-    assert len(bytes(s.data)) == 32
+    assert len(bytes(s.map(read=True))) == 32
 
 
 def test_allocate_device(device):
     s = sfnp.storage.allocate_device(device, 64)
-    assert len(bytes(s.data)) == 64
+    assert len(bytes(s.map(read=True))) == 64
 
 
 def test_fill1(lsys, device):
@@ -43,7 +43,7 @@ def test_fill1(lsys, device):
         s = sfnp.storage.allocate_host(device, 8)
         s.fill(b"0")
         await device
-        assert bytes(s.data) == b"00000000"
+        assert bytes(s.map(read=True)) == b"00000000"
 
     lsys.run(main())
 
@@ -53,7 +53,7 @@ def test_fill2(lsys, device):
         s = sfnp.storage.allocate_host(device, 8)
         s.fill(b"01")
         await device
-        assert bytes(s.data) == b"01010101"
+        assert bytes(s.map(read=True)) == b"01010101"
 
     lsys.run(main())
 
@@ -63,7 +63,7 @@ def test_fill4(lsys, device):
         s = sfnp.storage.allocate_host(device, 8)
         s.fill(b"0123")
         await device
-        assert bytes(s.data) == b"01230123"
+        assert bytes(s.map(read=True)) == b"01230123"
 
     lsys.run(main())
 
@@ -135,7 +135,7 @@ def test_map_write(lsys, device):
             mv = memoryview(m)
             assert not mv.readonly
             mv[0] = ord(b"9")
-        assert bytes(src.data) == b"91230123"
+        assert bytes(src.map(read=True)) == b"91230123"
 
     lsys.run(main())
 
@@ -150,16 +150,27 @@ def test_map_discard(lsys, device):
             assert not mv.readonly
             for i in range(8):
                 mv[i] = ord(b"9") - i
-        assert bytes(src.data) == b"98765432"
+        assert bytes(src.map(read=True)) == b"98765432"
 
     lsys.run(main())
 
 
-def test_data_write(lsys, device):
+@pytest.mark.parametrize(
+    "alloc_bytes,fill_value,expected_value",
+    [
+        (8, b"9", b"99999999"),
+        (8, b"98", b"98989898"),
+        (8, b"9876", b"98769876"),
+        (8, b"98765432", b"98765432"),
+        (20, b"9876543210", b"98765432109876543210"),
+    ],
+)
+def test_mapping_fill1(lsys, device, alloc_bytes, fill_value, expected_value):
     async def main():
-        src = sfnp.storage.allocate_host(device, 8)
-        src.data = b"98765432"
-        assert bytes(src.data) == b"98765432"
+        src = sfnp.storage.allocate_host(device, alloc_bytes)
+        with src.map(discard=True) as m:
+            m.fill(fill_value)
+        assert bytes(src.map(read=True)) == expected_value
 
     lsys.run(main())
 
