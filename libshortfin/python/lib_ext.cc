@@ -637,7 +637,7 @@ void BindLocal(py::module_ &m) {
     py::object fiber_obj;
     std::optional<size_t> index;
   };
-  py::class_<local::Fiber>(m, "fiber")
+  py::class_<local::Fiber>(m, "Fiber")
       .def("__repr__", &local::Fiber::to_s)
       .def_prop_ro("raw_devices", &local::Fiber::raw_devices,
                    py::rv_policy::reference_internal)
