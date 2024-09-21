@@ -20,9 +20,21 @@ namespace {
 static const char DOCSTRING_ARGMAX[] =
     R"(Returns the indices of the maximum values along an axis.
 
-See documentation for numpy.argmax which this operator emulates.
+Implemented for dtypes: float16, float32.
 
-Implemented dtypes: float16, float32.
+Args:
+  input: An input array.
+  axis: Axis along which to sort. Defaults to the last axis (note that the
+    numpy default is into the flattened array, which we do not support).
+  keepdims: Whether to preserve the sort axis. If true, this will become a unit
+    dim. If false, it will be removed.
+  out: Array to write into. If specified, it must have an expected shape and
+    int64 dtype.
+  device_visible: Whether to make the result array visible to devices. Defaults to
+    False.
+
+Returns:
+  A device_array of dtype=int64, allocated on the host and not visible to the device.
 )";
 
 }  // namespace

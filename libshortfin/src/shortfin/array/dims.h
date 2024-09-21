@@ -139,6 +139,7 @@ class SHORTFIN_API InlinedDims {
   }
   template <std::contiguous_iterator BeginTy, typename EndTy>
   InlinedDims(BeginTy begin, EndTy end) {
+    assert(end > begin);
     set(std::span<const size_type>(&(*begin), end - begin));
   }
   InlinedDims(const InlinedDims &other) {

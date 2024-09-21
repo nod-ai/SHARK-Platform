@@ -58,7 +58,7 @@ def test_argmax(device):
     assert out.view(2).items.tolist() == [127] * 16
     assert out.view(3).items.tolist() == [0] * 16
 
-    # out= keepdims variant
+    # out= keepdims variant (left aligned rank broadcast is allowed)
     out = sfnp.device_array(device, [4, 16, 1], dtype=sfnp.int64)
     sfnp.argmax(src, keepdims=True, out=out)
     assert out.shape == [4, 16, 1]
@@ -66,6 +66,32 @@ def test_argmax(device):
     assert out.view(1).items.tolist() == [0] * 16
     assert out.view(2).items.tolist() == [127] * 16
     assert out.view(3).items.tolist() == [0] * 16
+
+
+def test_argmax_axis0(device):
+    src = sfnp.device_array(device, [4, 16], dtype=sfnp.float32)
+    for j in range(4):
+        src.view(j).items = [
+            float((j + 1) * (i + 1) - j * 4) for i in range(math.prod([1, 16]))
+        ]
+    print(repr(src))
+
+    # default variant
+    result = sfnp.argmax(src, axis=0)
+    assert result.shape == [16]
+    assert result.items.tolist() == [0, 0, 0, 0, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3]
+
+    # keepdims variant
+    result = sfnp.argmax(src, axis=0, keepdims=True)
+    assert result.shape == [1, 16]
+
+    # out= variant
+    out = sfnp.device_array(device, [16], dtype=sfnp.int64)
+    sfnp.argmax(src, axis=0, out=out)
+
+    # out= keepdims variant
+    out = sfnp.device_array(device, [1, 16], dtype=sfnp.int64)
+    sfnp.argmax(src, axis=0, keepdims=True, out=out)
 
 
 @pytest.mark.parametrize(
