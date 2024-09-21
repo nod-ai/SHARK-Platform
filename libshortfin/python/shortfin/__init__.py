@@ -25,7 +25,7 @@ ProgramModule = _sfl.local.ProgramModule
 Queue = _sfl.local.Queue
 QueueReader = _sfl.local.QueueReader
 QueueWriter = _sfl.local.QueueWriter
-Scope = _sfl.local.Scope
+fiber = _sfl.local.fiber
 ScopedDevice = _sfl.local.ScopedDevice
 StaticProgramParameters = _sfl.local.StaticProgramParameters
 System = _sfl.local.System
@@ -54,7 +54,7 @@ __all__ = [
     "Queue",
     "QueueReader",
     "QueueWriter",
-    "Scope",
+    "fiber",
     "ScopedDevice",
     "StaticProgramParameters",
     "System",

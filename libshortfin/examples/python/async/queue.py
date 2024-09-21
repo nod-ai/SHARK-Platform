@@ -56,18 +56,18 @@ class ReaderProcess(sf.Process):
 
 async def main():
     queue = lsys.create_queue()
-    main_scope = lsys.create_scope()
+    main_fiber = lsys.create_fiber()
     # TODO: Also test named queues.
     # queue = lsys.create_queue("infeed")
     w1 = lsys.create_worker("w1")
-    w1_scope = lsys.create_scope(w1)
+    w1_fiber = lsys.create_fiber(w1)
     await asyncio.gather(
-        WriterProcess(queue, scope=main_scope).launch(),
+        WriterProcess(queue, fiber=main_fiber).launch(),
         # By having a reader on the main worker and a separate worker,
         # we test both intra and inter worker future resolution, which
         # take different paths internally.
-        ReaderProcess(queue, scope=main_scope).launch(),
-        ReaderProcess(queue, scope=w1_scope).launch(),
+        ReaderProcess(queue, fiber=main_fiber).launch(),
+        ReaderProcess(queue, fiber=w1_fiber).launch(),
     )
 
 

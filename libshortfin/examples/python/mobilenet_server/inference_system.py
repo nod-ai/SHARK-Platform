@@ -26,7 +26,7 @@ class InferenceProcess(sf.Process):
         super().__init__(**kwargs)
         self.main_function = program["module.torch-jit-export"]
         self.request_reader = request_queue.reader()
-        self.device = self.scope.device(0)
+        self.device = self.fiber.device(0)
         self.device_input = sfnp.device_array(
             self.device, [MAX_BATCH, 3, 224, 224], sfnp.float32
         )
@@ -57,20 +57,20 @@ class InferenceProcess(sf.Process):
             print("Result 2:", result2)
 
             # Explicit invocation object.
-            # inv = self.main_function.invocation(scope=self.scope)
+            # inv = self.main_function.invocation(fiber=self.fiber)
             # inv.add_arg(self.device_input)
             # results = await inv.invoke()
             # print("results:", results)
 
             # Multiple invocations in parallel.
             # all_results = await asyncio.gather(
-            #     self.main_function(self.device_input, scope=self.scope),
-            #     self.main_function(self.device_input, scope=self.scope),
-            #     self.main_function(self.device_input, scope=self.scope),
+            #     self.main_function(self.device_input, fiber=self.fiber),
+            #     self.main_function(self.device_input, fiber=self.fiber),
+            #     self.main_function(self.device_input, fiber=self.fiber),
             # )
             # print("All results:", all_results)
 
-            # output = await self.scope.invoke(self.main_function, self.device_input)
+            # output = await self.fiber.invoke(self.main_function, self.device_input)
             # print("OUTPUT:", output)
             # read_back = self.device_input.for_transfer()
             # read_back.copy_from(self.device_input)
@@ -88,14 +88,14 @@ class Main:
         print(f"Loaded: {self.program_module}")
         self.processes = []
 
-    async def start_scope(self, scope):
+    async def start_fiber(self, fiber):
         # Note that currently, program load is synchronous. But we do it
         # in a task so we can await it in the future and let program loads
         # overlap.
         for _ in range(self.processes_per_worker):
-            program = sf.Program([self.program_module], scope=scope)
+            program = sf.Program([self.program_module], fiber=fiber)
             self.processes.append(
-                InferenceProcess(program, self.request_queue, scope=scope).launch()
+                InferenceProcess(program, self.request_queue, fiber=fiber).launch()
             )
 
     async def main(self):
@@ -104,14 +104,14 @@ class Main:
             f"System created with {len(devices)} devices:\n  "
             f"{'  '.join(repr(d) for d in devices)}"
         )
-        # We create a physical worker and initial scope for each device.
+        # We create a physical worker and initial fiber for each device.
         # This isn't a hard requirement and there are advantages to other
         # topologies.
         initializers = []
         for device in devices:
             worker = self.lsys.create_worker(f"device-{device.name}")
-            scope = self.lsys.create_scope(worker, devices=[device])
-            initializers.append(self.start_scope(scope))
+            fiber = self.lsys.create_fiber(worker, devices=[device])
+            initializers.append(self.start_fiber(fiber))
 
         # Run all initializers in parallel. These launch inference processes.
         print("Waiting for initializers")

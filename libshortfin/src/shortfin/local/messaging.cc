@@ -124,7 +124,7 @@ QueueReader::~QueueReader() {
 }
 
 MessageFuture QueueReader::Read() {
-  // TODO: It should be possible to further constrain the scope of this lock,
+  // TODO: It should be possible to further constrain the fiber of this lock,
   // but it is set here to be conservatively safe pending a full analysis.
   iree::slim_mutex_lock_guard g(queue().lock_);
   if (worker_) {

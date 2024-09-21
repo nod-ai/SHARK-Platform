@@ -215,7 +215,7 @@ struct allocated_ptr {
   T *ptr = nullptr;
 };
 
-// Wraps an iree_file_contents_t*, freeing it when it goes out of scope.
+// Wraps an iree_file_contents_t*, freeing it when it goes out of fiber.
 // The contents can be released as an iree_allocator_t which transfers
 // ownership to some consumer.
 class file_contents_ptr {
@@ -317,7 +317,7 @@ inline iree_status_t exception_to_status(std::exception &e) {
 }
 
 // RAII wrapper around an iree_status_t that will ignore it when going out
-// of scope. This is needed to avoid resource leaks when statuses are being
+// of fiber. This is needed to avoid resource leaks when statuses are being
 // used to signal a failure which may not be harvested.
 class ignorable_status {
  public:
