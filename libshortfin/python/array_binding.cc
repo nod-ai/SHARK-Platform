@@ -96,7 +96,7 @@ static const char DOCSTRING_STORAGE_COPY_FROM[] =
     R"(Copy contents from a source storage to this array.
 
 This operation executes asynchronously and the effect will only be visible
-once the execution scope has been synced to the point of mutation.
+once the execution fiber has been synced to the point of mutation.
 )";
 
 static const char DOCSTRING_STORAGE_FILL[] = R"(Fill a storage with a value.
@@ -106,7 +106,7 @@ buffer protocol of size 1, 2, or 4 bytes. The storage will be filled uniformly
 with the pattern.
 
 This operation executes asynchronously and the effect will only be visible
-once the execution scope has been synced to the point of mutation.
+once the execution fiber has been synced to the point of mutation.
 )";
 
 static const char DOCSTRING_STORAGE_MAP[] =
@@ -501,7 +501,7 @@ void BindArray(py::module_ &m) {
           [](py::handle py_type, class storage storage,
              std::span<const size_t> shape, DType dtype) {
             return custom_new_keep_alive<device_array>(
-                py_type, /*keep_alive=*/storage.scope(), storage, shape, dtype);
+                py_type, /*keep_alive=*/storage.fiber(), storage, shape, dtype);
           },
           py::arg("cls"), py::arg("storage"), py::arg("shape"),
           py::arg("dtype"))
@@ -510,7 +510,7 @@ void BindArray(py::module_ &m) {
           [](py::handle py_type, local::ScopedDevice &device,
              std::span<const size_t> shape, DType dtype) {
             return custom_new_keep_alive<device_array>(
-                py_type, /*keep_alive=*/device.scope(),
+                py_type, /*keep_alive=*/device.fiber(),
                 device_array::for_device(device, shape, dtype));
           },
           py::arg("cls"), py::arg("device"), py::arg("shape"), py::arg("dtype"))
@@ -526,21 +526,21 @@ void BindArray(py::module_ &m) {
                   [](local::ScopedDevice &device, std::span<const size_t> shape,
                      DType dtype) {
                     return custom_new_keep_alive<device_array>(
-                        py::type<device_array>(), /*keep_alive=*/device.scope(),
+                        py::type<device_array>(), /*keep_alive=*/device.fiber(),
                         device_array::for_device(device, shape, dtype));
                   })
       .def_static("for_host",
                   [](local::ScopedDevice &device, std::span<const size_t> shape,
                      DType dtype) {
                     return custom_new_keep_alive<device_array>(
-                        py::type<device_array>(), /*keep_alive=*/device.scope(),
+                        py::type<device_array>(), /*keep_alive=*/device.fiber(),
                         device_array::for_host(device, shape, dtype));
                   })
       .def("for_transfer",
            [](device_array &self) {
              return custom_new_keep_alive<device_array>(
                  py::type<device_array>(),
-                 /*keep_alive=*/self.device().scope(), self.for_transfer());
+                 /*keep_alive=*/self.device().fiber(), self.for_transfer());
            })
       .def_prop_ro("device", &device_array::device,
                    py::rv_policy::reference_internal)

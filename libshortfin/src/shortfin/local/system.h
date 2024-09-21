@@ -29,7 +29,7 @@ namespace detail {
 class BaseProcess;
 }  // namespace detail
 
-class Scope;
+class Fiber;
 class System;
 class SystemBuilder;
 
@@ -50,19 +50,19 @@ class SystemBuilder;
 //      tenant), and all owning references to the System are via
 //      `std::shared_ptr<System>`. Every object in the system must either be
 //      a managed child of the system or own a system reference.
-//   2. Scope: Binds any number of devices to a coherent schedule, rooted on
+//   2. Fiber: Binds any number of devices to a coherent schedule, rooted on
 //      a Worker. Scopes are independent of the system and there are generally
-//      as many as needed logical concurrency in the application. Each scope
+//      as many as needed logical concurrency in the application. Each fiber
 //      holds a system reference by way of a `std::shared_ptr<System>`. These
 //      are still heavy-weight objects mostly created at initialization time
-//      and are therefore managed held as a `std::shared_ptr<Scope>` by anything
+//      and are therefore managed held as a `std::shared_ptr<Fiber>` by anything
 //      that depends on them.
 //   3. TimelineResource: Any resource in the system (i.e. buffer,
 //      synchronization, object, etc) will hold a unique TimelineResource. These
 //      are light-weight objects managed via intrusive reference counting by
 //      their contained `TimelineResource::Ref` class. Each `TimelineResource`
-//      maintains a `std::shared_ptr<Scope>` back reference to its owning
-//      scope.
+//      maintains a `std::shared_ptr<Fiber>` back reference to its owning
+//      fiber.
 //
 // Leaf objects can have any lifetime that they wish, so long as they maintain
 // an appropriate ownership reference into the System hierarchy above. This
@@ -111,10 +111,10 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
   BlockingExecutor &blocking_executor() { return blocking_executor_; }
 
   // Scopes.
-  // Creates a new Scope bound to this System (it will internally
+  // Creates a new Fiber bound to this System (it will internally
   // hold a reference to this instance). All devices in system order will be
-  // added to the scope.
-  std::shared_ptr<Scope> CreateScope(Worker &worker,
+  // added to the fiber.
+  std::shared_ptr<Fiber> CreateFiber(Worker &worker,
                                      std::span<Device *const> devices);
 
   // Creates and starts a worker (if it is configured to run in a thread).

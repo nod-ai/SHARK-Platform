@@ -9,8 +9,8 @@
 
 #include <string_view>
 
+#include "shortfin/local/fiber.h"
 #include "shortfin/local/program_interfaces.h"
-#include "shortfin/local/scope.h"
 #include "shortfin/support/api.h"
 
 namespace shortfin::array {
@@ -75,9 +75,9 @@ class SHORTFIN_API storage : public local::ProgramInvocationMarshalable {
  public:
   ~storage();
   local::ScopedDevice &device() { return device_; }
-  local::Scope &scope() { return device_.scope(); }
+  local::Fiber &fiber() { return device_.fiber(); }
   const local::ScopedDevice &device() const { return device_; }
-  local::Scope &scope() const { return device_.scope(); }
+  local::Fiber &fiber() const { return device_.fiber(); }
 
   static storage import_buffer(local::ScopedDevice &device,
                                iree::hal_buffer_ptr buffer);
@@ -193,7 +193,7 @@ class SHORTFIN_API storage : public local::ProgramInvocationMarshalable {
   static storage ImportInvocationResultStorage(local::ProgramInvocation *inv,
                                                iree::hal_buffer_ptr buffer);
 
-  // The timeline resource holds the back reference to the owning scope,
+  // The timeline resource holds the back reference to the owning fiber,
   // which keeps all devices alive. Buffers must be destroyed before devices,
   // so this must be declared first.
   local::detail::TimelineResource::Ref timeline_resource_;

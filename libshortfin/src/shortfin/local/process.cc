@@ -15,9 +15,9 @@ namespace shortfin::local {
 detail::BaseProcess::BaseProcess() = default;
 detail::BaseProcess::~BaseProcess() = default;
 
-void detail::BaseProcess::Initialize(std::shared_ptr<Scope> scope) {
-  assert(!scope_ && "BaseProcess::Initialize already called");
-  scope_ = std::move(scope);
+void detail::BaseProcess::Initialize(std::shared_ptr<Fiber> fiber) {
+  assert(!fiber_ && "BaseProcess::Initialize already called");
+  fiber_ = std::move(fiber);
 }
 
 int64_t detail::BaseProcess::pid() const {
@@ -34,24 +34,24 @@ std::string detail::BaseProcess::to_s() const {
 
   if (pid == 0) {
     return fmt::format("Process(NOT_STARTED, worker='{}')",
-                       scope_->worker().name());
+                       fiber_->worker().name());
   } else if (pid < 0) {
     return fmt::format("Process(TERMINATED, worker='{}')",
-                       scope_->worker().name());
+                       fiber_->worker().name());
   } else {
     return fmt::format("Process(pid={}, worker='{}')", pid,
-                       scope_->worker().name());
+                       fiber_->worker().name());
   }
 }
 
 void detail::BaseProcess::Launch() {
-  Scope* scope = scope_.get();
+  Fiber* fiber = fiber_.get();
   {
     iree::slim_mutex_lock_guard g(lock_);
     if (pid_ != 0) {
       throw std::logic_error("Process can only be launched a single time");
     }
-    pid_ = scope->system().AllocateProcess(this);
+    pid_ = fiber->system().AllocateProcess(this);
   }
 
   ScheduleOnWorker();
@@ -70,7 +70,7 @@ void detail::BaseProcess::Terminate() {
     }
   }
   if (deallocate_pid > 0) {
-    scope_->system().DeallocateProcess(deallocate_pid);
+    fiber_->system().DeallocateProcess(deallocate_pid);
   } else {
     logging::warn("Process signalled termination multiple times (ignored)");
   }
@@ -84,6 +84,6 @@ CompletionEvent detail::BaseProcess::OnTermination() {
   return CompletionEvent(terminated_event_);
 }
 
-Process::Process(std::shared_ptr<Scope> scope) { Initialize(std::move(scope)); }
+Process::Process(std::shared_ptr<Fiber> fiber) { Initialize(std::move(fiber)); }
 
 }  // namespace shortfin::local

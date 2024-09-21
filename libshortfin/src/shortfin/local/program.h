@@ -23,7 +23,7 @@
 namespace shortfin::local {
 
 class BaseProgramParameters;
-class Scope;
+class Fiber;
 class System;
 
 enum class ProgramInvocationModel {
@@ -65,7 +65,7 @@ class SHORTFIN_API ProgramInvocation {
   static_assert(sizeof(Ptr) == sizeof(void *));
   using Future = TypedFuture<ProgramInvocation::Ptr>;
 
-  static Ptr New(std::shared_ptr<Scope> scope, iree::vm_context_ptr vm_context,
+  static Ptr New(std::shared_ptr<Fiber> fiber, iree::vm_context_ptr vm_context,
                  iree_vm_function_t &vm_function,
                  ProgramInvocationModel invocation_model);
   ProgramInvocation(const ProgramInvocation &) = delete;
@@ -79,8 +79,8 @@ class SHORTFIN_API ProgramInvocation {
   // accessed.
   bool scheduled() const { return scheduled_; }
 
-  // The scope this invocation was scheduled against.
-  Scope *scope() const { return scope_.get(); }
+  // The fiber this invocation was scheduled against.
+  Fiber *fiber() const { return fiber_.get(); }
 
   // Adds wait barriers to the invocation. For coarse fences invocations, these
   // will cause execution of the function to wait until all sempahores added
@@ -168,7 +168,7 @@ class SHORTFIN_API ProgramInvocation {
     iree_vm_async_invoke_state_t async_invoke_state;
   } state;
 
-  std::shared_ptr<Scope> scope_;
+  std::shared_ptr<Fiber> fiber_;
   iree_vm_list_t *result_list_ = nullptr;
   std::optional<Future> future_;
   iree::hal_fence_ptr wait_fence_;
@@ -195,7 +195,7 @@ class SHORTFIN_API ProgramFunction {
   operator iree_vm_function_t &() { return vm_function_; }
 
  private:
-  ProgramFunction(std::shared_ptr<Scope> scope, iree::vm_context_ptr vm_context,
+  ProgramFunction(std::shared_ptr<Fiber> fiber, iree::vm_context_ptr vm_context,
                   iree_vm_function_t vm_function,
                   std::optional<ProgramInvocationModel> invocation_model = {});
 
@@ -203,7 +203,7 @@ class SHORTFIN_API ProgramFunction {
       iree_vm_function_t &f);
 
   // The context that this function was resolved against.
-  std::shared_ptr<Scope> scope_;
+  std::shared_ptr<Fiber> fiber_;
   iree::vm_context_ptr vm_context_;
   iree_vm_function_t vm_function_;
   ProgramInvocationModel invocation_model_;
@@ -257,7 +257,7 @@ class SHORTFIN_API ProgramModule {
 // having functions invoked on them. While the underlying programming model
 // is a bit broader and can be exploited in various advanced way, generally,
 // a program should be thought of as a fiber, and it is therefore bound to
-// a Scope, which provides a logical thread of execution. By default, all
+// a Fiber, which provides a logical thread of execution. By default, all
 // invocations will take place in logical order (there are certain ways to
 // violate this constraint safely that are provided for separately).
 //
@@ -273,9 +273,9 @@ class SHORTFIN_API Program {
     bool trace_execution = false;
   };
 
-  // Loads a program attached to a scope with a list of user provided modules
+  // Loads a program attached to a fiber with a list of user provided modules
   // and options.
-  static Program Load(std::shared_ptr<Scope> scope,
+  static Program Load(std::shared_ptr<Fiber> fiber,
                       std::span<const ProgramModule> modules,
                       Options options = {});
 
@@ -291,12 +291,12 @@ class SHORTFIN_API Program {
   std::vector<std::string> exports() const;
 
  private:
-  explicit Program(std::shared_ptr<Scope> scope,
+  explicit Program(std::shared_ptr<Fiber> fiber,
                    iree::vm_context_ptr vm_context)
-      : scope_(std::move(scope)), vm_context_(std::move(vm_context)) {}
-  std::shared_ptr<Scope> scope_;
+      : fiber_(std::move(fiber)), vm_context_(std::move(vm_context)) {}
+  std::shared_ptr<Fiber> fiber_;
   iree::vm_context_ptr vm_context_;
-  friend class Scope;
+  friend class Fiber;
 };
 
 // Base class for classes that can be interpreted as a provider of program
