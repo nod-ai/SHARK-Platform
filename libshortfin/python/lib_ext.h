@@ -30,7 +30,7 @@ void BindHostSystem(py::module_ &module);
 void BindAMDGPUSystem(py::module_ &module);
 
 // RAII wrapper for a Py_buffer which calls PyBuffer_Release when it goes
-// out of fiber.
+// out of scope.
 class PyBufferReleaser {
  public:
   PyBufferReleaser(Py_buffer &b) : b_(b) {}

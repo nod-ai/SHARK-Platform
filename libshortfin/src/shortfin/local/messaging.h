@@ -131,7 +131,7 @@ class SHORTFIN_API Message {
   // reference count in ref_data_ when allocator is null or externally
   // when not null. When externally managed, ref_data_ is just a pointer
   // sized field that the allocator can use at it sees fit. Both fields
-  // are managed within a lock_ fiber and are optimized for single threaded
+  // are managed within a lock_ scope and are optimized for single threaded
   // access and cross-thread transfers with coarse references.
   mutable intptr_t ref_data_ SHORTFIN_GUARDED_BY(lock_) = 1;
   mutable detail::MessageLifetimeController lifetime_controller_

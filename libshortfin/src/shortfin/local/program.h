@@ -315,7 +315,7 @@ class SHORTFIN_API BaseProgramParameters {
 };
 
 // Pool of parameters that can be made available to ProgramModules. Each
-// instance represents a unique "parameter fiber" name which corresponds to
+// instance represents a unique "parameter scope" name which corresponds to
 // some set of parameters that one or more ProgramModules were compiled to
 // depend on.
 //

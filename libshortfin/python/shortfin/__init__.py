@@ -14,6 +14,7 @@ import shortfin.support.logging_setup as _logging_setup
 BaseProgramParameters = _sfl.local.BaseProgramParameters
 CompletionEvent = _sfl.local.CompletionEvent
 Device = _sfl.local.Device
+Fiber = _sfl.local.Fiber
 Message = _sfl.local.Message
 Node = _sfl.local.Node
 Process = _sfl.local.Process
@@ -25,7 +26,6 @@ ProgramModule = _sfl.local.ProgramModule
 Queue = _sfl.local.Queue
 QueueReader = _sfl.local.QueueReader
 QueueWriter = _sfl.local.QueueWriter
-fiber = _sfl.local.fiber
 ScopedDevice = _sfl.local.ScopedDevice
 StaticProgramParameters = _sfl.local.StaticProgramParameters
 System = _sfl.local.System
@@ -44,6 +44,7 @@ __all__ = [
     "BaseProgramParameters",
     "CompletionEvent",
     "Device",
+    "Fiber",
     "Message",
     "Node",
     "Program",
@@ -54,7 +55,6 @@ __all__ = [
     "Queue",
     "QueueReader",
     "QueueWriter",
-    "fiber",
     "ScopedDevice",
     "StaticProgramParameters",
     "System",

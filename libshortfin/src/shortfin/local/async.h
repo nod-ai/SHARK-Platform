@@ -101,7 +101,7 @@ class SHORTFIN_API Future {
   // with a value or a failure). If the future is already satisfied, they
   // will be queued for delivery on a future cycle of the event loop. If
   // running on the same worker as owns this Future, then the callback will
-  // never be executed within the fiber of this call. If adding a callback
+  // never be executed within the scope of this call. If adding a callback
   // from another thread, then it is possible that the callback runs concurrent
   // with returning from this function.
   void AddCallback(FutureCallback callback);
