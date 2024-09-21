@@ -18,6 +18,29 @@ namespace shortfin::array {
 template class InlinedDims<iree_hal_dim_t>;
 
 // -------------------------------------------------------------------------- //
+// base_array
+// -------------------------------------------------------------------------- //
+
+void base_array::expand_dims(Dims::value_type axis) {
+  auto shape = this->shape();
+  if (axis > shape.size()) {
+    throw std::invalid_argument(
+        fmt::format("expand_dims axis must be <= rank ({}) but was {}",
+                    shape.size(), axis));
+  }
+  Dims new_dims(shape.size() + 1);
+  size_t j = 0;
+  for (size_t i = 0; i < axis; ++i) {
+    new_dims[j++] = shape[i];
+  }
+  new_dims[j++] = 1;
+  for (size_t i = axis; i < shape.size(); ++i) {
+    new_dims[j++] = shape[i];
+  }
+  set_shape(new_dims.span());
+}
+
+// -------------------------------------------------------------------------- //
 // device_array
 // -------------------------------------------------------------------------- //
 

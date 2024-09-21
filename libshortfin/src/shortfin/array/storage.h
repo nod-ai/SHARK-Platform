@@ -91,9 +91,11 @@ class SHORTFIN_API storage : public local::ProgramInvocationMarshalable {
   // By default, if there are any affinity bits set in the device, then
   // the storage will be device visible and have permitted usage for
   // transfers. This default policy can be overriden based on device defaults
-  // or explicit options.
+  // or explicit options. Pass `device_visible=false` to create a pure host
+  // heap buffer.
   static storage allocate_host(local::ScopedDevice &device,
-                               iree_device_size_t allocation_size);
+                               iree_device_size_t allocation_size,
+                               bool device_visible = true);
 
   // Creates a subspan view of the current storage given a byte offset and
   // length. The returned storage shares the underlying allocation and

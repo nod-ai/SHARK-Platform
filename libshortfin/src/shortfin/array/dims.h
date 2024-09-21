@@ -40,17 +40,36 @@ class SHORTFIN_API InlinedDims {
     using reference = T &;
     using iterator_category = std::random_access_iterator_tag;
     iterator(pointer p) : p(p) {}
-    iterator &operator++() {
+    constexpr iterator &operator++() {
       p++;
       return *this;
     }
-    iterator &operator++(int) {
+    constexpr iterator operator++(int) {
+      auto tmp = *this;
       p++;
+      return tmp;
+    }
+    constexpr iterator &operator--() {
+      p--;
       return *this;
     }
-    bool operator==(iterator other) const { return p == other.p; }
-    bool operator!=(iterator other) const { return p != other.p; }
-    reference operator*() { return *p; }
+    constexpr iterator operator--(int) {
+      auto tmp = *this;
+      p--;
+      return tmp;
+    }
+    constexpr bool operator==(iterator other) const { return p == other.p; }
+    constexpr bool operator!=(iterator other) const { return p != other.p; }
+    constexpr reference operator*() { return *p; }
+    constexpr iterator operator+(difference_type d) const {
+      return iterator(p + d);
+    }
+    constexpr iterator operator-(difference_type d) const {
+      return iterator(p - d);
+    }
+    constexpr difference_type operator-(iterator rhs) const {
+      return reinterpret_cast<difference_type>(p - rhs.p);
+    }
 
    private:
     pointer p;
@@ -64,17 +83,40 @@ class SHORTFIN_API InlinedDims {
     using iterator_category = std::random_access_iterator_tag;
 
     const_iterator(pointer p) : p(p) {}
-    const_iterator &operator++() {
+    constexpr const_iterator &operator++() {
       p++;
       return *this;
     }
-    const_iterator &operator++(int) {
+    constexpr const_iterator operator++(int) {
+      auto tmp = *this;
       p++;
+      return tmp;
+    }
+    constexpr const_iterator &operator--() {
+      p--;
       return *this;
     }
-    bool operator==(const_iterator other) const { return p == other.p; }
-    bool operator!=(const_iterator other) const { return p != other.p; }
-    reference operator*() { return *p; }
+    constexpr const_iterator operator--(int) {
+      auto tmp = *this;
+      p--;
+      return tmp;
+    }
+    constexpr bool operator==(const_iterator other) const {
+      return p == other.p;
+    }
+    constexpr bool operator!=(const_iterator other) const {
+      return p != other.p;
+    }
+    constexpr reference operator*() { return *p; }
+    constexpr const_iterator operator+(difference_type d) const {
+      return const_iterator(p + d);
+    }
+    constexpr const_iterator operator-(difference_type d) const {
+      return const_iterator(p - d);
+    }
+    constexpr difference_type operator-(const_iterator rhs) const {
+      return reinterpret_cast<difference_type>(p - rhs.p);
+    }
 
    private:
     pointer p;
@@ -94,6 +136,10 @@ class SHORTFIN_API InlinedDims {
       new (&dims_.inline_dims) InlineTy();
       std::fill(dims_.inline_dims.begin(), dims_.inline_dims.end(), value);
     }
+  }
+  template <std::contiguous_iterator BeginTy, typename EndTy>
+  InlinedDims(BeginTy begin, EndTy end) {
+    set(std::span<const size_type>(&(*begin), end - begin));
   }
   InlinedDims(const InlinedDims &other) {
     new (&dims_.inline_dims) InlineTy();
@@ -168,6 +214,12 @@ class SHORTFIN_API InlinedDims {
   const_iterator end() const { return const_iterator(data() + size()); }
   const_iterator cbegin() const { return const_iterator(data()); }
   const_iterator cend() const { return const_iterator(data() + size()); }
+  reverse_iterator rbegin() { return reverse_iterator(begin()); }
+  reverse_iterator rend() { return reverse_iterator(end()); }
+  const_reverse_iterator rbegin() const {
+    return const_reverse_iterator(begin());
+  }
+  const_reverse_iterator rend() const { return const_reverse_iterator(end()); }
 
   void resize(size_type count) { resize_impl(count, value_type()); }
   void resize(size_type count, value_type value) { resize_impl(count, value); }

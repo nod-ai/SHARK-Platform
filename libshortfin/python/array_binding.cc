@@ -605,6 +605,8 @@ void BindArray(py::module_ &m) {
         if (!contents) return "<<unmappable>>";
         return *contents;
       });
+
+  BindArrayHostOps(m);
 }
 
 }  // namespace shortfin::python
