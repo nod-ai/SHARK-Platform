@@ -9,6 +9,7 @@ import io
 import logging
 
 import shortfin as sf
+import shortfin.array as sfnp
 
 # TODO: Have a generic "Responder" interface vs just the concrete impl.
 from shortfin.interop.fastapi import FastAPIResponder
@@ -48,7 +49,9 @@ class GenerateItemProcess(sf.Process):
         self.client.batcher.submit(initial_prefill)
         await initial_prefill.done
 
-        print("LOGITS:", initial_prefill.result_logits)
+        logging.info("LOGITS: %r", initial_prefill.result_logits)
+        token = sfnp.argmax(initial_prefill.result_logits)
+        logging.info("TOKEN: %r", token)
 
         self.result_token_ids = self.input_token_ids
         self.client.stream_results(self)
