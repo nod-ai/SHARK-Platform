@@ -1,3 +1,9 @@
+# Copyright 2024 Advanced Micro Devices, Inc.
+#
+# Licensed under the Apache License v2.0 with LLVM Exceptions.
+# See https://llvm.org/LICENSE.txt for license information.
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+
 import torch
 from sharktank.examples.paged_llm_v1 import *
 from sharktank.utils import tokenizer
@@ -20,7 +26,7 @@ class BaseLlamaTest(unittest.TestCase):
             attention_dtype=self.activation_dtype,
         )
 
-    def runPrefill(self, kv_cache_type):
+    def runPrefill(self, *, kv_cache_type):
         config = self.createConfigModel(kv_cache_type)
         model = PagedLlamaModelV1(self.dataset.root_theta, config)
         generator = TorchGenerator(model, self.tokenizer_config)
@@ -80,7 +86,9 @@ class Llama7BTest(BaseLlamaTest):
         self.llama_cpp_7b_prefill_token_logit = torch.tensor(19.356068)
 
     def testPrefillPaged7B(self):
-        batch_results_paged, greedy_token_logit_paged = self.runPrefill("paged")
+        batch_results_paged, greedy_token_logit_paged = self.runPrefill(
+            kv_cache_type="paged"
+        )
         self.comparePrefillResults(
             batch_results_paged,
             greedy_token_logit_paged,
@@ -89,7 +97,9 @@ class Llama7BTest(BaseLlamaTest):
         )
 
     def testPrefillDirect7B(self):
-        batch_results_direct, greedy_token_logit_direct = self.runPrefill("direct")
+        batch_results_direct, greedy_token_logit_direct = self.runPrefill(
+            kv_cache_type="direct"
+        )
         self.comparePrefillResults(
             batch_results_direct,
             greedy_token_logit_direct,
@@ -127,7 +137,9 @@ class Llama8BTest(BaseLlamaTest):
         self.llama_cpp_8b_prefill_token_logit = torch.tensor(15.613972)
 
     def testPrefillPaged8B(self):
-        batch_results_paged, greedy_token_logit_paged = self.runPrefill("paged")
+        batch_results_paged, greedy_token_logit_paged = self.runPrefill(
+            kv_cache_type="paged"
+        )
         self.comparePrefillResults(
             batch_results_paged,
             greedy_token_logit_paged,
@@ -136,7 +148,9 @@ class Llama8BTest(BaseLlamaTest):
         )
 
     def testPrefillDirect8B(self):
-        batch_results_direct, greedy_token_logit_direct = self.runPrefill("direct")
+        batch_results_direct, greedy_token_logit_direct = self.runPrefill(
+            kv_cache_type="direct"
+        )
         self.comparePrefillResults(
             batch_results_direct,
             greedy_token_logit_direct,
