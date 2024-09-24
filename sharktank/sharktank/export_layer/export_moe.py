@@ -19,13 +19,15 @@ def main():
         default="/tmp/batch_llama_v1.mlir",
     )
     parser.add_argument(
-        "--bs",
+        "--batch-size",
+        "-bs",
         help="Batch size to generate, e.g. `4` or `2`",
         type=lambda arg: int(arg),
         default="2",
     )
     parser.add_argument(
         "--verbose",
+        "-v",
         help="Include verbose logging",
         action="store_true",
     )
@@ -36,7 +38,7 @@ def main():
     )
     parser.add_argument(
         "--use-grok",
-        help="Enables Grok based MOE block export",
+        help="Enable to export Grok model's version of MOE block",
         action="store_true",
     )
 
