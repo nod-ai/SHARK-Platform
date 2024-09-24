@@ -15,9 +15,9 @@ import shortfin.array as sfnp
 from shortfin.interop.fastapi import FastAPIResponder
 
 from .io_struct import GenerateReqInput
-from .messages import PrefillRequest
+from .messages import InferenceExecRequest, InferencePhase
 from .service import GenerateService
-from .tokenizer import Encoding, Tokenizer
+from .tokenizer import Encoding
 
 logger = logging.getLogger(__name__)
 
@@ -45,15 +45,38 @@ class GenerateItemProcess(sf.Process):
         self.result_token_ids: list[int] = []
 
     async def run(self):
-        initial_prefill = PrefillRequest(self.input_token_ids)
-        self.client.batcher.submit(initial_prefill)
-        await initial_prefill.done
+        exec = InferenceExecRequest(InferencePhase.PREFILL, self.input_token_ids)
+        try:
+            self.client.batcher.submit(exec)
+            await exec.done
 
-        logging.info("LOGITS: %r", initial_prefill.result_logits)
-        token = sfnp.argmax(initial_prefill.result_logits)
-        logging.info("TOKEN: %r", token)
+            # Prefill result.
+            token = sfnp.argmax(exec.result_logits)
+            token_int = token.items[0]
 
-        self.result_token_ids = self.input_token_ids
+            # Decode loop.
+            # TODO: Use correct eot token from config.
+            exec.start_position = len(self.input_token_ids) - 1
+            while token_int != 128001:
+                exec.reset(InferencePhase.DECODE)
+                exec.input_token_ids = [token_int]
+                exec.start_position += 1
+                self.client.batcher.submit(exec)
+                await exec.done
+                token = sfnp.argmax(exec.result_logits)
+                token_int = token.items[0]
+                self.append_token(token_int)
+                if exec.start_position > 32:
+                    # TEMP: Limit result size while debugging.
+                    logging.warning(
+                        "Prematurely ending generation due to result overflow"
+                    )
+                    break
+        finally:
+            exec.free_cache_pages()
+
+    def append_token(self, token: int):
+        self.result_token_ids.append(token)
         self.client.stream_results(self)
 
 

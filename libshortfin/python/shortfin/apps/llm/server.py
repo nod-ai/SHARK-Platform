@@ -22,7 +22,6 @@ from fastapi import FastAPI, Request, Response
 import uvicorn
 
 
-import shortfin as sf
 from .components.generate import ClientGenerateBatchProcess
 from .components.config_struct import ModelParams
 from .components.io_struct import GenerateReqInput
