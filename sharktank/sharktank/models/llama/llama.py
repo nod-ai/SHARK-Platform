@@ -231,7 +231,6 @@ class AttentionFFNBlock(ThetaLayer):
         head_dim: int,
         head_count_kv: int,
         rms_epsilon: float,
-        use_hf: bool = False,
     ):
         super().__init__(theta)
         self.add_module(
@@ -244,7 +243,7 @@ class AttentionFFNBlock(ThetaLayer):
                 head_dim=head_dim,
                 head_count_kv=head_count_kv,
                 rms_epsilon=rms_epsilon,
-                use_hf=use_hf,
+                use_grok=False,
             ),
         )
         self.add_module(
