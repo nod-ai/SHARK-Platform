@@ -100,7 +100,7 @@ class GenerateReqInput:
                 # parallel sampling +1 represents the original prefill stage
                 num = parallel_sample_num + 1
                 if isinstance(self.text, list):
-                    # suppot batch operation
+                    # support batch operation
                     self.batch_size = len(self.text)
                     num = num * len(self.text)
                 elif isinstance(self.input_ids, list) and isinstance(

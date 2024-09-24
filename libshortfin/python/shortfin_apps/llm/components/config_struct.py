@@ -21,7 +21,7 @@ For context, a popular model has parameters of:
     attn_head_count = 32
     attn_head_dim = 128   # (dim / head_count)
 
-If paging, then we primary care about the organization of a single block, where
+If paging, then we primarily care about the organization of a single block, where
 a block represents a single position in the sequence for a single item in the batch.
 Therefore, it will be organized like:
     block = torch.empty(transformer_block_count, 2, attn_head_count, attn_head_dim)
