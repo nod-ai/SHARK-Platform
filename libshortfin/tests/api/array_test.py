@@ -21,13 +21,13 @@ def lsys():
 
 
 @pytest.fixture
-def scope(lsys):
-    return lsys.create_scope()
+def fiber(lsys):
+    return lsys.create_fiber()
 
 
 @pytest.fixture
-def device(scope):
-    return scope.device(0)
+def device(fiber):
+    return fiber.device(0)
 
 
 def test_storage_constructor(lsys, device):
@@ -113,8 +113,8 @@ def test_shape_overflow(lsys, device):
         ),
     ],
 )
-def test_xtensor_types(scope, dtype, code, py_value, expected_str):
-    ary = sfnp.device_array.for_host(scope.device(0), [2, 4], dtype)
+def test_xtensor_types(fiber, dtype, code, py_value, expected_str):
+    ary = sfnp.device_array.for_host(fiber.device(0), [2, 4], dtype)
     with ary.map(discard=True) as m:
         m.fill(py_value)
     s = str(ary)
@@ -136,8 +136,8 @@ def test_xtensor_types(scope, dtype, code, py_value, expected_str):
         (sfnp.float64, 42.0),
     ],
 )
-def test_items(scope, dtype, value):
-    ary = sfnp.device_array.for_host(scope.device(0), [2, 4], dtype)
+def test_items(fiber, dtype, value):
+    ary = sfnp.device_array.for_host(fiber.device(0), [2, 4], dtype)
     ary.items = [value] * 8
     readback = ary.items.tolist()
     assert readback == [value] * 8
@@ -154,8 +154,8 @@ def test_items(scope, dtype, value):
         (sfnp.float64, 42.0),
     ],
 )
-def test_typed_mapping(scope, dtype, value):
-    ary = sfnp.device_array.for_host(scope.device(0), [2, 4], dtype)
+def test_typed_mapping(fiber, dtype, value):
+    ary = sfnp.device_array.for_host(fiber.device(0), [2, 4], dtype)
     with ary.map(discard=True) as m:
         m.fill(value)
     readback = ary.items.tolist()

@@ -12,22 +12,22 @@ shortfin_cc_component(
   HDRS
     async.h
     device.h
+    fiber.h
     messaging.h
     process.h
     program.h
     worker.h
     scheduler.h
-    scope.h
     system.h
   SRCS
     async.cc
     device.cc
+    fiber.cc
     messaging.cc
     process.cc
     program.cc
     worker.cc
     scheduler.cc
-    scope.cc
     system.cc
   COMPONENTS
     shortfin_support
