@@ -13,7 +13,6 @@ import torch.nn as nn
 
 
 from ...layers import *
-from ...layers.mixture_of_experts_block import PreGatherMoeBlock
 from ...types import Theta
 
 torch.set_printoptions(profile="full")
