@@ -47,8 +47,13 @@ class LlamaHParams:
     @staticmethod
     def from_gguf_props(p: dict[str, Any]):
         name_prefix = "llama"
+        # These shouldnt be required for llama.
+        default_attn_dim = None
+        default_rope_count = None
         if "grok.attention.head_count" in p:
             name_prefix = "grok"
+            default_attn_dim = 128
+            default_rope_count = 128
         default_expert_count = 0
         default_expert_used_count = 0
         default_rope_freq_base = 10000.0
@@ -59,8 +64,12 @@ class LlamaHParams:
             embedding_length=_int_prop(p, f"{name_prefix}.embedding_length"),
             block_count=_int_prop(p, f"{name_prefix}.block_count"),
             feed_forward_length=_int_prop(p, f"{name_prefix}.feed_forward_length"),
-            attn_head_dim=128,  # _int_prop(p, f"{name_prefix}.rope.dimension_count"),
-            rope_dimension_count=128,  # _int_prop(p, f"{name_prefix}.rope.dimension_count"),
+            attn_head_dim=_optional_int_prop(
+                p, f"{name_prefix}.rope.dimension_count", default_attn_dim
+            ),
+            rope_dimension_count=_optional_int_prop(
+                p, f"{name_prefix}.rope.dimension_count", default_rope_count
+            ),
             attention_head_count=attention_head_count,
             attention_layer_norm_rms_epsilon=_float_prop(
                 p, f"{name_prefix}.attention.layer_norm_rms_epsilon"
