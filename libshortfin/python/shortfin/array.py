@@ -40,6 +40,8 @@ device_array = _sfl.array.device_array
 storage = _sfl.array.storage
 DType = _sfl.array.DType
 
+# Ops.
+argmax = _sfl.array.argmax
 
 __all__ = [
     # DType aliases.
@@ -74,4 +76,6 @@ __all__ = [
     "device_array",
     "storage",
     "DType",
+    # Ops.
+    "argmax",
 ]

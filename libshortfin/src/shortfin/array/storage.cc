@@ -61,7 +61,8 @@ storage storage::allocate_device(ScopedDevice &device,
 }
 
 storage storage::allocate_host(ScopedDevice &device,
-                               iree_device_size_t allocation_size) {
+                               iree_device_size_t allocation_size,
+                               bool device_visible) {
   if (!device.raw_device()) {
     throw std::invalid_argument("Cannot allocate with a null device affinity");
   }
@@ -70,12 +71,14 @@ storage storage::allocate_host(ScopedDevice &device,
   iree_hal_buffer_params_t params = {
       .usage = IREE_HAL_BUFFER_USAGE_MAPPING,
       .access = IREE_HAL_MEMORY_ACCESS_ALL,
-      .type = IREE_HAL_MEMORY_TYPE_OPTIMAL_FOR_HOST |
-              IREE_HAL_MEMORY_TYPE_DEVICE_VISIBLE,
+      .type = IREE_HAL_MEMORY_TYPE_OPTIMAL_FOR_HOST,
       .queue_affinity = device.affinity().queue_affinity(),
   };
-  if (device.affinity().queue_affinity() != 0) {
-    params.usage |= IREE_HAL_BUFFER_USAGE_TRANSFER;
+  if (device_visible) {
+    params.type |= IREE_HAL_MEMORY_TYPE_DEVICE_VISIBLE;
+    if (device.affinity().queue_affinity() != 0) {
+      params.usage |= IREE_HAL_BUFFER_USAGE_TRANSFER;
+    }
   }
   SHORTFIN_THROW_IF_ERROR(iree_hal_allocator_allocate_buffer(
       allocator, params, allocation_size, buffer.for_output()));
