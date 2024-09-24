@@ -6,6 +6,8 @@
 
 import pytest
 
+import shortfin as sf
+
 
 def pytest_addoption(parser):
     parser.addoption(
@@ -32,3 +34,21 @@ def pytest_runtest_setup(item):
                 f"test requires system in {required_system_names!r} but has "
                 f"{available_system_names!r} (set with --system arg)"
             )
+
+
+@pytest.fixture
+def cpu_lsys():
+    sc = sf.host.CPUSystemBuilder()
+    lsys = sc.create_system()
+    yield lsys
+    lsys.shutdown()
+
+
+@pytest.fixture
+def cpu_fiber(cpu_lsys):
+    return cpu_lsys.create_fiber()
+
+
+@pytest.fixture
+def cpu_device(cpu_fiber):
+    return cpu_fiber.device(0)

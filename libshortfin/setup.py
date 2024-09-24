@@ -317,6 +317,7 @@ setup(
             "_shortfin",
             "_shortfin_default",
             "shortfin",
+            "shortfin_apps",
         ]
         + (["_shortfin_tracy"] if ENABLE_TRACY else [])
     ),
@@ -326,6 +327,7 @@ setup(
             "_shortfin": str(PYTHON_SOURCE_DIR / "_shortfin"),
             "_shortfin_default": str(PYTHON_DEFAULT_BINARY_DIR / "_shortfin_default"),
             "shortfin": str(PYTHON_SOURCE_DIR / "shortfin"),
+            "shortfin_apps": str(PYTHON_SOURCE_DIR / "shortfin_apps"),
         },
         (
             ({"_shortfin_tracy": str(PYTHON_TRACY_BINARY_DIR / "_shortfin_tracy")})
