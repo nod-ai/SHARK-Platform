@@ -16,62 +16,11 @@ When in question, we draw from the vocabulary and normalization they have done
 
 from dataclasses import dataclass
 from typing import Any, Optional
+from ...layers import *
 
 import torch
 
-__all__ = ["LlamaHParams", "GrokHParams"]
-
-
-@dataclass
-class GrokHParams:
-    """Corresponds 1:1 with the 'LLM' section of the GGUF docs.
-    Comments are only provided if they differ from this source.
-    """
-
-    context_length: int
-    embedding_length: int
-    block_count: int
-    feed_forward_length: int
-    rope_dimension_count: int
-    rope_freq_base: float
-    attention_head_count: int
-    attn_head_dim: int
-    attention_layer_norm_rms_epsilon: float
-    attention_head_count_kv: int
-    expert_count: int
-    expert_used_count: int
-
-    @staticmethod
-    def from_gguf_props(p: dict[str, Any]):
-        default_expert_count = 0
-        default_expert_used_count = 0
-        default_rope_freq_base = 10000.0
-        attention_head_count = _int_prop(p, "grok.attention.head_count")
-
-        return LlamaHParams(
-            context_length=_int_prop(p, "grok.context_length"),
-            embedding_length=_int_prop(p, "grok.embedding_length"),
-            block_count=_int_prop(p, "grok.block_count"),
-            feed_forward_length=_int_prop(p, "grok.feed_forward_length"),
-            attn_head_dim=128,  # _int_prop(p, "grok.rope.dimension_count"),
-            rope_dimension_count=128,  # _int_prop(p, "grok.rope.dimension_count"),
-            attention_head_count=attention_head_count,
-            attention_layer_norm_rms_epsilon=_float_prop(
-                p, "grok.attention.layer_norm_rms_epsilon"
-            ),
-            attention_head_count_kv=_optional_int_prop(
-                p, "grok.attention.head_count_kv", attention_head_count
-            ),
-            rope_freq_base=_optional_float_prop(
-                p, "grok.rope.freq_base", default_rope_freq_base
-            ),
-            expert_count=_optional_int_prop(
-                p, "grok.expert_count", default_expert_count
-            ),
-            expert_used_count=_optional_int_prop(
-                p, "grok.expert_used_count", default_expert_used_count
-            ),
-        )
+__all__ = ["LlamaHParams", "LlamaModelConfig"]
 
 
 @dataclass
@@ -93,6 +42,7 @@ class LlamaHParams:
     attention_head_count_kv: int
     expert_count: int
     expert_used_count: int
+    model_variant: str
 
     @staticmethod
     def from_gguf_props(p: dict[str, Any]):
@@ -127,6 +77,7 @@ class LlamaHParams:
             expert_used_count=_optional_int_prop(
                 p, f"{name_prefix}.expert_used_count", default_expert_used_count
             ),
+            model_variant=name_prefix,
         )
 
 
@@ -162,3 +113,62 @@ def _optional_int_prop(p: dict[str, Any], name: str, default_value: int) -> int:
         return int(value)
     except ValueError as e:
         raise ValueError(f"Property '{name}' expected to be an int and was not") from e
+
+
+@dataclass
+class LlamaModelConfig:
+    hp: LlamaHParams
+
+    # Block sequence stride for a paged KV cache. This must divide evenly
+    # into the context length.
+    block_seq_stride: int = 16
+
+    # Either "paged" or "direct".
+    kv_cache_type: str = "paged"
+
+    # The device on which to place intermediate state.
+    device: Optional[torch.device] = None
+
+    # Dtype to use for general FP activations not otherwise configured.
+    activation_dtype: torch.dtype = torch.float16
+
+    # Dtype to use for attention.
+    attention_dtype: torch.dtype = torch.float16
+
+    # Indicates if running with HuggingFace implementation and ensures
+    # numerical equivalency to HuggingFace's LLaMa if true (by modifying
+    # rotary embedding).
+    use_hf: bool = False
+
+    # If true, then the model may pre-initialize certain tables during
+    # init. This can be better for eager execution but when capturing a program,
+    # it is often better to preserve the calculation explicitly and rely on
+    # the compiler to transform it to an initialization time step. This can
+    # be the difference of many gigabytes of static data being embedded in
+    # the program and not.
+    static_tables: bool = True
+
+    def create_kv_cache(self) -> BaseKVCache:
+        hp = self.hp
+        if self.kv_cache_type == "direct":
+            return DirectKVCache(
+                block_seq_stride=self.block_seq_stride,
+                transformer_block_count=hp.block_count,
+                attn_head_count=hp.attention_head_count_kv,
+                attn_head_dim=hp.attn_head_dim,
+                seq_length=hp.context_length,
+                device=self.device,
+                dtype=self.attention_dtype,
+            )
+        elif self.kv_cache_type == "paged":
+            return PagedKVCache(
+                transformer_block_count=hp.block_count,
+                attn_head_count=hp.attention_head_count_kv,
+                attn_head_dim=hp.attn_head_dim,
+                cache_partition_count=2,  # One for each of K/V.
+                block_seq_stride=self.block_seq_stride,
+                device=self.device,
+                dtype=self.attention_dtype,
+            )
+        else:
+            raise NotImplementedError(f"kv_cache_type = {self.kv_cache_type}")
