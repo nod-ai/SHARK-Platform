@@ -6,7 +6,7 @@
 
 import pytest
 
-import shortfin.apps.llm.components.tokenizer as tokenizer
+import shortfin_apps.llm.components.tokenizer as tokenizer
 
 
 @pytest.fixture
