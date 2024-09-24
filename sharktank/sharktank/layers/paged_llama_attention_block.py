@@ -202,12 +202,19 @@ class PagedLlamaAttentionBlock(ThetaLayer):
             # TODO: This needs to be reworked with index ops.
             assert xk_cache_update.shape[1] == 1
             assert xv_cache_update.shape[1] == 1
-            max_start_pos = 0
-            for row_index in range(bs):
-                row_start_pos = start_positions[row_index].item()
-                max_start_pos = max(row_start_pos, max_start_pos)
-                cache_k[row_index, row_start_pos] = xk_cache_update[row_index, 0]
-                cache_v[row_index, row_start_pos] = xv_cache_update[row_index, 0]
+            for b in range(bs):
+                # Make a tensor because indices must be all tensors, so we can avoid
+                # doing start_positions[row_index].item(), which generates a lot of SymInts.
+                row_index = torch.tensor(
+                    b, dtype=torch.int64, device=xk_cache_update.device
+                )
+                row_start_pos = start_positions[row_index]
+                cache_k.index_put(
+                    (row_index, row_start_pos), xk_cache_update[row_index, 0]
+                )
+                cache_v.index_put(
+                    (row_index, row_start_pos), xv_cache_update[row_index, 0]
+                )
             return cache_k[:, :kv_seq_len], cache_v[:, :kv_seq_len]
 
     def transact_cache_paged(
