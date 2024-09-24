@@ -45,10 +45,10 @@ def cpu_lsys():
 
 
 @pytest.fixture
-def cpu_scope(cpu_lsys):
-    return cpu_lsys.create_scope()
+def cpu_fiber(cpu_lsys):
+    return cpu_lsys.create_fiber()
 
 
 @pytest.fixture
-def cpu_device(cpu_scope):
-    return cpu_scope.device(0)
+def cpu_device(cpu_fiber):
+    return cpu_fiber.device(0)

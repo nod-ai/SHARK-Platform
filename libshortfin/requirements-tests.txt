@@ -7,3 +7,6 @@ uvicorn
 # Libraries needed to build in dev setups.
 setuptools
 wheel
+
+# Deps needed to run all unit tests.
+tokenizers

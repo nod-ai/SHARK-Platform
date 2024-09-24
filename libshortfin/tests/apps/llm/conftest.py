@@ -12,6 +12,6 @@ from shortfin.support.deps import ShortfinDepNotFoundError
 @pytest.fixture(autouse=True)
 def require_deps():
     try:
-        import shortfin.apps.llm
+        import shortfin_apps.llm
     except ShortfinDepNotFoundError as e:
         pytest.skip(f"Dep not available: {e}")

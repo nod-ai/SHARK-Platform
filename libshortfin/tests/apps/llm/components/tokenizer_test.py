@@ -6,12 +6,12 @@
 
 import pytest
 
-import shortfin_apps.llm.components.tokenizer as tokenizer
-
 
 @pytest.fixture
 def bert_tokenizer():
-    return tokenizer.Tokenizer.from_pretrained("hf-pretrained:bert-base-cased")
+    import shortfin_apps.llm.components.tokenizer as tokenizer
+
+    return tokenizer.Tokenizer.from_pretrained("bert-base-cased")
 
 
 def test_tokenizers_lib(bert_tokenizer):
@@ -27,11 +27,11 @@ def test_tokenizers_lib(bert_tokenizer):
     assert bert_tokenizer.encoding_length(enc0) == 12
 
 
-def test_tokenizer_to_array(cpu_scope, bert_tokenizer):
+def test_tokenizer_to_array(cpu_fiber, bert_tokenizer):
     batch_seq_len = 12
     encs = bert_tokenizer.encode(["This is sequence 1", "Sequence 2"])
     bert_tokenizer.post_process_encodings(encs, batch_seq_len)
-    ary = bert_tokenizer.encodings_to_array(cpu_scope.device(0), encs, batch_seq_len)
+    ary = bert_tokenizer.encodings_to_array(cpu_fiber.device(0), encs, batch_seq_len)
     print(ary)
     assert ary.view(0).items.tolist() == [
         101,
@@ -63,7 +63,7 @@ def test_tokenizer_to_array(cpu_scope, bert_tokenizer):
     ]
 
     masks = bert_tokenizer.attention_masks_to_array(
-        cpu_scope.device(0), encs, batch_seq_len
+        cpu_fiber.device(0), encs, batch_seq_len
     )
     print(masks)
     assert masks.view(0).items.tolist() == [1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0]
