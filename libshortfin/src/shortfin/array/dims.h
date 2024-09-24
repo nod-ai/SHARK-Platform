@@ -302,7 +302,6 @@ class SHORTFIN_API InlinedDims {
   _D dims_;
 };
 
-template class InlinedDims<iree_hal_dim_t>;
 using Dims = InlinedDims<iree_hal_dim_t>;
 
 }  // namespace shortfin::array
