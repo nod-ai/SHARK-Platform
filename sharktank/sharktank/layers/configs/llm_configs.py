@@ -18,8 +18,6 @@ from dataclasses import dataclass
 from typing import Any, Optional
 import torch
 
-from ...layers import *
-
 __all__ = ["LlamaHParams", "LlamaModelConfig"]
 
 
@@ -149,28 +147,3 @@ class LlamaModelConfig:
     # be the difference of many gigabytes of static data being embedded in
     # the program and not.
     static_tables: bool = True
-
-    def create_kv_cache(self) -> BaseKVCache:
-        hp = self.hp
-        if self.kv_cache_type == "direct":
-            return DirectKVCache(
-                block_seq_stride=self.block_seq_stride,
-                transformer_block_count=hp.block_count,
-                attn_head_count=hp.attention_head_count_kv,
-                attn_head_dim=hp.attn_head_dim,
-                seq_length=hp.context_length,
-                device=self.device,
-                dtype=self.attention_dtype,
-            )
-        elif self.kv_cache_type == "paged":
-            return PagedKVCache(
-                transformer_block_count=hp.block_count,
-                attn_head_count=hp.attention_head_count_kv,
-                attn_head_dim=hp.attn_head_dim,
-                cache_partition_count=2,  # One for each of K/V.
-                block_seq_stride=self.block_seq_stride,
-                device=self.device,
-                dtype=self.attention_dtype,
-            )
-        else:
-            raise NotImplementedError(f"kv_cache_type = {self.kv_cache_type}")

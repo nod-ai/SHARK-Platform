@@ -10,6 +10,7 @@ import torch.nn as nn
 
 
 from ...layers import *
+from ...utils.create_cache import *
 from ...types import Theta
 
 torch.set_printoptions(profile="full")
@@ -56,7 +57,7 @@ class PagedGrokModelV1(BaseCausalLMModel):
         )
         self.config = config
         self.hp = hp
-        self.cache = config.create_kv_cache()
+        self.cache = create_kv_cache(self.config)
         self.activation_dtype = config.activation_dtype
         self.add_module(
             "token_embedding",

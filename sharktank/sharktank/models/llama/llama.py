@@ -15,6 +15,7 @@ import torch.nn.functional as F
 
 from ...layers import *
 from ...types import *
+from ...utils.create_cache import *
 from ... import ops
 
 __all__ = [
@@ -60,7 +61,7 @@ class PagedLlamaModelV1(BaseCausalLMModel):
         )
         self.config = config
         self.hp = hp
-        self.cache = config.create_kv_cache()
+        self.cache = create_kv_cache(self.config)
         self.activation_dtype = config.activation_dtype
         self.use_hf = config.use_hf
 
