@@ -16,7 +16,7 @@ from sharktank.types import *
 
 
 def _t(name: str, *dims: int):
-    return DefaultPrimitiveTensor(name=name, data=torch.empty(*dims))
+    return DefaultPrimitiveTensor(name=name, data=torch.ones(*dims))
 
 
 def _flat_t_dict(*ts):
