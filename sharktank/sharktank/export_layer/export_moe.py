@@ -44,7 +44,7 @@ def main():
 
     args = cli.parse(parser)
 
-    bs = args.bs
+    bs = args.batch_size
 
     model = PreGatherMoeBlock(
         theta=make_moe_block_theta()("blk.0"),
@@ -56,13 +56,13 @@ def main():
     fxb = FxProgramsBuilder(model)
     input = make_rand_torch((bs, 32, 6144))
 
-    @fxb.export_program(name="prefill_grok", args=(input,))
+    @fxb.export_program(name="prefill_moe", args=(input,))
     def _(model, input: torch.Tensor) -> torch.Tensor:
         return model(input)
 
     input = make_rand_torch((bs, 1, 6144))
 
-    @fxb.export_program(name="decode_grok", args=(input,))
+    @fxb.export_program(name="decode_moe", args=(input,))
     def _(model, input: torch.Tensor) -> torch.Tensor:
         return model(input)
 
