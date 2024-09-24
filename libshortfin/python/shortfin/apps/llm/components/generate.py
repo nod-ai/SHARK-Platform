@@ -37,7 +37,7 @@ class GenerateItemProcess(sf.Process):
         index: int,
         input_token_ids: list[int],
     ):
-        super().__init__(scope=client.scope)
+        super().__init__(fiber=client.fiber)
         self.client = client
         self.gen_req = gen_req
         self.index = index
@@ -82,7 +82,7 @@ class ClientGenerateBatchProcess(sf.Process):
         gen_req: GenerateReqInput,
         responder: FastAPIResponder,
     ):
-        super().__init__(scope=service.main_scope)
+        super().__init__(fiber=service.main_fiber)
         self.gen_req = gen_req
         self.responder = responder
         self.tokenizer = service.tokenizer

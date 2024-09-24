@@ -40,16 +40,16 @@ class AttnPageCache:
     per page, outside of the model, it is just a list of pages of a certain
     element type and number of elements (all inner dims are flattened).
 
-    One page table is allocated per device in a scope. Currently, this is a
+    One page table is allocated per device in a fiber. Currently, this is a
     dense allocation with committed memory but in the future, we may just
     allocate the address space and lazily populate it with committed memory.
 
-    The cache is unique because usage of it can span scopes and concurrency
+    The cache is unique because usage of it can span fibers and concurrency
     is implicitly managed at the block level (i.e. freshly acquired blocks
     are assumed to be uninitialized and available immediately for use).
 
-    It is initialized with a discrete list of scoped devices from a scope but
-    cache usage can be done from any scope which includes those devices.
+    It is initialized with a discrete list of fiberd devices from a fiber but
+    cache usage can be done from any fiber which includes those devices.
     """
 
     def __init__(

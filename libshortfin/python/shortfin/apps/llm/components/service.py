@@ -46,12 +46,12 @@ class GenerateService:
         self.inference_modules: list[sf.ProgramModule] = []
 
         self.main_worker = sysman.ls.create_worker(f"{name}-inference")
-        self.main_scope = sysman.ls.create_scope(self.main_worker)
+        self.main_fiber = sysman.ls.create_fiber(self.main_worker)
 
         # Scope dependent objects.
         self.batcher = BatcherProcess(self)
         self.page_cache = AttnPageCache(
-            devices=self.main_scope.devices_dict.values(), model_params=model_params
+            devices=self.main_fiber.devices_dict.values(), model_params=model_params
         )
 
     def load_inference_module(self, vmfb_path: Path):
@@ -62,7 +62,7 @@ class GenerateService:
     ):
         p = sf.StaticProgramParameters(self.sysman.ls, parameter_scope=parameter_scope)
         for path in paths:
-            logging.info("Loading parameter scope '%s' from: %s", parameter_scope, path)
+            logging.info("Loading parameter fiber '%s' from: %s", parameter_scope, path)
             p.load(path, format=format)
         self.inference_parameters.append(p)
 
@@ -74,7 +74,7 @@ class GenerateService:
                 )
             ]
             + self.inference_modules,
-            scope=self.main_scope,
+            fiber=self.main_fiber,
             trace_execution=False,
         )
         # Resolve prefill entrypoints.
@@ -116,7 +116,7 @@ class BatcherProcess(sf.Process):
     STROBE_LONG_DELAY = 0.25
 
     def __init__(self, service: GenerateService):
-        super().__init__(scope=service.main_scope)
+        super().__init__(fiber=service.main_fiber)
         self.service = service
         self.batcher_infeed = self.system.create_queue()
         self.pending_prefills: set[PrefillRequest] = set()
@@ -213,7 +213,7 @@ class PrefillExecutorProcess(sf.Process):
     """Executes a prefill batch."""
 
     def __init__(self, service: GenerateService, seq_stride: int, page_tables):
-        super().__init__(scope=service.main_scope)
+        super().__init__(fiber=service.main_fiber)
         self.service = service
         self.seq_stride = seq_stride
         self.prefill_requests: list[PrefillRequest] = []
@@ -241,7 +241,7 @@ class PrefillExecutorProcess(sf.Process):
             # Prepare inputs.
             # TODO: Better support in shortfin for h2d. The best way to do it is
             # device dependent.
-            device0 = self.scope.device(0)
+            device0 = self.fiber.device(0)
             int_dtype = sfnp.int64
             tokens = sfnp.device_array.for_device(device0, [bs, bsl], int_dtype)
             seq_lens = sfnp.device_array.for_device(device0, [bs], int_dtype)
