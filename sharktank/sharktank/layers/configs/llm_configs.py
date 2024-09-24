@@ -17,7 +17,7 @@ When in question, we draw from the vocabulary and normalization they have done
 from dataclasses import dataclass
 from typing import Any, Optional
 
-__all__ = ["LlamaHParams"]
+__all__ = ["LlamaHParams", "LlamaModelConfig"]
 
 
 @dataclass
@@ -43,10 +43,7 @@ class LlamaHParams:
 
     @staticmethod
     def from_gguf_props(p: dict[str, Any]):
-        model_arch = p["general.architecture"]
-        name_prefix = "llama"
-        if model_arch == "grok":
-            name_prefix = "grok"
+        name_prefix = p["general.architecture"]
         default_expert_count = 0
         default_expert_used_count = 0
         default_rope_freq_base = 10000.0
@@ -57,7 +54,7 @@ class LlamaHParams:
         )
 
         return LlamaHParams(
-            model_arch=model_arch,
+            model_arch=name_prefix,
             context_length=_int_prop(p, f"{name_prefix}.context_length"),
             embedding_length=_int_prop(p, f"{name_prefix}.embedding_length"),
             block_count=_int_prop(p, f"{name_prefix}.block_count"),
@@ -115,3 +112,62 @@ def _optional_int_prop(p: dict[str, Any], name: str, default_value: int) -> int:
         return int(value)
     except ValueError as e:
         raise ValueError(f"Property '{name}' expected to be an int and was not") from e
+
+
+@dataclass
+class LlamaModelConfig:
+    hp: LlamaHParams
+
+    # Block sequence stride for a paged KV cache. This must divide evenly
+    # into the context length.
+    block_seq_stride: int = 16
+
+    # Either "paged" or "direct".
+    kv_cache_type: str = "paged"
+
+    # The device on which to place intermediate state.
+    device: Optional[torch.device] = None
+
+    # Dtype to use for general FP activations not otherwise configured.
+    activation_dtype: torch.dtype = torch.float16
+
+    # Dtype to use for attention.
+    attention_dtype: torch.dtype = torch.float16
+
+    # Indicates if running with HuggingFace implementation and ensures
+    # numerical equivalency to HuggingFace's LLaMa if true (by modifying
+    # rotary embedding).
+    use_hf: bool = False
+
+    # If true, then the model may pre-initialize certain tables during
+    # init. This can be better for eager execution but when capturing a program,
+    # it is often better to preserve the calculation explicitly and rely on
+    # the compiler to transform it to an initialization time step. This can
+    # be the difference of many gigabytes of static data being embedded in
+    # the program and not.
+    static_tables: bool = True
+
+    def create_kv_cache(self) -> BaseKVCache:
+        hp = self.hp
+        if self.kv_cache_type == "direct":
+            return DirectKVCache(
+                block_seq_stride=self.block_seq_stride,
+                transformer_block_count=hp.block_count,
+                attn_head_count=hp.attention_head_count_kv,
+                attn_head_dim=hp.attn_head_dim,
+                seq_length=hp.context_length,
+                device=self.device,
+                dtype=self.attention_dtype,
+            )
+        elif self.kv_cache_type == "paged":
+            return PagedKVCache(
+                transformer_block_count=hp.block_count,
+                attn_head_count=hp.attention_head_count_kv,
+                attn_head_dim=hp.attn_head_dim,
+                cache_partition_count=2,  # One for each of K/V.
+                block_seq_stride=self.block_seq_stride,
+                device=self.device,
+                dtype=self.attention_dtype,
+            )
+        else:
+            raise NotImplementedError(f"kv_cache_type = {self.kv_cache_type}")

@@ -18,4 +18,4 @@ from .ffn_block import FFN
 from .ffn_moe_block import FFNMOE
 from .mixture_of_experts_block import SparseMoeBlock, PreGatherMoeBlock
 
-from . import configs
+from .configs import *

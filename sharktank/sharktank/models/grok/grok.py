@@ -4,9 +4,6 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-from typing import Optional
-
-from dataclasses import dataclass
 
 import torch
 import torch.nn as nn
@@ -18,60 +15,8 @@ from ...types import Theta
 torch.set_printoptions(profile="full")
 
 __all__ = [
-    "LlamaModelConfig",
     "PagedGrokModelV1",
 ]
-
-################################################################################
-# Config
-################################################################################
-
-
-@dataclass
-class LlamaModelConfig:
-    hp: configs.LlamaHParams
-
-    # Block sequence stride for a paged KV cache. This must divide evenly
-    # into the context length.
-    block_seq_stride: int = 16
-
-    # Either "paged" or "direct".
-    kv_cache_type: str = "paged"
-
-    # The device on which to place intermediate state.
-    device: Optional[torch.device] = None
-
-    # Dtype to use for general FP activations not otherwise configured.
-    activation_dtype: torch.dtype = torch.float16
-
-    # Dtype to use for attention.
-    attention_dtype: torch.dtype = torch.float16
-
-    def create_kv_cache(self) -> BaseKVCache:
-        hp = self.hp
-        if self.kv_cache_type == "direct":
-            return DirectKVCache(
-                block_seq_stride=self.block_seq_stride,
-                transformer_block_count=hp.block_count,
-                attn_head_count=hp.attention_head_count_kv,
-                attn_head_dim=hp.attn_head_dim,
-                seq_length=hp.context_length,
-                device=self.device,
-                dtype=self.attention_dtype,
-            )
-        elif self.kv_cache_type == "paged":
-            return PagedKVCache(
-                transformer_block_count=hp.block_count,
-                attn_head_count=hp.attention_head_count_kv,
-                attn_head_dim=hp.attn_head_dim,
-                cache_partition_count=2,  # One for each of K/V.
-                block_seq_stride=self.block_seq_stride,
-                device=self.device,
-                dtype=self.attention_dtype,
-            )
-        else:
-            raise NotImplementedError(f"kv_cache_type = {self.kv_cache_type}")
-
 
 ################################################################################
 # Models
