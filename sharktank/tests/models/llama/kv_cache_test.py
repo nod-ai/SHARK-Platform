@@ -72,7 +72,6 @@ class KVCacheTest(unittest.TestCase):
                     head_dim=self.head_dim,
                     head_count_kv=self.head_count_kv,
                     rms_epsilon=self.rms_epsilon,
-                    use_hf=False,
                 )
                 for n in range(self.block_count)
             ]
@@ -87,7 +86,6 @@ class KVCacheTest(unittest.TestCase):
                     head_dim=self.head_dim,
                     head_count_kv=self.head_count_kv,
                     rms_epsilon=self.rms_epsilon,
-                    use_hf=False,
                 )
                 for n in range(self.block_count)
             ]
