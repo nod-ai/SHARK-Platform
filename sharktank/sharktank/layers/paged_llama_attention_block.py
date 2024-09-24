@@ -36,7 +36,7 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         head_dim: int,
         head_count_kv: int,
         rms_epsilon: float,
-        use_grok: bool = False,
+        use_grok: Optional[bool] = False,
     ):
         super().__init__(theta)
 

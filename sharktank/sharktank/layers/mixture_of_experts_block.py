@@ -130,7 +130,7 @@ class PreGatherMoeBlock(ThetaLayer):
         expert_count: int,
         expert_used_count: int,
         rms_epsilon: float,
-        use_grok: bool = False,
+        use_grok: Optional[bool] = False,
     ):
         super().__init__(theta)
 
