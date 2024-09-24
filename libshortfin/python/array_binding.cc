@@ -114,10 +114,10 @@ static const char DOCSTRING_STORAGE_MAP[] =
 
 Support kwargs of:
 
-read: Enables read access to the mapped memory.
-write: Enables write access to the mapped memory and will flush upon close
+| read: Enables read access to the mapped memory.
+| write: Enables write access to the mapped memory and will flush upon close
   (for non-unified memory systems).
-discard: Indicates that the entire memory map should be treated as if it will
+| discard: Indicates that the entire memory map should be treated as if it will
   be overwritten. Initial contents will be undefined. Implies `write=True`.
 
 Mapping memory for access from the host requires a compatible buffer that has

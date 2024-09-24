@@ -25,6 +25,7 @@ class RMSNormLayer(ThetaLayer):
         weight_name: str = "weight",
         epsilon: float = 1e-6,
         dtype: torch.dtype = torch.float32,
+        debug_save_file=None,
     ):
         super().__init__(theta)
         self.weight = self.theta_tensor(weight_name)
