@@ -97,7 +97,6 @@ class PagedLlamaModelV1(BaseCausalLMModel):
                     head_dim=hp.attn_head_dim,
                     head_count_kv=hp.attention_head_count_kv,
                     rms_epsilon=hp.attention_layer_norm_rms_epsilon,
-                    use_hf=self.use_hf,
                 )
                 for n in range(hp.block_count)
             ]
@@ -243,7 +242,6 @@ class AttentionFFNBlock(ThetaLayer):
                 head_dim=head_dim,
                 head_count_kv=head_count_kv,
                 rms_epsilon=rms_epsilon,
-                use_grok=False,
             ),
         )
         self.add_module(
