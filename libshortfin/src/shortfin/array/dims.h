@@ -68,7 +68,7 @@ class SHORTFIN_API InlinedDims {
       return iterator(p - d);
     }
     constexpr difference_type operator-(iterator rhs) const {
-      return reinterpret_cast<difference_type>(p - rhs.p);
+      return static_cast<difference_type>(p - rhs.p);
     }
 
    private:
@@ -115,7 +115,7 @@ class SHORTFIN_API InlinedDims {
       return const_iterator(p - d);
     }
     constexpr difference_type operator-(const_iterator rhs) const {
-      return reinterpret_cast<difference_type>(p - rhs.p);
+      return static_cast<difference_type>(p - rhs.p);
     }
 
    private:
@@ -302,7 +302,7 @@ class SHORTFIN_API InlinedDims {
   _D dims_;
 };
 
-extern template class InlinedDims<iree_hal_dim_t>;
+template class InlinedDims<iree_hal_dim_t>;
 using Dims = InlinedDims<iree_hal_dim_t>;
 
 }  // namespace shortfin::array

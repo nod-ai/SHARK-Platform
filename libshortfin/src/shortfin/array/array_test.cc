@@ -43,7 +43,7 @@ TEST_F(DeviceArrayTest, contents_to_s_valid) {
       device, std::to_array<size_t>({2, 3}), DType::float32());
   {
     auto map = ary1.typed_data_w<float>();
-    std::fill(map.begin(), map.end(), 42.0);
+    std::fill(map.begin(), map.end(), 42.0f);
   }
 
   std::optional<std::string> contents = ary1.contents_to_s();
