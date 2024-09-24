@@ -21,13 +21,13 @@ def lsys():
 
 
 @pytest.fixture
-def scope(lsys):
-    return lsys.create_scope()
+def fiber(lsys):
+    return lsys.create_fiber()
 
 
 @pytest.fixture
-def device(scope):
-    return scope.device(0)
+def device(fiber):
+    return fiber.device(0)
 
 
 def test_argmax(device):
