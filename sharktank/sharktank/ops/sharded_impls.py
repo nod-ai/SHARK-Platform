@@ -6,14 +6,16 @@
 
 import torch
 from torch import Tensor
-from typing import List, Optional, Sequence
+from typing import List, Optional, Sequence, Union, Any, Tuple
 import itertools
 from numbers import Number
+import math
 
 from ..types import (
     AnyTensor,
     DefaultPrimitiveTensor,
     InferenceTensor,
+    PrimitiveTensor,
     ReplicatedTensor,
     ShardedTensor,
     sharding,
@@ -22,9 +24,10 @@ from ..types import (
     UnreducedTensor,
 )
 from ..types.tensors import unbox_tensor
-from ._registry import AllOfType
+from ._registry import AllOfType, AllOfExprsVariadic, IsOfType
 from .signatures import *
-from .shape import broadcast_dims
+from .shape import broadcast_dims, broadcast_dim, unbroadcast_dim
+from ..utils import longest_equal_range
 
 
 @all_gather.override(SplitPrimitiveTensor)
@@ -42,9 +45,9 @@ def all_gather_split(
     return ReplicatedTensor(ts=shards)
 
 
-@all_reduce.override(SplitPrimitiveTensor)
-def all_reduce_split(
-    input: SplitPrimitiveTensor,
+@all_reduce.override(AllOfType(SplitPrimitiveTensor, UnreducedTensor))
+def all_reduce_split_or_unreduced(
+    input: Union[SplitPrimitiveTensor, UnreducedTensor],
 ) -> ReplicatedTensor:
     # For each device move the shards to it and do a reduction.
     # If we don't move first, common sub-expression elimination is free to collapse all
@@ -58,8 +61,20 @@ def all_reduce_split(
     return ReplicatedTensor(ts=shards)
 
 
+@cat.override(AllOfType(ReplicatedTensor))
+def cat_replicated(tensors: Sequence[ReplicatedTensor], dim: int) -> ReplicatedTensor:
+    assert len(tensors) > 0
+    shard_count = tensors[0].shard_count
+    assert all([t.shard_count == shard_count for t in tensors])
+
+    shards = [cat(shards, dim) for shards in zip(*[t.shards for t in tensors])]
+    return ReplicatedTensor(ts=shards)
+
+
 @cat.override(AllOfType(SplitPrimitiveTensor))
-def cat_sharded(tensors: Sequence[SplitPrimitiveTensor], dim: int):
+def cat_split(
+    tensors: Sequence[SplitPrimitiveTensor], dim: int
+) -> SplitPrimitiveTensor:
     assert len(tensors) > 0
     assert all(
         [
@@ -241,49 +256,67 @@ conv2d.override(Tensor, SplitPrimitiveTensor, auto_dequant=True)(
 
 
 @elementwise.override(ReplicatedTensor)
-def replicated_elementwise_unary(operator, x: ReplicatedTensor):
-    partials = [operator(unbox_tensor(pt)) for pt in x.shards]
+def replicated_elementwise_unary(operator, x: ReplicatedTensor, *args, **kwargs):
+    partials = [operator(unbox_tensor(pt), *args, **kwargs) for pt in x.shards]
     return ReplicatedTensor(ts=partials)
 
 
 @elementwise.override(SplitPrimitiveTensor)
-def split_elementwise_unary(operator, x: SplitPrimitiveTensor):
-    partials = [operator(unbox_tensor(pt)) for pt in x.shards]
+def split_elementwise_unary(operator, x: SplitPrimitiveTensor, *args, **kwargs):
+    partials = [operator(unbox_tensor(pt), *args, **kwargs) for pt in x.shards]
     return SplitPrimitiveTensor(shard_dim=x.shard_dim, shape=x.shape, ts=partials)
+
+
+@elementwise.override(ReplicatedTensor, ReplicatedTensor)
+def replicated_elementwise_binary(
+    operator, x: ReplicatedTensor, y: ReplicatedTensor, *args, **kwargs
+):
+    assert x.shard_count == y.shard_count
+    shards = [
+        operator(unbox_tensor(shard_x), unbox_tensor(shard_y), *args, **kwargs)
+        for shard_x, shard_y in zip(x.shards, y.shards)
+    ]
+    return ReplicatedTensor(ts=shards)
 
 
 @elementwise.override(SplitPrimitiveTensor, SplitPrimitiveTensor)
 def split_elementwise_binary(
-    operator, x: SplitPrimitiveTensor, y: SplitPrimitiveTensor
+    operator, x: SplitPrimitiveTensor, y: SplitPrimitiveTensor, *args, **kwargs
 ):
     assert x.shard_count == y.shard_count
     x_shard_dim, y_shard_dim = broadcast_dims([x.shard_dim, y.shard_dim], [x, y])
     assert x_shard_dim == y_shard_dim
     pt_xs = [unbox_tensor(pt) for pt in x.shards]
     pt_ys = [unbox_tensor(pt) for pt in y.shards]
-    partials = [operator(pt_x, pt_y) for pt_x, pt_y in zip(pt_xs, pt_ys)]
-    return SplitPrimitiveTensor(shard_dim=x.shard_dim, shape=x.shape, ts=partials)
+    partials = [
+        operator(pt_x, pt_y, *args, **kwargs) for pt_x, pt_y in zip(pt_xs, pt_ys)
+    ]
+    return SplitPrimitiveTensor(
+        shard_dim=x.shard_dim,
+        shape=torch.broadcast_shapes(x.shape, y.shape),
+        ts=partials,
+    )
 
 
 @elementwise.override(SplitPrimitiveTensor, Number)
 def elementwise_binary_split_lhs_scalar_rhs(
-    operator, x: SplitPrimitiveTensor, y: Number
+    operator, x: SplitPrimitiveTensor, y: Number, *args, **kwargs
 ):
     pt_xs = [unbox_tensor(pt) for pt in x.shards]
-    partials = [operator(pt_x, y) for pt_x in pt_xs]
+    partials = [operator(pt_x, y, *args, **kwargs) for pt_x in pt_xs]
     return SplitPrimitiveTensor(shard_dim=x.shard_dim, shape=x.shape, ts=partials)
 
 
 @elementwise.override(SplitPrimitiveTensor, Tensor)
 def elementwise_binary_split_lhs_tensor_rhs(
-    operator, x: SplitPrimitiveTensor, y: Tensor
+    operator, x: SplitPrimitiveTensor, y: Tensor, *args, **kwargs
 ):
-    return elementwise(operator, x, replicate(y, count=x.shard_count))
+    return elementwise(operator, x, reshard_like(y, like=x), *args, **kwargs)
 
 
 @elementwise.override(ReplicatedTensor, SplitPrimitiveTensor)
 def elementwise_binary_replicated_lhs_sharder_rhs(
-    operator, x: ReplicatedTensor, y: SplitPrimitiveTensor
+    operator, x: ReplicatedTensor, y: SplitPrimitiveTensor, *args, **kwargs
 ):
     if x.shard_count != y.shard_count:
         raise ValueError(
@@ -292,20 +325,76 @@ def elementwise_binary_replicated_lhs_sharder_rhs(
     # A replicated tensor can be split with no cost.
     # It is natural to propagate the split instead of the replication.
     x_sharded = reshard_like(x, like=y)
-    return elementwise(operator, x_sharded, y)
+    return elementwise(operator, x_sharded, y, *args, **kwargs)
 
 
 @elementwise.override(SplitPrimitiveTensor, ReplicatedTensor)
 def elementwise_binary_split_lhs_replicated_rhs(
-    operator, x: SplitPrimitiveTensor, y: ReplicatedTensor
+    operator, x: SplitPrimitiveTensor, y: ReplicatedTensor, *args, **kwargs
 ):
     assert len(y.shape) > 0, "0-rank not supported"
     if x.shard_count != y.shard_count:
         raise ValueError(
             f"Operands' number of shards not equal ({x.shard_count} != {y.shard_count})"
         )
+
+    shard_dim_in_res = broadcast_dim(x.shard_dim, [x.shape, y.shape])
+    shard_dim_in_y = unbroadcast_dim(shard_dim_in_res, [y.shape, x.shape])
+    is_shard_dim_broadcasted_in_y = (
+        shard_dim_in_y is None or y.shape[shard_dim_in_y] == 1
+    )
+    if is_shard_dim_broadcasted_in_y:
+        shards = [
+            elementwise(operator, x_shard, y_shard)
+            for x_shard, y_shard in zip(x.shards, y.shards)
+        ]
+        return SplitPrimitiveTensor(ts=shards, shard_dim=shard_dim_in_res)
+
     y_sharded = reshard_like(y, like=x)
-    return elementwise(operator, x, y_sharded)
+    return elementwise(operator, x, y_sharded, *args, **kwargs)
+
+
+@elementwise.override(ReplicatedTensor, UnreducedTensor)
+def elementwise_binary_replicated_lhs_unreduced_rhs(
+    operator, x: ReplicatedTensor, y: UnreducedTensor, *args, **kwargs
+):
+    if x.shard_count != y.shard_count:
+        raise ValueError(
+            f"Operands' number of shards not equal ({x.shard_count} != {y.shard_count})"
+        )
+    y_replicated = reshard_like(y, like=x)
+    return elementwise(operator, x, y_replicated, *args, **kwargs)
+
+
+@elementwise.override(ReplicatedTensor, Tensor)
+def elementwise_binary_replicated_lhs_unsharded_rhs(
+    operator, x: ReplicatedTensor, y: Tensor, *args, **kwargs
+):
+    y_replicated = reshard_like(y, like=x)
+    return elementwise(operator, x, y_replicated, *args, **kwargs)
+
+
+@elementwise.override(Tensor, ReplicatedTensor)
+def elementwise_binary_replicated_lhs_unsharded_rhs(
+    operator, x: Tensor, y: ReplicatedTensor, *args, **kwargs
+):
+    x_replicated = reshard_like(x, like=y)
+    return elementwise(operator, x_replicated, y, *args, **kwargs)
+
+
+# Embedding Lookup
+@embedding_lookup.override(ReplicatedTensor, ReplicatedTensor)
+def embedding_lookup_default(
+    input: ReplicatedTensor, embedding_matrix: ReplicatedTensor, dtype: torch.dtype
+):
+    assert input.shard_count == embedding_matrix.shard_count
+    shards = [
+        embedding_lookup(input_shard, embedding_matrix_shard, dtype)
+        for input_shard, embedding_matrix_shard in zip(
+            input.shards, embedding_matrix.shards
+        )
+    ]
+    return ReplicatedTensor(ts=shards)
 
 
 @equal.override(ReplicatedTensor)
@@ -316,6 +405,77 @@ def equal_replicated(a: ReplicatedTensor, b: AnyTensor) -> bool:
 @equal.override(SplitPrimitiveTensor)
 def equal_split(a: SplitPrimitiveTensor, b: AnyTensor) -> bool:
     return a.is_deep_equal(b)
+
+
+@expand.override(SplitPrimitiveTensor)
+def expand_split(
+    tensor: SplitPrimitiveTensor, shape: List[int]
+) -> SplitPrimitiveTensor:
+    assert len(shape) == len(tensor.shape)
+    expanded_dims = [
+        i
+        for i, (old_dim, new_dim) in enumerate(zip(tensor.shape, shape))
+        if old_dim == 1 and new_dim != 1
+    ]
+    assert (
+        tensor.shard_dim not in expanded_dims
+    ), "Expanding a split dimension is not supported"
+
+    def set_element(l: List, idx: int, el: Any) -> List:
+        l[idx] = el
+        return l
+
+    shards = [
+        expand(
+            shard,
+            set_element(list(shape), tensor.shard_dim, shard.shape[tensor.shard_dim]),
+        )
+        for shard in tensor.shards
+    ]
+    return SplitPrimitiveTensor(ts=shards, shard_dim=tensor.shard_dim)
+
+
+@flatten.override(ReplicatedTensor)
+def flatten_replicated(
+    input: ReplicatedTensor, start_dim: int, end_dim: int
+) -> ReplicatedTensor:
+    shards = [shard.flatten(start_dim, end_dim) for shard in input.shards]
+    return ReplicatedTensor(ts=shards)
+
+
+@flatten.override(SplitPrimitiveTensor)
+def flatten_split(
+    input: SplitPrimitiveTensor, start_dim: int, end_dim: int
+) -> SplitPrimitiveTensor:
+    end_dim_resolved = len(input.shape) - 1 if end_dim == -1 else end_dim
+    assert input.shard_dim <= start_dim or end_dim_resolved < input.shard_dim, (
+        "Flattening of a sharded dimension that is not the leading dimension in the"
+        " flattening dimension range is not supported. This would result in a"
+        " block-cyclic sharding which is not implemented."
+    )
+    assert (
+        input.shard_dim != start_dim
+        or input.shape[input.shard_dim] % input.shard_count == 0
+    ), "If the leading flattening dimension is the split dimension, its size must be divisible by the shard count."
+    shards = [shard.flatten(start_dim, end_dim) for shard in input.shards]
+    shard_dim = (
+        input.shard_dim
+        if input.shard_dim <= start_dim
+        else input.shard_dim - (end_dim_resolved - start_dim)
+    )
+    return SplitPrimitiveTensor(ts=shards, shard_dim=shard_dim)
+
+
+@gather.override(ReplicatedTensor, ReplicatedTensor)
+def gather_replicated(
+    input: ReplicatedTensor, dim: int, index: ReplicatedTensor
+) -> Tensor:
+    assert input.shard_count == index.shard_count
+    shards = [
+        gather(input_shard, dim, index_shard)
+        for input_shard, index_shard in zip(input.shards, index.shards)
+    ]
+    return ReplicatedTensor(ts=shards)
 
 
 @group_norm_affine.override(
@@ -336,6 +496,78 @@ def shareded_group_norm_affine(input, weight, bias, *, num_groups, eps):
     ]
 
     return SplitPrimitiveTensor(shard_dim=1, ts=result_shards)
+
+
+@index_copy_.override(SplitPrimitiveTensor, ReplicatedTensor, SplitPrimitiveTensor)
+def index_copy__split_replicated_split(
+    inout: SplitPrimitiveTensor,
+    dim: int,
+    index: ReplicatedTensor,
+    tensor: SplitPrimitiveTensor,
+) -> SplitPrimitiveTensor:
+    assert (
+        inout.shard_count == index.shard_count
+        and inout.shard_count == tensor.shard_count
+    )
+    assert inout.shard_dim == tensor.shard_dim
+    assert inout.shard_dim != dim
+    for inout_shard, index_shard, tensor_shard in zip(
+        inout.shards, index.shards, tensor.shards
+    ):
+        index_copy_(inout_shard, dim, index_shard, tensor_shard)
+    return inout
+
+
+@index_put_.override(
+    AllOfExprsVariadic(
+        IsOfType(SplitPrimitiveTensor),
+        IsOfType(SplitPrimitiveTensor),
+        IsOfType(Tensor, PrimitiveTensor, ReplicatedTensor),
+    )
+)
+def index_put__split(
+    inout: SplitPrimitiveTensor,
+    indices: Tuple[Union[Tensor, PrimitiveTensor, ReplicatedTensor]],
+    values: SplitPrimitiveTensor,
+) -> SplitPrimitiveTensor:
+    # TODO: verify that the values split dimension is not being indexed or implement
+    # this case.
+    indices = [replicate(idx, count=inout.shard_count) for idx in indices]
+    for i, shard in enumerate(inout.shards):
+        shard_indices = [idx.shards[i] for idx in indices]
+        shard.index_put_(shard_indices, values.shards[i])
+    return inout
+
+
+@index_select.override(ReplicatedTensor, ReplicatedTensor)
+def index_select_replicated(
+    tensor: ReplicatedTensor,
+    dim: int,
+    index: ReplicatedTensor,
+) -> ReplicatedTensor:
+    assert tensor.shard_count == index.shard_count
+    shards = [
+        index_select(tensor_shard, dim, index_shard)
+        for tensor_shard, index_shard in zip(tensor.shards, index.shards)
+    ]
+    return ReplicatedTensor(ts=shards)
+
+
+@index_select.override(SplitPrimitiveTensor, ReplicatedTensor)
+def index_select_split_replicated(
+    tensor: SplitPrimitiveTensor,
+    dim: int,
+    index: ReplicatedTensor,
+) -> ReplicatedTensor:
+    assert tensor.shard_count == index.shard_count
+    assert (
+        dim != tensor.shard_dim
+    ), "Indexing along the split dimension is not supported."
+    shards = [
+        index_select(tensor_shard, dim, index_shard)
+        for tensor_shard, index_shard in zip(tensor.shards, index.shards)
+    ]
+    return SplitPrimitiveTensor(ts=shards, shard_dim=tensor.shard_dim)
 
 
 @interpolate.override(ReplicatedTensor)
@@ -432,13 +664,14 @@ def matmul_replicated_lhs_split_rhs(
     lhs: ReplicatedTensor, rhs: SplitPrimitiveTensor, *, transpose_rhs: bool
 ) -> SplitPrimitiveTensor | UnreducedTensor:
     assert lhs.shard_count == rhs.shard_count
+    assert len(rhs.shape) == 2
 
     if transpose_rhs:
         return matmul(lhs, rhs.T)
 
     rhs_reduction_dim = 1
     if rhs_reduction_dim != rhs.shard_dim:
-        lhs_reduction_dimension = 0
+        lhs_reduction_dimension = len(lhs.shape) - 1
         lhs_split = reshard_split(
             lhs, dim=lhs_reduction_dimension, count=lhs.shard_count
         )
@@ -512,9 +745,11 @@ def matmul_split(
             f"Cannot matmul split tensors of different shard_count: "
             f"({lhs.shard_count} vs {rhs.shard_count})"
         )
+    if transpose_rhs:
+        return matmul(lhs, rhs.T)
 
     lhs_reduction_dim = len(lhs.shape) - 1
-    rhs_reduction_dim = 1 if transpose_rhs else 0
+    rhs_reduction_dim = len(rhs.shape) - 2 if len(rhs.shape) > 1 else len(rhs.shape) - 1
 
     # The reduction dimension is split on both tensors.
     if lhs_reduction_dim == lhs.shard_dim and rhs_reduction_dim == rhs.shard_dim:
@@ -524,16 +759,56 @@ def matmul_split(
         ]
         return UnreducedTensor(ts=partials)
 
+    is_batched_matmul = len(lhs.shape) > 2 or len(rhs.shape) > 2
+    if (
+        is_batched_matmul
+        and len(lhs.shape) == len(rhs.shape)
+        and lhs.shard_dim == rhs.shard_dim
+    ):
+        # The same batch dim is sharded for both arguments.
+        shards = [
+            matmul(lhs_shard, rhs_shard)
+            for lhs_shard, rhs_shard in zip(lhs.shards, rhs.shards)
+        ]
+        return SplitPrimitiveTensor(ts=shards, shard_dim=lhs.shard_dim)
+
+    # -1 for missing parallel dim.
+    lhs_parallel_dim = len(lhs.shape) - 2
+    rhs_parallel_dim = len(rhs.shape) - 1 if len(rhs.shape) > 1 else -1
+
     # One parallel dimension is split for each tensor.
-    if lhs_reduction_dim != lhs.shard_dim and rhs_reduction_dim != rhs.shard_dim:
-        if transpose_rhs:
-            rhs = rhs.T
+    # Or lhs batch dim and rhs parallel dim are split.
+    if lhs.shard_dim <= lhs_parallel_dim and rhs_parallel_dim == rhs.shard_dim:
         # We gather along the rhs shard dim.
         # It is more natural to preserve the sharding axis of the input.
         shards = [sharded_cat(matmul(lhs_shard, rhs)) for lhs_shard in lhs.shards]
         return SplitPrimitiveTensor(ts=shards, shard_dim=lhs.shard_dim)
 
     assert False, "Sharding configuration not supported"
+
+
+@mean.override(ReplicatedTensor)
+def mean_replicated(
+    x: ReplicatedTensor,
+    dim: Union[int, List[int]],
+    keepdim: bool,
+    *,
+    dtype: torch.dtype,
+) -> None:
+    shards = [
+        torch.mean(unbox_tensor(shard), dim=dim, keepdim=keepdim, dtype=dtype)
+        for shard in x.shards
+    ]
+    return ReplicatedTensor(ts=shards)
+
+
+@module_register_buffer.override(torch.nn.Module, ShardedTensor)
+def module_register_buffer_sharded(
+    module: torch.nn.Module, name: str, tensor: ShardedTensor
+) -> None:
+    for i, shard in enumerate(tensor.shards):
+        module_register_buffer(module, f"{name}__shard__{i}", shard)
+    setattr(module, name, tensor)
 
 
 @permute.override(SplitPrimitiveTensor)
@@ -544,23 +819,51 @@ def permute_split(tensor: SplitPrimitiveTensor, dims: List[int]):
 
 
 @permute.override(ReplicatedTensor)
-def permute_split(tensor: ReplicatedTensor, dims: List[int]):
+def permute_replicated(tensor: ReplicatedTensor, dims: List[int]):
     permuted_shards = [permute(shard, dims) for shard in tensor.shards]
     return ReplicatedTensor(ts=permuted_shards)
+
+
+@repeat.override(ReplicatedTensor)
+def repeat_replicated(input: ReplicatedTensor, *sizes: List[int]) -> ReplicatedTensor:
+    shards = [repeat(shard, *sizes) for shard in input.shards]
+    return ReplicatedTensor(ts=shards)
 
 
 @replicate.override(ReplicatedTensor)
 def replicate_replicated(input: ReplicatedTensor, *, count: int) -> ReplicatedTensor:
     if input.shard_count != count:
         raise ValueError(f"Number of shards not equal ({input.shard_count} != {count})")
-    assert input.shard_count == count
     return input
+
+
+@replicate.override(UnreducedTensor)
+def replicate_unreduced(input: UnreducedTensor, *, count: int) -> ReplicatedTensor:
+    if input.shard_count != count:
+        raise ValueError(f"Number of shards not equal ({input.shard_count} != {count})")
+    return all_reduce(input)
 
 
 @replicate.override(Tensor)
 def replicate_unsharded(input, *, count: int) -> ReplicatedTensor:
     torch_input = unbox_tensor(input)
     return ReplicatedTensor(ts=torch_input, shard_count=count)
+
+
+@reshape.override(SplitPrimitiveTensor)
+def reshape_split(
+    tensor: SplitPrimitiveTensor, shape: List[int]
+) -> SplitPrimitiveTensor:
+    if _reshape_get_single_split_dim(tensor.shape, shape) is not None:
+        return view(tensor, shape)
+
+    flatten_dim_range = _reshape_get_flatten_dim_range(tensor.shape, shape)
+    if flatten_dim_range is not None:
+        return flatten(tensor, flatten_dim_range[0], flatten_dim_range[1] - 1)
+
+    raise ValueError(
+        f"Unsupported reshaping of sharded split tensor of shape {tensor.shape} to shape {shape}"
+    )
 
 
 @reshard.override(Tensor, sharding.Split)
@@ -588,7 +891,13 @@ def reshard_theta_sharding(input: Theta, spec: sharding.ThetaSharding) -> Theta:
             result.name = input.name
         return result
 
-    return Theta({k: make_value(input(k), spec[k]) for k in input.keys})
+    return Theta(
+        {
+            k: make_value(input(k), spec[k])
+            for k in input.keys
+            if not isinstance(spec[k], sharding.Ignore)
+        }
+    )
 
 
 @reshard.override(Theta, sharding.ThetaLayerSharding)
@@ -707,6 +1016,13 @@ def reshard_like_split_to_split(
     return tensor
 
 
+@reshard_like.override(UnreducedTensor, ReplicatedTensor)
+def reshard_like_unreduced_to_replicated(
+    tensor: UnreducedTensor, like: ReplicatedTensor
+) -> ReplicatedTensor:
+    return replicate(tensor, count=like.shard_count)
+
+
 @sharded_cat.override(SplitPrimitiveTensor)
 def sharded_cat_unsharded(maybe_sharded: SplitPrimitiveTensor):
     shard_ts = [t.as_torch() for t in maybe_sharded.shards]
@@ -734,6 +1050,57 @@ def sharded_sum_unreduced(maybe_sharded: UnreducedTensor) -> Tensor:
     return _sharded_sum_sharded(maybe_sharded)
 
 
+@softmax.override(SplitPrimitiveTensor)
+def softmax_split(
+    tensor: SplitPrimitiveTensor, dim: Optional[int], dtype: Optional[torch.dtype]
+) -> Tensor:
+    dim = dim if dim is None or dim >= 0 else len(tensor.shape) + dim
+    assert (
+        dim is not None and dim != tensor.shard_dim
+    ), "Softmax along split dimension is not supported."
+    shards = [softmax(shard, dim=dim, dtype=dtype) for shard in tensor.shards]
+    return SplitPrimitiveTensor(
+        ts=shards, shard_dim=tensor.shard_dim, shape=tensor.shape
+    )
+
+
+@to.override(ReplicatedTensor)
+def to_replicated(tensor: ReplicatedTensor, *args, **kwargs):
+    shards = [to(shard, *args, **kwargs) for shard in tensor.shards]
+    return ReplicatedTensor(ts=shards)
+
+
+@to.override(SplitPrimitiveTensor)
+def to_split(tensor: SplitPrimitiveTensor, *args, **kwargs):
+    shards = [to(shard, *args, **kwargs) for shard in tensor.shards]
+    return SplitPrimitiveTensor(ts=shards, shard_dim=tensor.shard_dim)
+
+
+@transpose.override(SplitPrimitiveTensor)
+def transpose_split(
+    tensor: SplitPrimitiveTensor, dim0: int, dim1: int
+) -> SplitPrimitiveTensor:
+    shards = [transpose(shard, dim0, dim1) for shard in tensor.shards]
+    shard_dim = tensor.shard_dim
+    if shard_dim == dim0:
+        shard_dim = dim1
+    elif shard_dim == dim1:
+        shard_dim = dim0
+    return SplitPrimitiveTensor(ts=shards, shard_dim=shard_dim)
+
+
+@unflatten.override(SplitPrimitiveTensor)
+def unflatten_split(
+    input: SplitPrimitiveTensor, dim: int, sizes: Tuple[int]
+) -> SplitPrimitiveTensor:
+    assert dim != input.shard_dim, "Unflattening the split dimension is not supported."
+    shards = [unflatten(shard, dim, sizes) for shard in input.shards]
+    shard_dim = input.shard_dim
+    if dim < shard_dim:
+        shard_dim += len(sizes) - 1
+    return SplitPrimitiveTensor(ts=shards, shard_dim=shard_dim)
+
+
 @unshard.override(ReplicatedTensor)
 def unshard_replicated(input: ReplicatedTensor) -> Tensor:
     return input.shards[0]
@@ -744,6 +1111,117 @@ def unshard_split(input: SplitPrimitiveTensor) -> Tensor:
     return sharded_cat(input)
 
 
+@unshard.override(UnreducedTensor)
+def unshard_unreduced(input: UnreducedTensor) -> Tensor:
+    return elementwise(torch.add, *input.shards)
+
+
 @unshard.override(Tensor)
 def unshard_unsharded(input: Tensor) -> Tensor:
     return input
+
+
+def _reshape_get_flatten_dim_range(
+    from_shape: List[int], to_shape: List[int]
+) -> Optional[Tuple[int, int]]:
+    """If a reshape would flatten a range of dimensions return that index range [begin, end).
+    If the reshape is not of that kind return `None`."""
+    flatten_start_len = _reshape_get_single_split_dim(to_shape, from_shape)
+    if flatten_start_len is None:
+        return None
+    start, length = flatten_start_len
+    return start, start + length
+
+
+def _reshape_infer_dynamic_dim(
+    shape1: List[int], shape2: List[int]
+) -> Tuple[List[int], List[int]]:
+    assert (
+        len([d for d in list(shape1) + list(shape2) if d < 0]) <= 1
+    ), "Only one dynamic dimension is allowed"
+    shape1_dynamic_dims = [i for i, d in enumerate(shape1) if d <= 0]
+    if len(shape1_dynamic_dims) > 0:
+        s2, s1 = _reshape_infer_dynamic_dim(shape2, shape1)
+        return s1, s2
+
+    shape2_dynamic_dims = [i for i, d in enumerate(shape2) if d <= 0]
+    if len(shape2_dynamic_dims) == 0:
+        return shape1, shape2
+    shape2_dynamic_dim = shape2_dynamic_dims[0]
+    shape1_size = math.prod(shape1)
+    shape2_size_without_dynamic_dim = math.prod(d for d in shape2 if d > 0)
+    shape2_res = list(shape2)
+    assert shape1_size % shape2_size_without_dynamic_dim == 0
+    shape2_res[shape2_dynamic_dim] = shape1_size // shape2_size_without_dynamic_dim
+    assert shape2_res[shape2_dynamic_dim] > 0
+    return shape1, shape2_res
+
+
+def _reshape_get_single_split_dim(
+    from_shape: List[int], to_shape: List[int]
+) -> Optional[Tuple[int, int]]:
+    """If a reshape would split a single dimension, return its index and the length of the new dimensions.
+    If the reshape is not of that kind return `None`."""
+    from_shape, to_shape = _reshape_infer_dynamic_dim(from_shape, to_shape)
+
+    if len(to_shape) < len(from_shape):
+        return None
+    i = longest_equal_range(from_shape, to_shape)
+    if i == len(from_shape):
+        return i
+    j = len(to_shape) - longest_equal_range(reversed(from_shape), reversed(to_shape))
+    assert i < j
+    expected_split_dim_size = math.prod(to_shape[i:j])
+    if expected_split_dim_size != from_shape[i]:
+        return None
+    return (
+        i,
+        j - i,
+    )
+
+
+@unsqueeze.override(SplitPrimitiveTensor)
+def unsqueeze_split(tensor: SplitPrimitiveTensor, dim: int) -> SplitPrimitiveTensor:
+    shards = [torch.unsqueeze(unbox_tensor(shard), dim) for shard in tensor.shards]
+    shard_dim = tensor.shard_dim
+    dim_resolved = dim if dim >= 0 else dim + len(tensor.shape) + 1
+    if shard_dim >= dim_resolved:
+        shard_dim += 1
+    return SplitPrimitiveTensor(ts=shards, shard_dim=shard_dim)
+
+
+@unsqueeze.override(ReplicatedTensor)
+def unsqueeze_replicated(tensor: ReplicatedTensor, dim: int) -> SplitPrimitiveTensor:
+    shards = [torch.unsqueeze(unbox_tensor(shard), dim) for shard in tensor.shards]
+    return ReplicatedTensor(ts=shards)
+
+
+@view.override(SplitPrimitiveTensor)
+def view_split(tensor: SplitPrimitiveTensor, shape: List[int]) -> SplitPrimitiveTensor:
+    view_split_range = _reshape_get_single_split_dim(tensor.shape, shape)
+    if view_split_range is None:
+        raise ValueError(
+            "Only taking a tensor view where splitting a single dimension is supported"
+        )
+    view_split_dim = view_split_range[0]
+
+    if view_split_dim == tensor.shard_dim:
+        if tensor.shape[view_split_dim] % tensor.shard_count != 0:
+            raise ValueError(
+                "Only splitting a dimension that is multiple of the shard count is supported"
+            )
+        if shape[view_split_dim] % tensor.shard_count != 0:
+            raise ValueError(
+                "The resulting leading splitting dimension must be multiple of the shard count"
+            )
+
+    shard_dim = tensor.shard_dim
+    if shard_dim > view_split_dim:
+        new_dims_count = len(shape) - len(tensor.shape)
+        shard_dim += new_dims_count
+    new_shard_shape = list(shape)
+    new_shard_shape[shard_dim] //= tensor.shard_count
+    shards = [view(shard, new_shard_shape) for shard in tensor.shards]
+    res = SplitPrimitiveTensor(shard_dim=shard_dim, ts=shards)
+    assert math.prod(res.shape) == math.prod(tensor.shape)
+    return res

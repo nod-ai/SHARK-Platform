@@ -53,7 +53,7 @@ jobs:
           # wheels saves multiple minutes and a lot of bandwidth on runner setup.
           pip install --no-compile -r pytorch-cpu-requirements.txt
           pip install --no-compile -f https://iree.dev/pip-release-links.html --src deps \
-            -e "git+https://github.com/iree-org/iree-turbine.git#egg=shark-turbine"
+            -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
           pip install --no-compile -r requirements.txt -e sharktank/ shortfin/
 
           # Try with the latest nightly releases, not what iree-turbine pins.
@@ -85,7 +85,7 @@ jobs:
           python -m pip install --no-compile --upgrade pip
           pip install --no-compile -r pytorch-rocm-requirements.txt
           pip install --no-compile -f https://iree.dev/pip-release-links.html --src deps \
-            -e "git+https://github.com/iree-org/iree-turbine.git#egg=shark-turbine"
+            -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
           pip install --no-compile -r requirements.txt -e sharktank/ shortfin/
 
       - name: Run punet tests

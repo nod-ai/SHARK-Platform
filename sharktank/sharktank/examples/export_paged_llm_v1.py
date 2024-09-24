@@ -9,7 +9,7 @@
 import json
 import torch
 
-from shark_turbine.aot import *
+from iree.turbine.aot import *
 
 from sharktank.layers import *
 from sharktank.types import *
@@ -55,18 +55,25 @@ def main():
         "--attn-kernel",
         type=str,
         default="decomposed",
-        options=["decomposed", "torch_sdpa"],
+        help='["decomposed", "torch_sdpa"],',
     )
 
     args = cli.parse(parser)
+    dataset_type = cli.get_input_data_files(args)
+    dataset_type = "irpa" if "irpa" in dataset_type else "gguf"
     dataset = cli.get_input_dataset(args)
 
     hp = configs.LlamaHParams.from_gguf_props(dataset.properties)
     llama_config = LlamaModelConfig(hp)
+    llama_config.use_hf = False
     llama_config.static_tables = False  # Rely on the compiler for hoisting tables.
     llama_config.kv_cache_type = "direct" if args.bs == [1] else "paged"
+
     if llama_config.hp.expert_count:
-        model = PagedGrokModelV1(dataset.root_theta, llama_config)
+        if llama_config.hp.model_arch == "grok":
+            model = PagedGrokModelV1(dataset.root_theta, llama_config)
+        else:
+            model = PagedMixtralModelV1(dataset.root_theta, llama_config)
     else:
         model = PagedLlamaModelV1(dataset.root_theta, llama_config)
 

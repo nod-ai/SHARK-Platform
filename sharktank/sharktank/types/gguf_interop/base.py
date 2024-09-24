@@ -13,7 +13,7 @@ import torch
 
 from gguf import GGUFReader, GGUFValueType
 
-from shark_turbine.aot import (
+from iree.turbine.aot import (
     ExternalTensorTrait,
 )
 

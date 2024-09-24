@@ -8,6 +8,8 @@
 
 from typing import Optional
 
+from safetensors import safe_open
+
 import math
 import sys
 
@@ -20,8 +22,9 @@ from ..types import *
 from ..models.mixtral.mixtral import *
 from ..models.grok.grok import *
 from ..models.llama.llama import *
+from ..models.llama.sharding import shard_theta
 from ..utils.debugging import trace_tensor
-from ..utils.tokenizer import InferenceTokenizer, load_tokenizer
+from ..utils.tokenizer import InferenceTokenizer
 
 
 class TorchGenerator:
@@ -39,9 +42,9 @@ class TorchGenerator:
         self.tokenizer = tokenizer
         if model.cache.is_paged:
             self.shared_cache_state = model.cache.paged.allocate(page_cache_size)
+            self.free_pages = list(range(1, page_cache_size))
         else:
             self.shared_cache_state = None
-        self.free_pages = list(range(1, 128))
         self.end_token = end_token
 
     @property
@@ -52,6 +55,7 @@ class TorchGenerator:
         token_ids, seq_lens = self.tokenizer.encode(
             prompts, pad_to_multiple_of=self.model.cache.pad_sequence_stride
         )
+
         token_ids = torch.tensor(token_ids, device=self.model.device)
         seq_lens = torch.tensor(seq_lens, device=self.model.device)
         if self.shared_cache_state is not None:
@@ -136,6 +140,26 @@ class Batch:
             while len(block_ids_row) < needed_blocks:
                 block_ids_row.append(self.parent.alloc_page())
 
+    def compute_prefill_logits(
+        self,
+        model,
+        # [bs, batch_seq_len]
+        tokens: torch.Tensor,
+        *,
+        # [1, 1, batch_seq_len, batch_seq_len]
+        attention_mask: torch.Tensor,
+        # [bs, batch_seq_len // block_seq_stride]
+        seq_block_ids: torch.Tensor,
+        cache_state: list[torch.Tensor],
+    ):
+        logits = model.prefill(
+            tokens,
+            attention_mask=attention_mask,
+            seq_block_ids=seq_block_ids,
+            cache_state=cache_state,
+        )
+        return logits
+
     def prefill(self):
         model = self.parent.model
         attention_mask = model.attention_mask(
@@ -219,6 +243,17 @@ def main():
         help="DType to use for activations in the model",
         default="float32",
     )
+    parser.add_argument(
+        "--use-hf",
+        action="store_true",
+        default=False,
+    )
+    parser.add_argument(
+        "--tensor-parallelism-size",
+        type=int,
+        default=1,
+        help="How many devices are involved for tensor parallel sharding.",
+    )
     cli.add_input_dataset_options(parser)
     cli.add_tokenizer_options(parser)
     args = cli.parse(parser)
@@ -226,6 +261,7 @@ def main():
     device = torch.device(args.device) if args.device else None
     activation_dtype = getattr(torch, args.activation_dtype)
     assert isinstance(activation_dtype, torch.dtype)
+
     dataset = cli.get_input_dataset(args)
     tokenizer = cli.get_tokenizer(args)
     prompts = args.prompt
@@ -237,12 +273,20 @@ def main():
         device=device,
         activation_dtype=activation_dtype,
         attention_dtype=activation_dtype,
+        use_hf=args.use_hf,
+        tensor_parallelism_size=args.tensor_parallelism_size,
     )
+    if config.tensor_parallelism_size > 1:
+        dataset.root_theta = shard_theta(dataset.root_theta, config)
 
     if config.hp.expert_count:
-        model = PagedGrokModelV1(dataset.root_theta, config)
+        if config.hp.model_arch == "grok":
+            model = PagedGrokModelV1(dataset.root_theta, config)
+        else:
+            model = PagedMixtralModelV1(dataset.root_theta, config)
     else:
         model = PagedLlamaModelV1(dataset.root_theta, config)
+
     if args.save_intermediates_path:
         from ..utils.patching import SaveModuleResultTensorsPatch
 
@@ -272,6 +316,7 @@ def main():
             )
         print(f":: Result tokens: {batch.results}")
         batch.print_current_results()
+        counter += 1
 
 
 if __name__ == "__main__":

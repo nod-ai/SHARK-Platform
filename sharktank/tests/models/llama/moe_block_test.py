@@ -8,7 +8,7 @@ import unittest
 from typing import List
 
 import torch
-from shark_turbine.aot import *
+from iree.turbine.aot import *
 from sharktank.models.llama.testing import make_moe_block_theta, make_rand_torch
 from sharktank.layers.mixture_of_experts_block import PreGatherMoeBlock
 from sharktank import ops
@@ -21,11 +21,12 @@ class SparseMoeBlockTest(unittest.TestCase):
             expert_count=8,
             expert_used_count=2,
             rms_epsilon=1e-5,
+            use_grok=False,
         )
         fxb = FxProgramsBuilder(model)
         input = make_rand_torch((2, 32, 6144))
 
-        @fxb.export_program(name="moe_block", args=(input,))
+        @fxb.export_program(name="moe_block", args=(input,), strict=False)
         def _(model, input: torch.Tensor) -> torch.Tensor:
             return model(input)
 

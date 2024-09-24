@@ -356,6 +356,32 @@ class EqualTest(unittest.TestCase):
         assert not ops.equal(b_sharded, a_sharded)
 
 
+class FlattenTest(unittest.TestCase):
+    def testReplicated(self):
+        tensor = torch.rand(2, 3, 4, 5)
+        unsharded_expected_result = torch.flatten(tensor, start_dim=1, end_dim=2)
+        expected_result = ops.replicate(unsharded_expected_result, count=2)
+        sharded_tensor = ops.replicate(tensor, count=2)
+        actual_result = ops.flatten(sharded_tensor, start_dim=1, end_dim=2)
+        assert expected_result.is_deep_equal(actual_result)
+
+    def testSplitTensorFlattenNonSplitDim(self):
+        tensor = torch.rand(2, 3, 4, 5)
+        unsharded_expected_result = torch.flatten(tensor, start_dim=1, end_dim=2)
+        expected_result = ops.reshard_split(unsharded_expected_result, dim=2, count=2)
+        sharded_tensor = ops.reshard_split(tensor, dim=3, count=2)
+        actual_result = ops.flatten(sharded_tensor, start_dim=1, end_dim=2)
+        assert expected_result.is_deep_equal(actual_result)
+
+    def testSplitTensorSplitDimIsLeadingFlattenDim(self):
+        tensor = torch.rand(3, 4, 5, 6)
+        unsharded_expected_result = torch.flatten(tensor, start_dim=1, end_dim=2)
+        expected_result = ops.reshard_split(unsharded_expected_result, dim=1, count=2)
+        sharded_tensor = ops.reshard_split(tensor, dim=1, count=2)
+        actual_result = ops.flatten(sharded_tensor, start_dim=1, end_dim=2)
+        assert expected_result.is_deep_equal(actual_result)
+
+
 class GemmTest(unittest.TestCase):
     def testShardedParallelDim(self):
         a = torch.rand(4, 3)
@@ -373,6 +399,47 @@ class GemmTest(unittest.TestCase):
         assert sharded_result.shard_dim == 0
         actual = ops.unshard(sharded_result)
         torch.testing.assert_close(actual, expected)
+
+
+class IndexCopyTest(unittest.TestCase):
+    def testSplitInPlace(self):
+        torch.set_default_dtype(torch.float32)
+        tensor = torch.rand(3, 4, 5, 6)
+        dim = 2
+        source = torch.rand(3, 4, 2, 6)
+        index = torch.tensor([1, 3])
+        expected_result = torch.index_copy(tensor, dim, index, source)
+
+        split_dim = 1
+        shard_count = 2
+        sharded_tensor = ops.reshard_split(tensor, dim=split_dim, count=shard_count)
+        sharded_index = ops.replicate(index, count=shard_count)
+        sharded_source = ops.reshard_split(source, dim=split_dim, count=shard_count)
+        sharded_result = ops.index_copy_(
+            sharded_tensor, dim, sharded_index, sharded_source
+        )
+        assert sharded_tensor is sharded_result
+        actual_result = ops.unshard(sharded_tensor)
+        assert ops.equal(actual_result, expected_result)
+
+
+class IndexPutTest(unittest.TestCase):
+    def testSplitNonIndexDimInPlace(self):
+        torch.set_default_dtype(torch.float32)
+        tensor = torch.rand(3, 4, 5, 6)
+        indices = (
+            torch.tensor([1, 2], dtype=torch.long),
+            torch.tensor([2, 3], dtype=torch.long),
+        )
+        values = torch.rand(2, 5, 6)
+        expected_result = tensor.clone().index_put_(indices, values)
+        shard_count = 2
+        sharded_tensor = ops.reshard_split(tensor.clone(), dim=3, count=shard_count)
+        sharded_values = ops.reshard_split(values, dim=2, count=shard_count)
+        sharded_result = ops.index_put_(sharded_tensor, indices, sharded_values)
+        assert sharded_tensor is sharded_result
+        actual_result = ops.unshard(sharded_tensor)
+        assert ops.equal(actual_result, expected_result)
 
 
 class InterpolateTest(unittest.TestCase):
@@ -688,6 +755,21 @@ class MatmulTest(unittest.TestCase):
         )
         torch.testing.assert_close(Z_sharded, Z_ref)
 
+    def testSameSplitLhsAndRhsBatchDim(self):
+        a = torch.rand(3, 4, 5, 6)
+        b = torch.rand(3, 4, 6, 7)
+        shard_count = 2
+        shard_dim = 1
+        expected_result = torch.matmul(a, b)
+        sharded_a = ops.reshard_split(a, dim=shard_dim, count=shard_count)
+        sharded_b = ops.reshard_split(b, dim=shard_dim, count=shard_count)
+        sharded_result = ops.matmul(sharded_a, sharded_b)
+        assert isinstance(sharded_result, SplitPrimitiveTensor)
+        assert sharded_result.shard_count == shard_count
+        assert sharded_result.shard_dim == shard_dim
+        actual_result = unbox_tensor(ops.unshard(sharded_result))
+        torch.testing.assert_close(actual_result, expected_result)
+
 
 class ReplicateTest(unittest.TestCase):
     def testReplicateReplicated(self):
@@ -702,6 +784,48 @@ class ReplicateTest(unittest.TestCase):
         shard_count = 3
         actual_result = ops.replicate(tensor, count=shard_count)
         expected_result = ReplicatedTensor(ts=tensor, shard_count=shard_count)
+        assert expected_result.is_deep_equal(actual_result)
+
+        # Test not a copy.
+        tensor[...] = torch.rand_like(tensor)
+        assert all(ops.equal(tensor, shard) for shard in actual_result.shards)
+
+
+class ReshapeTest(unittest.TestCase):
+    def testSplitTensorFlattenNonSplitDim(self):
+        tensor = torch.rand(2, 3, 4, 5)
+        new_shape = [2, 12, 5]
+        unsharded_expected_result = torch.reshape(tensor, new_shape)
+        expected_result = ops.reshard_split(unsharded_expected_result, dim=2, count=2)
+        sharded_tensor = ops.reshard_split(tensor, dim=3, count=2)
+        actual_result = ops.reshape(sharded_tensor, new_shape)
+        assert expected_result.is_deep_equal(actual_result)
+
+    def testSplitTensorSplitDimIsLeadingFlattenDim(self):
+        tensor = torch.rand(3, 4, 5, 6)
+        new_shape = [3, 20, 6]
+        unsharded_expected_result = torch.reshape(tensor, new_shape)
+        expected_result = ops.reshard_split(unsharded_expected_result, dim=1, count=2)
+        sharded_tensor = ops.reshard_split(tensor, dim=1, count=2)
+        actual_result = ops.reshape(sharded_tensor, new_shape)
+        assert expected_result.is_deep_equal(actual_result)
+
+    def testSplitTensorUnflattenNonSplitDim(self):
+        tensor = torch.rand(3, 20, 6)
+        new_shape = [3, 4, 5, 6]
+        unsharded_expected_result = torch.reshape(tensor, new_shape)
+        expected_result = ops.reshard_split(unsharded_expected_result, dim=3, count=2)
+        sharded_tensor = ops.reshard_split(tensor, dim=2, count=2)
+        actual_result = ops.reshape(sharded_tensor, new_shape)
+        assert expected_result.is_deep_equal(actual_result)
+
+    def testSplitTensorUnflattenSplitDim(self):
+        tensor = torch.rand(3, 20, 6)
+        new_shape = [3, 4, 5, 6]
+        unsharded_expected_result = torch.reshape(tensor, new_shape)
+        expected_result = ops.reshard_split(unsharded_expected_result, dim=1, count=2)
+        sharded_tensor = ops.reshard_split(tensor, dim=1, count=2)
+        actual_result = ops.reshape(sharded_tensor, new_shape)
         assert expected_result.is_deep_equal(actual_result)
 
 
@@ -726,6 +850,11 @@ class ReshardSplitTest(unittest.TestCase):
             ts=tensor, shard_count=shard_count, shard_dim=shard_dim
         )
         assert expected_result.is_deep_equal(actual_result)
+
+        # Test not a copy.
+        tensor[...] = torch.rand_like(tensor)
+        result_split2 = ops.reshard_split(tensor, dim=shard_dim, count=shard_count)
+        assert ops.equal(actual_result, result_split2)
 
     def testReshardSharded(self):
         tensor = torch.rand(4, 5, 6, dtype=torch.float32)

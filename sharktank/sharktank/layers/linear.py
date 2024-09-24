@@ -7,10 +7,8 @@
 from typing import Optional
 
 import torch
-
 from .. import ops
 from .base import Theta, ThetaLayer
-from ..types.layout_utils import saturate_cast
 from ..types import (
     DynamicScaledQuantizer,
     QuantizedTensor,
@@ -54,19 +52,21 @@ class LinearLayer(ThetaLayer):
         self.qdq_input: Optional[QuantizedTensor] = theta.optional_tensor("qdq_input")
         if self.q_input is not None and self.qdq_input is not None:
             raise AssertionError(f"LinearLayer cannot have both q_input and qdq_input")
+        self.qdq_output: Optional[QuantizedTensor] = theta.optional_tensor("qdq_output")
 
     def forward(self, x):
         weight = self.weight
         bias = self.bias
         q_input = self.q_input
         qdq_input = self.qdq_input
-
+        qdq_output = self.qdq_output
         if self.premul_input is not None:
             x = ops.elementwise(torch.mul, x, self.premul_input)
 
         if q_input is not None:
             x = q_input.quantize(x)
         elif qdq_input is not None:
+            # TODO: probably need a way to only do q_input if exporting.
             x = qdq_input.quantize(x).unpack().dequant()
 
         y = ops.linear(x, weight, bias)
@@ -76,4 +76,7 @@ class LinearLayer(ThetaLayer):
         # the QuantizedTensor escape.
         if isinstance(y, QuantizedTensor):
             y = y.unpack().dequant()
+        if qdq_output is not None:
+            # TODO: same as above.
+            y = qdq_output.quantize(y).unpack().dequant()
         return y

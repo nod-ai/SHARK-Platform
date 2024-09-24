@@ -4,75 +4,20 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-from typing import Optional
-
-from dataclasses import dataclass
 
 import torch
 import torch.nn as nn
 
 
 from ...layers import *
-from ...layers.mixture_of_experts_block import PreGatherMoeBlock
+from ...utils.create_cache import *
 from ...types import Theta
 
 torch.set_printoptions(profile="full")
 
 __all__ = [
-    "LlamaModelConfig",
     "PagedGrokModelV1",
 ]
-
-################################################################################
-# Config
-################################################################################
-
-
-@dataclass
-class LlamaModelConfig:
-    hp: configs.LlamaHParams
-
-    # Block sequence stride for a paged KV cache. This must divide evenly
-    # into the context length.
-    block_seq_stride: int = 16
-
-    # Either "paged" or "direct".
-    kv_cache_type: str = "paged"
-
-    # The device on which to place intermediate state.
-    device: Optional[torch.device] = None
-
-    # Dtype to use for general FP activations not otherwise configured.
-    activation_dtype: torch.dtype = torch.float16
-
-    # Dtype to use for attention.
-    attention_dtype: torch.dtype = torch.float16
-
-    def create_kv_cache(self) -> BaseKVCache:
-        hp = self.hp
-        if self.kv_cache_type == "direct":
-            return DirectKVCache(
-                block_seq_stride=self.block_seq_stride,
-                transformer_block_count=hp.block_count,
-                attn_head_count=hp.attention_head_count_kv,
-                attn_head_dim=hp.attn_head_dim,
-                seq_length=hp.context_length,
-                device=self.device,
-                dtype=self.attention_dtype,
-            )
-        elif self.kv_cache_type == "paged":
-            return PagedKVCache(
-                transformer_block_count=hp.block_count,
-                attn_head_count=hp.attention_head_count_kv,
-                attn_head_dim=hp.attn_head_dim,
-                cache_partition_count=2,  # One for each of K/V.
-                block_seq_stride=self.block_seq_stride,
-                device=self.device,
-                dtype=self.attention_dtype,
-            )
-        else:
-            raise NotImplementedError(f"kv_cache_type = {self.kv_cache_type}")
-
 
 ################################################################################
 # Models
@@ -80,7 +25,7 @@ class LlamaModelConfig:
 
 
 class PagedGrokModelV1(BaseCausalLMModel):
-    """MixtralModel with a paged KV cache and supporting variable sequence
+    """Grok model with a paged KV cache and supporting variable sequence
     length batched inference.
 
     As both the caching and batching setup is complicated, this model variant
@@ -112,7 +57,7 @@ class PagedGrokModelV1(BaseCausalLMModel):
         )
         self.config = config
         self.hp = hp
-        self.cache = config.create_kv_cache()
+        self.cache = create_kv_cache(self.config)
         self.activation_dtype = config.activation_dtype
         self.add_module(
             "token_embedding",
@@ -125,6 +70,7 @@ class PagedGrokModelV1(BaseCausalLMModel):
                 rope_freq_base=hp.rope_freq_base,
                 max_seqlen=hp.context_length,
                 device=self.device,
+                use_hf=True,
             ),
         )
         self.add_module(
@@ -147,7 +93,6 @@ class PagedGrokModelV1(BaseCausalLMModel):
                     head_dim=hp.attn_head_dim,
                     head_count_kv=hp.attention_head_count_kv,
                     rms_epsilon=hp.attention_layer_norm_rms_epsilon,
-                    use_hf=True,
                     use_grok=True,
                 )
             )
@@ -157,6 +102,7 @@ class PagedGrokModelV1(BaseCausalLMModel):
                     expert_count=hp.expert_count,
                     expert_used_count=hp.expert_used_count,
                     rms_epsilon=hp.attention_layer_norm_rms_epsilon,
+                    use_grok=True,
                 )
             )
 
@@ -176,12 +122,13 @@ class PagedGrokModelV1(BaseCausalLMModel):
         self._assert_device(seq_block_ids)
         self._assert_device(*cache_state, dtype=self.activation_dtype)
         h = self.token_embedding(tokens)
-        self.trace_tensor("mixtral.token_embedding", h)
+        h *= 78.38367176906169
+        self.trace_tensor("grok.token_embedding", h)
 
         # Iterate over attention blocks.
         for block_idx, block in enumerate(self.attn_blocks):
             if block_idx == 0:
-                self.trace_tensor(f"mixtral.attn_block.{block_idx}.input", h)
+                self.trace_tensor(f"grok.attn_block.{block_idx}.input", h)
 
             if block.__class__.__name__ == "PagedLlamaAttentionBlock":
                 h = block(
@@ -192,15 +139,16 @@ class PagedGrokModelV1(BaseCausalLMModel):
                     cache_state=cache_state,
                     seq_block_ids=seq_block_ids,
                 )
-                self.trace_tensor(f"mixtral.attn_block.{block_idx}.output", h)
+                self.trace_tensor(f"grok.attn_block.{block_idx}.output", h)
             elif block.__class__.__name__ == "PreGatherMoeBlock":
                 h = block(
                     h,
                 )
-                self.trace_tensor(f"mixtral.moe_block.{block_idx}.output", h)
+                self.trace_tensor(f"grok.moe_block.{block_idx}.output", h)
 
         h = self.output_norm(h)
         logits = self.output_lm_head(h)
+        logits = logits * 0.5773502691896257
         return logits
 
     def decode(
@@ -226,7 +174,7 @@ class PagedGrokModelV1(BaseCausalLMModel):
         embedding_batch_mask = self.attention_embedding.compute_batch_mask(
             start_positions, batch_seq_len=1
         )
-        self.trace_tensor("mixtral.embedding_batch_mask", embedding_batch_mask)
+        self.trace_tensor("grok.embedding_batch_mask", embedding_batch_mask)
 
         # Allocate per-block temporary K/V tensors. These temporaries hold
         # one block's K/V state for the maximum context length.
@@ -253,12 +201,12 @@ class PagedGrokModelV1(BaseCausalLMModel):
 
         h = self.token_embedding(tokens)
         h *= 78.38367176906169
-        self.trace_tensor("mixtral.token_embedding", h)
+        self.trace_tensor("grok.token_embedding", h)
 
         # Iterate over attention blocks.
         for block_idx, block in enumerate(self.attn_blocks):
             if block_idx == 0:
-                self.trace_tensor(f"mixtral.attn_block.{block_idx}.input", h)
+                self.trace_tensor(f"grok.attn_block.{block_idx}.input", h)
 
             if block.__class__.__name__ == "PagedLlamaAttentionBlock":
                 h = block(
@@ -272,12 +220,12 @@ class PagedGrokModelV1(BaseCausalLMModel):
                     xk_temp=xk_temp,
                     xv_temp=xv_temp,
                 )
-                self.trace_tensor(f"mixtral.attn_block.{block_idx}.output", h)
-            elif block.__class__.__name__ == "SparseMoeBlock":
+                self.trace_tensor(f"grok.attn_block.{block_idx}.output", h)
+            elif block.__class__.__name__ == "PreGatherMoeBlock":
                 h = block(
                     h,
                 )
-                self.trace_tensor(f"mixtral.moe_block.{block_idx}.output", h)
+                self.trace_tensor(f"grok.moe_block.{block_idx}.output", h)
 
         h = self.output_norm(h)
         logits = self.output_lm_head(h)

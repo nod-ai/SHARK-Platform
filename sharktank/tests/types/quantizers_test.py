@@ -9,6 +9,7 @@ import unittest
 import torch
 
 from sharktank.types import *
+from sharktank.types.layout_utils import saturate_cast
 from sharktank.utils.testing import TempDirTestBase
 
 
@@ -163,6 +164,80 @@ class DynamicScaledQuantizerTest(TempDirTestBase):
         qs = layout.planes["qs"]
         dequant_value = layout.dequant()
         torch.testing.assert_close(orig_value, dequant_value, atol=1e-1, rtol=1e-1)
+
+    def testQuarkF8Hell(self):
+        # we use hardcoded values here because they're representative of actual values from a quark model
+        scale = torch.tensor(0.0118, dtype=torch.float64)
+        orig = torch.tensor(
+            [
+                -58,
+                -48,
+                -70,
+                53,
+                -53,
+                76,
+                -71,
+                -90,
+                50,
+                77,
+                62,
+                -98,
+                66,
+                -54,
+                55,
+                -80,
+                -66,
+                -62,
+                -61,
+                -56,
+                56,
+                -67,
+                79,
+                -60,
+                -71,
+                42,
+                72,
+                -73,
+                91,
+                63,
+                124,
+                -128,
+            ],
+            dtype=torch.int8,
+        )
+        # mirrors dequant logic  in quark and our importer
+        orig = orig.view(torch.float8_e4m3fn)
+        orig = (orig.to(torch.float64) * scale).to(torch.float16)
+        # Note that for fnuz  we have to do scale*2 to account for the difference between types
+        # We specify the reciprocal scale explicitly to avoid adding more floating point error noise
+        fnuz = StaticScaledQuantizer(
+            name="dopoo",
+            scale=1.0 / (scale * 2),
+            reciprocal_scale=scale * 2,
+            offset=None,
+            dtype=torch.float8_e4m3fnuz,
+        )
+        fn = StaticScaledQuantizer(
+            name="poodoo",
+            scale=1.0 / scale,
+            reciprocal_scale=scale,
+            offset=None,
+            dtype=torch.float8_e4m3fn,
+        )
+        fnuz_quant = fnuz.quantize(orig)
+        fn_quant = fn.quantize(orig)
+
+        dequant_fnuz = fnuz_quant.unpack().dequant()
+        dequant_fn = fn_quant.unpack().dequant()
+
+        # redundant asserts for sanity
+        torch.testing.assert_close(
+            orig.to(torch.float16), dequant_fnuz, atol=1e-3, rtol=1e-3
+        )
+        torch.testing.assert_close(
+            orig.to(torch.float16), dequant_fn, atol=1e-3, rtol=1e-3
+        )
+        torch.testing.assert_close(dequant_fnuz, dequant_fn, atol=1e-3, rtol=1e-3)
 
 
 if __name__ == "__main__":
