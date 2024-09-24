@@ -16,6 +16,9 @@ When in question, we draw from the vocabulary and normalization they have done
 
 from dataclasses import dataclass
 from typing import Any, Optional
+import torch
+
+from ...layers import *
 
 __all__ = ["LlamaHParams", "LlamaModelConfig"]
 
