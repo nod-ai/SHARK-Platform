@@ -11,7 +11,7 @@
 #include <string>
 
 #include "shortfin/local/async.h"
-#include "shortfin/local/scope.h"
+#include "shortfin/local/fiber.h"
 #include "shortfin/local/worker.h"
 #include "shortfin/support/api.h"
 #include "shortfin/support/iree_concurrency.h"
@@ -26,19 +26,27 @@ namespace detail {
 // structure and external lifetime management.
 class SHORTFIN_API BaseProcess {
  public:
-  BaseProcess(std::shared_ptr<Scope> scope);
+  BaseProcess();
   BaseProcess(const BaseProcess &) = delete;
   virtual ~BaseProcess();
 
   // The unique pid of this process (or zero if not launched).
   int64_t pid() const;
   std::string to_s() const;
-  std::shared_ptr<Scope> &scope() { return scope_; }
+  std::shared_ptr<Fiber> &fiber() { return fiber_; }
 
   // Returns a future that can be waited on for termination.
   CompletionEvent OnTermination();
 
  protected:
+  // Derived classes must arrange to call Initialize() before any operation
+  // is taken on the instance. In C++ subclasses, this will typically be done
+  // in the constructor, but for bindings, this can be separated.
+  void Initialize(std::shared_ptr<Fiber> fiber);
+
+  // Whether subclass initialization has been done.
+  bool is_initialized() const { return fiber_.get(); }
+
   // Launches the process.
   void Launch();
 
@@ -51,7 +59,7 @@ class SHORTFIN_API BaseProcess {
   void Terminate();
 
  private:
-  std::shared_ptr<Scope> scope_;
+  std::shared_ptr<Fiber> fiber_;
 
   // Process control state. Since this can be accessed by multiple threads,
   // it is protected by a lock. Most process state can only be accessed on
@@ -73,7 +81,7 @@ class SHORTFIN_API BaseProcess {
 // driven fashion (i.e. cps, async/await, co-routines, etc).
 class SHORTFIN_API Process : public detail::BaseProcess {
  public:
-  using BaseProcess::BaseProcess;
+  Process(std::shared_ptr<Fiber> fiber);
 };
 
 }  // namespace shortfin::local

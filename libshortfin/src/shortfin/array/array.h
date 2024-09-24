@@ -21,6 +21,26 @@
 
 namespace shortfin::array {
 
+// Wraps an owned mapping and an adapted xtensor together, ensuring that the
+// mapping remains live for the duration of the tensor. This presents as a
+// smart pointer or iterator in that you dereference the tensor via `*` or
+// `->`.
+template <typename EltTy>
+struct mapped_xtensor_holder {
+ public:
+  using xtensor_type =
+      decltype(xt::adapt(static_cast<EltTy *>(nullptr), Dims()));
+  mapped_xtensor_holder(class mapping mapping, xtensor_type t)
+      : mapping(std::move(mapping)), t(std::move(t)) {}
+
+  xtensor_type &operator*() { return t; }
+  xtensor_type &operator->() { return t; }
+
+ private:
+  class mapping mapping;
+  xtensor_type t;
+};
+
 // Either a host or device nd-array view.
 class SHORTFIN_API base_array {
  public:
@@ -48,6 +68,9 @@ class SHORTFIN_API base_array {
   // etc).
   Dims &shape_container() { return shape_; }
   const Dims &shape_container() const { return shape_; }
+
+  // Inserts a unit dim at axis, which must be <= rank.
+  void expand_dims(Dims::value_type axis);
 
  private:
   DType dtype_;
@@ -78,9 +101,10 @@ class SHORTFIN_API device_array
   // arrays that are visible from different combinations of host/device.
   static device_array for_host(local::ScopedDevice &device,
                                std::span<const Dims::value_type> shape,
-                               DType dtype) {
+                               DType dtype, bool device_visible = true) {
     return device_array(
-        storage::allocate_host(device, dtype.compute_dense_nd_size(shape)),
+        storage::allocate_host(device, dtype.compute_dense_nd_size(shape),
+                               device_visible),
         shape, dtype);
   }
 
@@ -125,20 +149,62 @@ class SHORTFIN_API device_array
   // Typed access to the backing data.
   template <typename EltTy>
   typed_mapping<EltTy> typed_data() {
+    dtype().AssertCompatibleSize<EltTy>();
     return typed_mapping<EltTy>(data());
   }
   template <typename EltTy>
   typed_mapping<const EltTy> typed_data() const {
+    dtype().AssertCompatibleSize<EltTy>();
     return typed_mapping<const EltTy>(data());
   }
   template <typename EltTy>
   typed_mapping<EltTy> typed_data_rw() {
+    dtype().AssertCompatibleSize<EltTy>();
     return typed_mapping<EltTy>(data_rw());
   }
   template <typename EltTy>
   typed_mapping<EltTy> typed_data_w() {
+    dtype().AssertCompatibleSize<EltTy>();
     return typed_mapping<EltTy>(data_w());
   }
+
+  // Maps a read-only xtensor for the given EltTy (which must be compatible with
+  // the array dtype). The returned holder maintains the mapping and the
+  // xtensor, allowing the xtensor to be dereferenced via `*` or `->` like a
+  // pointer.
+  template <typename EltTy>
+  auto map_xtensor() {
+    dtype().AssertCompatibleSize<EltTy>();
+    auto m = data();
+    auto *data = static_cast<EltTy *>(static_cast<void *>((m.data())));
+    return mapped_xtensor_holder<EltTy>(
+        std::move(m), xt::adapt(static_cast<EltTy *>(data), shape_container()));
+  }
+
+  // Same as `map_xtensor()` but maps read-write.
+  template <typename EltTy>
+  auto map_xtensor_rw() {
+    dtype().AssertCompatibleSize<EltTy>();
+    auto m = data_rw();
+    auto *data = static_cast<EltTy *>(static_cast<void *>((m.data())));
+    return mapped_xtensor_holder<EltTy>(
+        std::move(m), xt::adapt(static_cast<EltTy *>(data), shape_container()));
+  }
+
+  // Same as `map_xtensor()` but maps write-only.
+  template <typename EltTy>
+  auto map_xtensor_w() {
+    dtype().AssertCompatibleSize<EltTy>();
+    auto m = data_w();
+    auto *data = static_cast<EltTy *>(static_cast<void *>((m.data())));
+    return mapped_xtensor_holder<EltTy>(
+        std::move(m), xt::adapt(static_cast<EltTy *>(data), shape_container()));
+  }
+
+  // Creates a device array which aliases the backing storage by slicing. Only
+  // slice shapes that produce a dense view without strides are supported by
+  // this mechanism.
+  device_array view(Dims &indices, Dims &sizes);
 
   std::string to_s() const override;
 

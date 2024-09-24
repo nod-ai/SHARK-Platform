@@ -20,6 +20,7 @@ FetchContent_MakeAvailable(nanobind)
 
 nanobind_add_module(shortfin_python_extension NB_STATIC LTO
   array_binding.cc
+  array_host_ops.cc
   lib_ext.cc
 )
 
@@ -35,18 +36,43 @@ target_link_libraries(shortfin_python_extension
   PRIVATE ${SHORTFIN_LINK_LIBRARY_NAME}
 )
 
+function(shortfin_python_stubs build_type)
+  nanobind_add_stub(
+    shortfin_python_extension_stub
+    MODULE _shortfin_${build_type}.lib
+    OUTPUT _shortfin_${build_type}/lib.pyi
+    DEPENDS shortfin_python_extension
+  )
+
+endfunction()
+
+function(shortfin_python_stubs build_variant)
+  set(output_root "${CMAKE_CURRENT_BINARY_DIR}/_shortfin_${build_variant}")
+  file(MAKE_DIRECTORY ${output_root})
+  nanobind_add_stub(
+    shortfin_python_extension_stub_lib_${build_variant}
+    MODULE _shortfin_${build_variant}.lib
+    OUTPUT ${output_root}/lib/__init__.pyi
+    DEPENDS shortfin_python_extension
+  )
+
+  nanobind_add_stub(
+    shortfin_python_extension_stub_array_${build_variant}
+    MODULE _shortfin_${build_variant}.lib.array
+    OUTPUT ${output_root}/lib/array.pyi
+    DEPENDS shortfin_python_extension
+  )
+
+  nanobind_add_stub(
+    shortfin_python_extension_stub_local_${build_variant}
+    MODULE _shortfin_${build_variant}.lib.local
+    OUTPUT ${output_root}/lib/local.pyi
+    DEPENDS shortfin_python_extension
+  )
+endfunction()
+
 if (SHORTFIN_ENABLE_TRACING)
-  nanobind_add_stub(
-    shortfin_python_extension_stub
-    MODULE _shortfin_tracy.lib
-    OUTPUT _shortfin_tracy/lib.pyi
-    DEPENDS shortfin_python_extension
-  )
+  shortfin_python_stubs(tracy)
 else()
-  nanobind_add_stub(
-    shortfin_python_extension_stub
-    MODULE _shortfin_default.lib
-    OUTPUT _shortfin_default/lib.pyi
-    DEPENDS shortfin_python_extension
-  )
+  shortfin_python_stubs(default)
 endif()

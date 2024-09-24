@@ -21,35 +21,35 @@ def lsys():
 
 
 @pytest.fixture
-def scope(lsys):
-    return lsys.create_scope()
+def fiber(lsys):
+    return lsys.create_fiber()
 
 
 @pytest.fixture
-def device(scope):
-    return scope.device(0)
+def device(fiber):
+    return fiber.device(0)
 
 
-def test_invoke_mobilenet(lsys, scope, mobilenet_compiled_cpu_path):
-    device = scope.device(0)
+def test_invoke_mobilenet(lsys, fiber, mobilenet_compiled_cpu_path):
+    device = fiber.device(0)
     dummy_data = array.array(
         "f", ([0.2] * (224 * 224)) + ([0.4] * (224 * 224)) + ([-0.2] * (224 * 224))
     )
     program_module = lsys.load_module(mobilenet_compiled_cpu_path)
-    program = sf.Program([program_module], scope=scope)
+    program = sf.Program([program_module], fiber=fiber)
     main_function = program["module.torch-jit-export"]
 
     async def main():
         device_input = sfnp.device_array(device, [1, 3, 224, 224], sfnp.float32)
         staging_input = device_input.for_transfer()
-        staging_input.storage.data = dummy_data
+        with staging_input.map(discard=True) as m:
+            m.fill(dummy_data)
         device_input.copy_from(staging_input)
         (device_output,) = await main_function(device_input)
         host_output = device_output.for_transfer()
         host_output.copy_from(device_output)
         await device
-        flat_output = array.array("f")
-        flat_output.frombytes(host_output.storage.data)
+        flat_output = host_output.items
         absmean = functools.reduce(
             lambda x, y: x + abs(y) / len(flat_output), flat_output, 0.0
         )

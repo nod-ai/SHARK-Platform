@@ -8,9 +8,11 @@
 
 #include "fmt/core.h"
 #include "fmt/std.h"
+#include "iree/io/formats/parser_registry.h"
 #include "iree/modules/hal/module.h"
+#include "iree/modules/io/parameters/module.h"
 #include "iree/vm/bytecode/module.h"
-#include "shortfin/local/scope.h"
+#include "shortfin/local/fiber.h"
 #include "shortfin/local/system.h"
 #include "shortfin/support/logging.h"
 
@@ -34,10 +36,10 @@ void GetVmModuleExports(iree_vm_module_t *vm_module,
 // -------------------------------------------------------------------------- //
 
 ProgramFunction::ProgramFunction(
-    std::shared_ptr<Scope> scope, iree::vm_context_ptr vm_context,
+    std::shared_ptr<Fiber> fiber, iree::vm_context_ptr vm_context,
     iree_vm_function_t vm_function,
     std::optional<ProgramInvocationModel> invocation_model)
-    : scope_(std::move(scope)),
+    : fiber_(std::move(fiber)),
       vm_context_(std::move(vm_context)),
       vm_function_(vm_function),
       invocation_model_(invocation_model
@@ -72,7 +74,7 @@ std::string_view ProgramFunction::calling_convention() const {
 }
 
 ProgramInvocation::Ptr ProgramFunction::CreateInvocation() {
-  return ProgramInvocation::New(scope_, vm_context_, vm_function_,
+  return ProgramInvocation::New(fiber_, vm_context_, vm_function_,
                                 invocation_model_);
 }
 
@@ -106,6 +108,26 @@ ProgramModule ProgramModule::Load(System &system,
   return ProgramModule(std::move(module));
 }
 
+ProgramModule ProgramModule::ParameterProvider(
+    System &system, std::span<BaseProgramParameters *> params) {
+  std::vector<iree_io_parameter_provider_t *> providers;
+  providers.reserve(params.size());
+  for (auto *param : params) {
+    iree_io_parameter_provider_t *provider = *param;
+    if (!provider) {
+      throw std::logic_error(
+          "Cannot pass uninitialized parameters to ParameterProvider");
+    }
+    providers.push_back(provider);
+  }
+
+  iree::vm_module_ptr module;
+  SHORTFIN_THROW_IF_ERROR(iree_io_parameters_module_create(
+      system.vm_instance(), providers.size(), providers.data(),
+      system.host_allocator(), module.for_output()));
+  return ProgramModule(std::move(module));
+}
+
 std::string_view ProgramModule::name() const {
   return to_string_view(iree_vm_module_name(vm_module_));
 }
@@ -135,14 +157,14 @@ std::vector<std::string> ProgramModule::exports() const {
 // Program
 // -------------------------------------------------------------------------- //
 
-Program Program::Load(std::shared_ptr<Scope> scope,
+Program Program::Load(std::shared_ptr<Fiber> fiber,
                       std::span<const ProgramModule> modules, Options options) {
   std::vector<iree_vm_module_t *> all_modules;
   std::vector<iree_hal_device_t *> raw_devices;
 
-  // By default, bind all devices in the scope in order to the program.
-  for (Device *d : scope->raw_devices()) {
-    raw_devices.push_back(d->hal_device());
+  // By default, bind all devices in the fiber in order to the program.
+  for (auto &it : fiber->raw_devices()) {
+    raw_devices.push_back(it.second->hal_device());
   }
 
   // Add a HAL module.
@@ -154,7 +176,7 @@ Program Program::Load(std::shared_ptr<Scope> scope,
   // functionality (or module versions; iree_vm_module_dependency_t has the
   // minimum version required so you can switch between them, and whether they
   // are optional/required).
-  auto &system = scope->system();
+  auto &system = fiber->system();
   iree::vm_module_ptr hal_module;
   SHORTFIN_THROW_IF_ERROR(
       iree_hal_module_create(system.vm_instance(), raw_devices.size(),
@@ -175,7 +197,7 @@ Program Program::Load(std::shared_ptr<Scope> scope,
       system.vm_instance(), flags, all_modules.size(), all_modules.data(),
       system.host_allocator(), context.for_output()));
 
-  return Program(std::move(scope), std::move(context));
+  return Program(std::move(fiber), std::move(context));
 }
 
 std::optional<ProgramFunction> Program::LookupFunction(std::string_view name) {
@@ -194,7 +216,7 @@ std::optional<ProgramFunction> Program::LookupFunction(std::string_view name) {
       // TODO: Torch import is not setting the coarse-fences abi.model on
       // its functions. Get it from there instead of just assuming based on
       // name.
-      return ProgramFunction(scope_, vm_context_, f,
+      return ProgramFunction(fiber_, vm_context_, f,
                              ProgramInvocationModel::COARSE_FENCES);
     } else if (!iree_status_is_not_found(status)) {
       SHORTFIN_THROW_IF_ERROR(status);
@@ -206,7 +228,7 @@ std::optional<ProgramFunction> Program::LookupFunction(std::string_view name) {
       vm_context_, to_iree_string_view(name), &f);
   if (iree_status_is_not_found(status)) return {};
   SHORTFIN_THROW_IF_ERROR(status);
-  return ProgramFunction(scope_, vm_context_, f);
+  return ProgramFunction(fiber_, vm_context_, f);
 }
 
 ProgramFunction Program::LookupRequiredFunction(std::string_view name) {
@@ -274,7 +296,7 @@ ProgramInvocation::~ProgramInvocation() {
 }
 
 ProgramInvocation::Ptr ProgramInvocation::New(
-    std::shared_ptr<Scope> scope, iree::vm_context_ptr vm_context,
+    std::shared_ptr<Fiber> fiber, iree::vm_context_ptr vm_context,
     iree_vm_function_t &vm_function, ProgramInvocationModel invocation_model) {
   auto sig = iree_vm_function_signature(&vm_function);
   iree_host_size_t arg_count;
@@ -313,7 +335,7 @@ ProgramInvocation::Ptr ProgramInvocation::New(
   Ptr inst(static_cast<ProgramInvocation *>(
                static_cast<void *>(inst_storage.release())),
            Deleter());
-  inst->scope_ = std::move(scope);
+  inst->fiber_ = std::move(fiber);
   inst->state.params.context =
       vm_context.release();  // Ref transfer to ProgramInvocation.
   inst->state.params.function = vm_function;
@@ -345,9 +367,9 @@ iree_status_t ProgramInvocation::FinalizeCallingConvention(
   if (invocation_model == ProgramInvocationModel::COARSE_FENCES) {
     // If we have a device_selection, set up to signal the leader account.
     if (device_selection_) {
-      ScopedDevice scoped_device(*scope(), device_selection_);
+      ScopedDevice scoped_device(*fiber(), device_selection_);
       auto &sched_account =
-          scope()->scheduler().GetDefaultAccount(scoped_device);
+          fiber()->scheduler().GetDefaultAccount(scoped_device);
       iree_hal_fence_t *wait_fence = this->wait_fence();
       iree_hal_semaphore_t *timeline_sem = sched_account.timeline_sem();
       uint64_t timeline_now = sched_account.timeline_idle_timepoint();
@@ -375,7 +397,7 @@ iree_status_t ProgramInvocation::FinalizeCallingConvention(
                          static_cast<void *>(signal_sem_), signal_timepoint_);
       IREE_RETURN_IF_ERROR(
           iree_hal_fence_create_at(signal_sem_, signal_timepoint_,
-                                   scope()->host_allocator(), &signal_ref));
+                                   fiber()->host_allocator(), &signal_ref));
     }
     IREE_RETURN_IF_ERROR(iree_vm_list_push_ref_move(arg_list, signal_ref));
   } else {
@@ -392,7 +414,7 @@ ProgramInvocation::Future ProgramInvocation::Invoke(
     ProgramInvocation::Ptr invocation) {
   invocation->CheckNotScheduled();
 
-  Worker &worker = invocation->scope_->worker();
+  Worker &worker = invocation->fiber_->worker();
   // We're about to overwrite the instance level storage for params, so move
   // it to the stack and access there.
   Params params = invocation->state.params;
@@ -437,7 +459,7 @@ ProgramInvocation::Future ProgramInvocation::Invoke(
     // Multiple steps needed to schedule need to all exit via the same
     // path.
     if (iree_status_is_ok(status)) {
-      status = invocation->scope()->scheduler().FlushWithStatus();
+      status = invocation->fiber()->scheduler().FlushWithStatus();
     }
     if (iree_status_is_ok(status)) {
       status = invocation->FinalizeCallingConvention(
@@ -509,7 +531,7 @@ iree::vm_opaque_ref ProgramInvocation::result_ref(iree_host_size_t i) {
 
 iree_hal_fence_t *ProgramInvocation::wait_fence() {
   if (!wait_fence_) {
-    wait_fence_ = scope_->scheduler().NewFence();
+    wait_fence_ = fiber_->scheduler().NewFence();
   }
   return wait_fence_.get();
 }
@@ -531,6 +553,73 @@ void ProgramInvocation::DeviceSelect(DeviceAffinity device_affinity) {
   SHORTFIN_SCHED_LOG("Invocation {}: DeviceSelect {}",
                      static_cast<void *>(this), device_affinity.to_s());
   device_selection_ |= device_affinity;
+}
+
+std::string ProgramInvocation::to_s() {
+  return fmt::format("ProgramInvocation({}: result_size={})",
+                     (scheduled_ ? "SCHEDULED" : "NOT_SCHEDULED"),
+                     results_size());
+}
+
+// -------------------------------------------------------------------------- //
+// BaseProgramParameters
+// -------------------------------------------------------------------------- //
+
+BaseProgramParameters::~BaseProgramParameters() = default;
+
+// -------------------------------------------------------------------------- //
+// StaticProgramParameters
+// -------------------------------------------------------------------------- //
+
+StaticProgramParameters::StaticProgramParameters(
+    System &system, std::string_view parameter_scope,
+    iree_host_size_t max_concurrent_operations)
+    : host_allocator_(system.host_allocator()) {
+  SHORTFIN_THROW_IF_ERROR(
+      iree_io_parameter_index_create(host_allocator_, index_.for_output()));
+  SHORTFIN_THROW_IF_ERROR(iree_io_parameter_index_provider_create(
+      to_iree_string_view(parameter_scope), index_, max_concurrent_operations,
+      host_allocator_, provider_.for_output()));
+}
+
+void StaticProgramParameters::Load(std::filesystem::path file_path,
+                                   LoadOptions options) {
+  // Default format from extension.
+  if (options.format.empty()) {
+    options.format = file_path.extension();
+  }
+
+  // Open file.
+  iree_file_read_flags_t read_flags = IREE_FILE_READ_FLAG_DEFAULT;
+  if (options.mmap) {
+    read_flags = IREE_FILE_READ_FLAG_MMAP;
+  } else {
+    read_flags = IREE_FILE_READ_FLAG_PRELOAD;
+  }
+  iree_file_contents_t *file_contents = nullptr;
+  SHORTFIN_THROW_IF_ERROR(iree_file_read_contents(
+      file_path.c_str(), read_flags, host_allocator_, &file_contents));
+  iree_io_file_handle_release_callback_t release_callback = {
+      +[](void *user_data, iree_io_file_handle_primitive_t handle_primitive) {
+        iree_file_contents_t *file_contents = (iree_file_contents_t *)user_data;
+        iree_file_contents_free(file_contents);
+      },
+      file_contents,
+  };
+
+  // Wrap contents.
+  iree::io_file_handle_ptr file_handle;
+  iree_status_t status = iree_io_file_handle_wrap_host_allocation(
+      IREE_IO_FILE_ACCESS_READ, file_contents->buffer, release_callback,
+      host_allocator_, file_handle.for_output());
+  if (!iree_status_is_ok(status)) {
+    iree_file_contents_free(file_contents);
+    SHORTFIN_THROW_IF_ERROR(status);
+  }
+
+  // Parse.
+  SHORTFIN_THROW_IF_ERROR(iree_io_parse_file_index(
+      to_iree_string_view(options.format), file_handle.get(), index_.get()));
 }
 
 }  // namespace shortfin::local

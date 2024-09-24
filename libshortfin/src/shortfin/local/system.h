@@ -29,7 +29,7 @@ namespace detail {
 class BaseProcess;
 }  // namespace detail
 
-class Scope;
+class Fiber;
 class System;
 class SystemBuilder;
 
@@ -50,19 +50,19 @@ class SystemBuilder;
 //      tenant), and all owning references to the System are via
 //      `std::shared_ptr<System>`. Every object in the system must either be
 //      a managed child of the system or own a system reference.
-//   2. Scope: Binds any number of devices to a coherent schedule, rooted on
+//   2. Fiber: Binds any number of devices to a coherent schedule, rooted on
 //      a Worker. Scopes are independent of the system and there are generally
-//      as many as needed logical concurrency in the application. Each scope
+//      as many as needed logical concurrency in the application. Each fiber
 //      holds a system reference by way of a `std::shared_ptr<System>`. These
 //      are still heavy-weight objects mostly created at initialization time
-//      and are therefore managed held as a `std::shared_ptr<Scope>` by anything
+//      and are therefore managed held as a `std::shared_ptr<Fiber>` by anything
 //      that depends on them.
 //   3. TimelineResource: Any resource in the system (i.e. buffer,
 //      synchronization, object, etc) will hold a unique TimelineResource. These
 //      are light-weight objects managed via intrusive reference counting by
 //      their contained `TimelineResource::Ref` class. Each `TimelineResource`
-//      maintains a `std::shared_ptr<Scope>` back reference to its owning
-//      scope.
+//      maintains a `std::shared_ptr<Fiber>` back reference to its owning
+//      fiber.
 //
 // Leaf objects can have any lifetime that they wish, so long as they maintain
 // an appropriate ownership reference into the System hierarchy above. This
@@ -95,16 +95,15 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
   // Topology access.
   std::span<const Node> nodes() { return {nodes_}; }
   std::span<Device *const> devices() { return {devices_}; }
-  const std::unordered_map<std::string_view, Device *> &named_devices() {
+  const std::unordered_map<std::string_view, Device *> named_devices() {
     return named_devices_;
   }
+  Device *FindDeviceByName(std::string_view name);
 
   // Queue access.
-  Queue &CreateQueue(Queue::Options options);
-  Queue &named_queue(std::string_view name);
-  const std::unordered_map<std::string_view, Queue *> named_queues() {
-    return queues_by_name_;
-  }
+  QueuePtr CreateQueue(Queue::Options options);
+  QueuePtr CreateQueue() { return CreateQueue(Queue::Options()); }
+  QueuePtr named_queue(std::string_view name);
 
   // Access the system wide blocking executor thread pool. This can be used
   // to execute thunks that can block on a dedicated thread and is needed
@@ -112,10 +111,10 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
   BlockingExecutor &blocking_executor() { return blocking_executor_; }
 
   // Scopes.
-  // Creates a new Scope bound to this System (it will internally
+  // Creates a new Fiber bound to this System (it will internally
   // hold a reference to this instance). All devices in system order will be
-  // added to the scope.
-  std::shared_ptr<Scope> CreateScope(Worker &worker,
+  // added to the fiber.
+  std::shared_ptr<Fiber> CreateFiber(Worker &worker,
                                      std::span<Device *const> devices);
 
   // Creates and starts a worker (if it is configured to run in a thread).
@@ -141,14 +140,14 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
   void FinishInitialization();
 
  private:
-  void AssertNotInitialized() {
+  void AssertNotInitialized() SHORTFIN_REQUIRES_LOCK(lock_) {
     if (initialized_) {
       throw std::logic_error(
           "System::Initialize* methods can only be called during "
           "initialization");
     }
   }
-  void AssertRunning() {
+  void AssertRunning() SHORTFIN_REQUIRES_LOCK(lock_) {
     if (!initialized_ || shutdown_) {
       throw std::logic_error(
           "System manipulation methods can only be called when initialized and "
@@ -180,7 +179,9 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
   // after initialization, but mainly this is for keeping them alive.
   std::unordered_map<std::string_view, iree::hal_driver_ptr> hal_drivers_;
 
-  // Map of device name to a SystemDevice.
+  // Map of device name to a SystemDevice. Note that devices are immortal and
+  // enumerated at initialization time. As such, they are accessed without
+  // locking.
   std::vector<std::unique_ptr<Device>> retained_devices_;
   std::unordered_map<std::string_view, Device *> named_devices_;
   std::vector<Device *> devices_;
@@ -192,22 +193,25 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
   BlockingExecutor blocking_executor_;
 
   // Queues.
-  std::vector<std::unique_ptr<Queue>> queues_;
-  std::unordered_map<std::string_view, Queue *> queues_by_name_;
+  std::vector<std::shared_ptr<Queue>> queues_ SHORTFIN_GUARDED_BY(lock_);
+  std::unordered_map<std::string_view, Queue *> queues_by_name_
+      SHORTFIN_GUARDED_BY(lock_);
 
   // Workers.
-  std::vector<std::unique_ptr<Worker>> workers_;
+  std::vector<std::unique_ptr<Worker>> workers_ SHORTFIN_GUARDED_BY(lock_);
   std::vector<std::function<void(Worker &)>> worker_initializers_;
-  std::unordered_map<std::string_view, Worker *> workers_by_name_;
+  std::unordered_map<std::string_view, Worker *> workers_by_name_
+      SHORTFIN_GUARDED_BY(lock_);
 
   // Process management.
-  int next_pid_ = 1;
-  std::unordered_map<int, detail::BaseProcess *> processes_by_pid_;
+  int next_pid_ SHORTFIN_GUARDED_BY(lock_) = 1;
+  std::unordered_map<int, detail::BaseProcess *> processes_by_pid_
+      SHORTFIN_GUARDED_BY(lock_);
 
   // Whether initialization is complete. If true, various low level
   // mutations are disallowed.
-  bool initialized_ = false;
-  bool shutdown_ = false;
+  bool initialized_ SHORTFIN_GUARDED_BY(lock_) = false;
+  bool shutdown_ SHORTFIN_GUARDED_BY(lock_) = false;
 
   friend class detail::BaseProcess;
 };

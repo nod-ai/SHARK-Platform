@@ -16,7 +16,7 @@
 
 namespace shortfin::local {
 
-class Scope;
+class Fiber;
 class ScopedDevice;
 class System;
 
@@ -68,7 +68,7 @@ enum class TransactionMode {
 // Since TimelineResources are shared (i.e. across subspan storage, etc),
 // they are modeled as reference counted (using non atomics, since this is
 // "scoped" same thread access). They must only be held in a context that
-// is keeping the containing Scope alive.
+// is keeping the containing Fiber alive.
 //
 // Note to the future: in discussing the above, many cases were noted where
 // a more advanced programming model would be desirable in order to exercise
@@ -145,7 +145,7 @@ class SHORTFIN_API TimelineResource {
   iree_allocator_t host_allocator();
 
  private:
-  TimelineResource(std::shared_ptr<Scope> scope, size_t semaphore_capacity);
+  TimelineResource(std::shared_ptr<Fiber> fiber, size_t semaphore_capacity);
   ~TimelineResource();
   void Retain() { refcnt_++; }
   void Release() {
@@ -154,8 +154,8 @@ class SHORTFIN_API TimelineResource {
 
   int refcnt_ = 0;
 
-  // Back reference to the owning scope.
-  std::shared_ptr<Scope> scope_;
+  // Back reference to the owning fiber.
+  std::shared_ptr<Fiber> fiber_;
 
   // Non-owning mutation barrier semaphore and timepoint. The fact that this
   // is a single semaphore is an implementation detail that may be generalized
@@ -199,7 +199,7 @@ class SHORTFIN_API Account {
   // Returns a future that is satisfied when the timeline of this account
   // reaches its current idle timepoint (i.e. all currently pending work
   // is complete).
-  CompletionEvent OnSync();
+  VoidFuture OnSync();
 
  private:
   void Initialize();
@@ -232,7 +232,7 @@ class SHORTFIN_API Account {
   friend class Scheduler;
 };
 
-// Handles scheduling state for a scope.
+// Handles scheduling state for a fiber.
 class SHORTFIN_API Scheduler {
  public:
   Scheduler(System &system);
@@ -261,9 +261,9 @@ class SHORTFIN_API Scheduler {
   // Gets a fresh TimelineResource which can be used for tracking resource
   // read/write and setting barriers. Note that these are all allocated fresh
   // on each call today but may be pooled in the future.
-  TimelineResource::Ref NewTimelineResource(std::shared_ptr<Scope> scope) {
+  TimelineResource::Ref NewTimelineResource(std::shared_ptr<Fiber> fiber) {
     return TimelineResource::Ref(
-        new TimelineResource(std::move(scope), semaphore_count_));
+        new TimelineResource(std::move(fiber), semaphore_count_));
   }
 
   // Creates a new fence with capacity for all semaphores that are extant at
@@ -273,7 +273,8 @@ class SHORTFIN_API Scheduler {
   System &system() { return system_; }
 
  private:
-  void Initialize(std::span<Device *const> devices);
+  void Initialize(
+      std::span<const std::pair<std::string_view, Device *>> devices);
   System &system_;
 
   // Each distinct hal device gets an account.
@@ -286,7 +287,7 @@ class SHORTFIN_API Scheduler {
   TransactionMode tx_mode_ = TransactionMode::EAGER;
   TransactionType current_tx_type_ = TransactionType::NONE;
 
-  friend class local::Scope;
+  friend class local::Fiber;
 };
 
 }  // namespace detail

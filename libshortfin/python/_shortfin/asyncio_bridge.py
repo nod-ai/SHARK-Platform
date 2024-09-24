@@ -48,6 +48,13 @@ class PyWorkerEventLoop(asyncio.AbstractEventLoop):
         w.delay_call(deadline, handle._sf_maybe_run)
         return handle
 
+    def call_at(self, when, callback, *args, context=None) -> asyncio.TimerHandle:
+        w = self._worker
+        deadline = int(when * 1e9)
+        handle = _TimerHandle(when, callback, args, self, context)
+        w.delay_call(deadline, handle._sf_maybe_run)
+        return handle
+
     def call_exception_handler(self, context) -> None:
         # TODO: Should route this to the central exception handler. Should
         # also play with ergonomics of how the errors get reported in
@@ -62,7 +69,7 @@ class PyWorkerEventLoop(asyncio.AbstractEventLoop):
 
     def _timer_handle_cancelled(self, handle):
         # We don't do anything special: just skip it if it comes up.
-        pass
+        ...
 
 
 class _Handle(asyncio.Handle):

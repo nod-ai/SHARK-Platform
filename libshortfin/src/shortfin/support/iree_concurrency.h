@@ -14,12 +14,24 @@
 #include "iree/base/internal/wait_handle.h"
 #include "shortfin/support/iree_helpers.h"
 
+// Set up threading annotations.
+#if defined(SHORTFIN_HAS_THREAD_SAFETY_ANNOTATIONS)
+#define SHORTFIN_THREAD_ANNOTATION_ATTRIBUTE(x) __attribute__((x))
+#else
+#define SHORTFIN_THREAD_ANNOTATION_ATTRIBUTE(x)
+#endif
+
+#define SHORTFIN_GUARDED_BY(x) \
+  SHORTFIN_THREAD_ANNOTATION_ATTRIBUTE(guarded_by(x))
+#define SHORTFIN_REQUIRES_LOCK(...) \
+  SHORTFIN_THREAD_ANNOTATION_ATTRIBUTE(requires_capability(__VA_ARGS__))
+
 namespace shortfin::iree {
 
 SHORTFIN_IREE_DEF_PTR(thread);
 
 // Wraps an iree::slim_mutex as an RAII object.
-class slim_mutex {
+class SHORTFIN_THREAD_ANNOTATION_ATTRIBUTE(capability("mutex")) slim_mutex {
  public:
   slim_mutex() { iree_slim_mutex_initialize(&mu_); }
   slim_mutex(const slim_mutex &) = delete;
@@ -28,15 +40,31 @@ class slim_mutex {
 
   operator iree_slim_mutex_t *() { return &mu_; }
 
+  void Lock() SHORTFIN_THREAD_ANNOTATION_ATTRIBUTE(acquire_capability()) {
+    iree_slim_mutex_lock(&mu_);
+  }
+
+  void Unlock() SHORTFIN_THREAD_ANNOTATION_ATTRIBUTE(release_capability()) {
+    iree_slim_mutex_unlock(&mu_);
+  }
+
  private:
   iree_slim_mutex_t mu_;
 };
 
 // RAII slim mutex lock guard.
-class slim_mutex_lock_guard {
+class SHORTFIN_THREAD_ANNOTATION_ATTRIBUTE(scoped_lockable)
+    slim_mutex_lock_guard {
  public:
-  slim_mutex_lock_guard(slim_mutex &mu) : mu_(mu) { iree_slim_mutex_lock(mu_); }
-  ~slim_mutex_lock_guard() { iree_slim_mutex_unlock(mu_); }
+  slim_mutex_lock_guard(slim_mutex &mu)
+      SHORTFIN_THREAD_ANNOTATION_ATTRIBUTE(acquire_capability(mu))
+      : mu_(mu) {
+    mu_.Lock();
+  }
+  ~slim_mutex_lock_guard()
+      SHORTFIN_THREAD_ANNOTATION_ATTRIBUTE(release_capability()) {
+    mu_.Unlock();
+  }
 
  private:
   slim_mutex &mu_;

@@ -112,23 +112,25 @@ class SHORTFIN_API Future {
     virtual ~BaseState();
     iree::slim_mutex lock_;
     Worker *worker_;
-    int ref_count_ = 1;
-    iree::ignorable_status failure_status_;
-    bool done_ = false;
-    std::vector<FutureCallback> callbacks_;
+    int ref_count_ SHORTFIN_GUARDED_BY(lock_) = 1;
+    iree::ignorable_status failure_status_ SHORTFIN_GUARDED_BY(lock_);
+    bool done_ SHORTFIN_GUARDED_BY(lock_) = false;
+    std::vector<FutureCallback> callbacks_ SHORTFIN_GUARDED_BY(lock_);
   };
 
   Future(BaseState *state) : state_(state) {}
   void Retain() const;
   void Release() const;
   static Worker *GetRequiredWorker();
-  void set_success() { state_->done_ = true; }
+  void SetSuccessWithLockHeld() SHORTFIN_REQUIRES_LOCK(state_->lock_) {
+    state_->done_ = true;
+  }
   // Posts a message to the worker to issue callbacks. Lock must be held.
-  void IssueCallbacksWithLockHeld();
+  void IssueCallbacksWithLockHeld() SHORTFIN_REQUIRES_LOCK(state_->lock_);
   static iree_status_t RawHandleWorkerCallback(void *state_vp, iree_loop_t loop,
                                                iree_status_t status) noexcept;
   void HandleWorkerCallback();
-  void ThrowFailureWithLockHeld();
+  void ThrowFailureWithLockHeld() SHORTFIN_REQUIRES_LOCK(state_->lock_);
 
   mutable BaseState *state_;
 };
@@ -148,7 +150,11 @@ class SHORTFIN_API VoidFuture : public Future {
     return *this;
   }
 
-  using Future::set_success;
+  void set_success() {
+    iree::slim_mutex_lock_guard g(state_->lock_);
+    SetSuccessWithLockHeld();
+    IssueCallbacksWithLockHeld();
+  }
 };
 
 // Value containing Future.
@@ -183,7 +189,7 @@ class SHORTFIN_API TypedFuture : public Future {
           "Cannot 'set_failure' on a Future that is already done");
     }
     static_cast<TypedState *>(state_)->result_ = std::move(result);
-    set_success();
+    SetSuccessWithLockHeld();
     IssueCallbacksWithLockHeld();
   }
 

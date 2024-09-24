@@ -26,6 +26,7 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 20)
 # https://discourse.cmake.org/t/cmake-3-28-cmake-cxx-compiler-clang-scan-deps-notfound-not-found/9244/3
 set(CMAKE_CXX_SCAN_FOR_MODULES 0)
+set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 
 # Problems with linking libfmt without PIC.
 # Turn on PIC on non windows targets.
@@ -57,6 +58,14 @@ else()
   set(SHORTFIN_LINK_LIBRARY_NAME "shortfin-static")
 endif()
 
+# Includes.
+list(APPEND CMAKE_MODULE_PATH
+  ${CMAKE_CURRENT_LIST_DIR}/build_tools/cmake/
+)
+include(shortfin_library)
+include(CheckCXXCompilerFlag)
+include(FetchContent)
+
 # Enabling ASAN. Note that this will work best if building in a completely
 # bundled fashion and with an ASAN rigged CPython. Otherwise, various LD_PRELOAD
 # hacks are needed. This is merely a develope convenience: people are more
@@ -70,6 +79,13 @@ if(SHORTFIN_ENABLE_ASAN)
   add_compile_definitions(IREE_SANITIZER_ADDRESS)
 endif()
 
+# Thread safety annotations: Enabled if the compiler supports it.
+check_cxx_compiler_flag("-Wthread-safety" SHORTFIN_HAS_THREAD_SAFETY_ANNOTATIONS)
+if(SHORTFIN_HAS_THREAD_SAFETY)
+  add_compile_options(-Wthread-safety)
+  add_compile_definitions(SHORTFIN_HAS_THREAD_SAFETY_ANNOTATIONS)
+endif()
+
 option(SHORTFIN_SYSTEMS_AMDGPU "Builds for AMD GPU systems" ON)
 message(STATUS "libshortfin supported systems:")
 if(SHORTFIN_SYSTEMS_AMDGPU)
@@ -77,14 +93,6 @@ if(SHORTFIN_SYSTEMS_AMDGPU)
   add_compile_definitions("SHORTFIN_HAVE_AMDGPU")
 endif()
 message(STATUS "  - Host")
-
-include(FetchContent)
-
-# Includes.
-list(APPEND CMAKE_MODULE_PATH
-  ${CMAKE_CURRENT_LIST_DIR}/build_tools/cmake/
-)
-include(shortfin_library)
 
 # Dependencies.
 

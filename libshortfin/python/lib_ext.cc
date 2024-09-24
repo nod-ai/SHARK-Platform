@@ -10,10 +10,10 @@
 #include "shortfin/array/array.h"
 #include "shortfin/array/storage.h"
 #include "shortfin/local/async.h"
+#include "shortfin/local/fiber.h"
 #include "shortfin/local/messaging.h"
 #include "shortfin/local/process.h"
 #include "shortfin/local/program.h"
-#include "shortfin/local/scope.h"
 #include "shortfin/local/system.h"
 #if defined(SHORTFIN_HAVE_AMDGPU)
 #include "shortfin/local/systems/amdgpu.h"
@@ -142,9 +142,17 @@ class PyWorkerExtension : public local::Worker::Extension {
 
 class PyProcess : public local::detail::BaseProcess {
  public:
-  PyProcess(std::shared_ptr<local::Scope> scope, std::shared_ptr<Refs> refs)
-      : BaseProcess(std::move(scope)), refs_(std::move(refs)) {}
+  PyProcess(std::shared_ptr<Refs> refs)
+      : BaseProcess(), refs_(std::move(refs)) {}
+  using BaseProcess::Initialize;
+  using BaseProcess::is_initialized;
   using BaseProcess::Launch;
+
+  void AssertInitialized() {
+    if (!is_initialized()) {
+      throw std::logic_error("Process.__init__ not called in constructor");
+    }
+  }
 
   void ScheduleOnWorker() override {
     // This is tricky: We need to retain the object reference across the
@@ -154,14 +162,14 @@ class PyProcess : public local::detail::BaseProcess {
     // the callback.
     py::handle self_object = py::cast(this, py::rv_policy::none);
     self_object.inc_ref();
-    scope()->worker().CallThreadsafe(
+    fiber()->worker().CallThreadsafe(
         std::bind(&PyProcess::RunOnWorker, self_object));
   }
   static void RunOnWorker(py::handle self_handle) {
     py::gil_scoped_acquire g;
     // Steal the reference back from ScheduleOnWorker. Important: this is
     // very likely the last reference to the process. So self must not be
-    // touched after self_object goes out of scope.
+    // touched after self_object goes out of fiber.
     py::object self_object = py::steal(self_handle);
     PyProcess *self = py::cast<PyProcess *>(self_handle);
     // We assume that the run method either returns None (def) or a coroutine
@@ -314,6 +322,19 @@ py::object RunInForeground(std::shared_ptr<Refs> refs, local::System &self,
 }  // namespace
 
 NB_MODULE(lib, m) {
+// Tragically, debug builds of Python do the right thing and don't immortalize
+// many identifiers and such. This makes the last chance leak checking that
+// nanobind does somewhat unreliable since the reports it prints may be
+// to identifiers that are no longer live (at a time in process shutdown
+// where it is expected that everything left just gets dropped on the floor).
+// This causes segfaults or ASAN violations in the leak checker on exit in
+// certain scenarios where we have spurious "leaks" of global objects.
+#if defined(Py_DEBUG)
+  py::set_leak_warnings(false);
+#endif
+
+  logging::InitializeFromEnv();
+
   py::register_exception_translator(
       [](const std::exception_ptr &p, void * /*unused*/) {
         try {
@@ -339,6 +360,13 @@ NB_MODULE(lib, m) {
       });
 
   py::class_<iree::vm_opaque_ref>(m, "_OpaqueVmRef");
+
+  // Logging entrypoints.
+  m.def("log_debug", [](std::string_view sv) { logging::debug("{}", sv); });
+  m.def("log_info", [](std::string_view sv) { logging::info("{}", sv); });
+  m.def("log_warn", [](std::string_view sv) { logging::warn("{}", sv); });
+  m.def("log_error", [](std::string_view sv) { logging::error("{}", sv); });
+
   auto local_m = m.def_submodule("local");
   BindLocal(local_m);
   BindHostSystem(local_m);
@@ -396,30 +424,33 @@ void BindLocal(py::module_ &m) {
       .def(
           "device",
           [](local::System &self, std::string_view key) {
-            auto it = self.named_devices().find(key);
-            if (it == self.named_devices().end()) {
+            local::Device *device = self.FindDeviceByName(key);
+            if (!device) {
               throw std::invalid_argument(fmt::format("No device '{}'", key));
             }
-            return it->second;
+            return device;
           },
           py::rv_policy::reference_internal)
       .def(
           "create_queue",
-          [](local::System &self, std::string name) -> local::Queue & {
+          [](local::System &self,
+             std::optional<std::string> name) -> std::shared_ptr<local::Queue> {
             local::Queue::Options options;
-            options.name = std::move(name);
+            if (name) {
+              options.name = std::move(*name);
+            }
             return self.CreateQueue(std::move(options));
           },
-          py::arg("name"), py::rv_policy::reference_internal)
+          py::arg("name") = py::none(), py::rv_policy::reference_internal)
       .def("named_queue", &local::System::named_queue, py::arg("name"),
            py::rv_policy::reference_internal)
       .def(
-          "create_scope",
+          "create_fiber",
           [](local::System &self, local::Worker *worker,
              py::handle raw_devices) {
             // TODO: I couldn't really figure out how to directly accept an
             // optional kw-only arg without it just being a raw object/handle.
-            // If the passed devices is none, then we create the scope with
+            // If the passed devices is none, then we create the fiber with
             // all devices in the system. Otherwise, with those explicitly
             // given.
             std::vector<local::Device *> devices;
@@ -434,7 +465,7 @@ void BindLocal(py::module_ &m) {
               worker = dynamic_cast<local::Worker *>(&self.init_worker());
             }
 
-            return self.CreateScope(*worker, devices);
+            return self.CreateFiber(*worker, devices);
           },
           py::rv_policy::reference_internal,
           py::arg("worker").none() = py::none(), py::kw_only(),
@@ -482,13 +513,13 @@ void BindLocal(py::module_ &m) {
 
   py::class_<local::Program>(m, "Program")
       .def(py::new_([](std::span<const local::ProgramModule> modules,
-                       local::Scope &scope, bool trace_execution) {
+                       local::Fiber &fiber, bool trace_execution) {
              local::Program::Options options;
              options.trace_execution = trace_execution;
-             return local::Program::Load(scope.shared_from_this(), modules,
+             return local::Program::Load(fiber.shared_from_this(), modules,
                                          std::move(options));
            }),
-           py::arg("modules"), py::arg("scope"), py::kw_only(),
+           py::arg("modules"), py::arg("fiber"), py::kw_only(),
            py::arg("trace_execution") = false)
       .def_prop_ro("exports", &local::Program::exports)
       .def("lookup_function", &local::Program::LookupRequiredFunction)
@@ -505,7 +536,18 @@ void BindLocal(py::module_ &m) {
       .def_prop_ro("exports", &local::ProgramModule::exports)
       .def("__repr__", &local::ProgramModule::to_s)
       .def_static("load", &local::ProgramModule::Load, py::arg("system"),
-                  py::arg("path"), py::arg("mmap") = true);
+                  py::arg("path"), py::arg("mmap") = true)
+      .def_static(
+          "parameter_provider",
+          [](local::System &system, py::args params) {
+            std::vector<local::BaseProgramParameters *> c_params;
+            c_params.reserve(params.size());
+            for (py::handle h : params) {
+              c_params.push_back(py::cast<local::BaseProgramParameters *>(h));
+            }
+            return local::ProgramModule::ParameterProvider(system, c_params);
+          },
+          py::arg("system"), py::arg("params"));
   py::class_<local::ProgramInvocation::Ptr>(m, "ProgramInvocation")
       .def("invoke",
            [](local::ProgramInvocation::Ptr &self) {
@@ -552,41 +594,88 @@ void BindLocal(py::module_ &m) {
             }
             return PyRehydrateRef(self.get(), std::move(ref));
           },
-          "Gets the i'th result");
+          "Gets the i'th result")
+      .def("__repr__", [](local::ProgramInvocation::Ptr &self) {
+        if (!self) return std::string("ProgramInvocation(INVALID)");
+        return self->to_s();
+      });
+
+  py::class_<local::BaseProgramParameters>(m, "BaseProgramParameters");
+  py::class_<local::StaticProgramParameters, local::BaseProgramParameters>(
+      m, "StaticProgramParameters")
+      .def(
+          py::init<local::System &, std::string_view, iree_host_size_t>(),
+          py::arg("system"), py::arg("parameter_scope"),
+          py::arg("max_concurrent_operations") =
+              IREE_IO_PARAMETER_INDEX_PROVIDER_DEFAULT_MAX_CONCURRENT_OPERATIONS)
+      .def(
+          "load",
+          [](local::StaticProgramParameters &self,
+             std::filesystem::path file_path, std::string_view format,
+             bool readable, bool writable, bool mmap) {
+            local::StaticProgramParameters::LoadOptions options;
+            options.format = format;
+            options.readable = readable;
+            options.writable = writable;
+            options.mmap = mmap;
+            self.Load(file_path, options);
+          },
+          py::arg("file_path"), py::arg("format") = std::string_view(),
+          py::arg("readable") = true, py::arg("writable") = false,
+          py::arg("mmap") = true);
 
   struct DevicesSet {
-    DevicesSet(local::Scope &scope) : scope(scope) {}
-    local::Scope &scope;
+    DevicesSet(py::object fiber_obj, std::optional<size_t> index = {})
+        : fiber_obj(std::move(fiber_obj)), index(index) {}
+    py::object KeepAlive(local::ScopedDevice device) {
+      py::object device_obj = py::cast(device);
+      py::detail::keep_alive(/*nurse=*/device_obj.ptr(),
+                             /*patient=*/fiber_obj.ptr());
+      return device_obj;
+    }
+    local::Fiber &fiber() { return py::cast<local::Fiber &>(fiber_obj); }
+    py::object fiber_obj;
+    std::optional<size_t> index;
   };
-  py::class_<local::Scope>(m, "Scope")
-      .def("__repr__", &local::Scope::to_s)
-      .def_prop_ro("raw_devices", &local::Scope::raw_devices,
+  py::class_<local::Fiber>(m, "Fiber")
+      .def("__repr__", &local::Fiber::to_s)
+      .def_prop_ro("raw_devices", &local::Fiber::raw_devices,
                    py::rv_policy::reference_internal)
       .def(
           "raw_device",
-          [](local::Scope &self, int index) { return self.raw_device(index); },
+          [](local::Fiber &self, int index) { return self.raw_device(index); },
           py::rv_policy::reference_internal)
       .def(
           "raw_device",
-          [](local::Scope &self, std::string_view name) {
+          [](local::Fiber &self, std::string_view name) {
             return self.raw_device(name);
           },
           py::rv_policy::reference_internal)
-      .def_prop_ro(
-          "devices", [](local::Scope &self) { return DevicesSet(self); },
-          py::rv_policy::reference_internal)
-      .def_prop_ro("device_names", &local::Scope::device_names)
-      .def_prop_ro("named_devices", &local::Scope::named_devices,
-                   py::rv_policy::reference_internal)
+      .def_prop_ro("devices",
+                   [](py::object self) { return DevicesSet(std::move(self)); })
+      .def_prop_ro("devices_dict",
+                   [](py::handle self_obj) {
+                     local::Fiber &self = py::cast<local::Fiber &>(self_obj);
+                     py::dict d;
+                     for (auto &it : self.raw_devices()) {
+                       py::object scoped_device =
+                           py::cast(self.device(it.second));
+                       py::detail::keep_alive(/*nurse=*/scoped_device.ptr(),
+                                              /*patient=*/self_obj.ptr());
+                       d[py::cast(it.first)] = scoped_device;
+                     }
+                     return d;
+                   })
+      .def_prop_ro("device_names", &local::Fiber::device_names)
       .def(
           "device",
-          [](local::Scope &self, py::args args) {
+          [](local::Fiber &self, py::args args) {
             return CastDeviceAffinity(self, args);
           },
           py::rv_policy::reference_internal);
 
   py::class_<local::ScopedDevice>(m, "ScopedDevice")
-      .def_prop_ro("scope", &local::ScopedDevice::scope,
+      .def_prop_ro("fiber", &local::ScopedDevice::fiber,
                    py::rv_policy::reference)
       .def_prop_ro("affinity", &local::ScopedDevice::affinity,
                    py::rv_policy::reference_internal)
@@ -601,25 +690,35 @@ void BindLocal(py::module_ &m) {
       .def("__repr__", &local::ScopedDevice::to_s);
 
   py::class_<DevicesSet>(m, "_ScopeDevicesSet")
+      .def("__iter__",
+           [](DevicesSet &self) { return DevicesSet(self.fiber_obj, 0); })
+      .def("__next__",
+           [](DevicesSet &self) {
+             auto &fiber = self.fiber();
+             if (!self.index || *self.index >= fiber.raw_devices().size()) {
+               // Blurgh: Exception as flow control is not cheap. There is a
+               // very obnoxious way to make this not be exception based but
+               // this is a minority path.
+               throw py::stop_iteration();
+             }
+             return self.KeepAlive(fiber.device((*self.index)++));
+           })
       .def("__len__",
-           [](DevicesSet &self) { return self.scope.raw_devices().size(); })
-      .def(
-          "__getitem__",
-          [](DevicesSet &self, int index) { return self.scope.device(index); },
-          py::rv_policy::reference_internal)
-      .def(
-          "__getitem__",
-          [](DevicesSet &self, std::string_view name) {
-            return self.scope.device(name);
-          },
-          py::rv_policy::reference_internal)
-      .def(
-          "__getattr__",
-          [](DevicesSet &self, std::string_view name) {
-            return self.scope.device(name);
-          },
-          py::rv_policy::reference_internal);
+           [](DevicesSet &self) { return self.fiber().raw_devices().size(); })
+      .def("__getitem__",
+           [](DevicesSet &self, size_t index) {
+             return self.KeepAlive(self.fiber().device(index));
+           })
+      .def("__getitem__",
+           [](DevicesSet &self, std::string_view name) {
+             return self.KeepAlive(self.fiber().device(name));
+           })
+      .def("__getattr__",
+           [](DevicesSet &self, std::string_view name) -> py::object {
+             return self.KeepAlive(self.fiber().device(name));
+           });
 
+  ;
   py::class_<local::Worker>(m, "Worker", py::is_weak_referenceable())
       .def_prop_ro("loop",
                    [](local::Worker &self) {
@@ -681,30 +780,51 @@ void BindLocal(py::module_ &m) {
       .def("__repr__", &local::Worker::to_s);
 
   py::class_<PyProcess>(m, "Process")
-      .def("__init__", [](py::args, py::kwargs) {})
+      .def(
+          "__init__",
+          [](py::handle self_obj, std::shared_ptr<local::Fiber> fiber) {
+            PyProcess &self = py::cast<PyProcess &>(self_obj);
+            self.Initialize(std::move(fiber));
+          },
+          py::kw_only(), py::arg("fiber"))
       .def_static(
           "__new__",
-          [refs](py::handle py_type, py::args,
-                 std::shared_ptr<local::Scope> scope, py::kwargs) {
-            return custom_new<PyProcess>(py_type, std::move(scope), refs);
+          [refs](py::handle py_type, py::args, py::kwargs) {
+            return custom_new<PyProcess>(py_type, refs);
           },
-          py::arg("type"), py::arg("args"), py::arg("scope"), py::arg("kwargs"))
+          py::arg("type"), py::arg("args"), py::arg("kwargs"))
       .def_prop_ro("pid", &PyProcess::pid)
-      .def_prop_ro("scope", &PyProcess::scope)
+      .def_prop_ro("fiber",
+                   [](PyProcess &self) -> std::shared_ptr<local::Fiber> {
+                     self.AssertInitialized();
+                     return self.fiber();
+                   })
+      .def_prop_ro("system",
+                   [](PyProcess &self) {
+                     self.AssertInitialized();
+                     return self.fiber()->system().shared_ptr();
+                   })
       .def("launch",
            [](py::object self_obj) {
              PyProcess &self = py::cast<PyProcess &>(self_obj);
+             self.AssertInitialized();
              self.Launch();
              return self_obj;
            })
       .def("__await__",
            [](PyProcess &self) {
+             self.AssertInitialized();
              py::object future =
                  py::cast(local::CompletionEvent(self.OnTermination()),
                           py::rv_policy::move);
              return future.attr("__await__")();
            })
-      .def("__repr__", &PyProcess::to_s);
+      .def("__repr__", [](PyProcess &self) {
+        if (!self.is_initialized()) {
+          return std::string("Process(UNINITIALIZED)");
+        }
+        return self.to_s();
+      });
 
   py::class_<local::CompletionEvent>(m, "CompletionEvent")
       .def(py::init<>())
@@ -758,28 +878,30 @@ void BindLocal(py::module_ &m) {
       // happens, the owner struct is replaced and any C++ side reference counts
       // are turned into Python reference counts. Once transferred, only Python
       // reference counting is used, even if referenced from the C++ side.
-      py::intrusive_ptr<local::Message>(
-          [](local::Message *self, PyObject *self_py) noexcept {
-            local::detail::MessageRefOwner owner(
-                +[](local::detail::MessageRefOwner::Request req,
-                    const local::Message &msg) {
-                  py::gil_scoped_acquire g;
-                  PyObject *msg_object = reinterpret_cast<PyObject *>(
-                      local::detail::MessageRefOwner::access_ref_data(msg));
-                  if (req == local::detail::MessageRefOwner::Request::RETAIN) {
-                    py::handle(msg_object).inc_ref();
-                  } else {
-                    py::handle(msg_object).dec_ref();
-                  }
-                });
-            intptr_t orig_ref_data =
-                owner.set_owner(*self, reinterpret_cast<intptr_t>(self_py));
-            // Transfer any prior C++ references to the Python side (less 1
-            // since we start with a live reference).
-            for (int i = 0; i < orig_ref_data - 1; ++i) {
-              py::handle(self_py).inc_ref();
-            }
-          }))
+      py::intrusive_ptr<local::Message>([](local::Message *self,
+                                           PyObject *self_py) noexcept {
+        local::detail::MessageLifetimeController owner(
+            +[](local::detail::MessageLifetimeController::Request req,
+                const local::Message &msg) {
+              py::gil_scoped_acquire g;
+              PyObject *msg_object = reinterpret_cast<PyObject *>(
+                  local::detail::MessageLifetimeController::AccessOwnedRefData(
+                      msg));
+              if (req ==
+                  local::detail::MessageLifetimeController::Request::RETAIN) {
+                py::handle(msg_object).inc_ref();
+              } else {
+                py::handle(msg_object).dec_ref();
+              }
+            });
+        intptr_t orig_ref_data =
+            owner.TakeOwnership(*self, reinterpret_cast<intptr_t>(self_py));
+        // Transfer any prior C++ references to the Python side (less 1
+        // since we start with a live reference).
+        for (int i = 0; i < orig_ref_data - 1; ++i) {
+          py::handle(self_py).inc_ref();
+        }
+      }))
       .def(py::init<>());
 
   py::class_<local::Queue>(m, "Queue")
@@ -791,10 +913,15 @@ void BindLocal(py::module_ &m) {
                  py::type<local::QueueWriter>(),
                  /*keep_alive=*/self, /*queue=*/self);
            })
-      .def("reader", [](local::Queue &self) {
-        return custom_new_keep_alive<local::QueueReader>(
-            py::type<local::QueueReader>(),
-            /*keep_alive=*/self, /*queue=*/self);
+      .def("reader",
+           [](local::Queue &self) {
+             return custom_new_keep_alive<local::QueueReader>(
+                 py::type<local::QueueReader>(),
+                 /*keep_alive=*/self, /*queue=*/self);
+           })
+      .def_prop_ro("closed", &local::Queue::is_closed)
+      .def("write_nodelay", [](local::Queue &self, local::Message &message) {
+        self.WriteNoDelay(local::Message::Ref(message));
       });
   py::class_<local::QueueWriter>(m, "QueueWriter")
       .def("__call__",
@@ -855,7 +982,9 @@ void BindLocal(py::module_ &m) {
             });
         return iter_ret;
       });
-  py::class_<local::VoidFuture, local::Future>(m, "VoidFuture");
+  py::class_<local::VoidFuture, local::Future>(m, "VoidFuture")
+      .def(py::init<>())
+      .def("set_success", [](local::VoidFuture &self) { self.set_success(); });
   py::class_<local::ProgramInvocation::Future, local::Future>(
       m, "ProgramInvocationFuture")
       .def("result", [](local::ProgramInvocation::Future &self) {

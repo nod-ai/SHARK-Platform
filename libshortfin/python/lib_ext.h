@@ -11,6 +11,7 @@
 #include <nanobind/operators.h>
 #include <nanobind/stl/filesystem.h>
 #include <nanobind/stl/function.h>
+#include <nanobind/stl/optional.h>
 #include <nanobind/stl/shared_ptr.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/string_view.h>
@@ -24,6 +25,7 @@ namespace shortfin::python {
 namespace py = nanobind;
 
 void BindArray(py::module_ &module);
+void BindArrayHostOps(py::module_ &module);
 void BindLocal(py::module_ &module);
 void BindHostSystem(py::module_ &module);
 void BindAMDGPUSystem(py::module_ &module);
