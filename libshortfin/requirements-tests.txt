@@ -8,5 +8,6 @@ uvicorn
 setuptools
 wheel
 
-# Deps needed to run all unit tests.
+# Deps needed for shortfin_apps.llm
+dataclasses-json
 tokenizers
