@@ -38,7 +38,7 @@ storage::~storage() { logging::destruct("array::storage", this); }
 storage storage::import_buffer(local::ScopedDevice &device,
                                iree::hal_buffer_ptr buffer) {
   return storage(device, std::move(buffer),
-                 device.scope().NewTimelineResource());
+                 device.fiber().NewTimelineResource());
 }
 
 storage storage::allocate_device(ScopedDevice &device,
@@ -57,11 +57,12 @@ storage storage::allocate_device(ScopedDevice &device,
   SHORTFIN_THROW_IF_ERROR(iree_hal_allocator_allocate_buffer(
       allocator, params, allocation_size, buffer.for_output()));
   return storage(device, std::move(buffer),
-                 device.scope().NewTimelineResource());
+                 device.fiber().NewTimelineResource());
 }
 
 storage storage::allocate_host(ScopedDevice &device,
-                               iree_device_size_t allocation_size) {
+                               iree_device_size_t allocation_size,
+                               bool device_visible) {
   if (!device.raw_device()) {
     throw std::invalid_argument("Cannot allocate with a null device affinity");
   }
@@ -70,17 +71,19 @@ storage storage::allocate_host(ScopedDevice &device,
   iree_hal_buffer_params_t params = {
       .usage = IREE_HAL_BUFFER_USAGE_MAPPING,
       .access = IREE_HAL_MEMORY_ACCESS_ALL,
-      .type = IREE_HAL_MEMORY_TYPE_OPTIMAL_FOR_HOST |
-              IREE_HAL_MEMORY_TYPE_DEVICE_VISIBLE,
+      .type = IREE_HAL_MEMORY_TYPE_OPTIMAL_FOR_HOST,
       .queue_affinity = device.affinity().queue_affinity(),
   };
-  if (device.affinity().queue_affinity() != 0) {
-    params.usage |= IREE_HAL_BUFFER_USAGE_TRANSFER;
+  if (device_visible) {
+    params.type |= IREE_HAL_MEMORY_TYPE_DEVICE_VISIBLE;
+    if (device.affinity().queue_affinity() != 0) {
+      params.usage |= IREE_HAL_BUFFER_USAGE_TRANSFER;
+    }
   }
   SHORTFIN_THROW_IF_ERROR(iree_hal_allocator_allocate_buffer(
       allocator, params, allocation_size, buffer.for_output()));
   return storage(device, std::move(buffer),
-                 device.scope().NewTimelineResource());
+                 device.fiber().NewTimelineResource());
 }
 
 storage storage::subspan(iree_device_size_t byte_offset,
@@ -92,7 +95,7 @@ storage storage::subspan(iree_device_size_t byte_offset,
 }
 
 void storage::fill(const void *pattern, iree_host_size_t pattern_length) {
-  device_.scope().scheduler().AppendCommandBuffer(
+  device_.fiber().scheduler().AppendCommandBuffer(
       device_, TransactionType::TRANSFER, [&](Account &account) {
         // Must depend on all of this buffer's use dependencies to avoid
         // write-after-read hazard.
@@ -118,7 +121,7 @@ void storage::fill(const void *pattern, iree_host_size_t pattern_length) {
 }
 
 void storage::copy_from(storage &source_storage) {
-  device_.scope().scheduler().AppendCommandBuffer(
+  device_.fiber().scheduler().AppendCommandBuffer(
       device_, TransactionType::TRANSFER, [&](Account &account) {
         // Must depend on the source's mutation dependencies to avoid
         // read-before-write hazard.
@@ -227,7 +230,7 @@ storage storage::CreateFromInvocationResultRef(local::ProgramInvocation *inv,
 storage storage::ImportInvocationResultStorage(local::ProgramInvocation *inv,
                                                iree::hal_buffer_ptr buffer) {
   local::ScopedDevice device =
-      local::ScopedDevice(*inv->scope(), inv->device_selection());
+      local::ScopedDevice(*inv->fiber(), inv->device_selection());
   auto imported_storage = storage::import_buffer(device, std::move(buffer));
 
   auto coarse_signal = inv->coarse_signal();

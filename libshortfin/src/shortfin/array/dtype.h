@@ -20,11 +20,11 @@ namespace shortfin::array {
 class SHORTFIN_API DType {
  public:
 #define SHORTFIN_DTYPE_HANDLE(et, ident) \
-  static DType ident() { return DType(et, #ident); }
+  static constexpr DType ident() { return DType(et, #ident); }
 #include "shortfin/array/dtypes.inl"
 #undef SHORTFIN_DTYPE_HANDLE
 
-  operator iree_hal_element_type_t() const { return et_; }
+  constexpr operator iree_hal_element_type_t() const { return et_; }
 
   std::string_view name() const { return name_; }
 
@@ -56,13 +56,23 @@ class SHORTFIN_API DType {
   // pre-condition
   iree_device_size_t compute_dense_nd_size(std::span<const size_t> dims);
 
-  bool operator==(const DType &other) const { return et_ == other.et_; }
+  constexpr bool operator==(const DType &other) const {
+    return et_ == other.et_;
+  }
 
   // Imports a raw iree_hal_element_type_t from the ether.
   static DType import_element_type(iree_hal_element_type_t et);
 
+  // Asserts that the sizeof EltTy is equal to the size of this dtype.
+  template <typename EltTy>
+  void AssertCompatibleSize() {
+    if (!is_byte_aligned() || sizeof(EltTy) != dense_byte_count()) {
+      throw std::invalid_argument("Incompatible element size");
+    }
+  }
+
  private:
-  DType(iree_hal_element_type_t et, std::string_view name)
+  constexpr DType(iree_hal_element_type_t et, std::string_view name)
       : et_(et), name_(name) {}
   iree_hal_element_type_t et_;
   std::string_view name_;

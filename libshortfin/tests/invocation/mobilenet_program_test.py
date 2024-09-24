@@ -21,22 +21,22 @@ def lsys():
 
 
 @pytest.fixture
-def scope(lsys):
-    return lsys.create_scope()
+def fiber(lsys):
+    return lsys.create_fiber()
 
 
 @pytest.fixture
-def device(scope):
-    return scope.device(0)
+def device(fiber):
+    return fiber.device(0)
 
 
-def test_invoke_mobilenet(lsys, scope, mobilenet_compiled_cpu_path):
-    device = scope.device(0)
+def test_invoke_mobilenet(lsys, fiber, mobilenet_compiled_cpu_path):
+    device = fiber.device(0)
     dummy_data = array.array(
         "f", ([0.2] * (224 * 224)) + ([0.4] * (224 * 224)) + ([-0.2] * (224 * 224))
     )
     program_module = lsys.load_module(mobilenet_compiled_cpu_path)
-    program = sf.Program([program_module], scope=scope)
+    program = sf.Program([program_module], fiber=fiber)
     main_function = program["module.torch-jit-export"]
 
     async def main():

@@ -25,6 +25,7 @@ namespace shortfin::python {
 namespace py = nanobind;
 
 void BindArray(py::module_ &module);
+void BindArrayHostOps(py::module_ &module);
 void BindLocal(py::module_ &module);
 void BindHostSystem(py::module_ &module);
 void BindAMDGPUSystem(py::module_ &module);

@@ -96,7 +96,7 @@ static const char DOCSTRING_STORAGE_COPY_FROM[] =
     R"(Copy contents from a source storage to this array.
 
 This operation executes asynchronously and the effect will only be visible
-once the execution scope has been synced to the point of mutation.
+once the execution fiber has been synced to the point of mutation.
 )";
 
 static const char DOCSTRING_STORAGE_FILL[] = R"(Fill a storage with a value.
@@ -106,7 +106,7 @@ buffer protocol of size 1, 2, or 4 bytes. The storage will be filled uniformly
 with the pattern.
 
 This operation executes asynchronously and the effect will only be visible
-once the execution scope has been synced to the point of mutation.
+once the execution fiber has been synced to the point of mutation.
 )";
 
 static const char DOCSTRING_STORAGE_MAP[] =
@@ -114,10 +114,10 @@ static const char DOCSTRING_STORAGE_MAP[] =
 
 Support kwargs of:
 
-read: Enables read access to the mapped memory.
-write: Enables write access to the mapped memory and will flush upon close
+| read: Enables read access to the mapped memory.
+| write: Enables write access to the mapped memory and will flush upon close
   (for non-unified memory systems).
-discard: Indicates that the entire memory map should be treated as if it will
+| discard: Indicates that the entire memory map should be treated as if it will
   be overwritten. Initial contents will be undefined. Implies `write=True`.
 
 Mapping memory for access from the host requires a compatible buffer that has
@@ -496,20 +496,24 @@ void BindArray(py::module_ &m) {
       .def_prop_ro("shape", &base_array::shape);
   py::class_<device_array, base_array>(m, "device_array")
       .def("__init__", [](py::args, py::kwargs) {})
-      .def_static("__new__",
-                  [](py::handle py_type, class storage storage,
-                     std::span<const size_t> shape, DType dtype) {
-                    return custom_new_keep_alive<device_array>(
-                        py_type, /*keep_alive=*/storage.scope(), storage, shape,
-                        dtype);
-                  })
-      .def_static("__new__",
-                  [](py::handle py_type, local::ScopedDevice &device,
-                     std::span<const size_t> shape, DType dtype) {
-                    return custom_new_keep_alive<device_array>(
-                        py_type, /*keep_alive=*/device.scope(),
-                        device_array::for_device(device, shape, dtype));
-                  })
+      .def_static(
+          "__new__",
+          [](py::handle py_type, class storage storage,
+             std::span<const size_t> shape, DType dtype) {
+            return custom_new_keep_alive<device_array>(
+                py_type, /*keep_alive=*/storage.fiber(), storage, shape, dtype);
+          },
+          py::arg("cls"), py::arg("storage"), py::arg("shape"),
+          py::arg("dtype"))
+      .def_static(
+          "__new__",
+          [](py::handle py_type, local::ScopedDevice &device,
+             std::span<const size_t> shape, DType dtype) {
+            return custom_new_keep_alive<device_array>(
+                py_type, /*keep_alive=*/device.fiber(),
+                device_array::for_device(device, shape, dtype));
+          },
+          py::arg("cls"), py::arg("device"), py::arg("shape"), py::arg("dtype"))
       .def("__sfinv_marshal__",
            [](device_array *self, py::capsule inv_capsule, int barrier) {
              auto *inv =
@@ -522,21 +526,21 @@ void BindArray(py::module_ &m) {
                   [](local::ScopedDevice &device, std::span<const size_t> shape,
                      DType dtype) {
                     return custom_new_keep_alive<device_array>(
-                        py::type<device_array>(), /*keep_alive=*/device.scope(),
+                        py::type<device_array>(), /*keep_alive=*/device.fiber(),
                         device_array::for_device(device, shape, dtype));
                   })
       .def_static("for_host",
                   [](local::ScopedDevice &device, std::span<const size_t> shape,
                      DType dtype) {
                     return custom_new_keep_alive<device_array>(
-                        py::type<device_array>(), /*keep_alive=*/device.scope(),
+                        py::type<device_array>(), /*keep_alive=*/device.fiber(),
                         device_array::for_host(device, shape, dtype));
                   })
       .def("for_transfer",
            [](device_array &self) {
              return custom_new_keep_alive<device_array>(
                  py::type<device_array>(),
-                 /*keep_alive=*/self.device().scope(), self.for_transfer());
+                 /*keep_alive=*/self.device().fiber(), self.for_transfer());
            })
       .def_prop_ro("device", &device_array::device,
                    py::rv_policy::reference_internal)
@@ -601,6 +605,8 @@ void BindArray(py::module_ &m) {
         if (!contents) return "<<unmappable>>";
         return *contents;
       });
+
+  BindArrayHostOps(m);
 }
 
 }  // namespace shortfin::python

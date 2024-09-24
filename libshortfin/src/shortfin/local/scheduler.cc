@@ -6,7 +6,7 @@
 
 #include "shortfin/local/scheduler.h"
 
-#include "shortfin/local/scope.h"
+#include "shortfin/local/fiber.h"
 #include "shortfin/local/system.h"
 #include "shortfin/support/logging.h"
 
@@ -91,12 +91,12 @@ VoidFuture Account::OnSync() {
 // TimelineResource
 // -------------------------------------------------------------------------- //
 
-TimelineResource::TimelineResource(std::shared_ptr<Scope> scope,
+TimelineResource::TimelineResource(std::shared_ptr<Fiber> fiber,
                                    size_t semaphore_capacity)
-    : scope_(std::move(scope)) {
+    : fiber_(std::move(fiber)) {
   logging::construct("TimelineResource", this);
   SHORTFIN_THROW_IF_ERROR(
-      iree_hal_fence_create(semaphore_capacity, scope_->host_allocator(),
+      iree_hal_fence_create(semaphore_capacity, fiber_->host_allocator(),
                             use_barrier_fence_.for_output()));
 }
 
@@ -111,7 +111,7 @@ void TimelineResource::use_barrier_insert(iree_hal_semaphore_t *sem,
 }
 
 iree_allocator_t TimelineResource::host_allocator() {
-  return scope_->host_allocator();
+  return fiber_->host_allocator();
 }
 
 // -------------------------------------------------------------------------- //

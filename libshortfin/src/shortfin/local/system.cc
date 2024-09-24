@@ -8,7 +8,7 @@
 
 #include <fmt/core.h>
 
-#include "shortfin/local/scope.h"
+#include "shortfin/local/fiber.h"
 #include "shortfin/support/logging.h"
 
 namespace shortfin::local {
@@ -83,11 +83,11 @@ void System::Shutdown() {
   blocking_executor_.Kill();
 }
 
-std::shared_ptr<Scope> System::CreateScope(Worker &worker,
+std::shared_ptr<Fiber> System::CreateFiber(Worker &worker,
                                            std::span<Device *const> devices) {
   iree::slim_mutex_lock_guard guard(lock_);
   AssertRunning();
-  return std::make_shared<Scope>(shared_ptr(), worker, devices);
+  return std::make_shared<Fiber>(shared_ptr(), worker, devices);
 }
 
 void System::InitializeNodes(int node_count) {

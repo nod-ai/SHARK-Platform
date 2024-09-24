@@ -20,6 +20,7 @@ FetchContent_MakeAvailable(nanobind)
 
 nanobind_add_module(shortfin_python_extension NB_STATIC LTO
   array_binding.cc
+  array_host_ops.cc
   lib_ext.cc
 )
 

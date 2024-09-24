@@ -25,8 +25,8 @@ class DeviceArrayTest : public testing::Test {
 
   void SetUp() override {
     system = systems::HostCPUSystemBuilder().CreateSystem();
-    scope = system->CreateScope(system->init_worker(), system->devices());
-    device = scope->device(0);
+    fiber = system->CreateFiber(system->init_worker(), system->devices());
+    device = fiber->device(0);
   }
   void TearDown() override {
     system->Shutdown();
@@ -34,7 +34,7 @@ class DeviceArrayTest : public testing::Test {
   }
 
   SystemPtr system;
-  std::shared_ptr<Scope> scope;
+  std::shared_ptr<Fiber> fiber;
   ScopedDevice device;
 };
 

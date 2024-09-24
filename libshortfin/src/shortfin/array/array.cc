@@ -18,6 +18,29 @@ namespace shortfin::array {
 template class InlinedDims<iree_hal_dim_t>;
 
 // -------------------------------------------------------------------------- //
+// base_array
+// -------------------------------------------------------------------------- //
+
+void base_array::expand_dims(Dims::value_type axis) {
+  auto shape = this->shape();
+  if (axis > shape.size()) {
+    throw std::invalid_argument(
+        fmt::format("expand_dims axis must be <= rank ({}) but was {}",
+                    shape.size(), axis));
+  }
+  Dims new_dims(shape.size() + 1);
+  size_t j = 0;
+  for (size_t i = 0; i < axis; ++i) {
+    new_dims[j++] = shape[i];
+  }
+  new_dims[j++] = 1;
+  for (size_t i = axis; i < shape.size(); ++i) {
+    new_dims[j++] = shape[i];
+  }
+  set_shape(new_dims.span());
+}
+
+// -------------------------------------------------------------------------- //
 // device_array
 // -------------------------------------------------------------------------- //
 
@@ -152,9 +175,13 @@ device_array device_array::view(Dims &offsets, Dims &sizes) {
       has_stride = true;
     }
 
-    new_dims[i] = slice_size;
+    // Since we are only narrowing a dense, row major slice, as we traverse
+    // the dims, we are narrowing the memory view at each step by advancing
+    // the beginning based on the requested offset and pulling the end in
+    // by the difference in size.
     start_offset += row_stride * slice_offset;
-    span_size = row_stride * slice_size;
+    span_size -= row_stride * (new_dims[i] - slice_size);
+    new_dims[i] = slice_size;
   }
 
   return device_array(storage().subspan(start_offset, span_size),

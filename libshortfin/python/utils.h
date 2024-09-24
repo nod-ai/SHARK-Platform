@@ -8,31 +8,31 @@
 
 #include "./lib_ext.h"
 #include "shortfin/local/device.h"
-#include "shortfin/local/scope.h"
+#include "shortfin/local/fiber.h"
 
 namespace shortfin::python {
 
 // Casts any of int, str, local::Device, DeviceAffinity to a DeviceAffinity.
 // If the object is a sequence, then the affinity is constructed from the union.
-inline local::ScopedDevice CastDeviceAffinity(local::Scope& scope,
+inline local::ScopedDevice CastDeviceAffinity(local::Fiber& fiber,
                                               py::handle object) {
   if (py::isinstance<local::Device>(object)) {
-    return scope.device(py::cast<local::Device*>(object));
+    return fiber.device(py::cast<local::Device*>(object));
   } else if (py::isinstance<local::DeviceAffinity>(object)) {
-    return local::ScopedDevice(scope, py::cast<local::DeviceAffinity>(object));
+    return local::ScopedDevice(fiber, py::cast<local::DeviceAffinity>(object));
   } else if (py::isinstance<int>(object)) {
-    return scope.device(py::cast<int>(object));
+    return fiber.device(py::cast<int>(object));
   } else if (py::isinstance<std::string>(object)) {
-    return scope.device(py::cast<std::string>(object));
+    return fiber.device(py::cast<std::string>(object));
   } else if (py::isinstance<py::sequence>(object)) {
     // Important: sequence must come after string, since string is a sequence
     // and this will infinitely recurse (since the first element of the string
     // is a sequence, etc).
     local::DeviceAffinity affinity;
     for (auto item : py::cast<py::sequence>(object)) {
-      affinity |= CastDeviceAffinity(scope, item).affinity();
+      affinity |= CastDeviceAffinity(fiber, item).affinity();
     }
-    return local::ScopedDevice(scope, affinity);
+    return local::ScopedDevice(fiber, affinity);
   }
 
   throw std::invalid_argument(fmt::format("Cannot cast {} to DeviceAffinity",
