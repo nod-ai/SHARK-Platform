@@ -28,6 +28,7 @@ def create_kv_cache(config: LlamaModelConfig) -> BaseKVCache:
             block_seq_stride=config.block_seq_stride,
             device=config.device,
             dtype=config.attention_dtype,
+            shard_count=config.tensor_parallelism_size,
         )
     else:
         raise NotImplementedError(f"kv_cache_type = {config.kv_cache_type}")

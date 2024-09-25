@@ -135,6 +135,11 @@ class LlamaModelConfig:
     # Dtype to use for attention.
     attention_dtype: torch.dtype = torch.float16
 
+    # How many devices are involved for tensor parallel sharding.
+    # If greater than 1, the model will expect sharded model parameters and function
+    # arguments.
+    tensor_parallelism_size: int = 1
+
     # Indicates if running with HuggingFace implementation and ensures
     # numerical equivalency to HuggingFace's LLaMa if true (by modifying
     # rotary embedding).

@@ -149,11 +149,11 @@ class PagedLlamaAttentionBlock(ThetaLayer):
 
         # Flash attention.
         if not self.use_grok:
-            attn_weights = torch.matmul(xq, keys.transpose(2, 3)) / math.sqrt(
+            attn_weights = ops.matmul(xq, keys.transpose(2, 3)) / math.sqrt(
                 self.head_dim
             )
         elif self.use_grok:
-            attn_weights = torch.matmul(xq, keys.transpose(2, 3))
+            attn_weights = ops.matmul(xq, keys.transpose(2, 3))
             attn_weights = 30.0 * torch.tanh(
                 attn_weights * (0.08838834764831845 / 30.0)
             )
