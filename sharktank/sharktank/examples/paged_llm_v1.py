@@ -223,11 +223,6 @@ def main():
         default="float32",
     )
     parser.add_argument(
-        "--attention-dtype",
-        help="DType to use for attention in the model",
-        default="float16",
-    )
-    parser.add_argument(
         "--use-hf",
         action="store_true",
         default=False,
@@ -240,7 +235,7 @@ def main():
     activation_dtype = getattr(torch, args.activation_dtype)
     attention_dtype = getattr(torch, args.attention_dtype)
     assert isinstance(activation_dtype, torch.dtype)
-    assert isinstance(attention_dtype, torch.dtype)
+
     dataset = cli.get_input_dataset(args)
     tokenizer = cli.get_tokenizer(args)
     prompts = args.prompt
@@ -251,7 +246,7 @@ def main():
         kv_cache_type=args.kv_cache_type,
         device=device,
         activation_dtype=activation_dtype,
-        attention_dtype=attention_dtype,
+        attention_dtype=activation_dtype,
         use_hf=args.use_hf,
     )
 
