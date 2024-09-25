@@ -9,14 +9,17 @@ import pytest
 
 import shortfin as sf
 
+
 @pytest.fixture(autouse=True)
 def clean_env():
     save = {}
+
     def kill():
         for key, value in os.environ.items():
             if key.startswith("SHORTFIN_"):
                 save[key] = value
                 del os.environ[key]
+
     kill()
     yield
     kill()
