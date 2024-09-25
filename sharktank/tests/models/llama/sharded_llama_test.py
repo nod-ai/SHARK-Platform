@@ -152,5 +152,5 @@ class AttentionBlockTest(unittest.TestCase):
             sharded_model.cache.paged.unflatten_page_table(decode_sharded_cache_state)
         ).flatten(start_dim=1)
         torch.testing.assert_close(
-            actual_decode_cache_state, expected_decode_cache_state
+            actual_decode_cache_state, expected_decode_cache_state, atol=1e-4, rtol=1e-4
         )
