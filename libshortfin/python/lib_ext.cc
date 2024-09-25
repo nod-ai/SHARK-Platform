@@ -432,7 +432,12 @@ void BindLocal(py::module_ &m) {
                 py::cast(system_ptr, py::rv_policy::take_ownership);
             live_system_refs.attr("add")(system_obj);
             if (check_options) {
-              self.config_options().CheckAllOptionsConsumed();
+              try {
+                self.config_options().CheckAllOptionsConsumed();
+              } catch (...) {
+                system_obj.attr("shutdown")();
+                throw;
+              }
             }
             return system_obj;
           },
