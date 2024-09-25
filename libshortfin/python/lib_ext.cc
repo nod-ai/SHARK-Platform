@@ -43,8 +43,10 @@ or integer values:
     eligible physical cores on the node.
 
 Args:
-  env_prefix: If specified, then any options not found in kwargs will be looked
-    for in the environment by prefixing the upper-cased key with this value.
+  env_prefix: Controls how options are looked up in the environment. By default,
+    the prefix is "SHORTFIN_" and upper-cased options are appended to it. Any
+    option not explicitly specified but in the environment will be used. Pass
+    None to disable environment lookup.
   **kwargs: Key/value arguments for controlling setup of the system.
 )";
 
@@ -1068,8 +1070,8 @@ void BindHostSystem(py::module_ &global_m) {
             new (self) local::systems::HostCPUSystemBuilder(
                 iree_allocator_system(), std::move(options));
           },
-          py::kw_only(), py::arg("env_prefix") = py::none(), py::arg("kwargs"),
-          DOCSTRING_HOSTCPU_SYSTEM_BUILDER_CTOR);
+          py::kw_only(), py::arg("env_prefix").none() = "SHORTFIN_",
+          py::arg("kwargs"), DOCSTRING_HOSTCPU_SYSTEM_BUILDER_CTOR);
   py::class_<local::systems::HostCPUDevice, local::Device>(m, "HostCPUDevice");
 }
 
