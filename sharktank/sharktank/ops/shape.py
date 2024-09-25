@@ -6,6 +6,7 @@
 
 from typing import Sequence
 from ..types.tensors import AnyTensor
+import numpy as np
 
 
 def broadcast_dim(
@@ -53,3 +54,13 @@ def broadcast_dims(
     ranks = [len(shape) for shape in shaped_or_shape]
     broadcast_rank = max(ranks)
     return [dim + max(0, broadcast_rank - rank) for dim, rank in zip(dims, ranks)]
+
+
+def flatten_shape(shape: Sequence[int], start_dim: int = 0, end_dim: int = -1):
+    end_dim = end_dim if end_dim >= 0 else len(input) - 1
+    shape = list(shape)
+    return (
+        shape[:start_dim]
+        + np.prod(shape[start_dim : end_dim + 1])
+        + shape[: end_dim + 1]
+    )

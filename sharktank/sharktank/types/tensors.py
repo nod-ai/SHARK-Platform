@@ -22,6 +22,7 @@ from numbers import Integral
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+import numpy as np
 
 import torch
 from torch import Tensor
@@ -36,6 +37,7 @@ from ..utils.io import ShardedArchiveBuilder
 
 __all__ = [
     "AnyTensor",
+    "BlockCyclicSplitTensor",
     "DefaultPrimitiveTensor",
     "flatten_tensor_tree",
     "InferenceTensor",
@@ -850,6 +852,83 @@ class SplitPrimitiveTensor(ShardedTensorBase):
         new_key = self._get_shard_slice(key)
         shards = [shard[new_key] for shard in self.shards]
         return SplitPrimitiveTensor(ts=shards, shard_dim=self.shard_dim)
+
+
+@register_inference_tensor
+class BlockCyclicSplitTensor(ShardedTensor):
+    """A tensor that is sharded into blocks of the same size.
+    The blocks are assigned cyclically to the list of devices.
+
+    Example distribution of a 2D tensor consisting of blocks Bij, over 4 devices
+    arranged in 2D mesh [[D0, D1], [D2, D3]].
+    ```
+    +--------+--------+--------+--------+
+    | B00 D0 | B01 D1 | B02 D0 | B03 D1 |
+    +--------+--------+--------+--------+
+    | B10 D2 | B11 D3 | B12 D2 | B13 D3 |
+    +--------+--------+--------+--------+
+    | B20 D0 | B21 D1 | B22 D0 | B23 D1 |
+    +--------+--------+--------+--------+
+    ```
+
+    Each device will hold a tensor consisting of the blocks assigned to it. They are
+    concatenated into a single tensor according to the device mesh structure.
+    In the above example device D0 will have the tensor
+    ```
+    +-----+-----+
+    | B00 | B02 |
+    +-----+-----+
+    | B20 | B22 |
+    +-----+-----+
+    ```
+
+    If an unsharded tensor dimension has a size that is not divisible by the
+    corresponding block size dimension, then the last block in will have a reduced
+    size, such that the sum of block sizes is equal to the unsharded tensor dimension
+    size.
+
+    One usage of this type of sharding is to do reshaping of split tensors without
+    moving data between devices.
+    For example if we have a MxN tensor that is split across its 1-th dimension and
+    distributed across 3 devices. Each device gets a tensor of size [M, N/3].
+    For simplicity we assume `N mod 3 == 0`.
+    ```
+           N
+    +----+----+----+
+    | D0 | D1 | D2 | M
+    +----+----+----+
+    ```
+    Flattening the tensor would result in a 1D tensor with block-cyclic sharding with
+    blocks of size N/3.
+    ```
+                            MxN
+    +----+----+----+----+----+----+-----+----+----+----+
+    | D0 | D1 | D2 | D0 | D1 | D2 | ... | D0 | D1 | D2 |
+    +----+----+----+----+----+----+-----+----+----+----+
+    ```
+    """
+
+    def __init__(
+        self,
+        *,
+        shape: List[int],
+        shards: List[torch.Tensor],
+        mesh_shape: List[int],
+        block_shape: List[int],
+        name: str = UnnamedTensorName,
+    ):
+        super().__init__(name=name, ts=shards, shape=shape)
+        assert np.prod(mesh_shape) == len(shards)
+        self._mesh_shape = mesh_shape
+        self._block_shape = block_shape
+
+    @property
+    def block_shape(self) -> int:
+        return self._block_shape
+
+    @property
+    def block_shape(self) -> int:
+        return self._block_shape
 
 
 @register_inference_tensor

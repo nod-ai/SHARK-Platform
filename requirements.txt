@@ -2,6 +2,7 @@
 gguf==0.6.0
 numpy==1.26.3
 onnx==1.15.0
+numpy>=1.15
 
 # Model deps.
 huggingface-hub==0.22.2
