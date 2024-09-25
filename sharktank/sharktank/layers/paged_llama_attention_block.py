@@ -156,7 +156,7 @@ class PagedLlamaAttentionBlock(ThetaLayer):
             attn_weights = torch.matmul(xq, keys.transpose(2, 3))
             attn_weights = 30.0 * torch.tanh(
                 attn_weights * (0.08838834764831845 / 30.0)
-
+            )
         self.assert_not_nan(attn_weights)
 
         # Apply attention mask.
