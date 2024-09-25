@@ -43,8 +43,16 @@ option(SHORTFIN_ENABLE_TRACING "Enable runtime tracing for iree and shortfin" OF
 set(SHORTFIN_IREE_SOURCE_DIR "" CACHE FILEPATH "Path to IREE source")
 
 # Options for building static or dynamic libraries.
-option(SHORTFIN_BUILD_STATIC "Builds static libraries" OFF)
-option(SHORTFIN_BUILD_DYNAMIC "Builds dynamic libraries" ON)
+# Default to dynamic linking, unless on Windows.
+# TODO(#211): Unify the defaults once Windows dynamic linking issues are fixed.
+set(SHORTFIN_BUILD_STATIC_DEFAULT OFF)
+set(SHORTFIN_BUILD_DYNAMIC_DEFAULT ON)
+if(WIN32)
+  set(SHORTFIN_BUILD_STATIC_DEFAULT ON)
+  set(SHORTFIN_BUILD_DYNAMIC_DEFAULT OFF)
+endif()
+option(SHORTFIN_BUILD_STATIC "Builds static libraries" ${SHORTFIN_BUILD_STATIC_DEFAULT})
+option(SHORTFIN_BUILD_DYNAMIC "Builds dynamic libraries" ${SHORTFIN_BUILD_DYNAMIC_DEFAULT})
 cmake_dependent_option(SHORTFIN_LINK_DYNAMIC "Links internal binaries against static libshortfin.a" ON "SHORTFIN_BUILD_DYNAMIC" OFF)
 if(NOT SHORTFIN_BUILD_STATIC AND NOT SHORTFIN_BUILD_DYNAMIC)
   message(FATAL_ERROR "One of SHORTFIN_BUILD_STATIC or SHORTFIN_BUILD_DYNAMIC must be ON")
