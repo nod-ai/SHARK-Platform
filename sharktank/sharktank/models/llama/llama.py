@@ -8,7 +8,6 @@ from typing import Optional
 
 from dataclasses import dataclass
 import math
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -87,7 +86,6 @@ class PagedLlamaModelV1(BaseCausalLMModel):
             ),
         )
         self.add_module("output_lm_head", LinearLayer(theta("output")))
-
         self.attn_blocks = nn.ModuleList(
             [
                 AttentionFFNBlock(
@@ -282,6 +280,7 @@ class AttentionFFNBlock(ThetaLayer):
             xk_temp=xk_temp,
             xv_temp=xv_temp,
         )
+
         # Feed forward network.
         ffn_input = self.ffn_norm(h)
         ffn_down = self.ffn(ffn_input)

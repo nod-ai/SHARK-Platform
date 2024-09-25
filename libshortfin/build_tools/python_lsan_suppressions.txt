@@ -5,4 +5,5 @@ leak:numpy
 leak:_mlir_libs
 leak:google/_upb
 leak:import_find_and_load
+leak:pyo3::pyclass::create_type_object
 leak:ufunc
