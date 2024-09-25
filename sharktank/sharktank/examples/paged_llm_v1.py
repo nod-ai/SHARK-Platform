@@ -233,7 +233,6 @@ def main():
 
     device = torch.device(args.device) if args.device else None
     activation_dtype = getattr(torch, args.activation_dtype)
-    attention_dtype = getattr(torch, args.attention_dtype)
     assert isinstance(activation_dtype, torch.dtype)
 
     dataset = cli.get_input_dataset(args)
