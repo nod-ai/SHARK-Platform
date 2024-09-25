@@ -25,6 +25,7 @@ module {
 util.func private @sharktank_einsum_2args_q4_{{es_name}}_{{bs}}_{{a_type}}(
     %a: !a_tensor_type, %d: !d_tensor_type, %qs_raw: !qs_raw_tensor_type, %m: !m_tensor_type)
     -> !c_tensor_type {
+  %debug = tensor.empty() : tensor<1xf32>
   %zero = arith.constant 0.0: !accum_type
   // todo: loop
   {% for i in range(a_size) %}
@@ -43,7 +44,7 @@ util.func private @sharktank_einsum_2args_q4_{{es_name}}_{{bs}}_{{a_type}}(
   %b_unblocked_dim = arith.muli %b{{b_size-1}}, %bs : index
 
   //%qs = flow.tensor.bitcast %qs_raw : !qs_raw_tensor_type -> !qs_tensor_type
-  %qs = flow.tensor.bitcast %qs_raw : !qs_raw_tensor_type{{"{"}}{% for i in range(b_size-1) %}%b{{i}},{% endfor %}%b{{b_size-1}}{{"}"}} -> !qs_tensor_type{{"{"}}{% for i in range(b_size-1) %}%b{{i}},{% endfor %}%b_unblocked_dim{{"}"}}
+  %qs = flow.tensor.bitcast %qs_raw : !qs_raw_tensor_type{{"{"}}{% for i in range(b_size-1) %}%b{{i}},{% endfor %}%b{{b_size-1}}{{"}"}} -> !qs_tensor_type{{"{"}}{% for i in range(b_size-1) %}%b{{i}},{% endfor %}%b{{b_size-1}}{{"}"}}
 
   // Dequantize.
   // todo: loop
