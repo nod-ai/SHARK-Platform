@@ -151,6 +151,9 @@ class AttentionBlockTest(unittest.TestCase):
         actual_decode_cache_state = ops.unshard(
             sharded_model.cache.paged.unflatten_page_table(decode_sharded_cache_state)
         ).flatten(start_dim=1)
+        # TODO: investigate why the Windows machine CI is producing a larger numerical
+        # error.
+        # The Ubuntu CI runs fine with default tolerances.
         torch.testing.assert_close(
             actual_decode_cache_state, expected_decode_cache_state, atol=1e-4, rtol=1e-4
         )
