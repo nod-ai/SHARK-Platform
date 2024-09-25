@@ -127,7 +127,6 @@ class einsum_2args_q4(CustomOp):
             m_desc.t.dtype == d_desc.t.dtype and len(m_dims) == len(qs_dims),
             lambda: f"einsum_2args_q4 arg 'm': Incorrect dtype (got {m_desc.t.dtype})",
         )
-
         # einsum_str
         torch._check(
             einsum_str.count(",") == 1 and einsum_str.count("->") == 1,
@@ -139,9 +138,7 @@ class einsum_2args_q4(CustomOp):
         es_set = set(es_out)
 
         shp = qs_desc.t.shape
-        print(shp)
         b_dims = list(shp[:-2]) + [shp[-2] * block_size]
-        print(b_dims)
         torch._check(
             len(es_in0) == len(a_desc.t.shape)
             and len(es_in1)
@@ -262,5 +259,4 @@ class einsum_2args_q4(CustomOp):
             c_size=len(es_out),
             out_dyn_dim_size_str=oddss,
         )
-        print(target_function)
         kb.yield_results(*call_function(target_function, *kb.arg_bindings))

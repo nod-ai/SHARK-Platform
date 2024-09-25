@@ -21,11 +21,13 @@ __all__ = [
     "all_reduce",
     "cat",
     "conv2d",
+    "einsum_2args",
     "elementwise",
     "embedding_lookup",
     "equal",
     "expand",
     "flatten",
+    "get_index",
     "gemm",
     "group_norm_affine",
     "layer_norm",
@@ -166,6 +168,37 @@ def _conv2d_trampoline(
 
 
 @overridable
+def einsum_2args(
+    input0: AnyTensor,
+    input1: AnyTensor,
+    einsum_str: str,
+    *,
+    accum_dtype: Optional[torch.dtype] = None,
+) -> torch.Tensor:
+    """Executes a given Einstein summation notation string on the provided tensors.
+
+    Equivalent to:
+    ```
+    y = torch.einsum(einsum_str, input0, input1)
+    ```
+    """
+    raise NotImplementedError
+
+
+@einsum_2args.trampoline
+def _einsum_trampoline(
+    d: SignatureDispatcher, input0: AnyTensor, input1: AnyTensor, einsum_str: str
+):
+    tensors = (input0, input1)
+    for override in d.find_overrides(tensors):
+        result = override(input0, input1, einsum_str)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(tensors)
+
+
+@overridable
 def elementwise(operator, *args, **kwargs) -> AnyTensor:
     """Applies an elementwise operator against arguments."""
     raise NotImplementedError
@@ -252,6 +285,7 @@ def _equal_trampoline(d: SignatureDispatcher, a: AnyTensor, b: AnyTensor):
 
 
 @overridable
+<<<<<<< HEAD
 def expand(tensor: AnyTensor, shape: List[int]) -> AnyTensor:
     """See torch.Tensor.expand"""
     ...
@@ -264,6 +298,27 @@ def _expand_trampoline(
     tensors = (tensor,)
     for override in d.find_overrides(tensors):
         result = override(tensor, shape)
+=======
+def get_index(
+    tensor: AnyTensor,
+    key: slice,
+) -> torch.Tensor:
+    """Indexes the tensor using the key.
+
+    Equivalent to:
+    ```
+    out = tensor[key]
+    ```
+    """
+    raise NotImplementedError
+
+
+@get_index.trampoline
+def _get_index_trampoline(d: SignatureDispatcher, tensor: AnyTensor, key: slice):
+    tensors = (tensor,)
+    for override in d.find_overrides(tensors):
+        result = override(tensor, key)
+>>>>>>> 8de4a21 (Hook the einsum op and the get_index` op into their implementations)
         if result is not NotImplemented:
             return override, result
     else:
@@ -271,6 +326,7 @@ def _expand_trampoline(
 
 
 @overridable
+<<<<<<< HEAD
 def flatten(input: AnyTensor, start_dim: int = 0, end_dim: int = -1) -> AnyTensor:
     """See torch.flatten"""
     ...
@@ -290,6 +346,8 @@ def _flatten_trampoline(
 
 
 @overridable
+=======
+>>>>>>> 8de4a21 (Hook the einsum op and the get_index` op into their implementations)
 def gemm(
     a: AnyTensor,
     b: AnyTensor,

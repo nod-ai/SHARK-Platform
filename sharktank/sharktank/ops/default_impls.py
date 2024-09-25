@@ -14,7 +14,13 @@ from torch import Tensor, dtype
 import torch.nn.functional as F
 from numbers import Number
 
-from ..types import PrimitiveTensor, QuantizedTensor, InferenceTensor
+from ..types import (
+    PrimitiveTensor,
+    QuantizedTensor,
+    InferenceTensor,
+    PlanarQuantizedTensor,
+    BlockScaledI4Layout,
+)
 from ..types.tensors import unbox_tensor, AnyTensor
 from ._registry import AllOfType, AllOfExprs, AllOfExprsVariadic, IsOfType
 from .signatures import *
@@ -61,6 +67,12 @@ def conv2d_default(
 
 conv2d.override(Tensor, Tensor, Tensor, auto_dequant=True)(conv2d_default)
 conv2d.override(Tensor, Tensor, auto_dequant=True)(conv2d_default)
+
+# Einsum
+@einsum_2args.override(AllOfType(Tensor, PrimitiveTensor))
+def einsum_2args(x, y, einsum_str):
+    return torch.einsum(einsum_str, unbox_tensor(x), unbox_tensor(y))
+
 
 # Elementwise
 @elementwise.override(Tensor)
@@ -143,6 +155,28 @@ def flatten_default(
     input: Union[Tensor, PrimitiveTensor], start_dim: int, end_dim: int
 ) -> Tensor:
     return torch.flatten(unbox_tensor(input), start_dim, end_dim)
+
+
+@get_index.override(AllOfType(Tensor, PrimitiveTensor))
+def get_index_default(tensor, key: slice):
+    return unbox_tensor(tensor).__get_item__(key)
+
+
+@get_index.override(QuantizedTensor)
+def get_index_QuantizedTensor(tensor: QuantizedTensor, key: slice):
+    unpacked = tensor.unpack()
+    if isinstance(unpacked, BlockScaledI4Layout):
+        mul = 2
+    else:
+        return NotImplemented
+    new_d = unpacked._d[key]
+    new_qs = unpacked._qs[key]
+    if unpacked.m is not None:
+        new_m = unpacked.m[key]
+    dims = new_qs.shape
+    dims = dims[:-2] + (dims[-2] * dims[-1] * mul,)
+    layout = BlockScaledI4Layout(shape=dims, d=new_d, qs=new_qs, m=new_m)
+    return PlanarQuantizedTensor(shape=dims, layout=layout)
 
 
 @gemm.override(AllOfType(Tensor, InferenceTensor))
