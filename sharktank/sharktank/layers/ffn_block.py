@@ -8,6 +8,7 @@ from typing import Optional
 
 import torch
 import torch.nn.functional as F
+from .. import ops
 
 from .base import Theta, ThetaLayer
 from .linear import LinearLayer
@@ -32,7 +33,7 @@ class FFN(ThetaLayer):
         self,
         h: torch.Tensor,
     ):
-        ffn_gate = F.silu(self.ffn_gate(h))
+        ffn_gate = ops.elementwise(F.silu, self.ffn_gate(h))
         ffn_up = self.ffn_up(h)
         ffn_down = self.ffn_down(ffn_gate * ffn_up)
         return ffn_down
