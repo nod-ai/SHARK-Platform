@@ -4,13 +4,20 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
+import shortfin as sf
 
-def test_create_host_cpu_system():
-    from _shortfin import lib as sfl
 
-    sc = sfl.local.host.CPUSystemBuilder()
-    ls = sc.create_system()
-    print(f"LOCAL SYSTEM:", ls)
+def test_create_host_cpu_system_defaults():
+    sc = sf.host.CPUSystemBuilder()
+    with sc.create_system() as ls:
+        print(f"LOCAL SYSTEM:", ls)
+        print("\n".join(repr(d) for d in ls.devices))
 
-    print("Sleeping in Python")
-    ls.shutdown()
+
+def test_create_host_cpu_system_explicit_topology():
+    sc = sf.host.CPUSystemBuilder(
+        hostcpu_topology_nodes="all", hostcpu_topology_max_group_count=2
+    )
+    with sc.create_system() as ls:
+        print(f"LOCAL SYSTEM:", ls)
+        print("\n".join(repr(d) for d in ls.devices))

@@ -26,6 +26,28 @@ namespace shortfin::python {
 
 namespace {
 
+static const char DOCSTRING_HOSTCPU_SYSTEM_BUILDER_CTOR[] =
+    R"(Constructs a system with CPU based devices.
+
+Most configuration is done by way of key/value arguments. Arguments are meant
+to be derived from flags or config files and are expected to be simple strings
+or integer values:
+
+  * "hostcpu_topology_nodes": Takes one of the special values "current" (default)
+    or "all". If not one of those, this should be a comma-delimited list of
+    NUMA node ids. Each NUMA node will be modeled as one device queue and will
+    show up on the system as a device.
+  * "hostcpu_topology_max_group_count": Maximum number of groups to create per
+    node. The actual number of groups is derived by a heuristic (which can be
+    influenced by other options) such that there will not be more groups than
+    eligible physical cores on the node.
+
+Args:
+  env_prefix: If specified, then any options not found in kwargs will be looked
+    for in the environment by prefixing the upper-cased key with this value.
+  **kwargs: Key/value arguments for controlling setup of the system.
+)";
+
 static const char DOCSTRING_PROGRAM_FUNCTION_INVOCATION[] =
     R"(Creates an invocation object targeting the function.
 
@@ -400,15 +422,29 @@ void BindLocal(py::module_ &m) {
       };
 
   py::class_<local::SystemBuilder>(m, "SystemBuilder")
-      .def("create_system", [live_system_refs,
-                             worker_initializer](local::SystemBuilder &self) {
-        auto system_ptr = self.CreateSystem();
-        system_ptr->AddWorkerInitializer(worker_initializer);
-        auto system_obj = py::cast(system_ptr, py::rv_policy::take_ownership);
-        live_system_refs.attr("add")(system_obj);
-        return system_obj;
-      });
+      .def(
+          "create_system",
+          [live_system_refs, worker_initializer](local::SystemBuilder &self,
+                                                 bool check_options) {
+            auto system_ptr = self.CreateSystem();
+            system_ptr->AddWorkerInitializer(worker_initializer);
+            auto system_obj =
+                py::cast(system_ptr, py::rv_policy::take_ownership);
+            live_system_refs.attr("add")(system_obj);
+            if (check_options) {
+              self.config_options().CheckAllOptionsConsumed();
+            }
+            return system_obj;
+          },
+          py::arg("check_options") = true);
   py::class_<local::System>(m, "System", py::is_weak_referenceable())
+      .def("__enter__", [](py::object self_obj) { return self_obj; })
+      .def(
+          "__exit__",
+          [](local::System &self, py::handle exc_type, py::handle exc_value,
+             py::handle exc_tb) { self.Shutdown(); },
+          py::arg("exc_type").none(), py::arg("exc_value").none(),
+          py::arg("exc_tb").none())
       .def("shutdown", &local::System::Shutdown)
       // Access devices by list, name, or lookup.
       .def_prop_ro("device_names",
@@ -500,7 +536,6 @@ void BindLocal(py::module_ &m) {
   py::class_<local::Device>(m, "Device")
       .def_prop_ro("name", &local::Device::name)
       .def_prop_ro("node_affinity", &local::Device::node_affinity)
-      .def_prop_ro("node_locked", &local::Device::node_locked)
       .def(py::self == py::self)
       .def("__repr__", &local::Device::to_s);
   py::class_<local::DeviceAffinity>(m, "DeviceAffinity")
@@ -1015,7 +1050,21 @@ void BindHostSystem(py::module_ &global_m) {
       m, "SystemBuilder");
   py::class_<local::systems::HostCPUSystemBuilder,
              local::systems::HostSystemBuilder>(m, "CPUSystemBuilder")
-      .def(py::init<>());
+      .def(
+          "__init__",
+          [](local::systems::HostCPUSystemBuilder *self,
+             std::optional<std::string> env_prefix, py::kwargs kwargs) {
+            ConfigOptions options(std::move(env_prefix));
+            for (auto it = kwargs.begin(); it != kwargs.end(); ++it) {
+              std::string key = py::cast<std::string>((*it).first);
+              std::string value = py::cast<std::string>(py::str((*it).second));
+              options.SetOption(std::move(key), std::move(value));
+            }
+            new (self) local::systems::HostCPUSystemBuilder(
+                iree_allocator_system(), std::move(options));
+          },
+          py::kw_only(), py::arg("env_prefix") = py::none(), py::arg("kwargs"),
+          DOCSTRING_HOSTCPU_SYSTEM_BUILDER_CTOR);
   py::class_<local::systems::HostCPUDevice, local::Device>(m, "HostCPUDevice");
 }
 

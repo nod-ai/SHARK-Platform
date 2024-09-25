@@ -101,7 +101,7 @@ SystemPtr AMDGPUSystemBuilder::CreateSystem() {
             /*queue_ordinal=*/0,
             /*instance_topology_address=*/{0}),
         std::move(device), /*node_affinity=*/0,
-        /*node_locked=*/false));
+        /*capabilities=*/static_cast<uint32_t>(Device::Capabilities::NONE)));
   }
 
   // Initialize CPU devices if requested.

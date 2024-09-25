@@ -55,19 +55,19 @@ std::string DeviceAffinity::to_s() const {
 // -------------------------------------------------------------------------- //
 
 Device::Device(DeviceAddress address, iree::hal_device_ptr hal_device,
-               int node_affinity, bool node_locked)
+               int node_affinity, uint32_t capabilities)
     : address_(std::move(address)),
       hal_device_(std::move(hal_device)),
       node_affinity_(node_affinity),
-      node_locked_(node_locked) {}
+      capabilities_(capabilities) {}
 
 Device::~Device() = default;
 
 std::string Device::to_s() const {
   return fmt::format(
-      "Device(name='{}', ordinal={}:{}, node_affinity={}, node_locked={})",
+      "Device(name='{}', ordinal={}:{}, node_affinity={}, capabilities=0x{:x})",
       name(), address().instance_ordinal, address().queue_ordinal,
-      node_affinity(), node_locked());
+      node_affinity(), capabilities_);
 }
 
 }  // namespace shortfin::local
