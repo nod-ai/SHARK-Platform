@@ -16,6 +16,7 @@ from .linear import LinearLayer
 from .norm import RMSNormLayer
 from .rotary_embedding import RotaryEmbeddingLayer
 from .kv_cache import PagedKVCache
+from .. import ops
 
 __all__ = [
     "PagedLlamaAttentionBlock",
@@ -155,7 +156,7 @@ class PagedLlamaAttentionBlock(ThetaLayer):
             attn_weights = torch.matmul(xq, keys.transpose(2, 3))
             attn_weights = 30.0 * torch.tanh(
                 attn_weights * (0.08838834764831845 / 30.0)
-            )
+
         self.assert_not_nan(attn_weights)
 
         # Apply attention mask.
@@ -164,8 +165,9 @@ class PagedLlamaAttentionBlock(ThetaLayer):
             # self.trace_tensor("attn_mask", attention_mask)
             attn_weights = attn_weights + attention_mask
 
-        attn_weights = F.softmax(attn_weights.float(), dim=-1).type_as(xq)
-        attn_output = torch.matmul(attn_weights, values)  # (bs, heads, slen, head_dim)
+        attn_weights = ops.softmax(ops.to(attn_weights, dtype=torch.float32), dim=-1)
+        attn_weights = ops.to(attn_weights, dtype=xq.dtype)
+        attn_output = ops.matmul(attn_weights, values)  # (bs, heads, slen, head_dim)
         attn_output = attn_output.transpose(1, 2).reshape(bs, batch_seq_len, -1)
 
         # Project.

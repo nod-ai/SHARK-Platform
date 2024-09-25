@@ -22,6 +22,7 @@ from ..types import *
 from ..models.mixtral.mixtral import *
 from ..models.grok.grok import *
 from ..models.llama.llama import *
+from ..models.llama.sharding import shard_theta
 from ..utils.debugging import trace_tensor
 from ..utils.tokenizer import InferenceTokenizer
 
@@ -41,9 +42,9 @@ class TorchGenerator:
         self.tokenizer = tokenizer
         if model.cache.is_paged:
             self.shared_cache_state = model.cache.paged.allocate(page_cache_size)
+            self.free_pages = list(range(1, page_cache_size))
         else:
             self.shared_cache_state = None
-        self.free_pages = list(range(1, 128))
         self.end_token = end_token
 
     @property
@@ -227,6 +228,12 @@ def main():
         action="store_true",
         default=False,
     )
+    parser.add_argument(
+        "--tensor-parallelism-size",
+        type=int,
+        default=1,
+        help="How many devices are involved for tensor parallel sharding.",
+    )
     cli.add_input_dataset_options(parser)
     cli.add_tokenizer_options(parser)
     args = cli.parse(parser)
@@ -247,7 +254,10 @@ def main():
         activation_dtype=activation_dtype,
         attention_dtype=activation_dtype,
         use_hf=args.use_hf,
+        tensor_parallelism_size=args.tensor_parallelism_size,
     )
+    if config.tensor_parallelism_size > 1:
+        dataset.root_theta = shard_theta(dataset.root_theta, config)
 
     if config.hp.expert_count:
         if config.hp.model_arch == "grok":

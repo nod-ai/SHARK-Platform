@@ -8,6 +8,8 @@ from typing import Optional
 
 from dataclasses import dataclass
 import math
+from typing import Union
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -46,6 +48,19 @@ class PagedLlamaModelV1(BaseCausalLMModel):
        to be serviced.
 
     Various samplers and schedulers can be interleaved throughout.
+
+    In the case of tensor sharding (config.tensor_parallelism_size > 1) the model's KV
+    cache head dimension is sharded.
+    The number of KV cache heads must be divisible by the parallelism size.
+    With this sharding approach the KV cache is not replicated across devices.
+    The cache is split across the devices while the indexing logic/computation is
+    replicated.
+    All other arguments aside from the cache state are replicated.
+    After the attention we all-reduce.
+    The the first fully connected layer is split along the parallel dimension.
+    This drives that the reduction dimension is split for the second FC layer.
+    We return the unreduced tensor. The user is free to reduce it to obtain the
+    unsharded result or chain it with other tensor-parallel operations.
     """
 
     def __init__(self, theta: Theta, config: LlamaModelConfig):
@@ -77,6 +92,7 @@ class PagedLlamaModelV1(BaseCausalLMModel):
                 device=self.device,
                 use_hf=self.use_hf,
                 static_tables=config.static_tables,
+                tensor_parallelism_size=config.tensor_parallelism_size,
             ),
         )
         self.add_module(
@@ -104,18 +120,38 @@ class PagedLlamaModelV1(BaseCausalLMModel):
     def prefill(
         self,
         # [bs, batch_seq_len]
-        tokens: torch.Tensor,
+        tokens: Union[torch.Tensor, ReplicatedTensor],
         *,
         # [1, 1, batch_seq_len, batch_seq_len]
-        attention_mask: torch.Tensor,
+        attention_mask: Union[torch.Tensor, ReplicatedTensor],
         # [bs, batch_seq_len // block_seq_stride]
-        seq_block_ids: torch.Tensor,
-        cache_state: list[torch.Tensor],
+        seq_block_ids: Union[torch.Tensor, ReplicatedTensor],
+        cache_state: list[Union[torch.Tensor, SplitPrimitiveTensor]],
     ):
         self._assert_device(tokens)
         self._assert_device(attention_mask, dtype=self.activation_dtype)
         self._assert_device(seq_block_ids)
         self._assert_device(*cache_state, dtype=self.activation_dtype)
+
+        if self.config.tensor_parallelism_size > 1:
+            if not isinstance(tokens, ReplicatedTensor):
+                tokens = ops.replicate(
+                    tokens, count=self.config.tensor_parallelism_size
+                )
+            if not isinstance(attention_mask, ReplicatedTensor):
+                attention_mask = ops.replicate(
+                    attention_mask, count=self.config.tensor_parallelism_size
+                )
+            if not isinstance(seq_block_ids, ReplicatedTensor):
+                seq_block_ids = ops.replicate(
+                    seq_block_ids, count=self.config.tensor_parallelism_size
+                )
+            # If the user provided unsharded arguments they probably want
+            # an unsharded result as well.
+            unshard_result = True
+        else:
+            unshard_result = False
+
         h = self.token_embedding(tokens)
         self.trace_tensor("llama.token_embedding", h)
 
@@ -135,25 +171,64 @@ class PagedLlamaModelV1(BaseCausalLMModel):
 
         h = self.output_norm(h)
         logits = self.output_lm_head(h)
+        if unshard_result:
+            logits = ops.unshard(logits)
         return logits
 
     def decode(
         self,
         # [bs, 1]
-        tokens: torch.Tensor,
+        tokens: Union[torch.Tensor, ReplicatedTensor],
         *,
         # [bs, 1, 1, batch_seq_len]
-        attention_mask: torch.Tensor,
+        attention_mask: Union[torch.Tensor, ReplicatedTensor],
         # [bs] of starting positions
-        start_positions: torch.Tensor,
+        start_positions: Union[torch.Tensor, ReplicatedTensor],
         # [bs, batch_seq_len // block_seq_stride]
-        seq_block_ids: torch.Tensor,
-        cache_state: list[torch.Tensor],
+        seq_block_ids: Union[torch.Tensor, ReplicatedTensor],
+        cache_state: list[Union[torch.Tensor, SplitPrimitiveTensor]],
     ):
+        assert len(tokens.shape) == 2
+        assert len(attention_mask.shape) == 4
+        assert len(start_positions.shape) == 1
+        assert len(seq_block_ids.shape) == 2
+        assert tokens.shape[0] == attention_mask.shape[0]
+        assert tokens.shape[0] == start_positions.shape[0]
+        assert tokens.shape[0] == seq_block_ids.shape[0]
+        assert tokens.shape[1] == 1
+        assert attention_mask.shape[1] == 1 and attention_mask.shape[2] == 1
+        assert (
+            attention_mask.shape[3]
+            == seq_block_ids.shape[1] * self.config.block_seq_stride
+        )
         self._assert_device(tokens)
         self._assert_device(attention_mask, dtype=self.activation_dtype)
         self._assert_device(start_positions)
         self._assert_device(*cache_state, dtype=self.activation_dtype)
+
+        if self.config.tensor_parallelism_size > 1:
+            if not isinstance(tokens, ReplicatedTensor):
+                tokens = ops.replicate(
+                    tokens, count=self.config.tensor_parallelism_size
+                )
+            if not isinstance(attention_mask, ReplicatedTensor):
+                attention_mask = ops.replicate(
+                    attention_mask, count=self.config.tensor_parallelism_size
+                )
+            if not isinstance(start_positions, ReplicatedTensor):
+                start_positions = ops.replicate(
+                    start_positions, count=self.config.tensor_parallelism_size
+                )
+            if not isinstance(seq_block_ids, ReplicatedTensor):
+                seq_block_ids = ops.replicate(
+                    seq_block_ids, count=self.config.tensor_parallelism_size
+                )
+            # If the user provided unsharded arguments they probably want
+            # an unsharded result as well.
+            unshard_result = True
+        else:
+            unshard_result = False
+
         bs, _ = tokens.shape
         # Precompute a position based mask for computing rope embeddings
         # as it is the same for all blocks.
@@ -164,26 +239,48 @@ class PagedLlamaModelV1(BaseCausalLMModel):
 
         # Allocate per-block temporary K/V tensors. These temporaries hold
         # one block's K/V state for the maximum context length.
-        xk_temp = torch.empty(
-            [
+        if self.config.tensor_parallelism_size == 1:
+            xk_temp = torch.empty(
+                [
+                    bs,
+                    self.context_length,
+                    self.hp.attention_head_count_kv,
+                    self.hp.attn_head_dim,
+                ],
+                dtype=self.config.activation_dtype,
+                device=self.device,
+            )
+            xv_temp = torch.empty(
+                [
+                    bs,
+                    self.context_length,
+                    self.hp.attention_head_count_kv,
+                    self.hp.attn_head_dim,
+                ],
+                dtype=self.config.activation_dtype,
+                device=self.device,
+            )
+        else:
+            shard_size = [
                 bs,
                 self.context_length,
-                self.hp.attention_head_count_kv,
+                self.hp.attention_head_count_kv // self.config.tensor_parallelism_size,
                 self.hp.attn_head_dim,
-            ],
-            dtype=self.config.activation_dtype,
-            device=self.device,
-        )
-        xv_temp = torch.empty(
-            [
-                bs,
-                self.context_length,
-                self.hp.attention_head_count_kv,
-                self.hp.attn_head_dim,
-            ],
-            dtype=self.config.activation_dtype,
-            device=self.device,
-        )
+            ]
+            xk_temp_shard = [
+                torch.empty(
+                    shard_size, dtype=self.config.activation_dtype, device=self.device
+                )
+                for _ in range(self.config.tensor_parallelism_size)
+            ]
+            xv_temp_shard = [
+                torch.empty(
+                    shard_size, dtype=self.config.activation_dtype, device=self.device
+                )
+                for _ in range(self.config.tensor_parallelism_size)
+            ]
+            xk_temp = SplitPrimitiveTensor(ts=xk_temp_shard, shard_dim=2)
+            xv_temp = SplitPrimitiveTensor(ts=xv_temp_shard, shard_dim=2)
 
         h = self.token_embedding(tokens)
         self.trace_tensor("llama.token_embedding", h)
@@ -207,6 +304,8 @@ class PagedLlamaModelV1(BaseCausalLMModel):
 
         h = self.output_norm(h)
         logits = self.output_lm_head(h)
+        if unshard_result:
+            logits = ops.unshard(logits)
         return logits
 
 
@@ -255,7 +354,7 @@ class AttentionFFNBlock(ThetaLayer):
 
     def forward(
         self,
-        h: torch.Tensor,
+        h: Union[torch.Tensor, ReplicatedTensor],
         *,
         embedding: RotaryEmbeddingLayer,
         # [bs, batch_seq_len // block_seq_stride]
