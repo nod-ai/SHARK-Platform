@@ -10,8 +10,14 @@ import os
 import shutil
 import tempfile
 import unittest
+import torch
 
 from ..types import *
+
+# Range of torch.rand() is [0,1)
+# Range of torch.rand() * 2 - 1 is [-1, 1), includes negative values
+def make_rand_torch(shape, dtype=torch.float32):
+    return torch.rand(shape, dtype=dtype) * 2 - 1
 
 
 class TempDirTestBase(unittest.TestCase):
