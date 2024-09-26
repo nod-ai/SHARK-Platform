@@ -4,11 +4,9 @@ build:
   os: "ubuntu-24.04"
   tools:
     python: "3.12"
-  apt_packages:
-    - clang
   jobs:
     pre_build:
-      - CC=clang CXX=clang++ python -m pip install -v libshortfin/
+      - python -m pip install -v libshortfin/
 
 python:
   install:
