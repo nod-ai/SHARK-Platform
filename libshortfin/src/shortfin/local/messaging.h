@@ -207,7 +207,7 @@ class SHORTFIN_API Queue : public std::enable_shared_from_this<Queue> {
 
   friend class QueueReader;
   friend class QueueWriter;
-  friend struct QueueCreator;
+  friend QueueCreator;
   friend class System;
 };
 
