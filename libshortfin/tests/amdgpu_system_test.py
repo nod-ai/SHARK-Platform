@@ -67,3 +67,9 @@ def test_create_amd_gpu_system_visible_unknown():
         match="Requested visible device 'foobar' was not found on the system",
     ):
         sc.create_system()
+
+
+@pytest.mark.system("amdgpu")
+def test_system_ctor():
+    with sf.System("amdgpu") as ls:
+        assert "amdgpu:0:0@0" in ls.device_names

@@ -26,6 +26,14 @@ namespace shortfin::python {
 
 namespace {
 
+static const char DOCSTRING_SYSTEM_CTOR[] =
+    R"(Constructs a System based on system type and kwargs.
+
+System types depend on how the library was compiled and correspond to
+SystemBuilder classes. This API is a shorthand for creating a SystemBuilder
+and calling create_system() on it.
+)";
+
 static const char DOCSTRING_HOSTCPU_SYSTEM_BUILDER_CTOR[] =
     R"(Constructs a system with CPU based devices.
 
@@ -344,8 +352,11 @@ py::object RunInForeground(std::shared_ptr<Refs> refs, local::System &self,
 }
 
 ConfigOptions CreateConfigOptions(std::optional<std::string> &env_prefix,
-                                  py::kwargs &kwargs) {
-  ConfigOptions options(std::move(env_prefix));
+                                  py::kwargs &kwargs, bool validate_undef) {
+  ConfigOptions options(std::move(env_prefix),
+                        validate_undef
+                            ? ConfigOptions::ValidationLevel::UNDEF_ERROR
+                            : ConfigOptions::ValidationLevel::UNDEF_WARN);
   for (auto it = kwargs.begin(); it != kwargs.end(); ++it) {
     std::string key = py::cast<std::string>((*it).first);
     std::string value = py::cast<std::string>(py::str((*it).second));
@@ -435,27 +446,42 @@ void BindLocal(py::module_ &m) {
       };
 
   py::class_<local::SystemBuilder>(m, "SystemBuilder")
-      .def(
-          "create_system",
-          [live_system_refs, worker_initializer](local::SystemBuilder &self,
-                                                 bool check_options) {
-            auto system_ptr = self.CreateSystem();
-            system_ptr->AddWorkerInitializer(worker_initializer);
-            auto system_obj =
-                py::cast(system_ptr, py::rv_policy::take_ownership);
-            live_system_refs.attr("add")(system_obj);
-            if (check_options) {
-              try {
-                self.config_options().CheckAllOptionsConsumed();
-              } catch (...) {
-                system_obj.attr("shutdown")();
-                throw;
-              }
-            }
-            return system_obj;
-          },
-          py::arg("check_options") = true);
+      .def("create_system", [live_system_refs,
+                             worker_initializer](local::SystemBuilder &self) {
+        auto system_ptr = self.CreateSystem();
+        system_ptr->AddWorkerInitializer(worker_initializer);
+        auto system_obj = py::cast(system_ptr, py::rv_policy::take_ownership);
+        live_system_refs.attr("add")(system_obj);
+        try {
+          self.config_options().ValidateUndef();
+        } catch (...) {
+          system_obj.attr("shutdown")();
+          throw;
+        }
+        return system_obj;
+      });
   py::class_<local::System>(m, "System", py::is_weak_referenceable())
+      .def(
+          "__init__",
+          [live_system_refs](py::object self_obj, py::args, py::kwargs) {
+            live_system_refs.attr("add")(self_obj);
+          },
+          DOCSTRING_SYSTEM_CTOR)
+      .def_static(
+          "__new__",
+          [worker_initializer](py::handle py_type, std::string_view system_type,
+                               std::optional<std::string> env_prefix,
+                               bool validate_undef, py::kwargs kwargs) {
+            auto options =
+                CreateConfigOptions(env_prefix, kwargs, validate_undef);
+            auto system = local::System::Create(
+                iree_allocator_system(), system_type, std::move(options));
+            system->AddWorkerInitializer(worker_initializer);
+            return system;
+          },
+          py::arg("type"), py::arg("system_type"), py::kw_only(),
+          py::arg("env_prefix") = "SHORTFIN_", py::arg("validate_undef") = true,
+          py::arg("kwargs"))
       .def("__enter__", [](py::object self_obj) { return self_obj; })
       .def(
           "__exit__",
@@ -1071,13 +1097,16 @@ void BindHostSystem(py::module_ &global_m) {
       .def(
           "__init__",
           [](local::systems::HostCPUSystemBuilder *self,
-             std::optional<std::string> env_prefix, py::kwargs kwargs) {
-            auto options = CreateConfigOptions(env_prefix, kwargs);
+             std::optional<std::string> env_prefix, bool validate_undef,
+             py::kwargs kwargs) {
+            auto options =
+                CreateConfigOptions(env_prefix, kwargs, validate_undef);
             new (self) local::systems::HostCPUSystemBuilder(
                 iree_allocator_system(), std::move(options));
           },
           py::kw_only(), py::arg("env_prefix").none() = "SHORTFIN_",
-          py::arg("kwargs"), DOCSTRING_HOSTCPU_SYSTEM_BUILDER_CTOR);
+          py::arg("validate_undef") = true, py::arg("kwargs"),
+          DOCSTRING_HOSTCPU_SYSTEM_BUILDER_CTOR);
   py::class_<local::systems::HostCPUDevice, local::Device>(m, "HostCPUDevice");
 }
 
@@ -1168,13 +1197,16 @@ void BindAMDGPUSystem(py::module_ &global_m) {
       .def(
           "__init__",
           [](local::systems::AMDGPUSystemBuilder *self,
-             std::optional<std::string> env_prefix, py::kwargs kwargs) {
-            auto options = CreateConfigOptions(env_prefix, kwargs);
+             std::optional<std::string> env_prefix, bool validate_undef,
+             py::kwargs kwargs) {
+            auto options =
+                CreateConfigOptions(env_prefix, kwargs, validate_undef);
             new (self) local::systems::AMDGPUSystemBuilder(
                 iree_allocator_system(), std::move(options));
           },
           py::kw_only(), py::arg("env_prefix").none() = "SHORTFIN_",
-          py::arg("kwargs"), DOCSTRING_AMDGPU_SYSTEM_BUILDER_CTOR)
+          py::arg("validate_undef") = true, py::arg("kwargs"),
+          DOCSTRING_AMDGPU_SYSTEM_BUILDER_CTOR)
       .def_prop_ro(
           "available_devices",
           [](local::systems::AMDGPUSystemBuilder &self) {

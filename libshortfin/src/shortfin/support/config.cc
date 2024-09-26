@@ -129,7 +129,7 @@ std::optional<std::vector<int64_t>> ConfigOptions::GetIntList(
   return results;
 }
 
-void ConfigOptions::CheckAllOptionsConsumed() const {
+void ConfigOptions::ValidateUndef() const {
   std::vector<std::string_view> unused_options;
   for (auto it : options_) {
     const auto &key = it.first;
@@ -138,9 +138,18 @@ void ConfigOptions::CheckAllOptionsConsumed() const {
     }
   }
   if (!unused_options.empty()) {
-    throw std::invalid_argument(
-        fmt::format("Specified options were not used: {}",
-                    fmt::join(unused_options, ", ")));
+    std::string message = fmt::format("Specified options were not used: {}",
+                                      fmt::join(unused_options, ", "));
+    switch (validation_) {
+      case ValidationLevel::UNDEF_DEBUG:
+        logging::debug("{}", message);
+        break;
+      case ValidationLevel::UNDEF_WARN:
+        logging::warn("{}", message);
+        break;
+      case ValidationLevel::UNDEF_ERROR:
+        throw std::invalid_argument(std::move(message));
+    }
   }
 }
 

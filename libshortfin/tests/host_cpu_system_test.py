@@ -6,6 +6,7 @@
 
 import os
 import pytest
+import re
 
 import shortfin as sf
 
@@ -54,3 +55,30 @@ def test_create_host_cpu_system_unsupported_option():
         ValueError, match="Specified options were not used: unsupported"
     ):
         sc.create_system()
+
+
+def test_system_ctor():
+    with sf.System(
+        "hostcpu", hostcpu_topology_nodes="0,0", hostcpu_topology_max_group_count=2
+    ) as ls:
+        print(f"NODES EXPLICIT LOCAL SYSTEM:", ls)
+        print("\n".join(repr(d) for d in ls.devices))
+        assert len(ls.devices) == 2
+
+
+def test_system_ctor_unknown_type():
+    with pytest.raises(
+        ValueError,
+        match=re.escape("System type 'NOTDEFINED' not known (available: hostcpu"),
+    ):
+        sf.System("NOTDEFINED")
+
+
+def test_system_ctor_undef_error():
+    with pytest.raises(ValueError, match="Specified options were not used: undef"):
+        sf.System("hostcpu", undef=1)
+
+
+def test_system_ctor_undef_warn():
+    with sf.System("hostcpu", validate_undef=False, undef=1) as ls:
+        ...

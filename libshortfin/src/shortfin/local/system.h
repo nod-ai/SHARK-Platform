@@ -83,6 +83,15 @@ class SHORTFIN_API System : public std::enable_shared_from_this<System> {
   System(const System &) = delete;
   ~System();
 
+  // One shot creation factory that is the equivalent of:
+  //   SystemBuilder::ForSystem(
+  //     host_allocator, system_type,
+  //     std::move(config_options))->CreateSystem()
+  // Undef validation will be done on the config options prior to returning.
+  static std::shared_ptr<System> Create(iree_allocator_t host_allocator,
+                                        std::string_view system_type,
+                                        ConfigOptions config_options = {});
+
   // Explicit shutdown (vs in destructor) is encouraged.
   void Shutdown();
 
@@ -227,6 +236,12 @@ class SHORTFIN_API SystemBuilder {
         config_options_(std::move(config_options)) {}
   SystemBuilder() : SystemBuilder(iree_allocator_system()) {}
   virtual ~SystemBuilder() = default;
+
+  // Creates a SystemBuilder subclass for a given named system (i.e.
+  // "hostcpu", "amdgpu", etc).
+  static std::unique_ptr<SystemBuilder> ForSystem(
+      iree_allocator_t host_allocator, std::string_view system_type,
+      ConfigOptions config_options = {});
 
   iree_allocator_t host_allocator() { return host_allocator_; }
   const ConfigOptions &config_options() const { return config_options_; }
