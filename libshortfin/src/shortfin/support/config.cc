@@ -6,6 +6,8 @@
 
 #include "shortfin/support/config.h"
 
+#include <algorithm>
+#include <cctype>
 #include <charconv>
 #include <cstdlib>
 
@@ -35,9 +37,9 @@ const std::optional<std::string_view> ConfigOptions::GetOption(
     for (char c : key) {
       env_key.push_back(std::toupper(c));
     }
-    char *env_value = std::getenv(env_key.c_str());
-    if (env_value && std::strlen(env_value) > 0) {
-      return intern_.intern(env_value);
+    auto env_value = GetRawEnv(env_key.c_str());
+    if (env_value) {
+      return env_value;
     }
   }
 
@@ -64,6 +66,28 @@ std::optional<int64_t> ConfigOptions::GetInt(std::string_view key,
         *value, key));
   }
   return result;
+}
+
+bool ConfigOptions::GetBool(std::string_view key, bool default_value) const {
+  auto svalue = GetOption(key);
+  if (!svalue) return default_value;
+  auto iequal = [](std::string_view a, std::string_view b) -> bool {
+    return std::ranges::equal(a, b, [](char c1, char c2) {
+      return std::toupper(c1) == std::toupper(c2);
+    });
+  };
+  if (iequal(*svalue, "1") || iequal(*svalue, "TRUE") ||
+      iequal(*svalue, "ON")) {
+    return true;
+  } else if (iequal(*svalue, "0") || iequal(*svalue, "FALSE") ||
+             iequal(*svalue, "OFF")) {
+    return false;
+  } else {
+    throw std::invalid_argument(
+        fmt::format("Cannot interpret {} = '{}' as bool: must be one of '1', "
+                    "'TRUE', 'ON', '0', 'FALSE', 'OFF'",
+                    key, *svalue));
+  }
 }
 
 std::optional<std::vector<int64_t>> ConfigOptions::GetIntList(
@@ -118,6 +142,33 @@ void ConfigOptions::CheckAllOptionsConsumed() const {
         fmt::format("Specified options were not used: {}",
                     fmt::join(unused_options, ", ")));
   }
+}
+
+std::optional<std::string_view> ConfigOptions::GetRawEnv(
+    const char *key) const {
+  char *env_value = std::getenv(key);
+  if (env_value && std::strlen(env_value) > 0) {
+    return intern_.intern(env_value);
+  }
+  return {};
+}
+
+// Helper to split on a delimitter.
+std::vector<std::string_view> ConfigOptions::Split(std::string_view value,
+                                                   char delim) {
+  std::vector<std::string_view> results;
+  std::string_view rest(value);
+  for (;;) {
+    auto pos = rest.find(delim);
+    if (pos == std::string_view::npos) {
+      results.push_back(rest);
+      break;
+    }
+    std::string_view first = rest.substr(0, pos);
+    rest = rest.substr(pos + 1);
+    results.push_back(first);
+  }
+  return results;
 }
 
 }  // namespace shortfin

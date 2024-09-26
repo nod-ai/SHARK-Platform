@@ -343,6 +343,17 @@ py::object RunInForeground(std::shared_ptr<Refs> refs, local::System &self,
   return result;
 }
 
+ConfigOptions CreateConfigOptions(std::optional<std::string> &env_prefix,
+                                  py::kwargs &kwargs) {
+  ConfigOptions options(std::move(env_prefix));
+  for (auto it = kwargs.begin(); it != kwargs.end(); ++it) {
+    std::string key = py::cast<std::string>((*it).first);
+    std::string value = py::cast<std::string>(py::str((*it).second));
+    options.SetOption(std::move(key), std::move(value));
+  }
+  return options;
+}
+
 }  // namespace
 
 NB_MODULE(lib, m) {
@@ -1061,12 +1072,7 @@ void BindHostSystem(py::module_ &global_m) {
           "__init__",
           [](local::systems::HostCPUSystemBuilder *self,
              std::optional<std::string> env_prefix, py::kwargs kwargs) {
-            ConfigOptions options(std::move(env_prefix));
-            for (auto it = kwargs.begin(); it != kwargs.end(); ++it) {
-              std::string key = py::cast<std::string>((*it).first);
-              std::string value = py::cast<std::string>(py::str((*it).second));
-              options.SetOption(std::move(key), std::move(value));
-            }
+            auto options = CreateConfigOptions(env_prefix, kwargs);
             new (self) local::systems::HostCPUSystemBuilder(
                 iree_allocator_system(), std::move(options));
           },
@@ -1076,13 +1082,135 @@ void BindHostSystem(py::module_ &global_m) {
 }
 
 #if defined(SHORTFIN_HAVE_AMDGPU)
+
+namespace {
+static const char DOCSTRING_AMDGPU_SYSTEM_BUILDER_CTOR[] =
+    R"(Constructs a system with AMDGPU based devices.
+
+Most configuration is done by way of key/value arguments. See the properties
+of this class, which document the option keywords that can be passed to this
+constructor.
+
+Args:
+  env_prefix: Controls how options are looked up in the environment. By default,
+    the prefix is "SHORTFIN_" and upper-cased options are appended to it. Any
+    option not explicitly specified but in the environment will be used. Pass
+    None to disable environment lookup.
+  **kwargs: Key/value arguments for controlling setup of the system.
+)";
+
+static const char DOCSTRING_AMDGPU_SYSTEM_BUILDER_CPU_DEVICES_ENABLED[] =
+    R"(Whether to create a heterogenous system with hostcpu and amdgpu devices.
+
+Defaults to false. If enabled, the resulting system will contain both device
+types and it is up to application code to differentiate between them. All
+options for the hostcpu system builder are applicable in this case.
+
+This option can be set as an option keyword with the name
+"amdgpu_cpu_devices_enabled" or the environment variable
+"SHORTFIN_AMDGPU_CPU_DEVICES_ENABLED=true" (if `env_prefix` was not changed
+at construction).
+)";
+
+static const char DOCSTRING_AMDGPU_SYSTEM_BUILDER_HIP_LIB_SEARCH_PATHS[] =
+    R"(List of directories to search for libamdhip64.so (or amdhip64.dll).
+
+If empty, then `dlopen` will be used without a path, meaning that the library
+must be on the default search path or already loaded in the process (i.e.
+if running within an overall framework).
+
+Each entry should be a directory, but a full path to a file can be given by
+prefixing with "file:".
+
+This option can be set as an option keyword with the name
+"amdgpu_hip_lib_search_path" or the environment variable
+"SHORTFIN_AMDGPU_HIP_LIB_SEARCH_PATH" (if `env_prefix` was not changed at
+construction). For compatibility with IREE tools, the "IREE_HIP_DYLIB_PATH"
+environment variable is searched as a fallback in all cases. Multiple paths
+can be separated by semicolons on all platforms.
+)";
+
+static const char DOCSTRING_AMDGPU_SYSTEM_BUILDER_AVAILABLE_DEVICES[] =
+    R"(List of available device ids on the system.
+
+Accessing this property triggers enumeration, so configuration needed to load
+libraries and perform basic system setup must be set first.
+)";
+
+static const char DOCSTRING_AMDGPU_SYSTEM_BUILDER_VISIBLE_DEVICES[] =
+    R"(Get or set the list of visible device ids.
+
+If not set or None, then all available devices will be opened and added to
+the system. See the property `available_devices` to access this list of ids.
+
+If set, then each device with the given device id will be opened and added to
+the system in the order listed. Note that in certain partitioned cases, multiple
+devices may be available with the same device id. In this case, duplicates
+in the visible devices list will cause instantiate a partition of the device
+in enumeration order (so there can be as many duplicates as physical
+partitions). This is an uncommon scenario and most users should not specify
+duplicate device ids. Since there are several ways that partitioned devices
+can be consumed, additional options will be available in the future for
+controlling this behavior.
+
+This property can be set as an option keyword with the name
+"amdgpu_visible_devices" or the environment variable
+"SHORTFIN_AMDGPU_VISIBLE_DEVICES" (if `env_prefix` was not changed at
+construction). Multiples can be separated by a semicolon.
+)";
+
+}  // namespace
+
 void BindAMDGPUSystem(py::module_ &global_m) {
   auto m = global_m.def_submodule("amdgpu", "AMDGPU system config");
   py::class_<local::systems::AMDGPUSystemBuilder,
              local::systems::HostCPUSystemBuilder>(m, "SystemBuilder")
-      .def(py::init<>())
-      .def_rw("cpu_devices_enabled",
-              &local::systems::AMDGPUSystemBuilder::cpu_devices_enabled);
+      .def(
+          "__init__",
+          [](local::systems::AMDGPUSystemBuilder *self,
+             std::optional<std::string> env_prefix, py::kwargs kwargs) {
+            auto options = CreateConfigOptions(env_prefix, kwargs);
+            new (self) local::systems::AMDGPUSystemBuilder(
+                iree_allocator_system(), std::move(options));
+          },
+          py::kw_only(), py::arg("env_prefix").none() = "SHORTFIN_",
+          py::arg("kwargs"), DOCSTRING_AMDGPU_SYSTEM_BUILDER_CTOR)
+      .def_prop_ro(
+          "available_devices",
+          [](local::systems::AMDGPUSystemBuilder &self) {
+            return self.GetAvailableDeviceIds();
+          },
+          DOCSTRING_AMDGPU_SYSTEM_BUILDER_AVAILABLE_DEVICES)
+      .def_prop_rw(
+          "cpu_devices_enabled",
+          [](local::systems::AMDGPUSystemBuilder &self) -> bool {
+            return self.cpu_devices_enabled();
+          },
+          [](local::systems::AMDGPUSystemBuilder &self, bool en) {
+            self.cpu_devices_enabled() = en;
+          },
+          DOCSTRING_AMDGPU_SYSTEM_BUILDER_CPU_DEVICES_ENABLED)
+      .def_prop_rw(
+          "hip_lib_search_paths",
+          [](local::systems::AMDGPUSystemBuilder &self)
+              -> std::vector<std::string> {
+            return self.hip_lib_search_paths();
+          },
+          [](local::systems::AMDGPUSystemBuilder &self,
+             std::vector<std::string> vs) { self.hip_lib_search_paths() = vs; },
+          DOCSTRING_AMDGPU_SYSTEM_BUILDER_HIP_LIB_SEARCH_PATHS)
+      .def_prop_rw(
+          "visible_devices",
+          [](local::systems::AMDGPUSystemBuilder &self)
+              -> std::optional<std::vector<std::string>> {
+            return self.visible_devices();
+          },
+          [](local::systems::AMDGPUSystemBuilder &self,
+             std::optional<std::vector<std::string>> vs) {
+            self.visible_devices() = std::move(vs);
+          },
+          DOCSTRING_AMDGPU_SYSTEM_BUILDER_VISIBLE_DEVICES);
+
   py::class_<local::systems::AMDGPUDevice, local::Device>(m, "AMDGPUDevice");
 }
 #endif  // SHORTFIN_HAVE_AMDGPU

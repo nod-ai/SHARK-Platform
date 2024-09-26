@@ -42,6 +42,14 @@ class SHORTFIN_API ConfigOptions {
   std::optional<int64_t> GetInt(std::string_view key,
                                 bool non_negative = false) const;
 
+  // Gets an option as a bool, returning |default_value| if not found.
+  // Bools are interpreted strictly from the string value. The following
+  // evaluate to true (case insensitive):
+  //   1, TRUE, ON
+  // The following evaluate to false:
+  //   0, FALSE, OFF
+  bool GetBool(std::string_view key, bool default_value = false) const;
+
   // Gets an option as a list of integers, optionally enforcing that each
   // is non-negative.
   std::optional<std::vector<int64_t>> GetIntList(
@@ -51,6 +59,14 @@ class SHORTFIN_API ConfigOptions {
   // that were not consulted. This only applies to options added via SetOption
   // and not environment variables. Use in APIs that expect specific options.
   void CheckAllOptionsConsumed() const;
+
+  // Gets a raw environment variable without looking up in the options or
+  // translating the name.
+  std::optional<std::string_view> GetRawEnv(const char *key) const;
+
+  // Helper to split on a delimitter.
+  static std::vector<std::string_view> Split(std::string_view value,
+                                             char delim);
 
  private:
   mutable string_interner intern_;
