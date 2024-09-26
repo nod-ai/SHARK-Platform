@@ -58,7 +58,7 @@ def test_devices_collection_access(fiber):
 def test_device_affinity_repr(fiber):
     assert (
         repr(sfl.local.DeviceAffinity(fiber.raw_device(0)))
-        == "DeviceAffinity(host-cpu:0:0@0[0x1])"
+        == "DeviceAffinity(hostcpu:0:0@0[0x1])"
     )
     assert repr(sfl.local.DeviceAffinity()) == "DeviceAffinity(ANY)"
 

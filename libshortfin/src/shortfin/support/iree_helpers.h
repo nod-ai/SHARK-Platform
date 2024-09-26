@@ -15,6 +15,7 @@
 #include "iree/hal/api.h"
 #include "iree/io/parameter_index_provider.h"
 #include "iree/modules/hal/types.h"
+#include "iree/task/api.h"
 #include "iree/vm/api.h"
 #include "iree/vm/ref_cc.h"
 #include "shortfin/support/api.h"
@@ -144,24 +145,25 @@ class object_ptr {
 // Defines a reference counting helper struct named like
 // iree_hal_buffer_ptr_helper (for type_stem == hal_buffer).
 // These must be defined in the shortfin::iree::detail namespace.
-#define SHORTFIN_IREE_DEF_PTR(type_stem)             \
-  namespace detail {                                 \
-  struct type_stem##_ptr_helper {                    \
-    static void steal(iree_##type_stem##_t *obj) {   \
-      LogIREESteal(#type_stem "_t", obj);            \
-    }                                                \
-    static void retain(iree_##type_stem##_t *obj) {  \
-      LogIREERetain(#type_stem "_t", obj);           \
-      iree_##type_stem##_retain(obj);                \
-    }                                                \
-    static void release(iree_##type_stem##_t *obj) { \
-      LogIREERelease(#type_stem "_t", obj);          \
-      iree_##type_stem##_release(obj);               \
-    }                                                \
-  };                                                 \
-  }                                                  \
-  using type_stem##_ptr =                            \
-      object_ptr<iree_##type_stem##_t, detail::type_stem##_ptr_helper>
+#define SHORTFIN_IREE_DEF_PTR(type_stem)                                \
+  namespace detail {                                                    \
+  struct type_stem##_ptr_helper {                                       \
+    static void steal(iree_##type_stem##_t *obj) {                      \
+      LogIREESteal(#type_stem "_t", obj);                               \
+    }                                                                   \
+    static void retain(iree_##type_stem##_t *obj) {                     \
+      LogIREERetain(#type_stem "_t", obj);                              \
+      iree_##type_stem##_retain(obj);                                   \
+    }                                                                   \
+    static void release(iree_##type_stem##_t *obj) {                    \
+      LogIREERelease(#type_stem "_t", obj);                             \
+      iree_##type_stem##_release(obj);                                  \
+    }                                                                   \
+  };                                                                    \
+  }                                                                     \
+  using type_stem##_ptr =                                               \
+      object_ptr<iree_##type_stem##_t, detail::type_stem##_ptr_helper>; \
+  static_assert(sizeof(type_stem##_ptr) == sizeof(iree_##type_stem##_t *))
 
 SHORTFIN_IREE_DEF_PTR(hal_command_buffer);
 SHORTFIN_IREE_DEF_PTR(hal_buffer);
@@ -173,6 +175,7 @@ SHORTFIN_IREE_DEF_PTR(hal_semaphore);
 SHORTFIN_IREE_DEF_PTR(io_file_handle);
 SHORTFIN_IREE_DEF_PTR(io_parameter_index);
 SHORTFIN_IREE_DEF_PTR(io_parameter_provider);
+SHORTFIN_IREE_DEF_PTR(task_executor);
 SHORTFIN_IREE_DEF_PTR(vm_context);
 SHORTFIN_IREE_DEF_PTR(vm_instance);
 SHORTFIN_IREE_DEF_PTR(vm_list);

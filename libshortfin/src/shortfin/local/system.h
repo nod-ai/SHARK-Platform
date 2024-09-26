@@ -19,6 +19,7 @@
 #include "shortfin/local/worker.h"
 #include "shortfin/support/api.h"
 #include "shortfin/support/blocking_executor.h"
+#include "shortfin/support/config.h"
 #include "shortfin/support/iree_concurrency.h"
 #include "shortfin/support/iree_helpers.h"
 #include "shortfin/support/stl_extras.h"
@@ -220,18 +221,22 @@ using SystemPtr = std::shared_ptr<System>;
 // Base class for configuration objects for setting up a System.
 class SHORTFIN_API SystemBuilder {
  public:
-  SystemBuilder(iree_allocator_t host_allocator)
-      : host_allocator_(host_allocator) {}
+  SystemBuilder(iree_allocator_t host_allocator,
+                ConfigOptions config_options = {})
+      : host_allocator_(host_allocator),
+        config_options_(std::move(config_options)) {}
   SystemBuilder() : SystemBuilder(iree_allocator_system()) {}
   virtual ~SystemBuilder() = default;
 
   iree_allocator_t host_allocator() { return host_allocator_; }
+  const ConfigOptions &config_options() const { return config_options_; }
 
   // Construct a System
   virtual SystemPtr CreateSystem() = 0;
 
  private:
   const iree_allocator_t host_allocator_;
+  ConfigOptions config_options_;
 };
 
 }  // namespace shortfin::local

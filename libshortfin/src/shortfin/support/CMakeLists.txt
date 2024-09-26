@@ -10,6 +10,7 @@ shortfin_cc_component(
   HDRS
     api.h
     blocking_executor.h
+    config.h
     globals.h
     iree_helpers.h
     iree_concurrency.h
@@ -17,6 +18,7 @@ shortfin_cc_component(
     stl_extras.h
   SRCS
     blocking_executor.cc
+    config.cc
     globals.cc
     iree_helpers.cc
     logging.cc
@@ -31,6 +33,7 @@ shortfin_cc_component(
     iree_io_parameter_index_provider
     iree_io_parameter_provider
     iree_modules_hal_types
+    iree_task_api
     spdlog::spdlog
 )
 
