@@ -11,14 +11,17 @@
 # Others.
 
 # nanobind
+# Pinned to a pre 2.2.0 commit hash which includes free threaded support.
+# TODO: Bump to 2.2.0 when available.
 FetchContent_Declare(
   nanobind
   GIT_REPOSITORY https://github.com/wjakob/nanobind.git
-  GIT_TAG        9641bb7151f04120013b812789b3ebdfa7e7324f # 2.1.0
+  GIT_TAG        8ce0dee7f62add575f85c0de386a9c819e4d50af # HEAD > 2.1.0
 )
 FetchContent_MakeAvailable(nanobind)
 
-nanobind_add_module(shortfin_python_extension NB_STATIC LTO
+nanobind_add_module(shortfin_python_extension
+  NB_STATIC LTO FREE_THREADED
   array_binding.cc
   array_host_ops.cc
   lib_ext.cc
