@@ -30,18 +30,15 @@ class SHORTFIN_API AMDGPUDevice : public Device {
 // GPU systems have specific NUMA configurations that need to be mated.
 class SHORTFIN_API AMDGPUSystemBuilder : public HostCPUSystemBuilder {
  public:
-  AMDGPUSystemBuilder(iree_allocator_t host_allocator);
+  AMDGPUSystemBuilder(iree_allocator_t host_allocator,
+                      ConfigOptions options = {});
   AMDGPUSystemBuilder() : AMDGPUSystemBuilder(iree_allocator_system()) {}
   ~AMDGPUSystemBuilder();
-
-  // Triggers driver setup and initial device enumeration. No-op if already
-  // done.
-  void Enumerate();
 
   SystemPtr CreateSystem() override;
 
   // Settings.
-  bool cpu_devices_enabled = false;
+  bool &cpu_devices_enabled() { return cpu_devices_enabled_; }
 
   // See iree_hal_hip_driver_options_t::hip_lib_search_paths. Each is either
   // a directory or "file:" prefixed path to a specific HIP dynamic library.
@@ -50,17 +47,39 @@ class SHORTFIN_API AMDGPUSystemBuilder : public HostCPUSystemBuilder {
   // split on ';' and each entry added here (for compatibility with IREE
   // tools).
   // Changing these paths after enumeration has no effect.
-  std::vector<std::string> hip_lib_search_paths;
+  std::vector<std::string> &hip_lib_search_paths() {
+    return hip_lib_search_paths_;
+  }
+
+  // If set, then the system will be created to only include devices with
+  // the corresponding id (in the order listed).
+  std::optional<std::vector<std::string>> &visible_devices() {
+    return visible_devices_;
+  };
+
+  // Gets all enumerated available device ids. This triggers enumeration, so
+  // any settings required for that must already be set. This does no filtering
+  // and will return all device ids.
+  std::vector<std::string> GetAvailableDeviceIds();
 
  private:
   void InitializeDefaultSettings();
+  // Triggers driver setup and initial device enumeration. No-op if already
+  // done.
+  void Enumerate();
 
   // Valid at construction time.
   iree_hal_hip_device_params_t default_device_params_;
 
+  // Configuration.
+  bool cpu_devices_enabled_ = false;
+  std::vector<std::string> hip_lib_search_paths_;
+  std::optional<std::vector<std::string>> visible_devices_;
+
   // Valid post enumeration.
   iree::hal_driver_ptr hip_hal_driver_;
-  std::vector<iree_hal_device_info_t> visible_devices_;
+  iree_host_size_t available_devices_count_ = 0;
+  iree::allocated_ptr<iree_hal_device_info_t> available_devices_;
 };
 
 }  // namespace shortfin::local::systems
