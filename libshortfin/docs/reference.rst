@@ -15,6 +15,9 @@ Array
     :members:
 .. autoclass:: base_array
 .. autoclass:: device_array
+    :members:
+
+.. autofunction:: _shortfin_default.lib.array.argmax
 
 Local
 --------------
