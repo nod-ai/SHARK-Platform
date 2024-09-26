@@ -13,11 +13,10 @@ target_include_directories(
                            $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>)
 
 
-set(_INIT_INTERNAL_DEPS)
-if(SHORTFIN_SYSTEMS_AMDGPU)
-  list(APPEND _INIT_INTERNAL_DEPS shortfin_systems_amdgpu)
-endif()
+get_property(
+  _SHORTFIN_LIB_OPTIONAL_COMPONENTS GLOBAL PROPERTY SHORTFIN_LIB_OPTIONAL_COMPONENTS)
 
+message(STATUS "Linking optional components '${_SHORTFIN_LIB_OPTIONAL_COMPONENTS}'")
 shortfin_public_library(
   NAME
     shortfin
@@ -25,6 +24,6 @@ shortfin_public_library(
     shortfin_array
     shortfin_local
     shortfin_support
-    shortfin_systems_host
-    ${_INIT_INTERNAL_DEPS}
+    shortfin_systems_factory
+    ${_SHORTFIN_LIB_OPTIONAL_COMPONENTS}
 )

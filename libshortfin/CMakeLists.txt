@@ -98,7 +98,6 @@ option(SHORTFIN_SYSTEMS_AMDGPU "Builds for AMD GPU systems" ON)
 message(STATUS "libshortfin supported systems:")
 if(SHORTFIN_SYSTEMS_AMDGPU)
   message(STATUS "  - AMD GPU")
-  add_compile_definitions("SHORTFIN_HAVE_AMDGPU")
 endif()
 message(STATUS "  - Host")
 

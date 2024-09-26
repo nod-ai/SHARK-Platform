@@ -53,7 +53,7 @@ function(shortfin_cc_component)
     _RULE
     ""
     "NAME"
-    "HDRS;SRCS;DEPS;COMPONENTS"
+    "HDRS;SRCS;DEFINES;DEPS;COMPONENTS"
     ${ARGN}
   )
   if(SHORTFIN_BUILD_STATIC)
@@ -73,6 +73,7 @@ function(shortfin_cc_component)
         ${_STATIC_COMPONENTS}
         ${_RULE_DEPS}
     )
+    target_compile_definitions(${_STATIC_OBJECTS_NAME} PUBLIC ${_RULE_DEFINES})
   endif()
 
   if(SHORTFIN_BUILD_DYNAMIC)
@@ -101,6 +102,7 @@ function(shortfin_cc_component)
     )
     target_compile_definitions(${_DYLIB_OBJECTS_NAME}
       PRIVATE _SHORTFIN_BUILDING_DYLIB)
+    target_compile_definitions(${_DYLIB_OBJECTS_NAME} PUBLIC ${_RULE_DEFINES})
   endif()
 endfunction()
 

@@ -28,8 +28,17 @@ namespace shortfin {
 // prefix and lookup up via std::getenv().
 class SHORTFIN_API ConfigOptions {
  public:
-  ConfigOptions(std::optional<std::string> env_lookup_prefix = {})
-      : env_lookup_prefix_(std::move(env_lookup_prefix)) {}
+  // Level of validation to do on configuration options when calling `Create`.
+  enum class ValidationLevel {
+    UNDEF_WARN,
+    UNDEF_DEBUG,
+    UNDEF_ERROR,
+  };
+
+  ConfigOptions(std::optional<std::string> env_lookup_prefix = {},
+                ValidationLevel validation = ValidationLevel::UNDEF_WARN)
+      : env_lookup_prefix_(std::move(env_lookup_prefix)),
+        validation_(validation) {}
   ConfigOptions(const ConfigOptions &) = delete;
   ConfigOptions(ConfigOptions &&) = default;
 
@@ -55,11 +64,6 @@ class SHORTFIN_API ConfigOptions {
   std::optional<std::vector<int64_t>> GetIntList(
       std::string_view key, bool non_negative = false) const;
 
-  // Raises a descriptive invalid_argument exception if options were provided
-  // that were not consulted. This only applies to options added via SetOption
-  // and not environment variables. Use in APIs that expect specific options.
-  void CheckAllOptionsConsumed() const;
-
   // Gets a raw environment variable without looking up in the options or
   // translating the name.
   std::optional<std::string_view> GetRawEnv(const char *key) const;
@@ -68,11 +72,18 @@ class SHORTFIN_API ConfigOptions {
   static std::vector<std::string_view> Split(std::string_view value,
                                              char delim);
 
+  // After all configuration options have been consumed, perform validation
+  // that all options were recognized.
+  void ValidateUndef() const;
+
  private:
   mutable string_interner intern_;
   // Optional environment variable lookup prefix for resolving options not
   // explicitly set.
   std::optional<std::string> env_lookup_prefix_;
+
+  // Level of validation to perform.
+  ValidationLevel validation_;
 
   // Explicit keyword options.
   std::unordered_map<std::string_view, std::string> options_;
