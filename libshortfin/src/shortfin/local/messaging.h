@@ -189,10 +189,11 @@ class SHORTFIN_API Queue : public std::enable_shared_from_this<Queue> {
   void Close();
 
  protected:
+  Queue(Options options);
+
  private:
   // Queues can only be created as shared by the System.
   static QueuePtr Create(Options options);
-  Queue(Options options);
   mutable iree::slim_mutex lock_;
   Options options_;
   // Backlog of messages not yet sent to a reader. Messages are pushed on the

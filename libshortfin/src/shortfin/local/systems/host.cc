@@ -101,7 +101,7 @@ HostCPUSystemBuilder::SelectHostCPUNodesFromOptions() {
   } else if (*topology_nodes == "all") {
     // If topology_nodes == "all", create a mask of all available nodes.
     nodes.reserve(available_node_count);
-    for (auto i = 0; i < available_node_count; ++i) {
+    for (iree_host_size_t i = 0; i < available_node_count; ++i) {
       nodes.push_back(i);
     }
   } else {
@@ -110,7 +110,7 @@ HostCPUSystemBuilder::SelectHostCPUNodesFromOptions() {
         config_options().GetIntList("hostcpu_topology_nodes");
     assert(topology_node_ids);
     for (int64_t node_id : *topology_node_ids) {
-      if (node_id < 0 || node_id >= available_node_count) {
+      if (node_id < 0 || (iree_host_size_t)node_id >= available_node_count) {
         throw std::invalid_argument(fmt::format(
             "Illegal value {} in hostcpu_topology_nodes: Expected [0..{}]",
             node_id, available_node_count - 1));
