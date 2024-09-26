@@ -59,7 +59,9 @@ Device::Device(DeviceAddress address, iree::hal_device_ptr hal_device,
     : address_(std::move(address)),
       hal_device_(std::move(hal_device)),
       node_affinity_(node_affinity),
-      capabilities_(capabilities) {}
+      capabilities_(capabilities) {
+  assert(hal_device_ && "nullptr iree_hal_device_t");
+}
 
 Device::~Device() = default;
 

@@ -209,7 +209,7 @@ void HostCPUSystemBuilder::InitializeHostCPUDevices(System &lsys,
             /*instance_ordinal=*/0,
             /*queue_ordinal=*/queue_index,
             /*instance_topology_address=*/{queue_index}),
-        /*hal_device=*/std::move(device),
+        /*hal_device=*/device,
         /*node_affinity=*/node_id,
         /*capabilities=*/
         static_cast<int32_t>(
