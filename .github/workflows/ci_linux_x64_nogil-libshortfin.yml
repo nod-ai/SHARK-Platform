@@ -4,7 +4,7 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-name: CI - libshortfin
+name: CI - libshortfin - Python 3.13 Free-threaded
 
 on:
   workflow_dispatch:
@@ -41,7 +41,6 @@ jobs:
       run: |
         sudo apt update
         sudo apt install clang lld cmake ninja-build
-        sudo apt install libspdlog-dev libxtensor-dev
 
     - name: Checkout repository
       uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
@@ -66,15 +65,13 @@ jobs:
         git submodule update --init --depth 1 -- third_party/hip-build-deps/
 
     - name: Setup Python
-      uses: actions/setup-python@39cd14951b08e74b54015e9e001cdefcf80e669f # v5.1.1
+      uses: deadsnakes/action@e640ac8743173a67cca4d7d77cd837e514bf98e8 # v3.2.0
       with:
-        python-version: "3.12"
-        cache: "pip"
+        python-version: "3.13-dev"
+        nogil : true
     - name: Install Python packages
-      # TODO: Switch to `pip install -r requirements.txt -e libshortfin/`.
       run: |
-        pip install -r ${{ env.LIBSHORTFIN_DIR }}/requirements-tests.txt
-        pip install -r ${{ env.LIBSHORTFIN_DIR }}/requirements-iree-compiler.txt
+        pip install -r ${{ env.LIBSHORTFIN_DIR }}/requirements-tests-nogil.txt
         pip freeze
 
     - name: Build libshortfin (full)
@@ -92,27 +89,9 @@ jobs:
         cmake --build . --target all
         pip install -v -e .
 
-    - name: Test libshortfin (full)
+    - name: Run libshortfin Python tests (full)
       run: |
-        cd ${{ env.LIBSHORTFIN_DIR }}/build
-        ctest --timeout 30 --output-on-failure
         cd ${{ env.LIBSHORTFIN_DIR }}
-        pytest -s
-
-    - name: Build libshortfin (host-only)
-      run: |
-        mkdir ${{ env.LIBSHORTFIN_DIR }}/build-host-only
-        cd ${{ env.LIBSHORTFIN_DIR }}/build-host-only
-        # In this configuration, also build static+dynamic in order to verify
-        # that path structurally works.
-        cmake -GNinja \
-          -DCMAKE_C_COMPILER=clang-18 \
-          -DCMAKE_CXX_COMPILER=clang++-18 \
-          -DCMAKE_LINKER_TYPE=LLD \
-          -DSHORTFIN_IREE_SOURCE_DIR=${{ env.IREE_REPO_DIR }} \
-          -DSHORTFIN_BUILD_PYTHON_BINDINGS=ON \
-          -DSHORTFIN_HAVE_AMDGPU=OFF \
-          -DSHORTFIN_BUILD_STATIC=ON \
-          -DSHORTFIN_BUILD_DYNAMIC=ON \
-          ..
-        cmake --build . --target all
+        pytest -s --ignore=tests/examples/fastapi_test.py
+      # TODO: Enable further tests and switch to
+      # pytest -s tests
