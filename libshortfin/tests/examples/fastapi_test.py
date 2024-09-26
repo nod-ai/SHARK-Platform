@@ -20,6 +20,10 @@ example_dir = project_dir / "examples" / "python"
 
 @pytest.fixture(scope="session")
 def server():
+    try:
+        import fastapi
+    except ModuleNotFoundError as e:
+        pytest.skip(f"Required dep not available: {e}")
     runner = ServerRunner([])
     yield runner
     print("Sending kill signal")

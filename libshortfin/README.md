@@ -101,3 +101,23 @@ recommended:
 * Compile dependencies with `-fvisibility=hidden`
 * Enable LTO builds of libshortfin
 * Set flags to enable symbol versioning
+
+# Miscellaneous Build Topics
+
+## Free threaded Python
+
+Support for free threaded Python builds (aka. "nogil") is in progress. It
+is currently being tested via dev builds of CPython 3.13 with the
+`--disable-gil` option set. There are multiple ways to acquire such an
+environment. If using `pyenv`, here is a way:
+
+```
+# Build a 3.13-dev-nogil version.
+PYTHON_CONFIGURE_OPTS='--disable-gil' \
+$(pyenv root)/plugins/python-build/bin/python-build 3.13-dev \
+  $(pyenv root)/versions/3.13-dev-nogil
+
+# Test (should print "1").
+pyenv shell 3.13-dev-nogil
+python -c 'import sysconfig; print(sysconfig.get_config_var("Py_GIL_DISABLED"))'
+```

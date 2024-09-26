@@ -17,8 +17,8 @@ class PyWorkerEventLoop(asyncio.AbstractEventLoop):
         # Requirement of asyncio.
         return False
 
-    def create_task(self, coro):
-        return asyncio.Task(coro, loop=self)
+    def create_task(self, coro, *, name=None, context=None):
+        return asyncio.Task(coro, loop=self, name=name, context=context)
 
     def create_future(self):
         return asyncio.Future(loop=self)
