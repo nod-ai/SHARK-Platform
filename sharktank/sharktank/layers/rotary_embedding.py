@@ -28,9 +28,6 @@ class RotaryEmbeddingLayer(BaseLayer):
         tensor_parallelism_size: int = 1,
     ):
         super().__init__()
-        # Force static_tables until compiler limitations are solved.
-        # See https://github.com/nod-ai/sharktank/issues/156
-        static_tables = True
         self.device = device
         self.rope_dimension_count = rope_dimension_count
         self.max_seqlen = max_seqlen
