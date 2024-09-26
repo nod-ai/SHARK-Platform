@@ -26,7 +26,7 @@ class SparseMoeBlockTest(unittest.TestCase):
         fxb = FxProgramsBuilder(model)
         input = make_rand_torch((2, 32, 6144))
 
-        @fxb.export_program(name="moe_block", args=(input,))
+        @fxb.export_program(name="moe_block", args=(input,), strict=False)
         def _(model, input: torch.Tensor) -> torch.Tensor:
             return model(input)
 
