@@ -35,10 +35,10 @@ pip install -v -e .
 ```bash
 # Build shortfin.*.whl into the dist/ directory
 #   e.g. `shortfin-0.9-cp312-cp312-linux_x86_64.whl`
-python -m pip wheel -v -w dist .
+python3 -m pip wheel -v -w dist .
 
 # Install the built wheel.
-python -m pip install dist/*.whl
+python3 -m pip install dist/*.whl
 ```
 
 TODO: helper script to build under manylinux using Docker
