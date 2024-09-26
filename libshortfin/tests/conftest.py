@@ -4,6 +4,7 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
+import os
 import pytest
 
 import shortfin as sf
@@ -34,6 +35,27 @@ def pytest_runtest_setup(item):
                 f"test requires system in {required_system_names!r} but has "
                 f"{available_system_names!r} (set with --system arg)"
             )
+
+
+# Keys that will be cleaned project wide prior to and after each test run.
+# Test code can freely modify these.
+CLEAN_ENV_KEYS = [
+    "SHORTFIN_HOSTCPU_TOPOLOGY_NODES",
+    "SHORTFIN_HOSTCPU_TOPOLOGY_MAX_GROUP_COUNT",
+]
+
+
+@pytest.fixture(autouse=True)
+def clean_env():
+    def kill():
+        for key in CLEAN_ENV_KEYS:
+            if key in os.environ:
+                del os.environ[key]
+                os.unsetenv(key)
+
+    kill()
+    yield
+    kill()
 
 
 @pytest.fixture

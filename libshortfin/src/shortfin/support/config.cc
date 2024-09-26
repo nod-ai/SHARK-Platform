@@ -35,10 +35,8 @@ const std::optional<std::string_view> ConfigOptions::GetOption(
     for (char c : key) {
       env_key.push_back(std::toupper(c));
     }
-    logging::debug("LOOKUP KEY {}", env_key);
     char *env_value = std::getenv(env_key.c_str());
     if (env_value && std::strlen(env_value) > 0) {
-      logging::debug("LOOKUP KEY {} = {}", env_key, env_value);
       return intern_.intern(env_value);
     }
   }

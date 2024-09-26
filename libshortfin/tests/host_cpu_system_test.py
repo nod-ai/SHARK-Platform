@@ -10,23 +10,6 @@ import pytest
 import shortfin as sf
 
 
-@pytest.fixture(autouse=True)
-def clean_env():
-    save = {}
-
-    def kill():
-        for key, value in os.environ.items():
-            if key.startswith("SHORTFIN_"):
-                save[key] = value
-                del os.environ[key]
-
-    kill()
-    yield
-    kill()
-    for key, value in save.items():
-        os.environ[key] = value
-
-
 def test_create_host_cpu_system_defaults():
     sc = sf.host.CPUSystemBuilder()
     with sc.create_system() as ls:
@@ -56,8 +39,8 @@ def test_create_host_cpu_system_topology_nodes_explicit():
 
 
 def test_create_host_cpu_system_env_vars():
-    os.putenv("SHORTFIN_HOSTCPU_TOPOLOGY_NODES", "0,0")
-    os.putenv("SHORTFIN_HOSTCPU_TOPOLOGY_MAX_GROUP_COUNT", "2")
+    os.environ["SHORTFIN_HOSTCPU_TOPOLOGY_NODES"] = "0,0"
+    os.environ["SHORTFIN_HOSTCPU_TOPOLOGY_MAX_GROUP_COUNT"] = "2"
     sc = sf.host.CPUSystemBuilder()
     with sc.create_system() as ls:
         print(f"ENV VARS LOCAL SYSTEM:", ls)
