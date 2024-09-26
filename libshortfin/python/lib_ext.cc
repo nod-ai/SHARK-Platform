@@ -1084,7 +1084,19 @@ void BindHostSystem(py::module_ &global_m) {
 #if defined(SHORTFIN_HAVE_AMDGPU)
 
 namespace {
-static const char DOCSTRING_AMDGPU_SYSTEM_BUILDER_CTOR[] = R"(
+static const char DOCSTRING_AMDGPU_SYSTEM_BUILDER_CTOR[] =
+    R"(Constructs a system with AMDGPU based devices.
+
+Most configuration is done by way of key/value arguments. See the properties
+of this class, which document the option keywords that can be passed to this
+constructor.
+
+Args:
+  env_prefix: Controls how options are looked up in the environment. By default,
+    the prefix is "SHORTFIN_" and upper-cased options are appended to it. Any
+    option not explicitly specified but in the environment will be used. Pass
+    None to disable environment lookup.
+  **kwargs: Key/value arguments for controlling setup of the system.
 )";
 
 static const char DOCSTRING_AMDGPU_SYSTEM_BUILDER_CPU_DEVICES_ENABLED[] =
