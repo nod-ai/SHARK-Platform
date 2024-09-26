@@ -309,7 +309,7 @@ if ENABLE_TRACY:
     populate_built_package(os.path.join(PYTHON_TRACY_BINARY_DIR / "_shortfin_tracy"))
 
 packages = find_namespace_packages(
-    where=os.path.join(SETUPPY_DIR, "python"),
+    where=os.path.join(SOURCE_DIR, "python"),
     include=[
         "_shortfin",
         "_shortfin_default",
