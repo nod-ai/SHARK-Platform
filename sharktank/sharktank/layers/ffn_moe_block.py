@@ -12,6 +12,7 @@ import torch.nn.functional as F
 from .base import ThetaLayer
 from .linear import LinearLayer
 from ..types import Theta, DefaultPrimitiveTensor
+from ..ops import einsum_2args
 
 __all__ = [
     "FFNMOE",
@@ -36,24 +37,24 @@ class PreGatherFFNMOE(ThetaLayer):
     def pre_matmul_gather(self, inputs, weights, experts, einstring="mk,menk->men"):
         inputs = inputs[:, :]
         weights = weights[experts, :, :]
-        matmul = torch.einsum(einstring, inputs, weights.float())
+        matmul = einsum_2args(inputs, weights, einstring)
         return matmul
 
     def bigger_mmg(self, inputs, weights, experts):
         inputs = inputs[:, :]
         weights = weights[experts, :, :]
-        matmul = torch.einsum("mek,menk->men", inputs, weights.float())
+        matmul = einsum_2args(inputs, weights, "mek,menk->men")
         return matmul
 
     def one_hot_matmul(self, inputs, weights, experts):
-        matmul = torch.einsum("mk,bnk->bmn", inputs, weights)
+        matmul = einsum_2args(inputs, weights, "mk,bnk->bmn")
         # Post mix the experts
         oh = (
             torch.nn.functional.one_hot(experts.reshape(-1), num_classes=8)
             .transpose(0, 1)
             .to(torch.float32)
         )
-        output = torch.einsum("bm,bmn->mn", oh, matmul)
+        output = einsum_2args(oh, matmul, "bm,bmn->mn")
         return output
 
     def forward(
@@ -75,7 +76,7 @@ class PreGatherFFNMOE(ThetaLayer):
         ffn_down = self.pre_matmul_gather(
             ffn_gate * ffn_up, self.ffn_down, experts, einstring="mek,menk->men"
         )
-        ffn_down = torch.einsum("me,men->men", expert_gate, ffn_down)
+        ffn_down = einsum_2args(expert_gate, ffn_down, "me,men->men")
         return torch.sum(ffn_down, dim=1)
 
 
