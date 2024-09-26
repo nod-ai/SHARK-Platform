@@ -71,11 +71,11 @@ ENABLE_TRACY = get_env_boolean("SHORTFIN_ENABLE_TRACING", False)
 
 if ENABLE_TRACY:
     print(
-        "*** Enabling Tracy instrumentation (disable with SHORTFIN_BUILD_TRACING=OFF)",
+        "*** Enabling Tracy instrumentation (disable with SHORTFIN_ENABLE_TRACING=OFF)",
     )
 else:
     print(
-        "*** Tracy instrumentation not enabled (enable with SHORTFIN_BUILD_TRACING=ON)",
+        "*** Tracy instrumentation not enabled (enable with SHORTFIN_ENABLE_TRACING=ON)",
     )
 
 
