@@ -12,6 +12,7 @@
 #include "iree/task/api.h"
 #include "shortfin/local/system.h"
 #include "shortfin/support/api.h"
+#include "shortfin/support/config.h"
 
 namespace shortfin::local::systems {
 
@@ -32,7 +33,8 @@ class SHORTFIN_API HostSystemBuilder : public SystemBuilder {
 // can extend this class (or provide features themselves).
 class SHORTFIN_API HostCPUSystemBuilder : public HostSystemBuilder {
  public:
-  HostCPUSystemBuilder(iree_allocator_t host_allocator);
+  HostCPUSystemBuilder(iree_allocator_t host_allocator,
+                       ConfigOptions options = {});
   HostCPUSystemBuilder() : HostCPUSystemBuilder(iree_allocator_system()) {}
   ~HostCPUSystemBuilder() override;
 
@@ -54,15 +56,17 @@ class SHORTFIN_API HostCPUSystemBuilder : public HostSystemBuilder {
   struct Deps {
     Deps(iree_allocator_t host_allocator);
     ~Deps();
-    iree_task_topology_t task_topology_options;
     iree_task_executor_options_t task_executor_options;
     iree_hal_task_device_params_t task_params;
     iree_hal_executable_plugin_manager_t* plugin_manager = nullptr;
     iree_hal_executable_loader_t* loaders[8] = {nullptr};
     iree_host_size_t loader_count = 0;
-    iree_task_executor_t* executor = nullptr;
     iree_hal_allocator_t* device_allocator = nullptr;
   } host_cpu_deps_;
+
+ private:
+  std::vector<iree_host_size_t> queue_node_ids_;
+  std::vector<iree_host_size_t> SelectHostCPUNodesFromOptions();
 };
 
 }  // namespace shortfin::local::systems

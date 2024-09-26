@@ -123,14 +123,22 @@ struct SHORTFIN_API DeviceAddress {
 // A device attached to the LocalSystem.
 class SHORTFIN_API Device {
  public:
+  enum class Capabilities : uint32_t {
+    NONE = 0,
+    // Indicates that the device has unified memory with the host that should
+    // be preferred when performing device-visible buffer manipulation. Note
+    // that many devices technically support host unified memory, but this bit
+    // indicates that it should be used for loading/storing/accessing device
+    // buffers without managing a separate staging DMA buffer.
+    PREFER_HOST_UNIFIED_MEMORY = 1,
+  };
   Device(DeviceAddress address, iree::hal_device_ptr hal_device,
-         int node_affinity, bool node_locked);
+         int node_affinity, uint32_t capabilities);
   virtual ~Device();
 
   const DeviceAddress &address() const { return address_; }
   std::string_view name() const { return address_.device_name; }
   int node_affinity() const { return node_affinity_; }
-  bool node_locked() const { return node_locked_; }
   iree_hal_device_t *hal_device() const { return hal_device_.get(); }
 
   std::string to_s() const;
@@ -144,7 +152,7 @@ class SHORTFIN_API Device {
   DeviceAddress address_;
   iree::hal_device_ptr hal_device_;
   int node_affinity_;
-  bool node_locked_;
+  uint32_t capabilities_ = 0;
 };
 
 // Holds a reference to a Device* and a bitmask of queues that are being
