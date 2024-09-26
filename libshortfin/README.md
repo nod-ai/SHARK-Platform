@@ -3,12 +3,18 @@
 Build options
 
 1. Native C++ build
-2. Python release build
-3. Python dev build
+2. Local Python release build
+3. Package Python release build
+4. Python dev build
+
+Prerequisites
+
+* A modern C/C++ compiler, such as clang 18 or gcc 12
+* A modern Python, such as Python 3.12
 
 ## Native C++ Builds
 
-```
+```bash
 cmake -GNinja -S. -Bbuild \
     -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
     -DCMAKE_LINKER_TYPE=LLD
@@ -18,15 +24,28 @@ If Python bindings are enabled in this mode (`-DSHORTFIN_BUILD_PYTHON_BINDINGS=O
 then `pip install -e build/` will install from the build dir (and support
 build/continue).
 
-## Python Release Builds
+## Local Python Release Builds
 
-```
+```bash
 pip install -v -e .
 ```
 
+## Package Python Release Builds
+
+```bash
+# Build shortfin.*.whl into the dist/ directory
+#   e.g. `shortfin-0.9-cp312-cp312-linux_x86_64.whl`
+python -m pip wheel -v -w dist .
+
+# Install the built wheel.
+python -m pip install dist/*.whl
+```
+
+TODO: helper script to build under manylinux using Docker
+
 ## Python Dev Builds
 
-```
+```bash
 # Install build system pre-reqs (since we are building in dev mode, this
 # is not done for us). See source of truth in pyproject.toml:
 pip install setuptools wheel
@@ -81,13 +100,13 @@ this is not considered to be a significant issue.
 
 Run platform independent tests only:
 
-```
+```bash
 pytest tests/
 ```
 
 Run tests including for a specific platform:
 
-```
+```bash
 pytest tests/ --system amdgpu
 ```
 
