@@ -11,6 +11,7 @@ import subprocess
 import os
 from pathlib import Path
 from distutils.command.build import build as _build
+from setuptools import find_namespace_packages
 from setuptools.command.build_ext import build_ext as _build_ext
 from setuptools.command.build_py import build_py as _build_py
 
@@ -307,20 +308,26 @@ populate_built_package(os.path.join(PYTHON_DEFAULT_BINARY_DIR / "_shortfin_defau
 if ENABLE_TRACY:
     populate_built_package(os.path.join(PYTHON_TRACY_BINARY_DIR / "_shortfin_tracy"))
 
+packages = find_namespace_packages(
+    where=os.path.join(SETUPPY_DIR, "python"),
+    include=[
+        "_shortfin",
+        "_shortfin_default",
+        "shortfin",
+        "shortfin.*",
+        "shortfin_apps",
+        "shortfin_apps.*",
+    ]
+    + (["_shortfin_tracy"] if ENABLE_TRACY else []),
+)
+print(f"Found libshortfin packages: {packages}")
+
 setup(
     name="shortfin",
     version="0.9",
     description="Shortfin native library implementation",
     author="SHARK Authors",
-    packages=(
-        [
-            "_shortfin",
-            "_shortfin_default",
-            "shortfin",
-            "shortfin_apps",
-        ]
-        + (["_shortfin_tracy"] if ENABLE_TRACY else [])
-    ),
+    packages=packages,
     zip_safe=False,
     package_dir=combine_dicts(
         {
