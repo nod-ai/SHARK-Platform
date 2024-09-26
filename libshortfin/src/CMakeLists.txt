@@ -16,7 +16,7 @@ target_include_directories(
 get_property(
   _SHORTFIN_LIB_OPTIONAL_COMPONENTS GLOBAL PROPERTY SHORTFIN_LIB_OPTIONAL_COMPONENTS)
 
-message(STATUS "Linking optional components ${_SHORTFIN_LIB_OPTIONAL_COMPONENTS}")
+message(STATUS "Linking optional components '${_SHORTFIN_LIB_OPTIONAL_COMPONENTS}'")
 shortfin_public_library(
   NAME
     shortfin
