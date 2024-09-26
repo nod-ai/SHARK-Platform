@@ -66,8 +66,7 @@ def einsum_util(einsum_str):
             else:
                 out_dyn_dim_size_str += "%b" + str(es_in1.find(c)) + ","
         else:
-            printf("invalid einsum string")
-            exit(1)
+            raise Exception("Invalid einsum string")
     out_dyn_dim_size_str = out_dyn_dim_size_str[:-1]
     return (
         (in0_idx, in1_idx, out_idx),
@@ -79,17 +78,16 @@ def einsum_util(einsum_str):
 
 @CustomOp.register(library=LIBRARY)
 class einsum_2args_q4(CustomOp):
-    """Generic block scaled matmul with transposed RHS.
+    """Einsum that takes two tensor inputs and returns one tensor.
 
-    This corresponds to the BlockScaledLayout and operates on planar `d`
+    The first input is expected to be a normal tensor.
+
+    The second input corresponds to the BlockScaledLayout and operates on planar `d`
     and `qs` tensors as specified there:
 
-    * `d`: `[N, K // BLOCK_SIZE, 1]`
-    * `qs`: `[N, K // BLOCK_SIZE, BLOCK_SIZE // 2]` (of uint8)
-    * `m`: `[N, K // BLOCK_SIZE, 1]`
-
-    The LHS is expected to be a 3d tensor of shape [B, M, K]. The kernel
-    will be specialized for all values of N, K and LHS dtype.
+    * `d`: `[..., K // BLOCK_SIZE, 1]`
+    * `qs`: `[..., K // BLOCK_SIZE, BLOCK_SIZE // 2]` (of uint8)
+    * `m`: `[..., K // BLOCK_SIZE, 1]`
     """
 
     signature = (
@@ -178,7 +176,6 @@ class einsum_2args_q4(CustomOp):
             elif pos1 >= 0:
                 out_dims.append(b_dim)
             else:
-                # TODO: I'm not sure if einsum notation supports broadcast in outputs, disabling it for now
                 torch._check(
                     False,
                     lambda: f"einsum_2args_q4 arg 'einsum_str': output indices must be in input indices (got '{einsum_str}')",

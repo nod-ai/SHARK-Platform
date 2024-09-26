@@ -27,7 +27,6 @@ util.func private @sharktank_einsum_2args_q4_{{es_name}}_{{bs}}_{{a_type}}(
     -> !c_tensor_type {
   %debug = tensor.empty() : tensor<1xf32>
   %zero = arith.constant 0.0: !accum_type
-  // todo: loop
   {% for i in range(a_size) %}
   %k{{i}} = arith.constant {{i}} : index
   {% endfor %}
@@ -47,7 +46,6 @@ util.func private @sharktank_einsum_2args_q4_{{es_name}}_{{bs}}_{{a_type}}(
   %qs = flow.tensor.bitcast %qs_raw : !qs_raw_tensor_type{{"{"}}{% for i in range(b_size-1) %}%b{{i}},{% endfor %}%b{{b_size-1}}{{"}"}} -> !qs_tensor_type{{"{"}}{% for i in range(b_size-1) %}%b{{i}},{% endfor %}%b{{b_size-1}}{{"}"}}
 
   // Dequantize.
-  // todo: loop
   %b_grouped = tensor.empty({% for i in range(b_size-1) %}%b{{i}},{% endfor %}%b{{b_size-1}}) : !b_grouped_tensor_type
   %b_grouped_dequant = linalg.generic {
       indexing_maps = [
@@ -71,11 +69,9 @@ util.func private @sharktank_einsum_2args_q4_{{es_name}}_{{bs}}_{{a_type}}(
   } -> !b_grouped_tensor_type
 
   // Collapse %b to the same unblocked structure.
-  // todo: loop
   %b_unblocked = tensor.collapse_shape %b_grouped_dequant [{% for i in range(b_size-1) %}[{{i}}], {% endfor %}[{{b_size-1}}, {{b_size}}]] : !b_grouped_tensor_type into !b_tensor_type
 
   // Einsum
-  // todo: loop, right dimensions
   %result_empty = tensor.empty({{out_dyn_dim_size_str}}) : !accum_tensor_type
   %result_fill = linalg.fill ins(%zero: !accum_type) outs(%result_empty: !accum_tensor_type) -> !accum_tensor_type
   %result = linalg.generic {
@@ -96,7 +92,6 @@ util.func private @sharktank_einsum_2args_q4_{{es_name}}_{{bs}}_{{a_type}}(
   } -> !accum_tensor_type
 
   // Cast.
-  // todo: loop, right dimensions
   %result_cast_empty = tensor.empty({{out_dyn_dim_size_str}}) : !c_tensor_type
   %result_cast = linalg.copy
     ins(%result : !accum_tensor_type)
