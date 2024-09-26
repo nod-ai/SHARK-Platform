@@ -79,6 +79,7 @@ jobs:
         mkdir ${{ env.LIBSHORTFIN_DIR }}/build
         cd ${{ env.LIBSHORTFIN_DIR }}/build
         cmake -GNinja \
+          -DCMAKE_BUILD_TYPE=Debug \
           -DCMAKE_C_COMPILER=clang-18 \
           -DCMAKE_CXX_COMPILER=clang++-18 \
           -DCMAKE_LINKER_TYPE=LLD \
