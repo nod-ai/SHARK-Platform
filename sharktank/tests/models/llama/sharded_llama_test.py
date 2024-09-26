@@ -44,6 +44,7 @@ class AttentionBlockTest(unittest.TestCase):
                 attention_head_count_kv=attention_head_count_kv,
                 expert_count=0,
                 expert_used_count=0,
+                model_arch="llama",
             ),
             block_seq_stride=block_seq_stride,
             activation_dtype=dtype,

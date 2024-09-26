@@ -20,6 +20,7 @@ from ..types import *
 
 # TODO: Should be using a base class with the protocol supported.
 from ..models.mixtral.mixtral import *
+from ..models.grok.grok import *
 from ..models.llama.llama import *
 from ..models.llama.sharding import shard_theta
 from ..utils.debugging import trace_tensor
@@ -223,11 +224,6 @@ def main():
         default="float32",
     )
     parser.add_argument(
-        "--attention-dtype",
-        help="DType to use for attention in the model",
-        default="float16",
-    )
-    parser.add_argument(
         "--use-hf",
         action="store_true",
         default=False,
@@ -244,9 +240,8 @@ def main():
 
     device = torch.device(args.device) if args.device else None
     activation_dtype = getattr(torch, args.activation_dtype)
-    attention_dtype = getattr(torch, args.attention_dtype)
     assert isinstance(activation_dtype, torch.dtype)
-    assert isinstance(attention_dtype, torch.dtype)
+
     dataset = cli.get_input_dataset(args)
     tokenizer = cli.get_tokenizer(args)
     prompts = args.prompt
@@ -257,7 +252,7 @@ def main():
         kv_cache_type=args.kv_cache_type,
         device=device,
         activation_dtype=activation_dtype,
-        attention_dtype=attention_dtype,
+        attention_dtype=activation_dtype,
         use_hf=args.use_hf,
         tensor_parallelism_size=args.tensor_parallelism_size,
     )
@@ -265,9 +260,13 @@ def main():
         dataset.root_theta = shard_theta(dataset.root_theta, config)
 
     if config.hp.expert_count:
-        model = PagedMixtralModelV1(dataset.root_theta, config)
+        if config.hp.model_arch == "grok":
+            model = PagedGrokModelV1(dataset.root_theta, config)
+        else:
+            model = PagedMixtralModelV1(dataset.root_theta, config)
     else:
         model = PagedLlamaModelV1(dataset.root_theta, config)
+
     if args.save_intermediates_path:
         from ..utils.patching import SaveModuleResultTensorsPatch
 
@@ -297,6 +296,7 @@ def main():
             )
         print(f":: Result tokens: {batch.results}")
         batch.print_current_results()
+        counter += 1
 
 
 if __name__ == "__main__":

@@ -37,9 +37,17 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         head_dim: int,
         head_count_kv: int,
         rms_epsilon: float,
-        use_hf: bool = False,
+        use_grok: Optional[bool] = False,
     ):
         super().__init__(theta)
+
+        self.block_index = block_index
+        self.cache = cache
+        self.head_count = head_count
+        self.head_dim = head_dim
+        self.head_count_kv = head_count_kv
+        self.use_grok = use_grok
+
         self.add_module(
             "attn_norm", RMSNormLayer(theta("attn_norm"), epsilon=rms_epsilon)
         )
@@ -48,12 +56,11 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         self.add_module("attn_v", LinearLayer(theta("attn_v")))
         self.add_module("attn_output", LinearLayer(theta("attn_output")))
 
-        self.block_index = block_index
-        self.cache = cache
-        self.head_count = head_count
-        self.head_dim = head_dim
-        self.head_count_kv = head_count_kv
-        self.use_hf = use_hf
+        if self.use_grok:
+            self.add_module(
+                "attn_output_norm",
+                RMSNormLayer(theta("attn_output_norm"), epsilon=rms_epsilon),
+            )
 
     def forward(
         self,
@@ -141,7 +148,15 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         values = xv.transpose(1, 2)
 
         # Flash attention.
-        attn_weights = ops.matmul(xq, keys.transpose(2, 3)) / math.sqrt(self.head_dim)
+        if not self.use_grok:
+            attn_weights = ops.matmul(xq, keys.transpose(2, 3)) / math.sqrt(
+                self.head_dim
+            )
+        elif self.use_grok:
+            attn_weights = ops.matmul(xq, keys.transpose(2, 3))
+            attn_weights = 30.0 * torch.tanh(
+                attn_weights * (0.08838834764831845 / 30.0)
+            )
         self.assert_not_nan(attn_weights)
 
         # Apply attention mask.
@@ -158,7 +173,9 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         # Project.
         attn_output = self.attn_output(attn_output)
 
-        # Remainder of the block.
+        if self.use_grok:
+            attn_output = self.attn_output_norm(attn_output)
+
         h = h + attn_output
 
         return h
@@ -183,6 +200,7 @@ class PagedLlamaAttentionBlock(ThetaLayer):
             return xk_cache_update, xv_cache_update
         else:
             # Decode. Write a single timestep.
+            # TODO: This needs to be reworked with index ops.
             assert xk_cache_update.shape[1] == 1
             assert xv_cache_update.shape[1] == 1
             for b in range(bs):
