@@ -71,17 +71,18 @@ class Perplexity:
 
     def get_logits(self):
 
-        # print(f":: Prompting:")
-        # for prompt in prompts:
-        #     print(f"    {prompt.encode()}")
-
         token_ids, seq_lens = self.generator.tokenizer.encode(
             self.prompts,
             pad_to_multiple_of=self.generator.model.cache.pad_sequence_stride,
             add_start_token=self.add_start_token,
         )
 
-        # print(f":: Prompt tokens: {token_ids}")
+        print(f":: Prompts:")
+        for prompt in self.prompts:
+            print(f"    {prompt.encode()}")
+
+        print(f":: Prompt token ids: {token_ids}")
+
         max_prompt_length = max(seq_lens)
 
         self.token_ids = torch.tensor(token_ids, device=self.generator.model.device)
@@ -92,10 +93,9 @@ class Perplexity:
             range(0, max_prompt_length),
             desc="eval-perplexity: Load models & Fetching logits",
         ):
-
+            # for i in range(0, max_prompt_length):
             token_batch = self.token_ids[:, i : i + 1]
             seq_lens_batch = torch.tensor([i] * self.bs)
-            # print('loop', i, token_batch, seq_lens_batch)
 
             if is_first_token:
                 token_batch, seq_lens_batch = self.generator.tokenizer.pad_tokens(
@@ -121,8 +121,6 @@ class Perplexity:
                 # print(self.batch.detokenize())
                 self.pad_logits = self.batch.prefill_logits[:, 1:2, :]
                 self.out_logits = self.batch.prefill_logits[:, 0:1, :]
-
-                # print('prefill_logits', self.batch.prefill_logits.shape, self.pad_logits.shape, self.out_logits.shape)
                 continue
 
             self.cache_state = self.batch.decode(self.cache_state)
@@ -132,10 +130,8 @@ class Perplexity:
             # print('decode_logits', self.batch.decode_logits.shape)
             self.out_logits = torch.cat((self.out_logits, self.batch.decode_logits), 1)
 
-            # print('out_logits', self.out_logits.shape)
         shape_diff = self.token_ids.shape[1] - self.out_logits.shape[1]
         tensor_pad = torch.cat([self.pad_logits] * shape_diff, 1)
-        # print(shape_diff, tensor_pad.shape)
         self.out_logits = torch.cat((self.out_logits, tensor_pad), 1)
         # print('out_logits', self.out_logits.shape)
 
@@ -144,7 +140,6 @@ class Perplexity:
         self.get_logits()
 
         loss_fct = CrossEntropyLoss(reduction="none")
-        # num_prompts = len(self.prompts)
 
         self.out_logits = self.out_logits.contiguous()
         self.token_ids = self.token_ids.contiguous()
@@ -174,6 +169,19 @@ class Perplexity:
         }
 
 
+def run_perplexity(
+    prompts: list[str],
+    dataset,
+    tokenizer,
+):
+    perplexity = Perplexity(prompts=prompts)
+
+    perplexity.load_model(dataset, tokenizer)
+    ppl = perplexity.compute_perplexity()
+
+    return ppl
+
+
 if __name__ == "__main__":
     parser = cli.create_parser()
     # parser.add_argument("--prompt", nargs="+", help="Prompt strings")
@@ -189,17 +197,10 @@ if __name__ == "__main__":
     dataset = cli.get_input_dataset(args)
     tokenizer = cli.get_tokenizer(args)
 
-    input_texts = load_dataset("wikitext", "wikitext-2-raw-v1", split="test")["text"][
-        :10
-    ]
+    input_texts = ["Happy Birthday!", "Write a story about LLamas"]
 
-    input_texts = [s for s in input_texts if s != ""]
+    # input_texts = [' Robert Boulter is an English film , television and theatre actor .', ' He had a guest starring role on the television series The Bill in 2000 .', ' This was followed by a starring role in the play Herons written by Simon Stephens , which was performed in 2001 at the Royal Court Theatre .', ' He had a guest role in the television series Judge John Deed in 2002 . In 2004 Boulter landed a role as " Craig " in the episode " Teddy \'s Story " of the television series The Long Firm ; he starred alongside actors Mark Strong and Derek Jacobi .', ' He was cast in the 2005 theatre productions of the Philip Ridley play Mercury Fur , which was performed at the Drum Theatre in Plymouth and the Menier Chocolate Factory in London . He was directed by John Tiffany and starred alongside Ben Whishaw , Shane Zaza , Harry Kent , Fraser Ayres , Sophie Stanton and Dominic Hall . \n', ' In 2006 , Boulter starred alongside Whishaw in the play Citizenship written by Mark Ravenhill . He appeared on a 2006 episode of the television series , Doctors , followed by a role in the 2007 theatre production of How to Curse directed by Josie Rourke . How to Curse was performed at Bush Theatre in the London Borough of Hammersmith and Fulham . Boulter starred in two films in 2008 , Daylight Robbery by filmmaker Paris Leonti , and Donkey Punch directed by Olly Blackburn .', ' In May 2008 , Boulter made a guest appearance on a two @-@ part episode arc of the television series Waking the Dead , followed by an appearance on the television series Survivors in November 2008 . He had a recurring role in ten episodes of the television series Casualty in 2010 , as " Kieron Fletcher " . Boulter starred in the 2011 film Mercenaries directed by Paris Leonti . \n']
 
-    # input_texts = ["Happy Birthday!", "Write a story about LLamas"]
-
-    perplexity = Perplexity(prompts=input_texts)
-
-    perplexity.load_model(dataset, tokenizer)
-    ppl = perplexity.compute_perplexity()
+    ppl = run_perplexity(prompts=input_texts, dataset=dataset, tokenizer=tokenizer)
 
     print(json.dumps(ppl, indent=2))
