@@ -23,7 +23,7 @@ class TorchGenerator:
         self,
         model: PagedLlamaModelV1,
         tokenizer: InferenceTokenizer,
-        page_cache_size: int = 128,
+        page_cache_size: int = 8192,
         # Need to look at the model more for this.
         end_token: int = 2,
     ):
@@ -33,7 +33,7 @@ class TorchGenerator:
             self.shared_cache_state = model.cache.paged.allocate(page_cache_size)
         else:
             self.shared_cache_state = None
-        self.free_pages = list(range(1, 128))
+        self.free_pages = list(range(1, 8192))
         self.end_token = end_token
 
     @property
@@ -108,6 +108,8 @@ class Batch:
             for _ in range(blocks_needed):
                 row.append(self.parent.alloc_page())
             self.seq_block_ids.append(row)
+
+        # print('free_pages, seq_lens', len(self.parent.free_pages), self.seq_lens)
 
     @property
     def done(self) -> bool:
