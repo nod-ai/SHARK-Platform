@@ -4,13 +4,14 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
+import json
 import numpy as np
 from tqdm import tqdm
 
 import torch
 from torch.nn import CrossEntropyLoss
 
-from datasets import load_dataset
+from datasets import load_dataset, load_from_disk
 
 from sharktank.layers import *
 from sharktank.types import *
@@ -87,7 +88,10 @@ class Perplexity:
         self.attention_mask = (self.token_ids != 0).int()
 
         is_first_token = True
-        for i in range(0, max_prompt_length):
+        for i in tqdm(
+            range(0, max_prompt_length),
+            desc="eval-perplexity: Load models & Fetching logits",
+        ):
 
             token_batch = self.token_ids[:, i : i + 1]
             seq_lens_batch = torch.tensor([i] * self.bs)
@@ -162,8 +166,10 @@ class Perplexity:
             crossentropy_loss / self.attention_mask.sum(1)
         ).tolist()
 
+        perplexity = dict(map(lambda i, j: (i, j), self.prompts, perplexity_batch))
+
         return {
-            "perplexities": perplexity_batch,
+            "perplexities": perplexity,
             "mean_perplexity": np.mean(perplexity_batch),
         }
 
@@ -186,6 +192,7 @@ if __name__ == "__main__":
     input_texts = load_dataset("wikitext", "wikitext-2-raw-v1", split="test")["text"][
         :10
     ]
+
     input_texts = [s for s in input_texts if s != ""]
 
     # input_texts = ["Happy Birthday!", "Write a story about LLamas"]
@@ -193,13 +200,6 @@ if __name__ == "__main__":
     perplexity = Perplexity(prompts=input_texts)
 
     perplexity.load_model(dataset, tokenizer)
-
     ppl = perplexity.compute_perplexity()
 
-    print(ppl)
-
-    print(list(ppl.keys()))
-    # ['perplexities', 'mean_perplexity']
-    print(round(ppl["mean_perplexity"], 0))
-    print(ppl["perplexities"])
-    print(input_texts)
+    print(json.dumps(ppl, indent=2))
