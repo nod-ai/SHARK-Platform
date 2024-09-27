@@ -77,6 +77,11 @@ class ServerRunner:
 
 @pytest.fixture(scope="session")
 def server():
+    try:
+        import fastapi
+        import uvicorn
+    except ModuleNotFoundError as e:
+        pytest.skip(f"Skipping server test because deps are missing: {e}")
     runner = ServerRunner([])
     yield runner
 
