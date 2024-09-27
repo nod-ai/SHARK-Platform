@@ -57,14 +57,13 @@ class ShardedLlamaTest(unittest.TestCase):
             config=self.config,
             vocab_size=self.vocabulary_size,
         )
+        self.prefill_seq_lens = torch.tensor(
+            [14, 9, self.block_seq_stride - 1], dtype=torch.int32
+        )
 
     def make_prefill_args(self, model: PagedLlamaModelV1) -> Dict[str, Any]:
-        seq_lens = torch.randint(
-            high=self.config.hp.context_length + 1, size=[self.batch_size]
-        )
-        seq_lens[self.batch_size - 1] = self.config.hp.context_length
         batch_seq_len = round_up_to_multiple_of(
-            int(torch.max(seq_lens)), model.cache.pad_sequence_stride
+            int(torch.max(self.prefill_seq_lens)), model.cache.pad_sequence_stride
         )
         token_ids = torch.randint(
             low=0,
@@ -72,7 +71,9 @@ class ShardedLlamaTest(unittest.TestCase):
             size=[self.batch_size, batch_seq_len],
             dtype=torch.int32,
         )
-        attention_mask = model.attention_mask(model.input_mask(seq_lens, batch_seq_len))
+        attention_mask = model.attention_mask(
+            model.input_mask(self.prefill_seq_lens, batch_seq_len)
+        )
         seq_block_ids = torch.arange(
             self.batch_size * batch_seq_len // self.config.block_seq_stride
         ).view(self.batch_size, -1)
@@ -103,10 +104,8 @@ class ShardedLlamaTest(unittest.TestCase):
         return prefill_args, sharded_prefill_args
 
     def make_decode_args(self, model: PagedLlamaModelV1) -> Dict[str, Any]:
-        seq_lens = torch.randint(
-            high=self.config.hp.context_length + 1, size=[self.batch_size]
-        )
-        seq_lens[self.batch_size - 1] = self.config.hp.context_length
+        start_positions = self.prefill_seq_lens.clone()
+        seq_lens = self.prefill_seq_lens + 1
         batch_seq_len = round_up_to_multiple_of(
             int(torch.max(seq_lens)), model.cache.pad_sequence_stride
         )
@@ -116,15 +115,8 @@ class ShardedLlamaTest(unittest.TestCase):
             size=[self.batch_size, 1],
             dtype=torch.int32,
         )
-        decode_seq_lens = torch.randint(
-            high=self.config.hp.context_length - 2, size=[self.batch_size]
-        )
-        start_positions = decode_seq_lens + 1
-        decode_batch_seq_len = round_up_to_multiple_of(
-            int(torch.max(seq_lens)), model.cache.pad_sequence_stride
-        )
-        decode_attention_mask = model.decode_attention_mask(
-            model.input_mask(decode_seq_lens, decode_batch_seq_len)
+        attention_mask = model.decode_attention_mask(
+            model.input_mask(seq_lens, batch_seq_len)
         )
         seq_block_ids = torch.arange(
             self.batch_size * batch_seq_len // self.config.block_seq_stride
@@ -133,7 +125,7 @@ class ShardedLlamaTest(unittest.TestCase):
         cache_state = [torch.rand_like(cache_state[0])]
         return {
             "tokens": decode_token_ids,
-            "attention_mask": decode_attention_mask,
+            "attention_mask": attention_mask,
             "start_positions": start_positions,
             "seq_block_ids": seq_block_ids,
             "cache_state": cache_state,
@@ -249,5 +241,6 @@ class ShardedLlamaTest(unittest.TestCase):
             # TODO: debug error
             # TypeError: Unsupported torch type conversion for
             # !torch.vtensor<[3,1,7],complex<f32>>
+            # https://github.com/llvm/torch-mlir/pull/3738 may fix this.
             output = export(sharded_fxb)
             output.save_mlir(f"{temp_dir}/program.mlir")
