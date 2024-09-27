@@ -18,6 +18,7 @@ Prerequisites
 cmake -GNinja -S. -Bbuild \
     -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
     -DCMAKE_LINKER_TYPE=LLD
+cmake --build build --target all
 ```
 
 If Python bindings are enabled in this mode (`-DSHORTFIN_BUILD_PYTHON_BINDINGS=ON`),
@@ -123,20 +124,21 @@ recommended:
 
 # Miscellaneous Build Topics
 
-## Free threaded Python
+## Free-threaded Python
 
-Support for free threaded Python builds (aka. "nogil") is in progress. It
+Support for free-threaded Python builds (aka. "nogil") is in progress. It
 is currently being tested via dev builds of CPython 3.13 with the
 `--disable-gil` option set. There are multiple ways to acquire such an
 environment. If using `pyenv`, here is a way:
 
 ```
-# Build a 3.13-dev-nogil version.
-PYTHON_CONFIGURE_OPTS='--disable-gil' \
-$(pyenv root)/plugins/python-build/bin/python-build 3.13-dev \
-  $(pyenv root)/versions/3.13-dev-nogil
+# Build a free-threaded 3.13 version.
+pyenv install --debug 3.13t-dev
 
-# Test (should print "1").
-pyenv shell 3.13-dev-nogil
-python -c 'import sysconfig; print(sysconfig.get_config_var("Py_GIL_DISABLED"))'
+# Test (should print "False").
+pyenv shell 3.13t-dev
+python -c 'import sys; print(sys._is_gil_enabled())'
 ```
+
+Further ways of installing a free-threaded CPython interpreter are documented at
+[py-free-threading.github.io](https://py-free-threading.github.io/installing_cpython/).
