@@ -39,7 +39,7 @@ class ServerRunner:
             [
                 sys.executable,
                 "-m",
-                "shortfin.llm.api.rest_server",
+                "sharktank.serving_poc.llm.api.rest_server",
                 "--testing-mock-service",
                 "--port=" + port,
             ]

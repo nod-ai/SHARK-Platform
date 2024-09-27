@@ -42,7 +42,7 @@ from ..service import (
 )
 
 
-logger = get_logger("shortfin.llm.impl.service_v1")
+logger = get_logger("sharktank.serving_poc.llm.impl.service_v1")
 
 EXPECTED_CONCURRENCY = 10
 

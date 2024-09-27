@@ -6,7 +6,7 @@
 
 import pytest
 
-from shortfin.framework.session import (
+from sharktank.serving_poc.framework.session import (
     DeviceSession,
 )
 

@@ -15,21 +15,21 @@ from iree.runtime import (  # type: ignore
     HalElementType,
 )
 
-from shortfin.framework.session import DeviceSession
+from sharktank.serving_poc.framework.session import DeviceSession
 
-from shortfin.llm.attn_block_cache import (
+from sharktank.serving_poc.llm.attn_block_cache import (
     create_attn_block_cache_module,
     AttnBlockCache,
 )
 
-from shortfin.llm.config import (
+from sharktank.serving_poc.llm.config import (
     CacheParams,
     ModelParams,
     ServiceParams,
 )
 
-from shortfin.llm.impl.service_v1 import GenerateServiceV1
-from shortfin.llm.service import GenerateRequest
+from sharktank.serving_poc.llm.impl.service_v1 import GenerateServiceV1
+from sharktank.serving_poc.llm.service import GenerateRequest
 
 
 def setup(vmfb_path, config_path, gguf_path):

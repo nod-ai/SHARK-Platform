@@ -21,7 +21,7 @@ from ..framework.session import DeviceSession
 from .config import human_size, CacheParams
 
 
-logger = get_logger("shortfin.llm.cache")
+logger = get_logger("sharktank.serving_poc.llm.cache")
 
 
 class AttnBlockCacheEntry:
