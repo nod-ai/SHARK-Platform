@@ -6,11 +6,11 @@ build:
     python: "3.12"
   jobs:
     pre_build:
-      - python -m pip install -v libshortfin/
+      - python -m pip install -v shortfin/
 
 python:
   install:
-    - requirements: libshortfin/docs/requirements.txt
+    - requirements: shortfin/docs/requirements.txt
 
 sphinx:
-  configuration: libshortfin/docs/conf.py
+  configuration: shortfin/docs/conf.py

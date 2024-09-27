@@ -1,4 +1,4 @@
-# libshortfin - SHARK C++ inference library
+# shortfin - SHARK C++ inference library
 
 Build options
 

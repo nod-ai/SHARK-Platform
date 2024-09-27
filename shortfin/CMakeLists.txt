@@ -95,7 +95,7 @@ if(SHORTFIN_HAS_THREAD_SAFETY)
 endif()
 
 option(SHORTFIN_SYSTEMS_AMDGPU "Builds for AMD GPU systems" ON)
-message(STATUS "libshortfin supported systems:")
+message(STATUS "shortfin supported systems:")
 if(SHORTFIN_SYSTEMS_AMDGPU)
   message(STATUS "  - AMD GPU")
 endif()

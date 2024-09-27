@@ -21,9 +21,9 @@ except ImportError:
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = "libshortfin"
+project = "shortfin"
 copyright = "2024, Advanced Micro Devices, Inc"
-author = "libshortfin Authors"
+author = "shortfin Authors"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
