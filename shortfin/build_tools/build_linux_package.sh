@@ -14,9 +14,9 @@
 #   sudo ./build_tools/build_linux_package.sh
 #
 # Build specific Python versions to custom directory:
-#   OVERRIDE_PYTHON_VERSIONS="cp312-cp312 cp313-313" \
+#   OVERRIDE_PYTHON_VERSIONS="cp312-cp312 cp313-cp313" \
 #   OUTPUT_DIR="/tmp/wheelhouse" \
-#   sudo ./build_tools/build_linux_package.sh
+#   sudo -E ./build_tools/build_linux_package.sh
 #
 # Valid Python versions match a subdirectory under /opt/python in the docker
 # image. Typically:
@@ -35,10 +35,12 @@ REPO_ROOT="$(cd "$THIS_DIR"/../../ && pwd)"
 SCRIPT_NAME="$(basename $0)"
 ARCH="$(uname -m)"
 
-# TODO: update to manylinux_2_28, 2014 is being used by torch-mlir
-# MANYLINUX_DOCKER_IMAGE="${MANYLINUX_DOCKER_IMAGE:-"ghcr.io/nod-ai/manylinux_x86_64:main@sha256:facedb71df670016e74e646d71e869e6fff70d4cdbaa6634d4d0a10d6e174399" }')}"
-MANYLINUX_DOCKER_IMAGE="${MANYLINUX_DOCKER_IMAGE:-quay.io/pypa/manylinux2014_${ARCH}@sha256:2ace4b4f06a726d270821cb4993caeed3aacdaa54801e9f13be8fbe96077f4dc}"
-PYTHON_VERSIONS="${OVERRIDE_PYTHON_VERSIONS:-cp312-cp312}"
+# TODO(#130): Update to manylinux_2_28, upstream or a fork
+#   * upstream uses a version of gcc that has build warnings/errors
+#   * https://github.com/nod-ai/base-docker-images is a bit out of date but can include a recent clang
+# MANYLINUX_DOCKER_IMAGE="${MANYLINUX_DOCKER_IMAGE:-quay.io/pypa/manylinux_2_28_${ARCH}:latest}"
+MANYLINUX_DOCKER_IMAGE="${MANYLINUX_DOCKER_IMAGE:-quay.io/pypa/manylinux2014_${ARCH}:latest}"
+PYTHON_VERSIONS="${OVERRIDE_PYTHON_VERSIONS:-cp312-cp312 cp313-cp313}"
 OUTPUT_DIR="${OUTPUT_DIR:-${THIS_DIR}/wheelhouse}"
 
 function run_on_host() {
