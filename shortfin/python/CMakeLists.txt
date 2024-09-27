@@ -4,7 +4,7 @@
 # https://llvm.org/LICENSE.txt for license information. SPDX-License-Identifier:
 # Apache-2.0 WITH LLVM-exception
 
-# libshortfin publishes multiple python packages: - _shortfin: Trampoline
+# shortfin publishes multiple python packages: - _shortfin: Trampoline
 # __init__.py which looks at environment variables to load an appropriate native
 # library. - _shortfin_default.lib: Native library as a default, uninstrumented
 # build. - _shortfin_tracing.lib: Native library with tracing enabled. -

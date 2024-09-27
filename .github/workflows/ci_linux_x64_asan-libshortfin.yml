@@ -4,7 +4,7 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-name: CI - libshortfin - ASan
+name: CI - shortfin - ASan
 
 on:
   workflow_dispatch:
@@ -14,7 +14,7 @@ on:
       - main
     paths:
       - '.github/workflows/ci_linux_x64_asan-libshortfin.yml'
-      - 'libshortfin/**'
+      - 'shortfin/**'
 
 permissions:
   contents: read
@@ -34,7 +34,7 @@ env:
   CACHE_ASAN_VER: 2
   CACHE_DEPS_VER: 1
   IREE_SOURCE_DIR: ${{ github.workspace }}/iree
-  LIBSHORTFIN_DIR: ${{ github.workspace }}/libshortfin/
+  LIBSHORTFIN_DIR: ${{ github.workspace }}/shortfin/
 
 jobs:
   setup-python-asan:
@@ -80,7 +80,7 @@ jobs:
 
 
   build-and-test:
-    name: Build and test libshortfin
+    name: Build and test shortfin
     needs: [setup-python-asan]
     runs-on: ubuntu-24.04
     env:
@@ -88,7 +88,7 @@ jobs:
       # leak checker by default. Here we suppress any ASAN features needed to
       # pass the build. Test configuration is done specially just for that step.
       ASAN_OPTIONS: detect_leaks=0,detect_odr_violation=0
-      LSAN_OPTIONS: suppressions=${{ github.workspace }}/libshortfin/build_tools/python_lsan_suppressions.txt
+      LSAN_OPTIONS: suppressions=${{ github.workspace }}/shortfin/build_tools/python_lsan_suppressions.txt
     steps:
     - name: Install dependencies
       run: |
@@ -122,7 +122,7 @@ jobs:
       uses: actions/cache/restore@0c45773b623bea8c8e75f6c82b208c3cf94ea4f9 # v4.0.2
       with:
         path: ${{ env.PYENV_ROOT }}
-        key: ${{ runner.os }}-python-deps-${{ hashFiles('libshortfin/requirements-tests.txt') }}-v${{ env.CACHE_DEPS_VER }}
+        key: ${{ runner.os }}-python-deps-${{ hashFiles('shortfin/requirements-tests.txt') }}-v${{ env.CACHE_DEPS_VER }}
 
     - name: Restore Python ASan cache
       id: cache-python-asan
@@ -152,7 +152,7 @@ jobs:
         path: ${{ env.PYENV_ROOT }}
         key: ${{ steps.cache-python-deps-restore.outputs.cache-primary-key }}
 
-    - name: Build libshortfin
+    - name: Build shortfin
       run: |
         eval "$(pyenv init -)"
         cd ${{ env.LIBSHORTFIN_DIR }}

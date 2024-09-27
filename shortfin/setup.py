@@ -235,7 +235,7 @@ class CMakeBuildPy(_build_py):
 
     def build_default_configuration(self):
         print("  *********************************")
-        print("  * Building base libshortfin     *")
+        print("  * Building base shortfin        *")
         print("  *********************************")
 
         build_cmake_configuration(CMAKE_DEFAULT_BUILD_DIR)
@@ -260,7 +260,7 @@ class CMakeBuildPy(_build_py):
 
     def build_tracy_configuration(self):
         print("  *********************************")
-        print("  * Building tracy libshortfin    *")
+        print("  * Building tracy shortfin       *")
         print("  *********************************")
 
         build_cmake_configuration(
@@ -320,7 +320,7 @@ packages = find_namespace_packages(
     ]
     + (["_shortfin_tracy"] if ENABLE_TRACY else []),
 )
-print(f"Found libshortfin packages: {packages}")
+print(f"Found shortfin packages: {packages}")
 
 setup(
     name="shortfin",
