@@ -27,7 +27,7 @@ from ..service import (
     GenerateRequest,
 )
 
-logger = get_logger("shortfin.llm.api_server")
+logger = get_logger("sharktank.serving_poc.llm.api_server")
 app = FastAPI()
 service: Optional[GenerateService] = None
 

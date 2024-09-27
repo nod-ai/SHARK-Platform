@@ -24,7 +24,7 @@ class DefaultFormatter(logging.Formatter):
 
 
 def _setup_logger():
-    root_logger = logging.getLogger("shortfin")
+    root_logger = logging.getLogger("sharktank.serving_poc")
     root_logger.setLevel(logging.DEBUG)
     default_handler = logging.StreamHandler(sys.stderr)
     default_handler.flush = sys.stderr.flush

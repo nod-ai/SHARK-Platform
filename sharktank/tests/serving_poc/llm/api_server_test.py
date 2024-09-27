@@ -39,7 +39,7 @@ class ServerRunner:
             [
                 sys.executable,
                 "-m",
-                "shortfin.llm.api.rest_server",
+                "sharktank.serving_poc.llm.api.rest_server",
                 "--testing-mock-service",
                 "--port=" + port,
             ]
@@ -77,6 +77,11 @@ class ServerRunner:
 
 @pytest.fixture(scope="session")
 def server():
+    try:
+        import fastapi
+        import uvicorn
+    except ModuleNotFoundError as e:
+        pytest.skip(f"Skipping server test because deps are missing: {e}")
     runner = ServerRunner([])
     yield runner
 
