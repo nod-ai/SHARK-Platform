@@ -194,7 +194,6 @@ class ShardedLlamaTest(unittest.TestCase):
             actual_decode_cache_state, expected_decode_cache_state, atol=1e-4, rtol=1e-4
         )
 
-    @unittest.expectedFailure
     def testExportToySizedModelToMlir(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             sharded_config = deepcopy(self.config)
@@ -204,7 +203,7 @@ class ShardedLlamaTest(unittest.TestCase):
             sharded_dataset = Dataset({}, sharded_theta)
             parameters_path = f"{temp_dir}/parameters.irpa"
             sharded_dataset.save(f"{temp_dir}/parameters.irpa")
-            sharded_dataset = Dataset.load(parameters_path)
+            sharded_dataset = Dataset.load(parameters_path, mmap=False)
 
             model = PagedLlamaModelV1(self.theta, self.config)
             sharded_model = PagedLlamaModelV1(
@@ -238,9 +237,5 @@ class ShardedLlamaTest(unittest.TestCase):
             def _(model, *args, **kwargs) -> torch.Tensor:
                 return model.decode(*args, **kwargs)
 
-            # TODO: debug error
-            # TypeError: Unsupported torch type conversion for
-            # !torch.vtensor<[3,1,7],complex<f32>>
-            # https://github.com/llvm/torch-mlir/pull/3738 may fix this.
             output = export(sharded_fxb)
             output.save_mlir(f"{temp_dir}/program.mlir")
