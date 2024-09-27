@@ -53,6 +53,8 @@ class ShardedLlamaTest(unittest.TestCase):
             activation_dtype=self.dtype,
             attention_dtype=self.dtype,
         )
+        self.sharded_config = deepcopy(self.config)
+        self.sharded_config.tensor_parallelism_size = 2
         self.theta = make_random_llama_theta(
             config=self.config,
             vocab_size=self.vocabulary_size,
@@ -145,10 +147,8 @@ class ShardedLlamaTest(unittest.TestCase):
         """Run a sharded variant of a toy model size and compare it against the
         unsharded variant."""
         model = PagedLlamaModelV1(self.theta, self.config)
-        sharded_config = deepcopy(self.config)
-        sharded_config.tensor_parallelism_size = 2
-        sharded_theta = shard_theta(self.theta, sharded_config)
-        sharded_model = PagedLlamaModelV1(sharded_theta, sharded_config)
+        sharded_theta = shard_theta(self.theta, self.sharded_config)
+        sharded_model = PagedLlamaModelV1(sharded_theta, self.sharded_config)
 
         # Verify prefill step.
         (
@@ -194,11 +194,11 @@ class ShardedLlamaTest(unittest.TestCase):
             actual_decode_cache_state, expected_decode_cache_state, atol=1e-4, rtol=1e-4
         )
 
-    def testExportToySizedModelToMlir(self):
+    def testExportToySizedModelToIreeModule(self):
+        """Test exporting to MLIR and compiling with IREE the sharded Llama model."""
+
         with tempfile.TemporaryDirectory() as temp_dir:
-            sharded_config = deepcopy(self.config)
-            sharded_config.tensor_parallelism_size = 2
-            sharded_theta = shard_theta(self.theta, sharded_config)
+            sharded_theta = shard_theta(self.theta, self.sharded_config)
             sharded_theta.rename_tensors_to_paths()
             sharded_dataset = Dataset({}, sharded_theta)
             parameters_path = f"{temp_dir}/parameters.irpa"
@@ -207,7 +207,7 @@ class ShardedLlamaTest(unittest.TestCase):
 
             model = PagedLlamaModelV1(self.theta, self.config)
             sharded_model = PagedLlamaModelV1(
-                sharded_dataset.root_theta, sharded_config
+                sharded_dataset.root_theta, self.sharded_config
             )
             sharded_fxb = FxProgramsBuilder(sharded_model)
 
@@ -239,3 +239,13 @@ class ShardedLlamaTest(unittest.TestCase):
 
             output = export(sharded_fxb)
             output.save_mlir(f"{temp_dir}/program.mlir")
+            output.session.set_flags(
+                *[
+                    f"--iree-hal-target-device=llvm-cpu[{i}]"
+                    for i in range(self.sharded_config.tensor_parallelism_size)
+                ]
+            )
+            output.compile(
+                save_to=f"{temp_dir}/program.vmfb",
+                target_backends=None,
+            )
