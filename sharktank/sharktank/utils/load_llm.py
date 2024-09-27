@@ -149,14 +149,14 @@ class Batch:
             model.input_mask(self.seq_lens, self.token_ids.shape[1])
         )
         seq_block_ids_tensor = self.pad_block_ids()
-        print(f":: Invoke prefill:")
+        # print(f":: Invoke prefill:")
         trace_tensor("prefill.token_ids", self.token_ids)
         trace_tensor("prefill.seq_block_ids", seq_block_ids_tensor)
         trace_tensor("prefill.attention_mask", attention_mask)
-        print("prefill.token_ids", self.token_ids)
-        print("prefill.seq_block_ids", seq_block_ids_tensor)
-        print("prefill.attention_mask", attention_mask.shape)
-        print("prefill.cache_state", self.cache_state[0].shape)
+        # print("prefill.token_ids", self.token_ids)
+        # print("prefill.seq_block_ids", seq_block_ids_tensor)
+        # print("prefill.attention_mask", attention_mask.shape)
+        # print("prefill.cache_state", self.cache_state[0].shape)
         self.prefill_logits = model.prefill(
             self.token_ids,
             attention_mask=attention_mask,
@@ -170,7 +170,7 @@ class Batch:
         tokens = torch.tensor(
             model.extract_tokens_from_logits(self.prefill_logits, self.seq_lens)
         ).unsqueeze(1)
-        print(f":: Prefill results:\n{tokens.tolist()}")
+        # print(f":: Prefill results:\n{tokens.tolist()}")
         self.add_result_token(tokens)
         self.next_tokens = tokens.to(device=model.device)
         return self.cache_state
@@ -193,7 +193,7 @@ class Batch:
         trace_tensor("decode.start_positions", start_positions)
         trace_tensor("decode.seq_block_ids", seq_block_ids_tensor)
         trace_tensor("decode.attention_mask", decode_attention_mask)
-        print("decode.token_ids", self.token_ids)
+        # print("decode.token_ids", self.token_ids)
 
         self.decode_logits = model.decode(
             self.token_ids,
@@ -203,7 +203,7 @@ class Batch:
             cache_state=self.cache_state,
         )
 
-        print("decode", len(self.decode_logits))
+        # print("decode", len(self.decode_logits))
         # trace_tensor("decode.logits", self.decode_logits)
         # # TODO: Normalize the output of extract_tokens_from_logits into
         # # tensor [bs, 1].
