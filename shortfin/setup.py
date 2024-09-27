@@ -346,6 +346,11 @@ setup(
         [CMakeExtension("_shortfin_default.lib")]
         + ([CMakeExtension("_shortfin_tracy.lib")] if ENABLE_TRACY else [])
     ),
+    entry_points={
+        "console_scripts": [
+            "shortfin-build=shortfin.build.__main__:main",
+        ],
+    },
     cmdclass={
         "build": CustomBuild,
         "build_ext": NoopBuildExtension,

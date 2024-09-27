@@ -11,10 +11,6 @@
 # macOS files
 .DS_Store
 
-# CMake artifacts
-build/
-build-*/
-
 # Python
 __pycache__
 _python_build/
