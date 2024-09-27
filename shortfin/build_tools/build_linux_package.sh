@@ -90,13 +90,14 @@ function run_in_docker() {
 
 function build_shortfin() {
   export SHORTFIN_ENABLE_TRACING=ON
-  python -m pip wheel --disable-pip-version-check -v -w "${OUTPUT_DIR}" "${REPO_ROOT}/libshortfin"
+  python -m pip wheel --disable-pip-version-check -v -w "${OUTPUT_DIR}" "${REPO_ROOT}/shortfin"
 }
 
 function run_audit_wheel() {
   local wheel_basename="$1"
   local python_version="$2"
-  generic_wheel="${OUTPUT_DIR}/${wheel_basename}-${python_version}-linux_$(uname -m).whl"
+  # Force wildcard expansion here
+  generic_wheel="$(echo "${OUTPUT_DIR}/${wheel_basename}-"*"-${python_version}-linux_${ARCH}.whl")"
   ls "${generic_wheel}"
   echo ":::: Auditwheel ${generic_wheel}"
   auditwheel repair -w "${OUTPUT_DIR}" "${generic_wheel}"
