@@ -11,7 +11,7 @@ from typing import Optional, Sequence, Union, List, Tuple
 import torch
 import numbers
 from torch import Tensor, dtype
-from ..types import AnyTensor, ShardedTensor, Theta, sharding
+from ..types import AnyTensor, ShardedTensor, Theta, sharding, InferenceTensor
 from numbers import Number
 
 from ._registry import *
@@ -24,23 +24,37 @@ __all__ = [
     "elementwise",
     "embedding_lookup",
     "equal",
+    "expand",
+    "flatten",
     "gemm",
     "group_norm_affine",
     "layer_norm",
+    "index_copy_",
+    "index_put_",
+    "index_select",
     "interpolate",
     "linear",
     "matmul",
+    "mean",
+    "module_register_buffer",
     "permute",
     "rms_norm",
     "replicate",
+    "reshape",
     "reshard",
     "reshard_split",
     "reshard_like",
     "scaled_dot_product_attention",
     "sharded_cat",
     "sharded_sum",
+    "softmax",
+    "to",
     "transfer_to_logical_device",
+    "transpose",
+    "unflatten",
     "unshard",
+    "unsqueeze",
+    "view",
 ]
 
 IntOrSequenceInt = Union[int, Sequence[int]]
@@ -152,16 +166,21 @@ def _conv2d_trampoline(
 
 
 @overridable
-def elementwise(operator, *args: AnyTensor) -> AnyTensor:
+def elementwise(operator, *args, **kwargs) -> AnyTensor:
     """Applies an elementwise operator against arguments."""
     raise NotImplementedError
 
 
 @elementwise.trampoline
-def _elementwise_trampoline(d: SignatureDispatcher, operator, *args: AnyTensor):
-    tensors = args
+def _elementwise_trampoline(d: SignatureDispatcher, operator, *args, **kwargs):
+    tensors = []
+    for a in args:
+        if isinstance(a, (Tensor, InferenceTensor)):
+            tensors.append(a)
+        else:
+            break
     for override in d.find_overrides(tensors):
-        result = override(operator, *args)
+        result = override(operator, *args, **kwargs)
         if result is not NotImplemented:
             return override, result
     else:
@@ -233,6 +252,44 @@ def _equal_trampoline(d: SignatureDispatcher, a: AnyTensor, b: AnyTensor):
 
 
 @overridable
+def expand(tensor: AnyTensor, shape: List[int]) -> AnyTensor:
+    """See torch.Tensor.expand"""
+    ...
+
+
+@expand.trampoline
+def _expand_trampoline(
+    d: SignatureDispatcher, tensor: AnyTensor, shape: List[int]
+) -> AnyTensor:
+    tensors = (tensor,)
+    for override in d.find_overrides(tensors):
+        result = override(tensor, shape)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(tensors)
+
+
+@overridable
+def flatten(input: AnyTensor, start_dim: int = 0, end_dim: int = -1) -> AnyTensor:
+    """See torch.flatten"""
+    ...
+
+
+@flatten.trampoline
+def _flatten_trampoline(
+    d: SignatureDispatcher, input: AnyTensor, start_dim: int = 0, end_dim: int = -1
+) -> AnyTensor:
+    dispatch_args = (input,)
+    for override in d.find_overrides(dispatch_args):
+        result = override(input, start_dim, end_dim)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(dispatch_args)
+
+
+@overridable
 def gemm(
     a: AnyTensor,
     b: AnyTensor,
@@ -292,6 +349,75 @@ def _group_norm_affine_trampoline(
     tensors = (input, weight, bias)
     for override in d.find_overrides(tensors):
         result = override(input, weight, bias, num_groups=num_groups, eps=eps)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(tensors)
+
+
+@overridable
+def index_copy_(
+    inout: AnyTensor, dim: int, index: AnyTensor, tensor: AnyTensor
+) -> AnyTensor:
+    """See torch.Tensor.index_copy_"""
+    ...
+
+
+@index_copy_.trampoline
+def _index_copy__trampoline(
+    d: SignatureDispatcher,
+    inout: AnyTensor,
+    dim: int,
+    index: AnyTensor,
+    tensor: AnyTensor,
+) -> AnyTensor:
+    tensors = (inout, index, tensor)
+    for override in d.find_overrides(tensors):
+        result = override(inout, dim, index, tensor)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(tensors)
+
+
+@overridable
+def index_put_(
+    inout: AnyTensor, indices: Tuple[AnyTensor], values: AnyTensor
+) -> AnyTensor:
+    """See torch.Tensor.index_put_"""
+    ...
+
+
+@index_put_.trampoline
+def _index_put__trampoline(
+    d: SignatureDispatcher,
+    inout: AnyTensor,
+    indices: Tuple[AnyTensor],
+    values: AnyTensor,
+) -> AnyTensor:
+    # We change the order for the variadic indices to be last.
+    tensors = (inout, values, *indices)
+    for override in d.find_overrides(tensors):
+        result = override(inout, indices, values)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(tensors)
+
+
+@overridable
+def index_select(tensor: AnyTensor, dim: int, index: AnyTensor) -> AnyTensor:
+    """See torch.Tensor.index_select"""
+    ...
+
+
+@index_select.trampoline
+def _index_select_trampoline(
+    d: SignatureDispatcher, tensor: AnyTensor, dim: int, index: AnyTensor
+) -> AnyTensor:
+    tensors = (tensor, index)
+    for override in d.find_overrides(tensors):
+        result = override(tensor, dim, index)
         if result is not NotImplemented:
             return override, result
     else:
@@ -436,7 +562,6 @@ def _matmul_trampoline(
     d: SignatureDispatcher, lhs, rhs, *, transpose_rhs: bool = False
 ):
     tensors = (lhs, rhs)
-    assert isinstance(rhs, numbers.Number) or len(rhs.shape) == 2
     for override in d.find_overrides(tensors):
         result = override(lhs, rhs, transpose_rhs=transpose_rhs)
         if result is not NotImplemented:
@@ -462,6 +587,57 @@ def _permute_trampoline(d: SignatureDispatcher, tensor: AnyTensor, dims: List[in
             return override, result
     else:
         d.fail(tensors)
+
+
+@overridable
+def mean(
+    x: AnyTensor,
+    dim: Union[int, List[int]],
+    keepdim: bool = False,
+    *,
+    dtype: torch.dtype = None,
+) -> AnyTensor:
+    """See torch.mean"""
+    raise NotImplementedError
+
+
+@mean.trampoline
+def _mean_trampoline(
+    d: SignatureDispatcher,
+    x: AnyTensor,
+    dim: Union[int, List[int]],
+    keepdim: bool = False,
+    *,
+    dtype: torch.dtype = None,
+) -> AnyTensor:
+    tensors = (x,)
+    for override in d.find_overrides(tensors):
+        result = override(x, dim, keepdim, dtype=dtype)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(tensors)
+
+
+@overridable
+def module_register_buffer(
+    module: torch.nn.Module, name: str, tensor: AnyTensor
+) -> None:
+    """Register the tensor into the module. See torch.nn.Module.register_buffer."""
+    ...
+
+
+@module_register_buffer.trampoline
+def _module_register_buffer_trampoline(
+    d: SignatureDispatcher, module: torch.nn.Module, name: str, tensor: AnyTensor
+) -> None:
+    args = (module, tensor)
+    for override in d.find_overrides(args):
+        result = override(module, name, tensor)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(args)
 
 
 @overridable
@@ -527,6 +703,26 @@ def _scaled_dot_product_attention(
             return override, result
     else:
         d.fail(tensors)
+
+
+@overridable
+def reshape(input: AnyTensor, shape: List[int]) -> AnyTensor:
+    """Returns a tensor with the same data and number of elements as input, but with
+    the specified shape.
+    See torch.reshape.
+    """
+    ...
+
+
+@reshape.trampoline
+def _reshape_trampoline(d: SignatureDispatcher, input, shape) -> AnyTensor:
+    dispatch_args = (input,)
+    for override in d.find_overrides(dispatch_args):
+        result = override(input, shape)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(dispatch_args)
 
 
 @overridable
@@ -637,13 +833,54 @@ def _sharded_sum_trampoline(d: SignatureDispatcher, maybe_sharded: AnyTensor):
 
 
 @overridable
+def softmax(
+    tensor: AnyTensor, dim: Optional[int] = None, dtype: Optional[torch.dtype] = None
+) -> AnyTensor:
+    """See torch.nn.functional.softmax"""
+    ...
+
+
+@softmax.trampoline
+def _softmax_trampoline(
+    d: SignatureDispatcher,
+    tensor: AnyTensor,
+    dim: Optional[int] = None,
+    dtype: Optional[torch.dtype] = None,
+) -> AnyTensor:
+    dispatch_args = [tensor]
+    for override in d.find_overrides(dispatch_args):
+        result = override(tensor, dim=dim, dtype=dtype)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(dispatch_args)
+
+
+@overridable
+def to(tensor: AnyTensor, *args, **kwargs) -> AnyTensor:
+    """See torch.Tensor.to"""
+    ...
+
+
+@to.trampoline
+def _to_trampoline(d: SignatureDispatcher, tensor: AnyTensor, *args, **kwargs):
+    dispatch_args = [tensor]
+    for override in d.find_overrides(dispatch_args):
+        result = override(tensor, *args, **kwargs)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(dispatch_args)
+
+
+@overridable
 def transfer_to_logical_device(tensor: AnyTensor, ordinal: int) -> AnyTensor:
     """Transfer the tensor to a device with ordinal `ordinal`."""
     ...
 
 
 @transfer_to_logical_device.trampoline
-def _transfer_to_logical_device(
+def _transfer_to_logical_device_trampoline(
     d: SignatureDispatcher, tensor: AnyTensor, ordinal: int
 ):
     tensors = (tensor,)
@@ -653,6 +890,44 @@ def _transfer_to_logical_device(
             return override, result
     else:
         d.fail(tensors)
+
+
+@overridable
+def transpose(tensor: AnyTensor, dim0: int, dim1: int) -> AnyTensor:
+    """See torch.transpose"""
+    ...
+
+
+@transpose.trampoline
+def _transpose_trampoline(
+    d: SignatureDispatcher, tensor: AnyTensor, dim0: int, dim1: int
+) -> AnyTensor:
+    tensors = (tensor,)
+    for override in d.find_overrides(tensors):
+        result = override(tensor, dim0, dim1)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(tensors)
+
+
+@overridable
+def unflatten(input: AnyTensor, dim: int, sizes: Tuple[int]) -> AnyTensor:
+    """See torch.unflatten"""
+    ...
+
+
+@unflatten.trampoline
+def _unflatten_trampoline(
+    d: SignatureDispatcher, input: AnyTensor, dim: int, sizes: Tuple[int]
+) -> AnyTensor:
+    dispatch_args = (input,)
+    for override in d.find_overrides(dispatch_args):
+        result = override(input, dim, sizes)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(dispatch_args)
 
 
 @overridable
@@ -666,6 +941,44 @@ def _unshard_trampoline(d: SignatureDispatcher, tensor: AnyTensor):
     tensors = (tensor,)
     for override in d.find_overrides(tensors):
         result = override(tensor)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(tensors)
+
+
+@overridable
+def unsqueeze(tensor: AnyTensor, dim: int) -> AnyTensor:
+    """See torch.unsqueeze"""
+    ...
+
+
+@unsqueeze.trampoline
+def _unsqueeze_trampoline(
+    d: SignatureDispatcher, tensor: AnyTensor, dim: int
+) -> AnyTensor:
+    tensors = (tensor,)
+    for override in d.find_overrides(tensors):
+        result = override(tensor, dim)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(tensors)
+
+
+@overridable
+def view(tensor: AnyTensor, shape: List[int]) -> AnyTensor:
+    """See torch.Tensor.view"""
+    ...
+
+
+@view.trampoline
+def _view_trampoline(
+    d: SignatureDispatcher, tensor: AnyTensor, shape: List[int]
+) -> AnyTensor:
+    tensors = (tensor,)
+    for override in d.find_overrides(tensors):
+        result = override(tensor, shape)
         if result is not NotImplemented:
             return override, result
     else:

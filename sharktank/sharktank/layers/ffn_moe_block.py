@@ -15,7 +15,68 @@ from ..types import Theta, DefaultPrimitiveTensor
 
 __all__ = [
     "FFNMOE",
+    "PreGatherFFNMOE",
 ]
+
+
+class PreGatherFFNMOE(ThetaLayer):
+    def __init__(
+        self,
+        theta: Theta,
+        use_grok: bool = False,
+    ):
+
+        super().__init__(theta)
+        self.use_grok = use_grok
+
+        self.ffn_gate = theta.tensor("ffn_gate_exps", "weight")
+        self.ffn_up = theta.tensor("ffn_up_exps", "weight")
+        self.ffn_down = theta.tensor("ffn_down_exps", "weight")
+
+    def pre_matmul_gather(self, inputs, weights, experts, einstring="mk,menk->men"):
+        inputs = inputs[:, :]
+        weights = weights[experts, :, :]
+        matmul = torch.einsum(einstring, inputs, weights.float())
+        return matmul
+
+    def bigger_mmg(self, inputs, weights, experts):
+        inputs = inputs[:, :]
+        weights = weights[experts, :, :]
+        matmul = torch.einsum("mek,menk->men", inputs, weights.float())
+        return matmul
+
+    def one_hot_matmul(self, inputs, weights, experts):
+        matmul = torch.einsum("mk,bnk->bmn", inputs, weights)
+        # Post mix the experts
+        oh = (
+            torch.nn.functional.one_hot(experts.reshape(-1), num_classes=8)
+            .transpose(0, 1)
+            .to(torch.float32)
+        )
+        output = torch.einsum("bm,bmn->mn", oh, matmul)
+        return output
+
+    def forward(
+        self,
+        h: torch.Tensor,
+        experts: torch.Tensor,
+        expert_gate: torch.Tensor,
+    ):
+        if self.use_grok:
+            ffn_gate = F.gelu(
+                self.pre_matmul_gather(h, self.ffn_gate.as_torch(), experts)
+            )
+        else:
+            ffn_gate = F.silu(
+                self.pre_matmul_gather(h, self.ffn_gate.as_torch(), experts)
+            )
+
+        ffn_up = self.pre_matmul_gather(h, self.ffn_up, experts)
+        ffn_down = self.pre_matmul_gather(
+            ffn_gate * ffn_up, self.ffn_down, experts, einstring="mek,menk->men"
+        )
+        ffn_down = torch.einsum("me,men->men", expert_gate, ffn_down)
+        return torch.sum(ffn_down, dim=1)
 
 
 class FFNMOE(ThetaLayer):

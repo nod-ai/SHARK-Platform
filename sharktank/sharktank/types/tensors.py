@@ -17,15 +17,15 @@ from typing import (
     Tuple,
 )
 from copy import deepcopy
-from collections.abc import Collection
-from numbers import Integral
+from collections.abc import Collection, Sequence
+from numbers import Integral, Number
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 import torch
 from torch import Tensor
-from torch.utils._pytree import register_pytree_node
+from torch.utils._pytree import register_pytree_node, SequenceKey
 from ..utils.math import ceildiv
 from shark_turbine.aot import (
     ExternalTensorTrait,
@@ -254,8 +254,15 @@ class InferenceTensor(ABC):
         return self._clone_with_globals(prev_globals)
 
     def to(
-        self, *, device: Optional[Union[str, torch.device]] = None
+        self,
+        *,
+        device: Optional[Union[str, torch.device]] = None,
     ) -> "InferenceTensor":
+        # TODO: reconcile with ops.to(...) and torch.Tensor.to(...).
+        # Do we always want to clone with globals?
+        # This makes our type inconsistent with torch tensors.
+        # If we use this to transform a theta we want to change the theta.
+        # If we want to use this in a computation we don't want to change the theta.
         return self.transform_globals(
             lambda d: {k: t.to(device=device) for k, t in d.items()}
         )
@@ -278,15 +285,113 @@ class InferenceTensor(ABC):
 
         return permute(self, dims=dims)
 
+    @property
+    def dtype(self) -> torch.dtype:
+        raise NotImplementedError()
+
+    def expand(self, *args: Union[List[List[int]], List[int]]) -> "AnyTensor":
+        from ..ops import expand
+
+        if all(isinstance(a, int) for a in args):
+            shape = args
+        else:
+            assert len(args) == 1
+            shape = args[0]
+        return expand(self, shape)
+
+    def flatten(self, start_dim: int = 0, end_dim: int = -1) -> "AnyTensor":
+        from ..ops import flatten
+
+        return flatten(self, start_dim, end_dim)
+
+    def index_copy_(
+        self, dim: int, index: "AnyTensor", tensor: "AnyTensor"
+    ) -> "InferenceTensor":
+        from ..ops import index_copy_
+
+        return index_copy_(self, dim, index, tensor)
+
+    def index_put_(
+        self, indices: Tuple["AnyTensor"], values: "AnyTensor"
+    ) -> "InferenceTensor":
+        from ..ops import index_put_
+
+        return index_put_(self, indices, values)
+
+    def index_select(
+        self,
+        dim: int,
+        index: "AnyTensor",
+    ) -> "InferenceTensor":
+        from ..ops import index_select
+
+        return index_select(self, dim, index)
+
+    def mean(
+        self,
+        dim: Union[int, List[int]],
+        keepdim: bool = False,
+        *,
+        dtype: torch.dtype = None,
+    ) -> "AnyTensor":
+        from ..ops import mean
+
+        return mean(self, dim, keepdim, dtype=None)
+
+    def pow(self, exponent: Union["AnyTensor", Number]) -> "AnyTensor":
+        from ..ops import elementwise
+
+        return elementwise(torch.pow, self, exponent)
+
+    def reshape(self, *args: Union[List[List[int]], List[int]]) -> "AnyTensor":
+        from ..ops import reshape
+
+        if all(isinstance(a, int) for a in args):
+            shape = args
+        else:
+            assert len(args) == 1
+            shape = args[0]
+        return reshape(self, shape)
+
+    def transpose(self, dim0: int, dim1: int) -> "AnyTensor":
+        from ..ops import transpose
+
+        return transpose(self, dim0, dim1)
+
+    def unflatten(self, dim: int, sizes: Tuple[int]) -> "AnyTensor":
+        from ..ops import unflatten
+
+        return unflatten(self, dim, sizes)
+
+    def unsqueeze(self, dim: int) -> "AnyTensor":
+        from ..ops import unsqueeze
+
+        return unsqueeze(self, dim)
+
+    def view(self, *args: Union[List[List[int]], List[int]]) -> "AnyTensor":
+        from ..ops import view
+
+        if all(isinstance(a, int) for a in args):
+            shape = args
+        else:
+            assert len(args) == 1
+            shape = args[0]
+        return view(self, shape)
+
     def __add__(self, rhs):
         from ..ops import elementwise
 
         return elementwise(torch.add, self, rhs)
 
     def __radd__(self, lhs):
-        # Assumes commutative addition due to torch.elementwise not handling numbers on
-        # the lhs.
+        # Assumes commutative addition due to torch elementwise ops not handling
+        # numbers on the lhs.
         return self.__add__(lhs)
+
+    def __mod__(self, rhs):
+        from ..ops import elementwise
+
+        return elementwise(torch.remainder, self, rhs)
 
     def __mul__(self, rhs):
         from ..ops import elementwise
@@ -294,9 +399,19 @@ class InferenceTensor(ABC):
         return elementwise(torch.mul, self, rhs)
 
     def __rmul__(self, lhs):
-        # Assumes commutative multiplication due to torch.elementwise not handling
+        # Assumes commutative multiplication due to torch elementwise ops not handling
         # numbers on the lhs.
         return self.__mul__(lhs)
+
+    def __truediv__(self, rhs):
+        from ..ops import elementwise
+
+        return elementwise(torch.true_divide, self, rhs)
+
+    def __floordiv__(self, rhs):
+        from ..ops import elementwise
+
+        return elementwise(torch.floor_divide, self, rhs)
 
 
 REGISTERED_INFERENCE_TENSOR_CLASSES: dict[str, Type[InferenceTensor]] = {}
@@ -336,6 +451,13 @@ class PrimitiveTensor(InferenceTensor):
         the logical arrangement of the data.
         """
         ...
+
+    @property
+    def dtype(self) -> torch.dtype:
+        return self.as_torch().dtype
+
+    def __setitem__(self, key, value: "AnyTensor"):
+        self.as_torch()[key] = unbox_tensor(value)
 
 
 @register_inference_tensor
@@ -390,6 +512,8 @@ class DefaultPrimitiveTensor(PrimitiveTensor):
         return DefaultPrimitiveTensor(name=self.name, data=new_globals[self.name])
 
     def __getitem__(self, key):
+        if isinstance(key, PrimitiveTensor):
+            key = unbox_tensor(key)
         return self._data[key]
 
     def __repr__(self):
@@ -602,6 +726,10 @@ class ShardedTensor(InferenceTensor):
         for i, shard in enumerate(self.shards):
             shard.name = f"{name}.shard.{i}"
 
+    @property
+    def dtype(self) -> torch.dtype:
+        return self.shards[0].dtype
+
 
 @register_inference_tensor
 class ShardedTensorBase(ShardedTensor):
@@ -622,7 +750,7 @@ class ShardedTensorBase(ShardedTensor):
         from ..ops import transfer_to_logical_device
 
         assert len(ts) > 0
-        assert shard_dim is None or len(ts[0].shape) > shard_dim
+        assert shard_dim is None or (shard_dim >= 0 and len(ts[0].shape) > shard_dim)
         super().__init__(name=name, shape=shape, shard_dim=shard_dim)
         self._shards: tuple[DefaultPrimitiveTensor] = tuple(
             DefaultPrimitiveTensor(
@@ -748,6 +876,32 @@ def _is_full_slice(s: slice, dim_size: int) -> bool:
     )
 
 
+def _resolve_ellipsis_in_slicing(key: Tuple[Any], shape: Tuple[int]) -> Tuple[Any]:
+    """Example:
+    key = [1:2, ..., 0]
+    shape = [2, 3, 4, 5, 6]
+    Returns:
+    [1:2, :, :, :, 0]"""
+    num_ellipsis = len([k for k in key if k == Ellipsis])
+    assert num_ellipsis <= 1, "Only one Ellipses is allowed."
+    if num_ellipsis <= 0:
+        return key
+    assert len(key) <= len(
+        shape
+    ), "Inserting trailing singleton dimensions is not supported."
+    dim = 0
+    res = []
+    for k in key:
+        if k == Ellipsis:
+            ellipsis_num_dims = len(shape) - len(key) + 1
+            res.extend([slice(None)] * ellipsis_num_dims)
+            dim += ellipsis_num_dims
+        else:
+            dim += 1
+            res.append(k)
+    return tuple(res)
+
+
 @register_inference_tensor
 class SplitPrimitiveTensor(ShardedTensorBase):
     """Sharded tensor split along a dimension into primitive tensors.
@@ -782,21 +936,23 @@ class SplitPrimitiveTensor(ShardedTensorBase):
         assert len(ts) > 0
         first_shape = ts[0].shape
         assert len(first_shape) > shard_dim
-        if shape is None:
-            # Compute the shape.
-            shape = list(first_shape)
-            shape[shard_dim] *= len(ts)
+        expected_shape = list(first_shape)
+        expected_shape[shard_dim] = sum([t.shape[shard_dim] for t in ts])
+        if shape is not None:
+            shape = list(shape)
+            assert expected_shape == shape
+        else:
+            shape = expected_shape
 
-        # Assert the shape.
-        shard_dim_size = first_shape[shard_dim]
-        for t in ts[1:]:
-            assert (
-                t.shape == first_shape
-            ), f"Shape mismatch for split tensors: {t.shape} vs {first_shape}"
-            shard_dim_size += t.shape[shard_dim]
-        assert (
-            shard_dim_size == shape[shard_dim]
-        ), f"Sharding mismatch: Sharded dims do not cover the whole volume {shard_dim_size} vs {shape[shard_dim]}"
+        # Assert the shapes.
+        for i, t in enumerate(ts):
+            t_shape = list(t.shape)
+            assert len(shape) == len(
+                t_shape
+            ), f"Shape size mismatch tensor shard {i} with shape {t.shape}. Expected shape size {len(shape)}. Got {len(t_shape)}."
+            assert all(
+                s == t for i, (s, t) in enumerate(zip(shape, t_shape)) if i != shard_dim
+            ), f"Shape mismatch for non-split dimension for tensor shard {i} with shape {t.shape}"
 
         super().__init__(name=name, ts=ts, shape=shape, shard_dim=shard_dim)
 
@@ -842,14 +998,36 @@ class SplitPrimitiveTensor(ShardedTensorBase):
 
     def __getitem__(self, key):
         # TODO: implement all cases.
-        # Only slicing of non-split dimension is supported.
+        if not isinstance(key, Sequence):
+            key = (key,)
+        key = _resolve_ellipsis_in_slicing(key, self.shape)
         if self._is_slicing_split_dim(key):
             raise NotImplementedError(
                 f"Slicing of the split dimension {self.shard_dim} is not supported."
             )
         new_key = self._get_shard_slice(key)
         shards = [shard[new_key] for shard in self.shards]
-        return SplitPrimitiveTensor(ts=shards, shard_dim=self.shard_dim)
+
+        shard_dim = self.shard_dim
+        for i in range(shard_dim):
+            if isinstance(key[i], Number) and key[i] >= 0:
+                # Rank reduction dimension before the split dim.
+                shard_dim -= 1
+
+        return SplitPrimitiveTensor(ts=shards, shard_dim=shard_dim)
+
+    def __setitem__(self, key, value):
+        assert isinstance(value, SplitPrimitiveTensor)
+        assert self.shard_count == value.shard_count
+        if not isinstance(key, Sequence):
+            key = (key,)
+        key = _resolve_ellipsis_in_slicing(key, self.shape)
+        if self._is_slicing_split_dim(key):
+            raise NotImplementedError(
+                f"Slicing of the split dimension {self.shard_dim} is not supported."
+            )
+        for shard, value_shard in zip(self.shards, value.shards):
+            shard[key] = unbox_tensor(value_shard)
 
 
 @register_inference_tensor
@@ -947,7 +1125,13 @@ class ReplicatedTensor(ShardedTensor):
         return cls(name=name, ts=ts, shard_count=shard_count)
 
     def __getitem__(self, key):
-        shards = [shard[key] for shard in self.shards]
+        if isinstance(key, ReplicatedTensor):
+            assert key.shard_count == self.shard_count
+            shards = [
+                shard[key_shard] for shard, key_shard in zip(self.shards, key.shards)
+            ]
+        else:
+            shards = [shard[key] for shard in self.shards]
         return ReplicatedTensor(ts=shards)
 
     def __repr__(self):
@@ -1102,10 +1286,16 @@ def unflatten_defult_primitive_tensor(
     return DefaultPrimitiveTensor(data=values_as_list[0], name=ctx["name"])
 
 
+def flatten_with_keys_default_primitive_tensor(t: DefaultPrimitiveTensor):
+    values, context = flatten_default_primitive_tensor(t)
+    return [(SequenceKey(i), v) for i, v in enumerate(values)], context
+
+
 register_pytree_node(
     DefaultPrimitiveTensor,
     flatten_fn=flatten_default_primitive_tensor,
     unflatten_fn=unflatten_defult_primitive_tensor,
+    flatten_with_keys_fn=flatten_with_keys_default_primitive_tensor,
 )
 
 
@@ -1123,10 +1313,16 @@ def unflatten_split_primitive_tensor(
     )
 
 
+def flatten_with_keys_split_primitive_tensor(t: SplitPrimitiveTensor):
+    values, context = flatten_split_primitive_tensor(t)
+    return [(SequenceKey(i), v) for i, v in enumerate(values)], context
+
+
 register_pytree_node(
     SplitPrimitiveTensor,
     flatten_fn=flatten_split_primitive_tensor,
     unflatten_fn=unflatten_split_primitive_tensor,
+    flatten_with_keys_fn=flatten_with_keys_split_primitive_tensor,
 )
 
 
@@ -1142,8 +1338,14 @@ def unflatten_replicated_tensor(
     return ReplicatedTensor(ts=list(values), name=ctx["name"])
 
 
+def flatten_with_keys_replicated_tensor(t: ReplicatedTensor):
+    values, context = flatten_replicated_tensor(t)
+    return [(SequenceKey(i), v) for i, v in enumerate(values)], context
+
+
 register_pytree_node(
     ReplicatedTensor,
     flatten_fn=flatten_replicated_tensor,
     unflatten_fn=unflatten_replicated_tensor,
+    flatten_with_keys_fn=flatten_with_keys_replicated_tensor,
 )
