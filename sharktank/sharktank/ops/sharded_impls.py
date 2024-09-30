@@ -10,7 +10,6 @@ from typing import List, Optional, Sequence, Union, Any, Tuple
 import itertools
 from numbers import Number
 import math
-import numpy as np
 
 from ..types import (
     AnyTensor,
@@ -363,6 +362,14 @@ def elementwise_binary_replicated_lhs_unsharded_rhs(
 ):
     y_replicated = reshard_like(y, like=x)
     return elementwise(operator, x, y_replicated, *args, **kwargs)
+
+
+@elementwise.override(Tensor, ReplicatedTensor)
+def elementwise_binary_replicated_lhs_unsharded_rhs(
+    operator, x: Tensor, y: ReplicatedTensor, *args, **kwargs
+):
+    x_replicated = reshard_like(x, like=y)
+    return elementwise(operator, x_replicated, y, *args, **kwargs)
 
 
 # Embedding Lookup
