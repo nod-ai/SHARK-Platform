@@ -412,7 +412,7 @@ class InferenceTensor(ABC):
         from ..ops import elementwise
 
         return elementwise(torch.floor_divide, self, rhs)
-    
+
     def __getitem__(self, key):
         from ..ops import get_index
 
