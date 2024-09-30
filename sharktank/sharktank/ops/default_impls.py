@@ -158,7 +158,7 @@ def flatten_default(
 
 
 @get_index.override(AllOfType(Tensor, PrimitiveTensor))
-def get_index_default(tensor, key: slice):
+def get_index_default(tensor, key):
     return unbox_tensor(tensor).__get_item__(key)
 
 

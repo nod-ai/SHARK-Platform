@@ -285,7 +285,6 @@ def _equal_trampoline(d: SignatureDispatcher, a: AnyTensor, b: AnyTensor):
 
 
 @overridable
-<<<<<<< HEAD
 def expand(tensor: AnyTensor, shape: List[int]) -> AnyTensor:
     """See torch.Tensor.expand"""
     ...
@@ -298,7 +297,13 @@ def _expand_trampoline(
     tensors = (tensor,)
     for override in d.find_overrides(tensors):
         result = override(tensor, shape)
-=======
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(tensors)
+
+
+@overridable
 def get_index(
     tensor: AnyTensor,
     key: slice,
@@ -318,7 +323,6 @@ def _get_index_trampoline(d: SignatureDispatcher, tensor: AnyTensor, key: slice)
     tensors = (tensor,)
     for override in d.find_overrides(tensors):
         result = override(tensor, key)
->>>>>>> 8de4a21 (Hook the einsum op and the get_index` op into their implementations)
         if result is not NotImplemented:
             return override, result
     else:
@@ -326,7 +330,6 @@ def _get_index_trampoline(d: SignatureDispatcher, tensor: AnyTensor, key: slice)
 
 
 @overridable
-<<<<<<< HEAD
 def flatten(input: AnyTensor, start_dim: int = 0, end_dim: int = -1) -> AnyTensor:
     """See torch.flatten"""
     ...
@@ -346,8 +349,6 @@ def _flatten_trampoline(
 
 
 @overridable
-=======
->>>>>>> 8de4a21 (Hook the einsum op and the get_index` op into their implementations)
 def gemm(
     a: AnyTensor,
     b: AnyTensor,
