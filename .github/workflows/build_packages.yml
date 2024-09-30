@@ -95,7 +95,7 @@ jobs:
         path: bindist
 
     - name: Release python wheels
-      uses: ncipollo/release-action@v1.14.0
+      uses: ncipollo/release-action@2c591bcc8ecdcd2db72b97d6147f871fcd833ba5 # v1.14.0
       with:
         artifacts: bindist/*.whl
         token: "${{ secrets.GITHUB_TOKEN }}"
