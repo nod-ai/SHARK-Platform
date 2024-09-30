@@ -132,7 +132,6 @@ class einsum_2args_q4_test(unittest.TestCase):
             ),
         )
         output = aot.export(ep)
-        output.print_readable()
         output.verify()
         asm = str(output.mlir_module)
         self.assertIn("@sharktank_einsum_2args_q4_mek_menk_men_32_f32", asm)
