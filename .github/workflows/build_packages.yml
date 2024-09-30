@@ -58,11 +58,14 @@ jobs:
             platform: linux-x86_64
             package: shortfin
             python-version: cp313-cp313
+          - runs-on: ubuntu-24.04
+            platform: linux-x86_64
+            package: shortfin
+            python-version: cp313-cp313t
 
           # TODO(#130): macOS platform
           # TODO(#130): Windows platform
           # TODO(#130): sharktank packages
-          # TODO(#130): free-threaded python
 
     steps:
     - name: Checkout repository
