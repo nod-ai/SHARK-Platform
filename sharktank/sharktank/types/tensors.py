@@ -25,7 +25,7 @@ from dataclasses import dataclass
 
 import torch
 from torch import Tensor
-from torch.utils._pytree import register_pytree_node
+from torch.utils._pytree import register_pytree_node, SequenceKey
 from ..utils.math import ceildiv
 from shark_turbine.aot import (
     ExternalTensorTrait,
@@ -1291,10 +1291,16 @@ def unflatten_defult_primitive_tensor(
     return DefaultPrimitiveTensor(data=values_as_list[0], name=ctx["name"])
 
 
+def flatten_with_keys_default_primitive_tensor(t: DefaultPrimitiveTensor):
+    values, context = flatten_default_primitive_tensor(t)
+    return [(SequenceKey(i), v) for i, v in enumerate(values)], context
+
+
 register_pytree_node(
     DefaultPrimitiveTensor,
     flatten_fn=flatten_default_primitive_tensor,
     unflatten_fn=unflatten_defult_primitive_tensor,
+    flatten_with_keys_fn=flatten_with_keys_default_primitive_tensor,
 )
 
 
@@ -1312,10 +1318,16 @@ def unflatten_split_primitive_tensor(
     )
 
 
+def flatten_with_keys_split_primitive_tensor(t: SplitPrimitiveTensor):
+    values, context = flatten_split_primitive_tensor(t)
+    return [(SequenceKey(i), v) for i, v in enumerate(values)], context
+
+
 register_pytree_node(
     SplitPrimitiveTensor,
     flatten_fn=flatten_split_primitive_tensor,
     unflatten_fn=unflatten_split_primitive_tensor,
+    flatten_with_keys_fn=flatten_with_keys_split_primitive_tensor,
 )
 
 
@@ -1331,8 +1343,14 @@ def unflatten_replicated_tensor(
     return ReplicatedTensor(ts=list(values), name=ctx["name"])
 
 
+def flatten_with_keys_replicated_tensor(t: ReplicatedTensor):
+    values, context = flatten_replicated_tensor(t)
+    return [(SequenceKey(i), v) for i, v in enumerate(values)], context
+
+
 register_pytree_node(
     ReplicatedTensor,
     flatten_fn=flatten_replicated_tensor,
     unflatten_fn=unflatten_replicated_tensor,
+    flatten_with_keys_fn=flatten_with_keys_replicated_tensor,
 )

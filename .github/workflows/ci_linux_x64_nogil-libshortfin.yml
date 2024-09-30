@@ -4,7 +4,7 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-name: CI - libshortfin - Python 3.13 Free-threaded
+name: CI - shortfin - Python 3.13 Free-threaded
 
 on:
   workflow_dispatch:
@@ -14,7 +14,7 @@ on:
       - main
     paths:
       - '.github/workflows/ci_linux_x64-libshortfin.yml'
-      - 'libshortfin/**'
+      - 'shortfin/**'
 
 permissions:
   contents: read
@@ -29,7 +29,7 @@ concurrency:
 
 env:
   IREE_REPO_DIR: ${{ github.workspace }}/iree
-  LIBSHORTFIN_DIR: ${{ github.workspace }}/libshortfin/
+  LIBSHORTFIN_DIR: ${{ github.workspace }}/shortfin/
 
 jobs:
   build-and-test:
@@ -56,8 +56,8 @@ jobs:
         ref: candidate-20240904.1006
 
     - name: Initalize IREE submodules
+      working-directory: ${{ env.IREE_REPO_DIR }}
       run : |
-        cd ${{ env.IREE_REPO_DIR }}
         git submodule update --init --depth 1 -- third_party/benchmark
         git submodule update --init --depth 1 -- third_party/cpuinfo/
         git submodule update --init --depth 1 -- third_party/flatcc
@@ -74,11 +74,13 @@ jobs:
         pip install -r ${{ env.LIBSHORTFIN_DIR }}/requirements-tests-nogil.txt
         pip freeze
 
-    - name: Build libshortfin (full)
+    - name: Build shortfin (full)
+      working-directory: ${{ env.LIBSHORTFIN_DIR }}
       run: |
-        mkdir ${{ env.LIBSHORTFIN_DIR }}/build
-        cd ${{ env.LIBSHORTFIN_DIR }}/build
+        mkdir build
         cmake -GNinja \
+          -S. \
+          -Bbuild \
           -DCMAKE_BUILD_TYPE=Debug \
           -DCMAKE_C_COMPILER=clang-18 \
           -DCMAKE_CXX_COMPILER=clang++-18 \
@@ -87,12 +89,12 @@ jobs:
           -DSHORTFIN_IREE_SOURCE_DIR=${{ env.IREE_REPO_DIR }} \
           -DSHORTFIN_BUILD_PYTHON_BINDINGS=ON \
           ..
-        cmake --build . --target all
-        pip install -v -e .
+        cmake --build build --target all
+        pip install -v -e build/
 
-    - name: Run libshortfin Python tests (full)
+    - name: Run shortfin Python tests (full)
+      working-directory: ${{ env.LIBSHORTFIN_DIR }}
       run: |
-        cd ${{ env.LIBSHORTFIN_DIR }}
         pytest -s --ignore=tests/examples/fastapi_test.py
       # TODO: Enable further tests and switch to
-      # pytest -s tests
+      # pytest -s
