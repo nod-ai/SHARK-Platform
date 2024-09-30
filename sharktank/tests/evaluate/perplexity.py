@@ -16,11 +16,9 @@ from datasets import load_dataset, load_from_disk
 from sharktank.layers import *
 from sharktank.types import *
 
-# TODO: Should be using a base class with the protocol supported.
-from sharktank.models.mixtral.mixtral import *
-
-# from sharktank.models.grok.grok import *
 from sharktank.models.llama.llama import *
+from sharktank.models.mixtral.mixtral import *
+from sharktank.models.grok.grok import *
 
 from sharktank.utils import cli
 from sharktank.utils.load_llm import *
@@ -58,12 +56,10 @@ class Perplexity:
         )
 
         if config.hp.expert_count:
-            # TODO Add grok after merging grok changes
-            # if config.hp.model_arch == "grok":
-            # pass
-            # model = PagedGrokModelV1(theta, config)
-            # else:
-            model = PagedMixtralModelV1(theta, config)
+            if config.hp.model_arch == "grok":
+                model = PagedGrokModelV1(theta, config)
+            else:
+                model = PagedMixtralModelV1(theta, config)
         else:
             model = PagedLlamaModelV1(theta, config)
 
