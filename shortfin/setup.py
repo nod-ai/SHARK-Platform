@@ -381,6 +381,27 @@ setup(
         [CMakeExtension("_shortfin_default.lib")]
         + ([CMakeExtension("_shortfin_tracy.lib")] if ENABLE_TRACY else [])
     ),
+    extras_require={
+        "testing": [
+            "pytest",
+            "requests",
+        ],
+        "apps": [
+            "dataclasses-json",
+            "tokenizers",
+        ],
+        "onnx": [
+            "onnx",
+        ],
+        "torch": [
+            # Note that this pulls in `torch>=2.3.0`, which then pulls in all of CUDA.
+            "iree-turbine",
+        ],
+        "server": [
+            "fastapi",
+            "uvicorn",
+        ],
+    },
     cmdclass={
         "build": CustomBuild,
         "build_ext": NoopBuildExtension,
