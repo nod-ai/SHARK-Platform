@@ -53,8 +53,8 @@ class Perplexity:
             block_seq_stride=16,
             kv_cache_type=args.kv_cache_type,
             device=device,
-            activation_dtype=torch.float16,
-            attention_dtype=torch.float16,
+            activation_dtype=torch.float32,
+            attention_dtype=torch.float32,
         )
 
         if config.hp.expert_count:
@@ -86,7 +86,7 @@ class Perplexity:
         max_prompt_length = max(seq_lens)
 
         self.token_ids = torch.tensor(token_ids, device=self.generator.model.device)
-        self.attention_mask = (self.token_ids != 0).int()
+        self.attention_mask = torch.tensor((self.token_ids != 0).int())
 
         is_first_token = True
         for i in tqdm(
@@ -119,7 +119,9 @@ class Perplexity:
                 is_first_token = False
                 self.cache_state = self.batch.prefill()
                 # print(self.batch.detokenize())
-                self.pad_logits = self.batch.prefill_logits[:, 1:2, :]
+                # torch.save(self.batch.prefill_logits, '/home/aramalin/sharktank/logits_perplexity_prefill.pt')
+
+                self.pad_logits = self.batch.prefill_logits[:, :, :]
                 self.out_logits = self.batch.prefill_logits[:, 0:1, :]
                 continue
 
@@ -130,10 +132,11 @@ class Perplexity:
             # print('decode_logits', self.batch.decode_logits.shape)
             self.out_logits = torch.cat((self.out_logits, self.batch.decode_logits), 1)
 
-        shape_diff = self.token_ids.shape[1] - self.out_logits.shape[1]
-        tensor_pad = torch.cat([self.pad_logits] * shape_diff, 1)
-        self.out_logits = torch.cat((self.out_logits, tensor_pad), 1)
-        # print('out_logits', self.out_logits.shape)
+        pad_logits_shape = self.out_logits.shape[1]
+        self.out_logits = torch.cat(
+            (self.out_logits, self.pad_logits[:, pad_logits_shape:, :]), 1
+        )
+        # print('out_logits', self.out_logits.shape, pad_logits_shape)
 
     def compute_perplexity(self):
 
@@ -141,14 +144,14 @@ class Perplexity:
 
         loss_fct = CrossEntropyLoss(reduction="none")
 
-        self.out_logits = self.out_logits.contiguous()
-        self.token_ids = self.token_ids.contiguous()
+        self.out_logits = self.out_logits[..., :-1, :].contiguous()
+        self.token_ids = self.token_ids[..., 1:].contiguous()
+        self.attention_mask = self.attention_mask[..., 1:].contiguous()
         assert self.token_ids.shape == self.out_logits.shape[0:2]
 
-        # print('shift3', self.out_logits.shape, self.out_logits.transpose(1, 2).shape)
+        # print('shift3', self.out_logits[0,0,20], self.out_logits.shape)
         # print('shift4', self.token_ids, self.token_ids.shape)
-        # print('shift6', self.out_logits[1,0,:100], self.out_logits[1,1,:100], self.out_logits[1,14,:100])
-        # print('shift7', self.attention_mask, self.attention_mask.shape, self.attention_mask.sum(1))
+        # print('shift7', self.attention_mask, self.attention_mask.shape)
 
         # perplexity = e ^ (sum(losses) / num_tokenized_tokens)
         crossentropy_loss = (
@@ -156,7 +159,6 @@ class Perplexity:
             * self.attention_mask
         ).sum(1)
         crossentropy_loss = torch.tensor(crossentropy_loss.tolist())
-        print("crossentropy_loss", crossentropy_loss)
         perplexity_batch = torch.exp(
             crossentropy_loss / self.attention_mask.sum(1)
         ).tolist()
