@@ -391,7 +391,8 @@ setup(
             "tokenizers",
         ],
         "onnx": [
-            "onnx",
+            "iree-runtime",
+            "iree-compiler[onnx]",
         ],
         "torch": [
             # Note that this pulls in `torch>=2.3.0`, which then pulls in all of CUDA.
