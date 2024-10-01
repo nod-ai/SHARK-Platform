@@ -51,8 +51,8 @@ class Perplexity:
             block_seq_stride=16,
             kv_cache_type=args.kv_cache_type,
             device=device,
-            activation_dtype=torch.float32,
-            attention_dtype=torch.float32,
+            activation_dtype=torch.float16,
+            attention_dtype=torch.float16,
         )
 
         if config.hp.expert_count:
@@ -90,7 +90,7 @@ class Perplexity:
         ):
             token_batch = self.token_ids[:, : i + 1]
             seq_lens_batch = torch.tensor([i] * self.bs)
-            # print('token_batch\n', self.generator.tokenizer.decode(token_batch))
+            # print('token_batch\n', token_batch, self.generator.tokenizer.decode(token_batch))
 
             token_batch, seq_lens_batch = self.generator.tokenizer.pad_tokens(
                 token_ids=token_batch.tolist(),
