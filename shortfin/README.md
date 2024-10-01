@@ -33,16 +33,22 @@ pip install -v -e .
 
 ## Package Python Release Builds
 
-```bash
-# Build shortfin.*.whl into the dist/ directory
-#   e.g. `shortfin-0.9-cp312-cp312-linux_x86_64.whl`
-python3 -m pip wheel -v -w dist .
+* To build wheels for Linux using a manylinux Docker container:
 
-# Install the built wheel.
-python3 -m pip install dist/*.whl
-```
+    ```bash
+    sudo ./build_tools/build_linux_package.sh
+    ```
 
-TODO: helper script to build under manylinux using Docker
+* To build a wheel for your host OS/arch manually:
+
+    ```bash
+    # Build shortfin.*.whl into the dist/ directory
+    #   e.g. `shortfin-0.9-cp312-cp312-linux_x86_64.whl`
+    python3 -m pip wheel -v -w dist .
+
+    # Install the built wheel.
+    python3 -m pip install dist/*.whl
+    ```
 
 ## Python Dev Builds
 
