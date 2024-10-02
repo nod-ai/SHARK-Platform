@@ -15,7 +15,7 @@ logger = logging.getLogger("eval")
 logger.setLevel(logging.INFO)
 
 
-class PerplexityTest(unittest.TestCase):
+class PerplexityTest:
     @pytest.mark.expensive
     @pytest.mark.integration
     def test(self):
@@ -49,4 +49,4 @@ class PerplexityTest(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    PerplexityTest().test()
