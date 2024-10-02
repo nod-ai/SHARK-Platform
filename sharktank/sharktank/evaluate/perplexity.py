@@ -4,8 +4,10 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
+import sys
 import logging
 import time
+from datetime import timedelta
 
 import json
 import numpy as np
@@ -13,8 +15,6 @@ from tqdm import tqdm
 
 import torch
 from torch.nn import CrossEntropyLoss
-
-from datasets import load_dataset, load_from_disk
 
 from sharktank.layers import *
 from sharktank.types import *
@@ -30,6 +30,8 @@ logging.basicConfig()
 logger = logging.getLogger("eval")
 logger.setLevel(logging.INFO)
 
+__all__ = ["Perplexity", "run_perplexity"]
+
 
 class Perplexity:
     """
@@ -44,28 +46,30 @@ class Perplexity:
         self,
         prompts: list,
         device,
+        kv_cache_type,
     ):
         self.prompts = prompts
         self.add_start_token = False
         self.batch_size = 16
         self.bs = len(prompts)
         self.device = device
+        self.kv_cache_type = kv_cache_type
 
     def timeit(func):
         def wrapper(*args, **kwargs):
             start = time.time()
             result = func(*args, **kwargs)
             end = time.time()
-            time_taken = end - start
-            time_str = "seconds"
-            if time_taken < 1:
-                time_taken = (end - start) * 1000
-                time_str = "ms"
+            seconds = end - start
+            time_taken = abs(timedelta(seconds=round(seconds)))
+
+            if seconds < 1:
+                time_taken = f" {seconds * 1000} ms"
 
             func_name = func.__name__
             if func_name == "get_perplexity":
                 func_name = "Total time"
-            logger.info(f" {func_name}: {time_taken} {time_str}")
+            logger.info(f" {func_name}: {time_taken}")
             return result
 
         return wrapper
@@ -78,7 +82,7 @@ class Perplexity:
         config = LlamaModelConfig(
             hp=configs.LlamaHParams.from_gguf_props(dataset.properties),
             block_seq_stride=16,
-            kv_cache_type=args.kv_cache_type,
+            kv_cache_type=self.kv_cache_type,
             device=self.device,
             activation_dtype=torch.float16,
             attention_dtype=torch.float16,
@@ -105,7 +109,7 @@ class Perplexity:
 
         logger.info(f" Prompts:")
         for idx, prompt in enumerate(self.prompts):
-            logger.info(f" {prompt.encode()}\n{token_ids[idx]}")
+            logger.info(f" Prompt {idx} - {prompt.encode()}\n{token_ids[idx]}")
 
         max_prompt_length = max(seq_lens)
 
@@ -199,8 +203,9 @@ def run_perplexity(
     dataset,
     tokenizer,
     device,
+    kv_cache_type,
 ):
-    perplexity = Perplexity(prompts=prompts, device=device)
+    perplexity = Perplexity(prompts=prompts, device=device, kv_cache_type=kv_cache_type)
 
     perplexity.load_model(dataset, tokenizer)
     ppl = perplexity.get_perplexity()
@@ -208,30 +213,37 @@ def run_perplexity(
     return ppl
 
 
-if __name__ == "__main__":
+def main(argv):
     parser = cli.create_parser()
     parser.add_argument("--kv-cache-type", default="paged", help="KV cache type")
     parser.add_argument("--device", help="Torch device (or default)")
 
     cli.add_input_dataset_options(parser)
     cli.add_tokenizer_options(parser)
-    args = cli.parse(parser)
+    args = cli.parse(parser, args=argv)
 
     device = torch.device(args.device) if args.device else None
-
+    kv_cache_type = args.kv_cache_type
     dataset = cli.get_input_dataset(args)
     tokenizer = cli.get_tokenizer(args)
 
-    input_texts = [
-        'Robert Boulter is an English film, television and theatre actor. He had a guest-starring role on the television series "The Bill" in 2000.',
-        "Du Fu was a prominent Chinese poet of the Tang dynasty. Along with Li Bai (Li Po), he is frequently called the greatest of the Chinese poets.",
-        "The Ise-class battleships were a pair of dreadnought battleships built for the Imperial Japanese Navy (IJN) during World War I. Originally intended to be repeats of the preceding Fusō class, they were redesigned before construction began. Both ships carried supplies for the survivors of the Great Kantō earthquake in 1923. They were modernized in 1934-37 with improvements to their armour and machinery and a rebuilt superstructure in the pagoda mast style. Afterwards they played a minor role in the Second Sino-Japanese War.",
-        'Richard Gale "Dick" Rifenburg (August 21, 1926-December 5, 1994) was an American football player and a pioneering television broadcaster for the forerunner to WIVB-TV in Buffalo. He played college football for the University of Michigan Wolverines in 1944 and from 1946 to 1948. He was a consensus selection at end on the 1948 College Football All-America Team. Rifenburg played professionally in the National Football League (NFL) with the Detroit Lions for one season in 1950. After retiring from football he settled in Buffalo and became a sports broadcaster.',
-        "An oxaziridine is an organic molecule that features a three-membered heterocycle containing oxygen, nitrogen, and carbon. In their largest application, oxazidines are intermediates in the industrial production of hydrazine. Oxaziridine derivatives are also used as specialized reagents in organic chemistry for a variety of oxidations, including alpha hydroxylation of enolates, epoxidation and aziridination of olefins, and other heteroatom transfer reactions.",
-    ]
+    prompt_path = (
+        "/home/aramalin/sharktank/sharktank/sharktank/evaluate/data/eval_prompts.txt"
+    )
+    with open(prompt_path, "r") as f:
+        input_texts = f.read().splitlines()
 
     ppl = run_perplexity(
-        prompts=input_texts[:3], dataset=dataset, tokenizer=tokenizer, device=device
+        prompts=input_texts,
+        dataset=dataset,
+        tokenizer=tokenizer,
+        device=device,
+        kv_cache_type=kv_cache_type,
     )
 
     logger.info(f"\n{json.dumps(ppl, indent=2)}")
+    return ppl
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
