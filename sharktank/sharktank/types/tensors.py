@@ -343,6 +343,11 @@ class InferenceTensor(ABC):
 
         return elementwise(torch.pow, self, exponent)
 
+    def repeat(self, *sizes: List[int]) -> "AnyTensor":
+        from ..ops import repeat
+
+        return repeat(self, *sizes)
+
     def reshape(self, *args: Union[List[List[int]], List[int]]) -> "AnyTensor":
         from ..ops import reshape
 

@@ -368,12 +368,12 @@ class PagedKVCache(BaseKVCache):
 
         cache_partitions_list = cache_partitions
         # [bs, partitions, atten_head_count, attn_head_dim]
-        cache_partitions = torch.concat(cache_partitions, dim=1)
+        cache_partitions = ops.cat(cache_partitions, dim=1)
 
         # [bs, 1]
         page_index = seq_positions // self.block_seq_stride
 
-        page_id = torch.gather(page_ids, dim=1, index=page_index.unsqueeze(1))
+        page_id = ops.gather(page_ids, dim=1, index=page_index.unsqueeze(1))
         page_offset = (seq_positions % self.block_seq_stride).unsqueeze(1)
 
         # [1, partitions]
@@ -442,7 +442,7 @@ class PagedKVCache(BaseKVCache):
             ).flatten(0, 1)
             subblock_ids_kv.append(subblock_ids)
 
-        subblock_ids = torch.concat(subblock_ids_kv)
-        part_block_view = torch.concat(part_block_views, dim=0)
+        subblock_ids = ops.cat(subblock_ids_kv)
+        part_block_view = ops.cat(part_block_views)
 
         subblock_table.index_copy_(0, subblock_ids, part_block_view)
