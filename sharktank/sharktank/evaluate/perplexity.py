@@ -227,9 +227,7 @@ def main(argv):
     dataset = cli.get_input_dataset(args)
     tokenizer = cli.get_tokenizer(args)
 
-    prompt_path = (
-        "/home/aramalin/sharktank/sharktank/sharktank/evaluate/data/eval_prompts.txt"
-    )
+    prompt_path = "SHARK-Platform/sharktank/sharktank/evaluate/data/eval_prompts.txt"
     with open(prompt_path, "r") as f:
         input_texts = f.read().splitlines()
 
