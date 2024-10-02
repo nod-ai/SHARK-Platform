@@ -9,6 +9,7 @@ from torch import Tensor, dtype
 import torch.nn.functional as F
 
 from ..kernels import (
+    einsum_2args_q4,
     mmt_block_scaled_offset_q4_unsigned,
     mmt_block_scaled_q8,
     mmtfp,
@@ -42,6 +43,18 @@ from .signatures import *
 #         # Only 2d or 3d batch matmuls currently supported.
 #         return NotImplemented
 #     return mmtfp(lhs, rhs)
+
+
+# Einsum
+
+
+@einsum_2args.override(Tensor, QuantizedTensor)
+def einsum_2args_QuantizedTensor(input0, input1, einsum_str):
+    unpacked = input1.unpack()
+    layout = input1.layout_type
+    if not isinstance(unpacked, BlockScaledI4Layout):
+        return NotImplemented
+    return einsum_2args_q4(input0, unpacked.d, unpacked._qs, unpacked.m, einsum_str)
 
 
 # Quantized Matmul

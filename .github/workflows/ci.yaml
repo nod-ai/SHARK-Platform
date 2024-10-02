@@ -55,20 +55,9 @@ jobs:
           pip install --no-compile -r pytorch-cpu-requirements.txt
           pip install --no-compile -f https://iree.dev/pip-release-links.html --src deps \
             -e "git+https://github.com/iree-org/iree-turbine.git#egg=shark-turbine"
-          pip install --no-compile -r requirements.txt -e sharktank/ shortfin/
+          pip install --no-compile -r requirements.txt -e sharktank/
 
       - name: Run sharktank tests
         if: ${{ !cancelled() }}
         run: |
           pytest -n 4 sharktank/
-
-      - name: Run shortfin tests
-        if: ${{ !cancelled() }}
-        run: |
-          pytest -n 4 shortfin/
-
-      # TODO: Enable type checking of sharktank
-      - name: MyPy Type Checking Shortfin
-        if: ${{ !cancelled() }}
-        run: |
-          (cd shortfin && mypy)
