@@ -413,6 +413,11 @@ class InferenceTensor(ABC):
 
         return elementwise(torch.floor_divide, self, rhs)
 
+    def __getitem__(self, key):
+        from ..ops import get_index
+
+        return get_index(self, key)
+
 
 REGISTERED_INFERENCE_TENSOR_CLASSES: dict[str, Type[InferenceTensor]] = {}
 
@@ -1236,6 +1241,7 @@ _NAME_TO_DTYPE: dict[str, torch.dtype] = {
     "int32": torch.int32,
     "int64": torch.int64,
     "bool": torch.bool,
+    "float8_e4m3fnuz": torch.float8_e4m3fnuz,
 }
 
 

@@ -140,7 +140,7 @@ class SHORTFIN_API Message {
 };
 
 // Future specialization for Message::Ref.
-extern template class TypedFuture<Message::Ref>;
+template class TypedFuture<Message::Ref>;
 using MessageFuture = TypedFuture<Message::Ref>;
 
 // -------------------------------------------------------------------------- //
