@@ -120,31 +120,31 @@ class MfmaIntrinsic:
     def __str__(self) -> str:
         input = str(self.input_type).upper()
         output = str(self.output_type).upper()
-        return f"MFMA_{input}_{self.m}x{self.n}x{self.k}_{output}"
+        return f"MFMA_{output}_{self.m}x{self.n}x{self.k}_{input}"
 
     @staticmethod
-    def mfma_f16_16x16x16_f32():
+    def mfma_f32_16x16x16_f16():
         return MfmaIntrinsic(ElementType.f16, 16, 16, 16, ElementType.f32)
 
     @staticmethod
-    def mfma_f16_32x32x8_f32():
+    def mfma_f32_32x32x8_f16():
         return MfmaIntrinsic(ElementType.f16, 32, 32, 8, ElementType.f32)
 
     @staticmethod
-    def mfma_i8_16x16x32_i32():
+    def mfma_i32_16x16x32_i8():
         return MfmaIntrinsic(ElementType.i8, 16, 16, 32, ElementType.i32)
 
     @staticmethod
-    def mfma_i8_32x32x16_i32():
+    def mfma_i32_32x32x16_i8():
         return MfmaIntrinsic(ElementType.i8, 32, 32, 16, ElementType.i32)
 
     @staticmethod
     def all():
         return [
-            MfmaIntrinsic.mfma_f16_16x16x16_f32(),
-            MfmaIntrinsic.mfma_f16_32x32x8_f32(),
-            MfmaIntrinsic.mfma_i8_16x16x32_i32(),
-            MfmaIntrinsic.mfma_i8_32x32x16_i32(),
+            MfmaIntrinsic.mfma_f32_16x16x16_f16(),
+            MfmaIntrinsic.mfma_f32_32x32x8_f16(),
+            MfmaIntrinsic.mfma_i32_16x16x32_i8(),
+            MfmaIntrinsic.mfma_i32_32x32x16_i8(),
         ]
 
 
