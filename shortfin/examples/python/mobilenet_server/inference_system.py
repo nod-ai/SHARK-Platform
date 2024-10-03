@@ -42,10 +42,7 @@ class InferenceProcess(sf.Process):
             # the array.
             # TODO: Easier to use API for writing into the storage
             with self.host_staging.storage.map(write=True, discard=True) as m:
-                request_bytes = request.raw_image_data.tobytes()
-                mv = memoryview(m)
-                for i in range(0, len(request_bytes)):
-                    mv[i] = request_bytes[i]
+                m.fill(request.raw_image_data)
             print("host_staging =", self.host_staging)
             self.device_input.copy_from(self.host_staging)
 
