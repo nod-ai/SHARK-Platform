@@ -151,7 +151,7 @@ class ShardedPagedKVCacheTest(unittest.TestCase):
         cache_partitions = [
             torch.rand(
                 self.batch_size,
-                self.block_seq_len * self.block_seq_stride,
+                1,
                 self.attn_head_count,
                 self.attn_head_dim,
             )
