@@ -442,6 +442,6 @@ class PagedKVCache(BaseKVCache):
             subblock_ids_kv.append(subblock_ids)
 
         subblock_ids = ops.cat(subblock_ids_kv)
-        part_block_view = ops.cat(part_block_views)
+        part_block_view = ops.cat(part_block_views, dim=0)
 
         subblock_table.index_copy_(0, subblock_ids, part_block_view)
