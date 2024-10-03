@@ -16,7 +16,7 @@ from sharktank.types import *
 
 
 def _t(name: str, *dims: int):
-    return DefaultPrimitiveTensor(name=name, data=torch.empty(*dims))
+    return DefaultPrimitiveTensor(name=name, data=torch.ones(*dims))
 
 
 def _flat_t_dict(*ts):
@@ -76,6 +76,22 @@ class ThetaTest(unittest.TestCase):
             pt2 = it2.globals[k]
             self.assertIsNot(pt1, pt2)
             torch.testing.assert_close(pt1, pt2)
+
+    def testPop(self):
+        t1 = Theta(
+            _flat_t_dict(
+                _t("a.b.c", 1, 2),
+                _t("a.c.d", 10, 11),
+                _t("a.b.3", 3, 4),
+            )
+        )
+        popped = t1.pop("a.b").flatten()
+        t1 = t1.flatten()
+
+        self.assertIsNotNone("a.c.d", t1.keys())
+        self.assertNotIn("a.b.c", t1.keys())
+        self.assertNotIn("a.b.3", t1.keys())
+        self.assertIn("a.b.3", popped.keys())
 
 
 class DatasetTest(unittest.TestCase):

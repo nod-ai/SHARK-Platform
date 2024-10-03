@@ -1,0 +1,10 @@
+leak:PyUnicode_New
+leak:_PyUnicodeWriter_PrepareInternal
+leak:_PyUnicodeWriter_Finish
+leak:numpy
+leak:_mlir_libs
+leak:google/_upb
+leak:import_find_and_load
+leak:pyo3::pyclass::create_type_object
+leak:ufunc
+leak:pydantic_core

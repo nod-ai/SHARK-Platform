@@ -4,7 +4,7 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-"""Specifications describing how block/layers of punet are sharded."""
+"""Specifications describing how blocks/layers of punet are sharded."""
 
 from ...types.sharding import *
 
@@ -31,7 +31,7 @@ class ResnetBlock2DSplitOutputChannelsSharding(ThetaLayerSharding):
                 "conv2": Conv2DSplitOutputChannelSharding(
                     shard_count=self.shard_count
                 ).theta_sharding(),
-                "time_emb_proj": LinearReplicatedInputSplitWeightAndBiasSharding(
+                "time_emb_proj": LinearSplitParallelWeightAndBiasSharding(
                     shard_count=self.shard_count
                 ).theta_sharding(),
                 "conv_shortcut": Conv2DSplitOutputChannelSharding(

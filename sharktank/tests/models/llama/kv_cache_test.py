@@ -28,6 +28,7 @@ class KVCacheTest(unittest.TestCase):
         self.block_seq_stride = 16
         self.rms_epsilon = 1e-5
         self.rope_dimension_count = 128
+        self.rope_freq_base = 10000.0
         self.max_seq_len = 4096
         self.start_positions = torch.tensor([8])
         self.bs = 1
@@ -58,6 +59,7 @@ class KVCacheTest(unittest.TestCase):
         )
         self.attention_embedding = RotaryEmbeddingLayer(
             rope_dimension_count=self.rope_dimension_count,
+            rope_freq_base=self.rope_freq_base,
             max_seqlen=self.max_seq_len,
             device=self.device,
             use_hf=False,
@@ -72,7 +74,6 @@ class KVCacheTest(unittest.TestCase):
                     head_dim=self.head_dim,
                     head_count_kv=self.head_count_kv,
                     rms_epsilon=self.rms_epsilon,
-                    use_hf=False,
                 )
                 for n in range(self.block_count)
             ]
@@ -87,7 +88,6 @@ class KVCacheTest(unittest.TestCase):
                     head_dim=self.head_dim,
                     head_count_kv=self.head_count_kv,
                     rms_epsilon=self.rms_epsilon,
-                    use_hf=False,
                 )
                 for n in range(self.block_count)
             ]
