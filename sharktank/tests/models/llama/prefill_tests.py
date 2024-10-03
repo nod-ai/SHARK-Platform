@@ -31,14 +31,24 @@ class BaseLlamaTest(unittest.TestCase):
         model = PagedLlamaModelV1(self.dataset.root_theta, config)
         generator = TorchGenerator(model, self.tokenizer_config)
         batch = generator.begin_batch(self.prompts)
+        attention_mask = model.attention_mask(
+            model.input_mask(batch.seq_lens, batch.token_ids.shape[1])
+        )
+        seq_block_ids_tensor = batch.pad_block_ids()
+        logits = batch.compute_prefill_logits(
+            model,
+            batch.token_ids,
+            attention_mask=attention_mask,
+            seq_block_ids=seq_block_ids_tensor,
+            cache_state=batch.cache_state,
+        )
         batch.prefill()
 
-        bs, *_ = batch.logits.shape
+        bs, *_ = logits.shape
         assert len(batch.seq_lens) == bs
         greedy_token_logit = 0.0
-        for b, seq_len in enumerate(batch.seq_lens):
-            step_logits = batch.logits[b, seq_len - 1]
-            greedy_token_logit = step_logits[torch.argmax(step_logits)]
+        step_logits = logits[0, batch.seq_lens[0] - 1]
+        greedy_token_logit = step_logits[torch.argmax(step_logits)]
 
         return batch.results, greedy_token_logit
 
@@ -82,8 +92,9 @@ class Llama7BTest(BaseLlamaTest):
             tokenizer_type="transformers",
         )
         self.prompts = default_arguments["prompt"]
+        # token and logit determined by running llama.cpp (llama_cpp_instructions.md).
         self.llama_cpp_7b_prefill_token = [[304]]
-        self.llama_cpp_7b_prefill_token_logit = torch.tensor(19.356068)
+        self.llama_cpp_7b_prefill_token_logit = torch.tensor(19.356606)
 
     def testPrefillPaged7B(self):
         batch_results_paged, greedy_token_logit_paged = self.runPrefill(
@@ -133,8 +144,9 @@ class Llama8BTest(BaseLlamaTest):
             tokenizer_type="transformers",
         )
         self.prompts = default_arguments["prompt"]
+        # token and logit determined by running llama.cpp (llama_cpp_instructions.md).
         self.llama_cpp_8b_prefill_token = [[311]]
-        self.llama_cpp_8b_prefill_token_logit = torch.tensor(15.613972)
+        self.llama_cpp_8b_prefill_token_logit = torch.tensor(15.612568)
 
     def testPrefillPaged8B(self):
         batch_results_paged, greedy_token_logit_paged = self.runPrefill(
