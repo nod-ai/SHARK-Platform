@@ -21,6 +21,8 @@ from sharktank.types import *
 from sharktank.models.llama.testing import *
 from sharktank.layers import causal_llm
 
+from sharktank.utils.create_cache import *
+
 # TODO: Should be using a base class with the protocol supported.
 from ..models.llama.llama import LlamaModelConfig, PagedLlamaAttentionBlock
 
@@ -206,6 +208,7 @@ def main():
         attention_head_count=32,
         attention_layer_norm_rms_epsilon=9.999999747378752e-06,
         attention_head_count_kv=32,
+        model_arch="llama",
     )
 
     llama_config = LlamaModelConfig(hp)
@@ -227,12 +230,11 @@ def main():
     model = PagedLlamaAttentionBlock(
         theta=attention_block_theta,
         block_index=0,
-        cache=llama_config.create_kv_cache(),
+        cache=create_kv_cache(llama_config),
         head_count=llama_config.hp.attention_head_count,
         head_dim=llama_config.hp.attn_head_dim,
         head_count_kv=llama_config.hp.attention_head_count_kv,
         rms_epsilon=llama_config.hp.attention_layer_norm_rms_epsilon,
-        use_hf=False,
     )
 
     def generate_params_json(hp, prefill_bs: list[int], decode_bs: list[int]):
