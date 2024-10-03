@@ -26,6 +26,7 @@ from dataclasses import dataclass
 import torch
 from torch import Tensor
 from torch.utils._pytree import register_pytree_node, SequenceKey
+import torch.utils._pytree
 from ..utils.math import ceildiv
 from iree.turbine.aot import (
     ExternalTensorTrait,
@@ -48,6 +49,7 @@ __all__ = [
     "ReplicatedTensor",
     "ShardedTensor",
     "SplitPrimitiveTensor",
+    "torch_tree_flatten",
     "unbox_tensor",
     "UnreducedTensor",
 ]
@@ -1360,3 +1362,9 @@ register_pytree_node(
     unflatten_fn=unflatten_replicated_tensor,
     flatten_with_keys_fn=flatten_with_keys_replicated_tensor,
 )
+
+
+def torch_tree_flatten(tree: tree_utils.Tree):
+    """Flatten a tree of tensors the same way they will be flattened during torch.export.export
+    if they are arguments or results of a function signature."""
+    return torch.utils._pytree.tree_flatten(tree=tree)
