@@ -12,10 +12,11 @@ from collections import OrderedDict
 from sharktank.models.llama.llama import LlamaModelConfig, PagedLlamaModelV1
 import sharktank.ops as ops
 from sharktank.types import (
-    Dataset,
-    InferenceTensor,
-    ShardedTensor,
     unbox_tensor,
+    ShardedTensor,
+    InferenceTensor,
+    DefaultPrimitiveTensor,
+    Dataset,
     AnyTensor,
 )
 from sharktank.models.llama.testing import make_random_llama_theta
@@ -31,8 +32,8 @@ import iree.runtime
 from pathlib import Path
 
 
-def get_iree_devices(device_count: int) -> List[iree.runtime.HalDevice]:
-    hal_driver = iree.runtime.get_driver("local-task")
+def get_iree_devices(driver: str, device_count: int) -> List[iree.runtime.HalDevice]:
+    hal_driver = iree.runtime.get_driver(driver)
     available_devices = hal_driver.query_available_devices()
     # Use the same actual device for all devices.
     return [hal_driver.create_device(available_devices[0]) for _ in range(device_count)]
@@ -71,13 +72,14 @@ def run_iree_module_function(
     vm_context: iree.runtime.VmContext,
     function_name: str,
     args: List[iree.runtime.DeviceArray],
+    driver: str,
 ) -> List[iree.runtime.DeviceArray]:
     vm_function = module.lookup_function(function_name)
     invoker = iree.runtime.FunctionInvoker(
         vm_context=vm_context,
         # TODO: rework iree.runtime.FunctionInvoker interface for multiple devices.
         # This works, but does not look right.
-        device=iree.runtime.get_device("local-task", cache=False),
+        device=iree.runtime.get_device(driver, cache=False),
         vm_function=vm_function,
     )
     res = invoker(*args)
@@ -99,7 +101,7 @@ def prepare_iree_module_function_args(
                     for shard, device in zip(arg.shards, devices)
                 ]
             )
-        elif isinstance(arg, (InferenceTensor, torch.Tensor)):
+        elif isinstance(arg, (DefaultPrimitiveTensor, torch.Tensor)):
             res.append(
                 iree.runtime.asdevicearray(
                     devices[0], unbox_tensor(arg).to("cpu").numpy()
@@ -314,6 +316,7 @@ class ShardedLlamaTest(unittest.TestCase):
             sharded_parameters_path = f"{temp_dir}/parameters.irpa"
             sharded_dataset.save(sharded_parameters_path)
             sharded_dataset = Dataset.load(sharded_parameters_path, mmap=False)
+            iree_driver = "local-task"
 
             model = PagedLlamaModelV1(self.theta, self.config)
             sharded_model = PagedLlamaModelV1(
@@ -363,7 +366,10 @@ class ShardedLlamaTest(unittest.TestCase):
                 target_backends=None,
             )
 
-            iree_devices = get_iree_devices(self.sharded_config.tensor_parallelism_size)
+            iree_devices = get_iree_devices(
+                driver=iree_driver,
+                device_count=self.sharded_config.tensor_parallelism_size,
+            )
             iree_module, vm_context, vm_instance = load_iree_module(
                 module_path=iree_module_path,
                 devices=iree_devices,
@@ -379,14 +385,16 @@ class ShardedLlamaTest(unittest.TestCase):
                 function_name="prefill",
                 module=iree_module,
                 vm_context=vm_context,
+                driver=iree_driver,
             )
             prefill_iree_result = iree_to_torch(*prefill_iree_result)
             assert len(prefill_iree_result) == 1
             expected_prefill_result = sharded_model.prefill(**sharded_prefill_args)
             # TODO: Although, not entirely wrong, investigate why this accuracy is that
-            # low for fp32.
+            # low for fp32 (atol=0.0011, rtol=0.013).
             torch.testing.assert_close(
-                prefill_iree_result[0], expected_prefill_result, atol=0.0011, rtol=0.013
+                prefill_iree_result[0],
+                expected_prefill_result,
             )
             prefill_iree_cache_state_shards = prefill_iree_args[
                 -self.config.tensor_parallelism_size - 1 :
