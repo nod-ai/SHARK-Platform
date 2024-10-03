@@ -25,8 +25,11 @@ wheelhouse
 *.whl
 *.venv
 
-#Model artifacts
+# Model artifacts
 *.pt
 *.safetensors
 *.gguf
 *.vmfb
+
+# Tuner artifacts
+tuning_*/

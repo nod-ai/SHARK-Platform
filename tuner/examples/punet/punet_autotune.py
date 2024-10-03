@@ -12,7 +12,7 @@ python -m tuner.examples.punet benchmark.mlir --lhs-dims=bmk --rhs-dims=bkn --ti
 
 Recommended Trial Run:
 
-python -m tuner.examples.punet benchmark.mlir --num-candidates=1
+python -m tuner.examples.punet benchmark.mlir --num-candidates=10
 
 
 Dry Run Test (no gpu requried):
@@ -118,9 +118,15 @@ class PunetClient(libtuner.TuningClient):
 
 def main():
     args = libtuner.parse_arguments()
+    input_dir = Path(args.input_file).resolve().parent
+
     path_config = libtuner.PathConfig()
+    # We expect the configs to be in the same dir as the input.
+    path_config.global_config_prolog_mlir = input_dir / path_config.global_config_prolog_mlir
+    path_config.global_config_epilog_mlir = input_dir / path_config.global_config_epilog_mlir
     path_config.base_dir.mkdir(parents=True, exist_ok=True)
     path_config.output_unilog.touch()
+
     candidate_trackers: list[libtuner.CandidateTracker] = []
     punet_client = PunetClient()
     stop_after_phase: str = args.stop_after

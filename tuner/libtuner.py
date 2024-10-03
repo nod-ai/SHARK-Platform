@@ -78,12 +78,12 @@ class CandidateTracker:
     calibrated_benchmark_diff: Optional[float] = None
 
 
-@dataclass(frozen=True)
+@dataclass
 class PathConfig:
     # Preset constants
-    global_config_prolog_mlir: Path = Path("./config_prolog.mlir")
-    global_config_epilog_mlir: Path = Path("./config_epilog.mlir")
-    model_baseline_vmfb: Path = Path("./baseline.vmfb")
+    global_config_prolog_mlir: Path = Path("config_prolog.mlir")
+    global_config_epilog_mlir: Path = Path("config_epilog.mlir")
+    model_baseline_vmfb: Path = Path("baseline.vmfb")
 
     # Dynamic paths
     base_dir: Path = field(init=False)
