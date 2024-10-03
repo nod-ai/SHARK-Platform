@@ -4,16 +4,17 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-from distutils.core import setup, Extension
-import sys
+import json
+import os
 import shutil
 import subprocess
-import os
-from pathlib import Path
+import sys
 from distutils.command.build import build as _build
+from distutils.core import setup, Extension
+from pathlib import Path
 from setuptools import find_namespace_packages
-from setuptools.command.build_ext import build_ext as _build_ext
 from setuptools.command.build_py import build_py as _build_py
+from setuptools.command.build_ext import build_ext as _build_ext
 
 
 def get_env_boolean(name: str, default_value: bool = False) -> bool:
@@ -131,6 +132,40 @@ class NoopBuildExtension(_build_ext):
 
     def copy_extensions_to_source(self, *args, **kwargs):
         ...
+
+
+# Setup and get version information.
+VERSION_INFO_FILE = os.path.join(SOURCE_DIR, "version_info.json")
+
+
+def load_version_info():
+    with open(VERSION_INFO_FILE, "rt") as f:
+        return json.load(f)
+
+
+def find_git_version():
+    try:
+        return (
+            subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=SOURCE_DIR)
+            .decode("utf-8")
+            .strip()
+        )
+    except subprocess.SubprocessError as e:
+        print(f"ERROR: Could not get git revision: {e}", file=sys.stderr)
+    return None
+
+
+try:
+    version_info = load_version_info()
+except FileNotFoundError:
+    print("version_info.json not found. Using defaults", file=sys.stderr)
+    version_info = {}
+git_version = find_git_version()
+
+PACKAGE_VERSION = version_info.get("package-version")
+if not PACKAGE_VERSION:
+    PACKAGE_VERSION = f"0.dev0+{git_version or '0'}"
+print(f"Using PACKAGE_VERSION: '{PACKAGE_VERSION}'")
 
 
 def maybe_nuke_cmake_cache(cmake_build_dir):
@@ -324,7 +359,7 @@ print(f"Found shortfin packages: {packages}")
 
 setup(
     name="shortfin",
-    version="0.9",
+    version=f"{PACKAGE_VERSION}",
     description="Shortfin native library implementation",
     author="SHARK Authors",
     packages=packages,

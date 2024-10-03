@@ -264,6 +264,40 @@ Dataset(
     ),
 ).alias_to("mixtral_8x7b_q8_0_gguf")
 
+Dataset(
+    "amd-shark/llama3.1-8B",
+    (
+        RemoteFile(
+            "gguf",
+            "amd-shark/llama-quant-models",
+            "llama3.1-8b/llama8b_f16.gguf",
+        ),
+        RemoteFile(
+            "tokenizer_config.json",
+            "amd-shark/llama-quant-models",
+            "llama3.1-8b/tokenizer_config.json",
+            extra_filenames=["llama3.1-8b/tokenizer.json"],
+        ),
+    ),
+).alias_to("llama3_8B_f16")
+
+Dataset(
+    "amd-shark/llama2-7B",
+    (
+        RemoteFile(
+            "gguf",
+            "amd-shark/llama-quant-models",
+            "llama2-7b/llama2_7b_f16.gguf",
+        ),
+        RemoteFile(
+            "tokenizer_config.json",
+            "amd-shark/llama-quant-models",
+            "llama2-7b/tokenizer_config.json",
+            extra_filenames=["llama2-7b/tokenizer.json"],
+        ),
+    ),
+).alias_to("llama2_7B_f16")
+
 ################################################################################
 # Tool entrypoint
 ################################################################################

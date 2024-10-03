@@ -1,0 +1,111 @@
+# Copyright 2024 Advanced Micro Devices, Inc.
+#
+# Licensed under the Apache License v2.0 with LLVM Exceptions.
+# See https://llvm.org/LICENSE.txt for license information.
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+
+name: Build packages
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Runs at 11:00 AM UTC, which is 3:00 AM PST (UTC-8)
+    - cron: '0 11 * * *'
+
+jobs:
+  # Note: metadata generation could happen in a separate trigger/schedule
+  # workflow. For cross platform builds, it's useful to just generate the
+  # metadata on Linux and pass that to later jobs using artifacts.
+  setup_metadata:
+    runs-on: ubuntu-24.04
+    outputs:
+      shark_package_version: ${{ steps.version.outputs.shark_package_version }}
+    steps:
+      # For now the version is just a calendar date + an automatically
+      # incrementing value. We may want different versions for nightly/dev
+      # builds and stable releases published to official places like pypi.
+      - name: Compute version
+        id: version
+        run: |
+          shark_package_version="$(printf '%(%Y%m%d)T.${{ github.run_number }}')"
+          echo "shark_package_version=${shark_package_version}" >> $GITHUB_OUTPUT
+          cat << EOF > ./version_info.json
+          {
+            "package-version": "${shark_package_version}"
+          }
+          EOF
+          cat ./version_info.json
+      - name: Upload version_info.json
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
+        with:
+          name: version_info
+          path: version_info.json
+
+  build_packages:
+    name: "${{ matrix.package }} :: ${{ matrix.platform }} :: ${{ matrix.python-version }}"
+    runs-on: ${{ matrix.runs-on }}
+    needs: [setup_metadata]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Ubuntu packages.
+          - runs-on: ubuntu-24.04
+            platform: linux-x86_64
+            package: shortfin
+            python-version: cp312-cp312
+          - runs-on: ubuntu-24.04
+            platform: linux-x86_64
+            package: shortfin
+            python-version: cp313-cp313
+          - runs-on: ubuntu-24.04
+            platform: linux-x86_64
+            package: shortfin
+            python-version: cp313-cp313t
+
+          # TODO(#130): macOS platform
+          # TODO(#130): Windows platform
+          # TODO(#130): sharktank packages
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      with:
+        path: "c" # Windows can hit path length limits, so use a short path.
+        submodules: false
+
+    - name: Download version_info.json
+      uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+      with:
+        name: version_info
+        path: ./c/shortfin/
+        merge-multiple: true
+
+    - name: Build shortfin (Linux x86_64, ${{ matrix.python-version }})
+      if: "matrix.package == 'shortfin' && matrix.platform == 'linux-x86_64'"
+      env:
+        OUTPUT_DIR: "${{ github.workspace }}/bindist"
+        OVERRIDE_PYTHON_VERSIONS: "${{ matrix.python-version }}"
+      run: |
+        [ -e ./bindist/* ] && rm ./bindist/*
+        ./c/shortfin/build_tools/build_linux_package.sh
+
+    - name: Upload python wheels
+      uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
+      with:
+        if-no-files-found: error
+        name: snapshot-${{ matrix.package }}-${{ matrix.platform }}-${{ matrix.python-version }}
+        path: bindist
+
+    - name: Release python wheels
+      uses: ncipollo/release-action@2c591bcc8ecdcd2db72b97d6147f871fcd833ba5 # v1.14.0
+      with:
+        artifacts: bindist/*.whl
+        token: "${{ secrets.RELEASE_PUBLISH_ACCESS_TOKEN }}"
+        tag: "dev-wheels"
+        name: "dev-wheels"
+        body: "Automatic snapshot release of SHARK-Platform python wheels."
+        removeArtifacts: false
+        allowUpdates: true
+        replacesArtifacts: true
+        makeLatest: false

@@ -93,8 +93,9 @@ ProgramModule ProgramModule::Load(System &system,
   iree::file_contents_ptr contents;
   iree_file_read_flags_t flags =
       mmap ? IREE_FILE_READ_FLAG_MMAP : IREE_FILE_READ_FLAG_PRELOAD;
-  SHORTFIN_THROW_IF_ERROR(iree_file_read_contents(
-      path.c_str(), flags, system.host_allocator(), contents.for_output()));
+  SHORTFIN_THROW_IF_ERROR(iree_file_read_contents(path.string().c_str(), flags,
+                                                  system.host_allocator(),
+                                                  contents.for_output()));
 
   // Ownership hazard: iree_vm_bytecode_module_create only assumes ownership
   // of the contents when it returns *sucessfully*. In the exceptional case,
@@ -586,7 +587,7 @@ void StaticProgramParameters::Load(std::filesystem::path file_path,
                                    LoadOptions options) {
   // Default format from extension.
   if (options.format.empty()) {
-    options.format = file_path.extension();
+    options.format = file_path.extension().string();
   }
 
   // Open file.
@@ -598,7 +599,7 @@ void StaticProgramParameters::Load(std::filesystem::path file_path,
   }
   iree_file_contents_t *file_contents = nullptr;
   SHORTFIN_THROW_IF_ERROR(iree_file_read_contents(
-      file_path.c_str(), read_flags, host_allocator_, &file_contents));
+      file_path.string().c_str(), read_flags, host_allocator_, &file_contents));
   iree_io_file_handle_release_callback_t release_callback = {
       +[](void *user_data, iree_io_file_handle_primitive_t handle_primitive) {
         iree_file_contents_t *file_contents = (iree_file_contents_t *)user_data;
