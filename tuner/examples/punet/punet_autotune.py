@@ -122,8 +122,12 @@ def main():
 
     path_config = libtuner.PathConfig()
     # We expect the configs to be in the same dir as the input.
-    path_config.global_config_prolog_mlir = input_dir / path_config.global_config_prolog_mlir
-    path_config.global_config_epilog_mlir = input_dir / path_config.global_config_epilog_mlir
+    path_config.global_config_prolog_mlir = (
+        input_dir / path_config.global_config_prolog_mlir
+    )
+    path_config.global_config_epilog_mlir = (
+        input_dir / path_config.global_config_epilog_mlir
+    )
     path_config.base_dir.mkdir(parents=True, exist_ok=True)
     path_config.output_unilog.touch()
 
