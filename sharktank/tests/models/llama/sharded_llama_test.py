@@ -5,16 +5,13 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 import unittest
-from typing import Any, List, Tuple, Union
-import typing
+from typing import Any, List, Tuple, Union, OrderedDict
 import collections.abc
-from collections import OrderedDict
 from sharktank.models.llama.llama import LlamaModelConfig, PagedLlamaModelV1
 import sharktank.ops as ops
 from sharktank.types import (
     unbox_tensor,
     ShardedTensor,
-    InferenceTensor,
     DefaultPrimitiveTensor,
     Dataset,
     AnyTensor,
@@ -160,9 +157,7 @@ class ShardedLlamaTest(unittest.TestCase):
             [14, 9, self.block_seq_stride - 1], dtype=torch.int32
         )
 
-    def make_prefill_args(
-        self, model: PagedLlamaModelV1
-    ) -> typing.OrderedDict[str, Any]:
+    def make_prefill_args(self, model: PagedLlamaModelV1) -> OrderedDict[str, Any]:
         batch_seq_len = round_up_to_multiple_of(
             int(torch.max(self.prefill_seq_lens)), model.cache.pad_sequence_stride
         )
@@ -191,7 +186,7 @@ class ShardedLlamaTest(unittest.TestCase):
 
     def make_equal_unsharded_and_sharded_prefill_args(
         self, model: PagedLlamaModelV1, sharded_model: PagedLlamaModelV1
-    ) -> Tuple[typing.OrderedDict[str, Any], typing.OrderedDict[str, Any]]:
+    ) -> Tuple[OrderedDict[str, Any], OrderedDict[str, Any]]:
         prefill_args = self.make_prefill_args(model)
         sharded_cache_state = sharded_model.cache.paged.allocate(
             page_count=self.cache_page_count
@@ -206,9 +201,7 @@ class ShardedLlamaTest(unittest.TestCase):
         sharded_prefill_args["cache_state"] = sharded_cache_state
         return prefill_args, sharded_prefill_args
 
-    def make_decode_args(
-        self, model: PagedLlamaModelV1
-    ) -> typing.OrderedDict[str, Any]:
+    def make_decode_args(self, model: PagedLlamaModelV1) -> OrderedDict[str, Any]:
         start_positions = self.prefill_seq_lens.clone()
         seq_lens = self.prefill_seq_lens + 1
         batch_seq_len = round_up_to_multiple_of(
@@ -240,7 +233,7 @@ class ShardedLlamaTest(unittest.TestCase):
 
     def make_equal_unsharded_and_sharded_decode_args(
         self, model: PagedLlamaModelV1, sharded_model: PagedLlamaModelV1
-    ) -> Tuple[typing.OrderedDict[str, Any], typing.OrderedDict[str, Any]]:
+    ) -> Tuple[OrderedDict[str, Any], OrderedDict[str, Any]]:
         decode_args = self.make_decode_args(model)
         sharded_decode_args = deepcopy(decode_args)
         sharded_decode_args["cache_state"] = sharded_model.cache.paged.shard_state(
