@@ -299,7 +299,8 @@ class ShardedLlamaTest(unittest.TestCase):
 
     @unittest.expectedFailure
     def testExportAndRunToySizedModelWithIree(self):
-        """Test exporting to MLIR and compiling with IREE the sharded Llama model."""
+        """Test exporting to MLIR and compiling with IREE the sharded Llama model.
+        Test numerical accuracy of the IREE module against PyTorch."""
 
         with tempfile.TemporaryDirectory() as temp_dir:
             sharded_theta = shard_theta(self.theta, self.sharded_config)
