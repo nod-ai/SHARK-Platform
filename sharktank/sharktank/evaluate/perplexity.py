@@ -234,7 +234,7 @@ def main(argv):
         input_texts = f.read().splitlines()
 
     ppl = run_perplexity(
-        prompts=["happy"],
+        prompts=input_texts,
         dataset=dataset,
         tokenizer=tokenizer,
         device=device,
