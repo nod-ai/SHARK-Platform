@@ -114,7 +114,9 @@ class Perplexity:
         max_prompt_length = max(seq_lens)
 
         self.token_ids = torch.tensor(token_ids, device=self.device)
-        self.attention_mask = (self.token_ids != 0).int().detach().clone()
+        self.attention_mask = (
+            (self.token_ids != 0).int().detach().clone().to(self.device)
+        )
 
         is_first_token = True
         for i in tqdm(
@@ -227,12 +229,12 @@ def main(argv):
     dataset = cli.get_input_dataset(args)
     tokenizer = cli.get_tokenizer(args)
 
-    prompt_path = "SHARK-Platform/sharktank/sharktank/evaluate/data/eval_prompts.txt"
+    prompt_path = "sharktank/sharktank/evaluate/data/eval_prompts.txt"
     with open(prompt_path, "r") as f:
         input_texts = f.read().splitlines()
 
     ppl = run_perplexity(
-        prompts=input_texts,
+        prompts=["happy"],
         dataset=dataset,
         tokenizer=tokenizer,
         device=device,
