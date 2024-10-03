@@ -366,7 +366,6 @@ class PagedKVCache(BaseKVCache):
 
         partition_count = len(cache_partitions)
 
-        cache_partitions_list = cache_partitions
         # [bs, partitions, atten_head_count, attn_head_dim]
         cache_partitions = torch.concat(cache_partitions, dim=1)
 
