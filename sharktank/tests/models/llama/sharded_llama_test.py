@@ -297,7 +297,12 @@ class ShardedLlamaTest(unittest.TestCase):
             actual_decode_cache_state, expected_decode_cache_state, atol=1e-4, rtol=1e-4
         )
 
-    @unittest.expectedFailure
+    @unittest.skip(
+        (
+            "Before this does not crash at all we need "
+            "https://github.com/iree-org/iree/pull/18663 merged."
+        )
+    )
     def testExportAndRunToySizedModelWithIree(self):
         """Test exporting to MLIR and compiling with IREE the sharded Llama model.
         Test numerical accuracy of the IREE module against PyTorch."""
