@@ -12,7 +12,7 @@ from pathlib import Path
 from setuptools import setup  # type: ignore
 
 THIS_DIR = Path(__file__).resolve().parent
-REPO_DIR = THIS_DIR
+REPO_DIR = THIS_DIR.parent.parent
 VERSION_INFO_FILE = REPO_DIR / "version_info.json"
 
 
@@ -24,7 +24,7 @@ def load_version_info():
 version_info = load_version_info()
 PACKAGE_VERSION = version_info["package-version"]
 
-with open(os.path.join(THIS_DIR, "README.md"), "rt") as f:
+with open(os.path.join(REPO_DIR, "README.md"), "rt") as f:
     README = f.read()
 
 
