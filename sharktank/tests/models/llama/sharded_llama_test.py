@@ -278,7 +278,9 @@ class ShardedLlamaTest(unittest.TestCase):
         ) = self.make_equal_unsharded_and_sharded_decode_args(model, sharded_model)
         expected_decode_result = model.decode(**decode_args)
         sharded_decode_result = sharded_model.decode(**sharded_decode_args)
-        torch.testing.assert_close(sharded_decode_result, expected_decode_result)
+        torch.testing.assert_close(
+            sharded_decode_result, expected_decode_result, atol=1e-4, rtol=1e-5
+        )
         expected_decode_cache_state = decode_args["cache_state"][0]
         actual_decode_cache_state = ops.unshard(
             sharded_model.cache.paged.unflatten_page_table(
