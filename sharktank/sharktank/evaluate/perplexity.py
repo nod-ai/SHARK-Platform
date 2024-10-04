@@ -84,8 +84,8 @@ class Perplexity:
             block_seq_stride=16,
             kv_cache_type=self.kv_cache_type,
             device=self.device,
-            activation_dtype=torch.float16,
-            attention_dtype=torch.float16,
+            activation_dtype=torch.float32,
+            attention_dtype=torch.float32,
         )
 
         if config.hp.expert_count:
@@ -229,7 +229,7 @@ def main(argv):
     dataset = cli.get_input_dataset(args)
     tokenizer = cli.get_tokenizer(args)
 
-    prompt_path = "sharktank/sharktank/evaluate/data/eval_prompts.txt"
+    prompt_path = "sharktank/evaluate/data/eval_prompts.txt"
     with open(prompt_path, "r") as f:
         input_texts = f.read().splitlines()
 
