@@ -1,6 +1,6 @@
 # Dispatch Tuner
 
-Allows to tune a signle dispatch in isolation.
+Allows to tune a single dispatch in isolation.
 
 ## Environments
 Follow instructions in [`/tuner/README.md`](../README.md)
@@ -9,8 +9,13 @@ Follow instructions in [`/tuner/README.md`](../README.md)
 
 ### Generate a benchmark file
 Use the usual `iree-compile` command for your dispatch and add
-`--iree-hal-dump-executable-files-to=dump`. Copy the `*_benchmark.mlir` file
-to some temporary directory of choice. This will be the input to the dispatch tuner.
+`--iree-hal-dump-executable-files-to=dump`. For example:
+```shell
+iree-compile mmt.mlir --iree-hal-target-backends=rocm --iree-hip-target=gfx942 --iree-hal-dump-executable-files-to=dump -o /dev/null
+```
+
+Next, copy the `*_benchmark.mlir` file to some temporary directory of choice.
+This will be the input to the dispatch tuner.
 
 ### Recommended Trial Run
 For an initial trial to test the tuning loop, use:
