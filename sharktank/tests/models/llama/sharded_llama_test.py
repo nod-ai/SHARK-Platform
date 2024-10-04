@@ -154,7 +154,7 @@ class ShardedLlamaTest(unittest.TestCase):
             vocab_size=self.vocabulary_size,
         )
         self.prefill_seq_lens = torch.tensor(
-            [14, 9, self.block_seq_stride - 1], dtype=torch.int32
+            [14, 9, self.block_seq_stride - 1], dtype=torch.int64
         )
 
     def make_prefill_args(self, model: PagedLlamaModelV1) -> OrderedDict[str, Any]:
