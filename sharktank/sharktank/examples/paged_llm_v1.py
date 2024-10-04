@@ -140,6 +140,26 @@ class Batch:
             while len(block_ids_row) < needed_blocks:
                 block_ids_row.append(self.parent.alloc_page())
 
+    def compute_prefill_logits(
+        self,
+        model,
+        # [bs, batch_seq_len]
+        tokens: torch.Tensor,
+        *,
+        # [1, 1, batch_seq_len, batch_seq_len]
+        attention_mask: torch.Tensor,
+        # [bs, batch_seq_len // block_seq_stride]
+        seq_block_ids: torch.Tensor,
+        cache_state: list[torch.Tensor],
+    ):
+        logits = model.prefill(
+            tokens,
+            attention_mask=attention_mask,
+            seq_block_ids=seq_block_ids,
+            cache_state=cache_state,
+        )
+        return logits
+
     def prefill(self):
         model = self.parent.model
         attention_mask = model.attention_mask(

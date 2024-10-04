@@ -76,7 +76,7 @@ def test_get_conv_tile_sizes():
     config = candidate_gen.Configuration(
         subgroup_size=64,
         workgroup_size=[256, 1, 1],
-        intrinsic="#iree_gpu.mma_layout<MFMA_F16_16x16x16_F32>",
+        intrinsic="#iree_gpu.mma_layout<MFMA_F32_16x16x16_F16>",
         tile_sizes=[464, 320, 16],
         subgroup_m_count=1,
         subgroup_n_count=4,
@@ -224,12 +224,12 @@ def test_get_shapes_batch_mmt():
 
 def test_mfma_intrinsic_to_str():
     assert (
-        str(candidate_gen.MfmaIntrinsic.mfma_f16_16x16x16_f32())
-        == "MFMA_F16_16x16x16_F32"
+        str(candidate_gen.MfmaIntrinsic.mfma_f32_16x16x16_f16())
+        == "MFMA_F32_16x16x16_F16"
     )
     assert (
-        str(candidate_gen.MfmaIntrinsic.mfma_i8_32x32x16_i32())
-        == "MFMA_I8_32x32x16_I32"
+        str(candidate_gen.MfmaIntrinsic.mfma_i32_32x32x16_i8())
+        == "MFMA_I32_32x32x16_I8"
     )
 
 
@@ -243,8 +243,8 @@ def test_get_compatible_mfma_intrinsics():
             candidate_gen.DispatchKind.mmt,
         )
     ) == [
-        candidate_gen.MfmaIntrinsic.mfma_f16_16x16x16_f32(),
-        candidate_gen.MfmaIntrinsic.mfma_f16_32x32x8_f32(),
+        candidate_gen.MfmaIntrinsic.mfma_f32_16x16x16_f16(),
+        candidate_gen.MfmaIntrinsic.mfma_f32_32x32x8_f16(),
     ]
 
     assert candidate_gen.get_compatible_mfma_intrinsics(
@@ -256,8 +256,8 @@ def test_get_compatible_mfma_intrinsics():
             candidate_gen.DispatchKind.mmt,
         )
     ) == [
-        candidate_gen.MfmaIntrinsic.mfma_i8_16x16x32_i32(),
-        candidate_gen.MfmaIntrinsic.mfma_i8_32x32x16_i32(),
+        candidate_gen.MfmaIntrinsic.mfma_i32_16x16x32_i8(),
+        candidate_gen.MfmaIntrinsic.mfma_i32_32x32x16_i8(),
     ]
 
     assert candidate_gen.get_compatible_mfma_intrinsics(
@@ -269,8 +269,8 @@ def test_get_compatible_mfma_intrinsics():
             candidate_gen.DispatchKind.batch_matmul,
         )
     ) == [
-        candidate_gen.MfmaIntrinsic.mfma_f16_16x16x16_f32(),
-        candidate_gen.MfmaIntrinsic.mfma_f16_32x32x8_f32(),
+        candidate_gen.MfmaIntrinsic.mfma_f32_16x16x16_f16(),
+        candidate_gen.MfmaIntrinsic.mfma_f32_32x32x8_f16(),
     ]
 
 
@@ -411,7 +411,7 @@ def test_generate_constraints_invalid_input():
 
 def test_apply_params_mmt():
     mlir_template = [
-        "<intrinsic = #iree_gpu.mma_layout<MFMA_F16_32x32x8_F32>, subgroup_m_count = 16, subgroup_n_count = 16>",
+        "<intrinsic = #iree_gpu.mma_layout<MFMA_F32_32x32x8_F16>, subgroup_m_count = 16, subgroup_n_count = 16>",
         "<LLVMGPUVectorDistribute workgroup_size = [16, 16] subgroup_size = 16,",
         "<tile_sizes = [[8, 8, 8]]>",
         '{llvm_func_attrs = {"amdgpu-waves-per-eu" = "4"}',
@@ -422,7 +422,7 @@ def test_apply_params_mmt():
     config = candidate_gen.Configuration(
         subgroup_size=16,
         workgroup_size=[16, 16, 1],
-        intrinsic=candidate_gen.MfmaIntrinsic.mfma_f16_16x16x16_f32(),
+        intrinsic=candidate_gen.MfmaIntrinsic.mfma_f32_16x16x16_f16(),
         tile_sizes=[8, 8, 8],
         subgroup_m_count=16,
         subgroup_n_count=16,
@@ -444,7 +444,7 @@ def test_apply_params_mmt():
     assert modified
     assert embeddable
     assert (
-        "intrinsic = #iree_gpu.mma_layout<MFMA_F16_16x16x16_F32>, subgroup_m_count = 16, subgroup_n_count = 16"
+        "intrinsic = #iree_gpu.mma_layout<MFMA_F32_16x16x16_F16>, subgroup_m_count = 16, subgroup_n_count = 16"
         in modified
     )
     assert (
@@ -457,7 +457,7 @@ def test_apply_params_mmt():
 
 def test_apply_params_conv():
     mlir_template = [
-        "<intrinsic = #iree_gpu.mma_layout<MFMA_F16_16x16x16_F32>, subgroup_m_count = 16, subgroup_n_count = 16>",
+        "<intrinsic = #iree_gpu.mma_layout<MFMA_F32_16x16x16_F16>, subgroup_m_count = 16, subgroup_n_count = 16>",
         "<LLVMGPUVectorDistribute workgroup_size = [256, 1, 1] subgroup_size = 64,",
         "<tile_sizes = [[1, 1, 64, 128, 1, 1, 32]]>",
         '{llvm_func_attrs = {"amdgpu-waves-per-eu" = "4"}',
@@ -468,7 +468,7 @@ def test_apply_params_conv():
     config = candidate_gen.Configuration(
         subgroup_size=64,
         workgroup_size=[256, 1, 1],
-        intrinsic=candidate_gen.MfmaIntrinsic.mfma_f16_16x16x16_f32(),
+        intrinsic=candidate_gen.MfmaIntrinsic.mfma_f32_16x16x16_f16(),
         tile_sizes=[464, 320, 16],
         subgroup_m_count=1,
         subgroup_n_count=4,
@@ -494,7 +494,7 @@ def test_apply_params_conv():
     assert modified
     assert embeddable
     assert (
-        "intrinsic = #iree_gpu.mma_layout<MFMA_F16_16x16x16_F32>, subgroup_m_count = 1, subgroup_n_count = 4"
+        "intrinsic = #iree_gpu.mma_layout<MFMA_F32_16x16x16_F16>, subgroup_m_count = 1, subgroup_n_count = 4"
         in modified
     )
     assert (
@@ -507,7 +507,7 @@ def test_apply_params_conv():
 
 def test_apply_params_contract():
     mlir_template = [
-        "<intrinsic = #iree_gpu.mma_layout<MFMA_F16_16x16x16_F32>, subgroup_m_count = 2, subgroup_n_count = 2>}>",
+        "<intrinsic = #iree_gpu.mma_layout<MFMA_F32_16x16x16_F16>, subgroup_m_count = 2, subgroup_n_count = 2>}>",
         "<LLVMGPUVectorDistribute workgroup_size = [128, 2, 1] subgroup_size = 64,",
         "<tile_sizes = [[1, 1, 1, 64, 64, 128]]>",
         '{llvm_func_attrs = {"amdgpu-waves-per-eu" = "1"}',
@@ -525,7 +525,7 @@ def test_apply_params_contract():
     config = candidate_gen.Configuration(
         subgroup_size=64,
         workgroup_size=[256, 1, 1],
-        intrinsic=candidate_gen.MfmaIntrinsic.mfma_f16_32x32x8_f32(),
+        intrinsic=candidate_gen.MfmaIntrinsic.mfma_f32_32x32x8_f16(),
         tile_sizes=[480, 384, 32],
         subgroup_m_count=1,
         subgroup_n_count=4,
@@ -540,7 +540,7 @@ def test_apply_params_contract():
 
     assert new_mlir
     assert (
-        "intrinsic = #iree_gpu.mma_layout<MFMA_F16_32x32x8_F32>, subgroup_m_count = 1, subgroup_n_count = 4"
+        "intrinsic = #iree_gpu.mma_layout<MFMA_F32_32x32x8_F16>, subgroup_m_count = 1, subgroup_n_count = 4"
         in new_mlir
     )
     assert (
@@ -553,7 +553,7 @@ def test_apply_params_contract():
 
 def test_apply_params_batch_matmul():
     mlir_template = [
-        "<intrinsic = #iree_gpu.mma_layout<MFMA_F16_16x16x16_F32>, subgroup_m_count = 4, subgroup_n_count = 1>}>",
+        "<intrinsic = #iree_gpu.mma_layout<MFMA_F32_16x16x16_F16>, subgroup_m_count = 4, subgroup_n_count = 1>}>",
         "<LLVMGPUVectorDistribute workgroup_size = [64, 4, 1] subgroup_size = 64,",
         "<tile_sizes = [[1, 128, 64, 64]]>",
         '{llvm_func_attrs = {"amdgpu-waves-per-eu" = "1"}',
@@ -571,7 +571,7 @@ def test_apply_params_batch_matmul():
     config = candidate_gen.Configuration(
         subgroup_size=64,
         workgroup_size=[128, 2, 1],
-        intrinsic=candidate_gen.MfmaIntrinsic.mfma_f16_32x32x8_f32(),
+        intrinsic=candidate_gen.MfmaIntrinsic.mfma_f32_32x32x8_f16(),
         tile_sizes=[416, 320, 128],
         subgroup_m_count=2,
         subgroup_n_count=2,
@@ -588,7 +588,7 @@ def test_apply_params_batch_matmul():
     assert modified
     assert embeddable
     assert (
-        "intrinsic = #iree_gpu.mma_layout<MFMA_F16_32x32x8_F32>, subgroup_m_count = 2, subgroup_n_count = 2"
+        "intrinsic = #iree_gpu.mma_layout<MFMA_F32_32x32x8_F16>, subgroup_m_count = 2, subgroup_n_count = 2"
         in modified
     )
     assert (
@@ -601,7 +601,7 @@ def test_apply_params_batch_matmul():
 
 def test_apply_params_batch_mmt_float():
     mlir_template = [
-        "<intrinsic = #iree_gpu.mma_layout<MFMA_F16_16x16x16_F32>, subgroup_m_count = 4, subgroup_n_count = 1>}>",
+        "<intrinsic = #iree_gpu.mma_layout<MFMA_F32_16x16x16_F16>, subgroup_m_count = 4, subgroup_n_count = 1>}>",
         "<LLVMGPUVectorDistribute workgroup_size = [64, 4, 1] subgroup_size = 64,",
         "<tile_sizes = [[1, 128, 128, 64]]>",
         '{llvm_func_attrs = {"amdgpu-waves-per-eu" = "1"}',
@@ -618,7 +618,7 @@ def test_apply_params_batch_mmt_float():
     config = candidate_gen.Configuration(
         subgroup_size=64,
         workgroup_size=[128, 2, 1],
-        intrinsic=candidate_gen.MfmaIntrinsic.mfma_f16_16x16x16_f32(),
+        intrinsic=candidate_gen.MfmaIntrinsic.mfma_f32_16x16x16_f16(),
         tile_sizes=[128, 64, 128],
         subgroup_m_count=2,
         subgroup_n_count=2,
@@ -635,7 +635,7 @@ def test_apply_params_batch_mmt_float():
     assert embeddable
     assert modified
     assert (
-        "intrinsic = #iree_gpu.mma_layout<MFMA_F16_16x16x16_F32>, subgroup_m_count = 2, subgroup_n_count = 2"
+        "intrinsic = #iree_gpu.mma_layout<MFMA_F32_16x16x16_F16>, subgroup_m_count = 2, subgroup_n_count = 2"
         in modified
     )
     assert (
@@ -648,7 +648,7 @@ def test_apply_params_batch_mmt_float():
 
 def test_apply_params_batch_mmt_int():
     mlir_template = [
-        "<intrinsic = #iree_gpu.mma_layout<MFMA_I8_16x16x32_I32>, subgroup_m_count = 4, subgroup_n_count = 1>}>",
+        "<intrinsic = #iree_gpu.mma_layout<MFMA_I32_16x16x32_I8>, subgroup_m_count = 4, subgroup_n_count = 1>}>",
         "<LLVMGPUVectorDistribute workgroup_size = [64, 4, 1] subgroup_size = 64,",
         "<tile_sizes = [[1, 128, 128, 64]]>",
         '{llvm_func_attrs = {"amdgpu-waves-per-eu" = "1"}',
@@ -665,7 +665,7 @@ def test_apply_params_batch_mmt_int():
     config = candidate_gen.Configuration(
         subgroup_size=64,
         workgroup_size=[128, 2, 1],
-        intrinsic=candidate_gen.MfmaIntrinsic.mfma_i8_32x32x16_i32(),
+        intrinsic=candidate_gen.MfmaIntrinsic.mfma_i32_32x32x16_i8(),
         tile_sizes=[128, 64, 128],
         subgroup_m_count=2,
         subgroup_n_count=2,
@@ -682,7 +682,7 @@ def test_apply_params_batch_mmt_int():
     assert modified
     assert "//   transform.named_sequence @match_batch_mmt_2x4096x640x640(" in modified
     assert (
-        "intrinsic = #iree_gpu.mma_layout<MFMA_I8_32x32x16_I32>, subgroup_m_count = 2, subgroup_n_count = 2"
+        "intrinsic = #iree_gpu.mma_layout<MFMA_I32_32x32x16_I8>, subgroup_m_count = 2, subgroup_n_count = 2"
         in modified
     )
     assert (
@@ -716,7 +716,7 @@ def test_apply_params_batch_mmt_int():
 
 def test_apply_params_broadcast_rhs_mmt():
     mlir_template = [
-        "<intrinsic = #iree_gpu.mma_layout<MFMA_I8_16x16x32_I32>, subgroup_m_count = 4, subgroup_n_count = 1>}>",
+        "<intrinsic = #iree_gpu.mma_layout<MFMA_I32_16x16x32_I8>, subgroup_m_count = 4, subgroup_n_count = 1>}>",
         "<LLVMGPUVectorDistribute workgroup_size = [64, 4, 1] subgroup_size = 64,",
         "<tile_sizes = [[1, 128, 128, 64]]>",
         '{llvm_func_attrs = {"amdgpu-waves-per-eu" = "1"}',
@@ -733,7 +733,7 @@ def test_apply_params_broadcast_rhs_mmt():
     config = candidate_gen.Configuration(
         subgroup_size=64,
         workgroup_size=[128, 2, 1],
-        intrinsic=candidate_gen.MfmaIntrinsic.mfma_i8_32x32x16_i32(),
+        intrinsic=candidate_gen.MfmaIntrinsic.mfma_i32_32x32x16_i8(),
         tile_sizes=[128, 64, 128],
         subgroup_m_count=2,
         subgroup_n_count=2,
@@ -753,7 +753,7 @@ def test_apply_params_broadcast_rhs_mmt():
         in modified
     )
     assert (
-        "intrinsic = #iree_gpu.mma_layout<MFMA_I8_32x32x16_I32>, subgroup_m_count = 2, subgroup_n_count = 2"
+        "intrinsic = #iree_gpu.mma_layout<MFMA_I32_32x32x16_I8>, subgroup_m_count = 2, subgroup_n_count = 2"
         in modified
     )
     assert (

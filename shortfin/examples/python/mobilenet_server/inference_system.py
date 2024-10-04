@@ -40,7 +40,9 @@ class InferenceProcess(sf.Process):
             # just writing to the backing storage is the best we have API
             # support for. Generally, APIs on storage should be mirrored onto
             # the array.
-            self.host_staging.storage.data = request.raw_image_data
+            # TODO: Easier to use API for writing into the storage
+            with self.host_staging.storage.map(write=True, discard=True) as m:
+                m.fill(request.raw_image_data)
             print("host_staging =", self.host_staging)
             self.device_input.copy_from(self.host_staging)
 
