@@ -7,21 +7,21 @@
 """
 Sample Usage:
 
-python -m tuner.examples.punet benchmark.mlir --lhs-dims=bmk --rhs-dims=bkn --tile-dims=*mnk --devices=hip://0,hip://1 --num-candidates=64
+python -m examples.punet benchmark.mlir --lhs-dims=bmk --rhs-dims=bkn --tile-dims=*mnk --devices=hip://0,hip://1 --num-candidates=64
 
 
 Recommended Trial Run:
 
-python -m tuner.examples.punet benchmark.mlir --num-candidates=1
+python -m examples.punet benchmark.mlir --num-candidates=1
 
 
 Dry Run Test (no gpu requried):
 
-python -m tuner.examples.punet benchmark.mlir --num-candidates=64 --num-model-candidates=10 --dry-run
+python -m examples.punet benchmark.mlir --num-candidates=64 --num-model-candidates=10 --dry-run
 
 """
 
-from ... import libtuner
+from tuner import libtuner
 from pathlib import Path
 
 
