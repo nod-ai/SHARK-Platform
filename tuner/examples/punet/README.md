@@ -31,16 +31,16 @@ cp ./dump-mmt/module_main_0_dispatch_0_rocm_hsaco_fb_benchmark.mlir test-benchma
 ### Recommended Trial Run
 For an initial trial to test the tuning loop, use:
 ```shell
-python -m tuner.examples.punet test-benchmark.mlir --num-candidates=10
+python -m examples.punet test-benchmark.mlir --num-candidates=10
 ```
 
 ### Dry Run Test
 To perform a dry run (no GPU required), use:
 ```shell
-python -m tuner.examples.punet test-benchmark.mlir --num-candidates=64 --num-model-candidates=10 --dry-run
+python -m examples.punet test-benchmark.mlir --num-candidates=64 --num-model-candidates=10 --dry-run
 ```
 
 ### Basic Usage
 ```shell
-python -m tuner.examples.punet test-benchmark.mlir
+python -m examples.punet test-benchmark.mlir
 ```
