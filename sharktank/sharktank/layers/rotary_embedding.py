@@ -4,6 +4,7 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
+from collections import namedtuple
 from typing import Optional, Union
 
 import torch
@@ -24,7 +25,7 @@ class RotaryEmbeddingLayer(BaseLayer):
         rope_freq_base: Optional[float],
         device: Optional[torch.device] = None,
         use_hf: bool = False,
-        static_tables: bool = True,
+        use_table: bool = True,
         tensor_parallelism_size: int = 1,
     ):
         super().__init__()
@@ -32,22 +33,21 @@ class RotaryEmbeddingLayer(BaseLayer):
         self.rope_dimension_count = rope_dimension_count
         self.max_seqlen = max_seqlen
         self.use_hf = use_hf
+        self.use_table = use_table
 
         self.rope_freq_base = rope_freq_base if rope_freq_base is not None else 10000.0
         self.tensor_parallelism_size = tensor_parallelism_size
-        if static_tables:
-            ops.module_register_buffer(
-                self, "static_rotary_embed_table", self._create_rotary_embed_table()
-            )
-        else:
-            self.static_rotary_embed_table = None
 
     @property
     def rotary_embed_table(self):
-        if self.static_rotary_embed_table is None:
+        if self.use_table:
             return self._create_rotary_embed_table()
-        else:
-            return self.static_rotary_embed_table
+
+        if self.tensor_parallelism_size == 1:
+            return None
+
+        nt = namedtuple("replicated_tensor", ["shards"])
+        return nt([None] * self.tensor_parallelism_size)
 
     def forward(
         self,
@@ -96,7 +96,7 @@ class RotaryEmbeddingLayer(BaseLayer):
         xq: torch.Tensor,
         xk: torch.Tensor,
         start_index: int,
-        rotary_embed_table: torch.Tensor,
+        rotary_embed_table: Optional[torch.Tensor],
     ):
         # xq_, xk_ shape: bs, sl, _, dim
         # freqs_cis shape: max_sl, dim
@@ -142,12 +142,18 @@ class RotaryEmbeddingLayer(BaseLayer):
             xq = xq[..., create_interleaved_tensor(xq.shape[-1])]
             xk = xk[..., create_interleaved_tensor(xq.shape[-1])]
 
-        xq_ = torch.view_as_complex(xq.reshape(*xq.shape[:-1], -1, 2))
-        xk_ = torch.view_as_complex(xk.reshape(*xk.shape[:-1], -1, 2))
+        xq_ = torch.view_as_complex(xq.unflatten(-1, (-1, 2)))
+        xk_ = torch.view_as_complex(xk.unflatten(-1, (-1, 2)))
         _, sl, _, dim = xq_.shape
 
         # Offset the table based on starting position.
-        freqs_cis = rotary_embed_table[start_index : start_index + sl, :]
+        if self.use_table:
+            freqs_cis = rotary_embed_table[start_index : start_index + sl, :]
+        else:
+            freqs_cis = torch.arange(start_index, start_index + sl, device=xq.device)
+            freqs_cis = self._compute_rotary_embed_table(freqs_cis)
+            freqs_cis = self._replicate(freqs_cis)
+
         assert freqs_cis.shape[-1] == dim
         assert (
             freqs_cis.shape[0] >= sl
@@ -206,7 +212,13 @@ class RotaryEmbeddingLayer(BaseLayer):
         ) + start_positions.unsqueeze(1)
         # Broadcast lookup to [b, ...].
         self.trace_tensor("rope.positions_seq", positions_seq)
-        freqs_cis = self.rotary_embed_table[positions_seq]
+
+        if self.use_table:
+            freqs_cis = self.rotary_embed_table[positions_seq]
+        else:
+            shape = positions_seq.shape
+            freqs_cis = self._compute_rotary_embed_table(positions_seq.flatten())
+            freqs_cis = freqs_cis.unflatten(0, shape)
 
         # Unsqueeze a unit dim for attention heads.
         broadcast_freqs_cis = freqs_cis.unsqueeze(2)
@@ -224,10 +236,6 @@ class RotaryEmbeddingLayer(BaseLayer):
                 isinstance(xk, SplitPrimitiveTensor)
                 and xq.shard_count == xk.shard_count
                 and xk.shard_dim == xq.shard_dim
-            )
-            assert (
-                isinstance(self.rotary_embed_table, ReplicatedTensor)
-                and xq.shard_count == self.rotary_embed_table.shard_count
             )
             assert (
                 isinstance(mask, ReplicatedTensor)
@@ -263,24 +271,20 @@ class RotaryEmbeddingLayer(BaseLayer):
         """
         # xq_, xk_ shape: bs, sl, _, dim
         # freqs_cis shape: max_sl, dim
-        xq_ = torch.view_as_complex(xq.reshape(*xq.shape[:-1], -1, 2))
-        xk_ = torch.view_as_complex(xk.reshape(*xk.shape[:-1], -1, 2))
+        xq_ = torch.view_as_complex(xq.unflatten(-1, (-1, 2)))
+        xk_ = torch.view_as_complex(xk.unflatten(-1, (-1, 2)))
         _, sl, _, dim = xq_.shape
 
         xq_out = torch.view_as_real(xq_ * mask).flatten(3)
         xk_out = torch.view_as_real(xk_ * mask).flatten(3)
         return xq_out.type_as(xq), xk_out.type_as(xk)
 
-    def _create_rotary_embed_table(
-        self,
-    ):
+    def _compute_rotary_embed_table(self, t):
         dim = self.rope_dimension_count
-        max_seqlen = self.max_seqlen
         freqs = 1.0 / (
             self.rope_freq_base
-            ** (torch.arange(0, dim, 2, device=self.device)[: (dim // 2)].float() / dim)
+            ** (torch.arange(0, dim, 2, device=t.device)[: (dim // 2)].float() / dim)
         )
-        t = torch.arange(max_seqlen, device=freqs.device)
         freqs = torch.outer(t, freqs).float()
 
         freqs_cis = (
@@ -289,8 +293,16 @@ class RotaryEmbeddingLayer(BaseLayer):
             else torch.polar(torch.ones_like(freqs), freqs)
         )
 
+        return freqs_cis
+
+    def _create_rotary_embed_table(self):
+        t = torch.arange(self.max_seqlen, device=self.device)
+        freqs_cis = self._compute_rotary_embed_table(t)
+        return self._replicate(freqs_cis)
+
+    def _replicate(self, t):
         if self.tensor_parallelism_size > 1:
             # Replicate across all devices, the data is not a lot and the computation is cheap.
-            freqs_cis = ops.replicate(freqs_cis, self.tensor_parallelism_size)
+            t = ops.replicate(t, self.tensor_parallelism_size)
 
-        return freqs_cis
+        return t
