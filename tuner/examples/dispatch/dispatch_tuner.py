@@ -7,17 +7,17 @@
 """
 Sample Usage:
 
-python -m examples.gemm benchmark.mlir --lhs-dims=bmk --rhs-dims=bkn --tile-dims=*mnk --devices=hip://0,hip://1 --num-candidates=64
+python -m examples.dispatch benchmark.mlir --lhs-dims=bmk --rhs-dims=bkn --tile-dims=*mnk --devices=hip://0,hip://1 --num-candidates=64
 
 
 Recommended Trial Run:
 
-python -m examples.gemm benchmark.mlir --num-candidates=10
+python -m examples.dispatch benchmark.mlir --num-candidates=10
 
 
 Dry Run Test (no gpu required):
 
-python -m examples.gemm benchmark.mlir --num-candidates=64 --dry-run
+python -m examples.dispatch benchmark.mlir --num-candidates=64 --dry-run
 
 """
 
