@@ -25,6 +25,7 @@ class RotaryEmbeddingLayer(BaseLayer):
         rope_freq_base: Optional[float],
         device: Optional[torch.device] = None,
         use_hf: bool = False,
+        static_tables: bool = False,
         use_table: bool = True,
         tensor_parallelism_size: int = 1,
     ):
@@ -33,14 +34,23 @@ class RotaryEmbeddingLayer(BaseLayer):
         self.rope_dimension_count = rope_dimension_count
         self.max_seqlen = max_seqlen
         self.use_hf = use_hf
+        self.static_tables = static_tables
         self.use_table = use_table
 
         self.rope_freq_base = rope_freq_base if rope_freq_base is not None else 10000.0
         self.tensor_parallelism_size = tensor_parallelism_size
+        if static_tables:
+            ops.module_register_buffer(
+                self, "static_rotary_embed_table", self._create_rotary_embed_table()
+            )
+        else:
+            self.static_rotary_embed_table = None
 
     @property
     def rotary_embed_table(self):
         if self.use_table:
+            if self.static_tables:
+                return self.static_rotary_embed_table
             return self._create_rotary_embed_table()
 
         if self.tensor_parallelism_size == 1:
