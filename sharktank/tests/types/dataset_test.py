@@ -11,7 +11,7 @@ import unittest
 
 import torch
 
-from shark_turbine.aot import ExternalTensorTrait
+from iree.turbine.aot import ExternalTensorTrait
 from sharktank.types import *
 
 

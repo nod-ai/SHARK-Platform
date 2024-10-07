@@ -15,7 +15,7 @@ import warnings
 import torch
 import torch.nn.functional as F
 
-from shark_turbine.aot import (
+from iree.turbine.aot import (
     ExternalTensorTrait,
     ParameterArchive,
     ParameterArchiveEntry,

@@ -24,7 +24,7 @@ from sharktank.utils import iterables_equal
 import tempfile
 import torch
 from copy import deepcopy
-from shark_turbine.aot import FxProgramsBuilder, export
+from iree.turbine.aot import FxProgramsBuilder, export
 import iree.runtime
 from pathlib import Path
 

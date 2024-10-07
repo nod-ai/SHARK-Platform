@@ -6,7 +6,7 @@
 
 from pathlib import Path
 
-from shark_turbine.aot import (
+from iree.turbine.aot import (
     ParameterArchiveBuilder,
 )
 
