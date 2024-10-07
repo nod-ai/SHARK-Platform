@@ -24,7 +24,7 @@ from ..types import (
 from ..types.tensors import unbox_tensor, AnyTensor
 from ._registry import AllOfType, AllOfExprs, AllOfExprsVariadic, IsOfType
 from .signatures import *
-import shark_turbine.ops.iree
+import iree.turbine.ops.iree
 
 
 @cat.override(AllOfType(Tensor, PrimitiveTensor))
@@ -393,7 +393,7 @@ def to_default(tensor: Tensor, *args, **kwargs):
 
 @transfer_to_logical_device.override(Tensor)
 def transfer_to_logical_device_default(tensor: Tensor, ordinal: int):
-    return shark_turbine.ops.iree.transfer_to_logical_device(
+    return iree.turbine.ops.iree.transfer_to_logical_device(
         f"{ordinal}", unbox_tensor(tensor)
     )
 

@@ -9,7 +9,7 @@
 import json
 import torch
 
-from shark_turbine.aot import *
+from iree.turbine.aot import *
 
 from sharktank.layers import *
 from sharktank.types import *

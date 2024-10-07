@@ -10,7 +10,7 @@ import tempfile
 import torch
 
 
-from shark_turbine import aot
+from iree.turbine import aot
 from sharktank.models.punet.testing import make_resnet_block_2d_theta
 from sharktank.models.punet.layers import ResnetBlock2D
 from sharktank.models.punet.sharding import ResnetBlock2DSplitOutputChannelsSharding

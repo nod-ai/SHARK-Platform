@@ -9,7 +9,7 @@ import unittest
 from pathlib import Path
 import tempfile
 import torch
-from shark_turbine import aot
+from iree.turbine import aot
 from sharktank.models.punet.layers import Conv2DLayer
 from sharktank import ops
 from sharktank.types import (

@@ -6,7 +6,7 @@
 
 import logging
 
-from shark_turbine.support.logging import get_logger
+from iree.turbine.support.logging import get_logger
 
 
 transform_logger: logging.Logger = get_logger("sharktank.transforms")

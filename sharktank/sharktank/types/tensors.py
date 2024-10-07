@@ -27,7 +27,7 @@ import torch
 from torch import Tensor
 from torch.utils._pytree import register_pytree_node, SequenceKey
 from ..utils.math import ceildiv
-from shark_turbine.aot import (
+from iree.turbine.aot import (
     ExternalTensorTrait,
 )
 from ..utils import tree as tree_utils

@@ -176,7 +176,7 @@ source .venv/bin/activate
 # Install requirements.
 pip install -r pytorch-cpu-requirements.txt
 pip install -f https://iree.dev/pip-release-links.html --src deps \
-  -e "git+https://github.com/iree-org/iree-turbine.git#egg=shark-turbine"
+  -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
 
 # Install local projects.
 pip install -r requirements.txt -e sharktank/ shortfin/

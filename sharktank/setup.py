@@ -95,7 +95,7 @@ setup(
         "sharktank": ["py.typed", "kernels/templates/*.mlir"],
     },
     install_requires=[
-        "shark-turbine",
+        "iree-turbine",
     ],
     extras_require={
         "testing": [

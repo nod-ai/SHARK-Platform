@@ -8,7 +8,7 @@ import unittest
 from typing import List
 
 import torch
-from shark_turbine.aot import *
+from iree.turbine.aot import *
 from sharktank.models.llama.testing import make_moe_block_theta, make_rand_torch
 from sharktank.layers.mixture_of_experts_block import PreGatherMoeBlock
 from sharktank import ops
