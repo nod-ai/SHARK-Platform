@@ -27,6 +27,7 @@ __all__ = [
     "equal",
     "expand",
     "flatten",
+    "gather",
     "get_index",
     "gemm",
     "group_norm_affine",
@@ -41,6 +42,7 @@ __all__ = [
     "module_register_buffer",
     "permute",
     "rms_norm",
+    "repeat",
     "replicate",
     "reshape",
     "reshard",
@@ -342,6 +344,28 @@ def _flatten_trampoline(
     dispatch_args = (input,)
     for override in d.find_overrides(dispatch_args):
         result = override(input, start_dim, end_dim)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(dispatch_args)
+
+
+@overridable
+def gather(input: AnyTensor, dim: int, index: AnyTensor) -> AnyTensor:
+    """See torch.gather"""
+    ...
+
+
+@gather.trampoline
+def _gather_trampoline(
+    d: SignatureDispatcher, input: AnyTensor, dim: int, index: AnyTensor
+) -> AnyTensor:
+    dispatch_args = (
+        input,
+        index,
+    )
+    for override in d.find_overrides(dispatch_args):
+        result = override(input, dim, index)
         if result is not NotImplemented:
             return override, result
     else:
@@ -716,6 +740,25 @@ def _rms_norm_trampoline(
             return override, result
     else:
         d.fail(tensors)
+
+
+@overridable
+def repeat(input: AnyTensor, *sizes: List[int]) -> AnyTensor:
+    """See torch.Tensor.repeat"""
+    ...
+
+
+@repeat.trampoline
+def _repeat_trampoline(
+    d: SignatureDispatcher, input: AnyTensor, *sizes: List[int]
+) -> AnyTensor:
+    dispatch_args = (input,)
+    for override in d.find_overrides(dispatch_args):
+        result = override(input, *sizes)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(dispatch_args)
 
 
 @overridable

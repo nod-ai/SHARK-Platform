@@ -157,6 +157,15 @@ def flatten_default(
     return torch.flatten(unbox_tensor(input), start_dim, end_dim)
 
 
+@gather.override(Tensor, Tensor)
+def gather_default(
+    input: Union[Tensor, PrimitiveTensor],
+    dim: int,
+    index: Union[Tensor, PrimitiveTensor],
+) -> Tensor:
+    return torch.gather(unbox_tensor(input), dim, unbox_tensor(index))
+
+
 @get_index.override(AllOfType(Tensor, PrimitiveTensor))
 def get_index_default(tensor, key):
     return unbox_tensor(tensor).__get_item__(key)
@@ -331,6 +340,11 @@ def module_register_buffer_default(
     module: torch.nn.Module, name: str, tensor: Union[Tensor, InferenceTensor]
 ) -> None:
     return module.register_buffer(name, unbox_tensor(tensor))
+
+
+@repeat.override(Tensor)
+def repeat_default(input: Union[Tensor, PrimitiveTensor], *sizes: List[int]) -> Tensor:
+    return unbox_tensor(input).repeat(*sizes)
 
 
 @reshape.override(Tensor)

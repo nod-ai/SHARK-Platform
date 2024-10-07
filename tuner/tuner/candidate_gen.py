@@ -111,40 +111,40 @@ class ProblemSize:
 
 @dataclass
 class MfmaIntrinsic:
-    input_type: ElementType
+    output_type: ElementType
     m: int
     n: int
     k: int
-    output_type: ElementType
+    input_type: ElementType
 
     def __str__(self) -> str:
         input = str(self.input_type).upper()
         output = str(self.output_type).upper()
-        return f"MFMA_{input}_{self.m}x{self.n}x{self.k}_{output}"
+        return f"MFMA_{output}_{self.m}x{self.n}x{self.k}_{input}"
 
     @staticmethod
-    def mfma_f16_16x16x16_f32():
-        return MfmaIntrinsic(ElementType.f16, 16, 16, 16, ElementType.f32)
+    def mfma_f32_16x16x16_f16():
+        return MfmaIntrinsic(ElementType.f32, 16, 16, 16, ElementType.f16)
 
     @staticmethod
-    def mfma_f16_32x32x8_f32():
-        return MfmaIntrinsic(ElementType.f16, 32, 32, 8, ElementType.f32)
+    def mfma_f32_32x32x8_f16():
+        return MfmaIntrinsic(ElementType.f32, 32, 32, 8, ElementType.f16)
 
     @staticmethod
-    def mfma_i8_16x16x32_i32():
-        return MfmaIntrinsic(ElementType.i8, 16, 16, 32, ElementType.i32)
+    def mfma_i32_16x16x32_i8():
+        return MfmaIntrinsic(ElementType.i32, 16, 16, 32, ElementType.i8)
 
     @staticmethod
-    def mfma_i8_32x32x16_i32():
-        return MfmaIntrinsic(ElementType.i8, 32, 32, 16, ElementType.i32)
+    def mfma_i32_32x32x16_i8():
+        return MfmaIntrinsic(ElementType.i32, 32, 32, 16, ElementType.i8)
 
     @staticmethod
     def all():
         return [
-            MfmaIntrinsic.mfma_f16_16x16x16_f32(),
-            MfmaIntrinsic.mfma_f16_32x32x8_f32(),
-            MfmaIntrinsic.mfma_i8_16x16x32_i32(),
-            MfmaIntrinsic.mfma_i8_32x32x16_i32(),
+            MfmaIntrinsic.mfma_f32_16x16x16_f16(),
+            MfmaIntrinsic.mfma_f32_32x32x8_f16(),
+            MfmaIntrinsic.mfma_i32_16x16x32_i8(),
+            MfmaIntrinsic.mfma_i32_32x32x16_i8(),
         ]
 
 

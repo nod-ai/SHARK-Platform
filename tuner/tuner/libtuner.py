@@ -78,12 +78,12 @@ class CandidateTracker:
     calibrated_benchmark_diff: Optional[float] = None
 
 
-@dataclass(frozen=True)
+@dataclass()
 class PathConfig:
     # Preset constants
-    global_config_prolog_mlir: Path = Path("./config_prolog.mlir")
-    global_config_epilog_mlir: Path = Path("./config_epilog.mlir")
-    model_baseline_vmfb: Path = Path("./baseline.vmfb")
+    global_config_prolog_mlir: Path = Path("config_prolog.mlir")
+    global_config_epilog_mlir: Path = Path("config_epilog.mlir")
+    model_baseline_vmfb: Path = Path("baseline.vmfb")
 
     # Dynamic paths
     base_dir: Path = field(init=False)
@@ -523,7 +523,7 @@ def create_worker_context_queue(device_ids: list[int]) -> queue.Queue[tuple[int,
 def run_command(run_pack: RunPack) -> TaskResult:
     command = run_pack.command
     check = run_pack.check
-    timeout_seconds = run_pack.timeout
+    timeout_seconds = run_pack.timeout_seconds
 
     result = None
     is_timeout = False
@@ -828,7 +828,7 @@ def compile_dispatches(
         num_worker=num_worker, task_list=task_list, function=run_command_wrapper
     )
 
-    # Note: failed/incompleted candidates can also be detected by checking if subprocess.res is None
+    # Note: failed/incomplete candidates can also be detected by checking if subprocess.res is None
     compiled_files = sorted(
         path_config.compiled_dir.glob("*.vmfb"), key=numerical_sort_key
     )
@@ -860,7 +860,8 @@ def compile_dispatches(
         compiled_candidates_hash_list.append((index, hash_val))
 
     handle_error(
-        condition=(good == 0), msg="Failed to compile all candidate .mlir files"
+        condition=(good == 0),
+        msg="All candidate dispatches .mlir files failed to compile",
     )
     handle_error(
         condition=(compiling_rate < 10),
