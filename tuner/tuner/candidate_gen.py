@@ -159,9 +159,12 @@ class Configuration:
     waves_per_eu: int
 
 
-class MlirRegex(str, Enum):
+class MlirRegex(Enum):
     ssa_value = r"%[a-zA-Z0-9-_]+"
     tensor_type = r"tensor<(([0-9]+x)+((f|i)[0-9]+))>"
+
+    def __str__(self) -> str:
+        return self.value
 
     @staticmethod
     def dps_ins_two_args() -> str:
@@ -259,7 +262,7 @@ def apply_configuration(
 
 
 def parse_tensor_type(tensor_type: str) -> ShapedType:
-    shape_match = re.search(MlirRegex.tensor_type, tensor_type)
+    shape_match = re.search(str(MlirRegex.tensor_type), tensor_type)
     assert shape_match
 
     shape_str = shape_match.group(1)
