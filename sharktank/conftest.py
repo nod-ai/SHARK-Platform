@@ -6,7 +6,8 @@
 
 from pathlib import Path
 import pytest
-from typing import Optional
+from pytest import FixtureRequest
+from typing import Optional, Any
 
 
 # Tests under each top-level directory will get a mark.
@@ -48,6 +49,15 @@ def pytest_addoption(parser):
         help="Exported model parameters. If not specified a temporary file will be used.",
     )
     parser.addoption(
+        "--prefix",
+        type=str,
+        default=None,
+        help=(
+            "Path prefix for test artifacts. "
+            "Other arguments may override this for specific values."
+        ),
+    )
+    parser.addoption(
         "--caching",
         action="store_true",
         default=False,
@@ -55,21 +65,40 @@ def pytest_addoption(parser):
     )
 
 
-@pytest.fixture(scope="session")
-def mlir_path(pytestconfig: pytest.Config) -> Optional[Path]:
-    return pytestconfig.getoption("mlir")
+def set_fixture_from_cli_option(
+    request: FixtureRequest,
+    cli_option_name: str,
+    class_attribute_name: Optional[str] = None,
+) -> Optional[Any]:
+    res = request.config.getoption(cli_option_name)
+    if request.cls is None:
+        return res
+    else:
+        if class_attribute_name is None:
+            class_attribute_name = cli_option_name
+        setattr(request.cls, class_attribute_name, res)
 
 
-@pytest.fixture(scope="session")
-def module_path(pytestconfig: pytest.Config) -> Optional[Path]:
-    return pytestconfig.getoption("module")
+@pytest.fixture(scope="class")
+def mlir_path(request: FixtureRequest) -> Optional[Path]:
+    return set_fixture_from_cli_option(request, "mlir", "mlir_path")
 
 
-@pytest.fixture(scope="session")
-def parameters_path(pytestconfig: pytest.Config) -> Optional[Path]:
-    return pytestconfig.getoption("parameters")
+@pytest.fixture(scope="class")
+def module_path(request: FixtureRequest) -> Optional[Path]:
+    return set_fixture_from_cli_option(request, "module", "module_path")
 
 
-@pytest.fixture(scope="session")
-def caching(pytestconfig: pytest.Config) -> Optional[Path]:
-    return pytestconfig.getoption("caching")
+@pytest.fixture(scope="class")
+def parameters_path(request: FixtureRequest) -> Optional[Path]:
+    return set_fixture_from_cli_option(request, "parameters", "parameters_path")
+
+
+@pytest.fixture(scope="class")
+def path_prefix(request: FixtureRequest) -> Optional[str]:
+    return set_fixture_from_cli_option(request, "prefix", "path_prefix")
+
+
+@pytest.fixture(scope="class")
+def caching(request: FixtureRequest) -> Optional[bool]:
+    return set_fixture_from_cli_option(request, "caching")
