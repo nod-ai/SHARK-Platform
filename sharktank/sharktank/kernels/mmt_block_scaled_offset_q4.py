@@ -37,41 +37,41 @@ class mmt_block_scaled_offset_q4_unsigned(CustomOp):
         m_desc = ksel.arg_tensor(3)  # Shape [N, K // BLOCK_SIZE, 1]
 
         # a arg
-        *batch_dims, a_m, a_k = a_desc.t.shape
+        *a_batch_dims, a_m, a_k = a_desc.t.shape
         torch._check(
             a_desc.t.dtype.is_floating_point,
             lambda: f"mmt_block_scaled_offset_q4_unsigned arg 'a': Expected floating point (got {a_desc.t.dtype})",
         )
         torch._check(
-            len(batch_dims) == 1,
+            len(a_batch_dims) == 1,
             lambda: f"mmt_block_scaled_offset_q4_unsigned arg 'a': Expected 3d tensor (got {a_desc.t.shape})",
         )
 
         # qs arg
-        qs_n, qs_group0, qs_bs_div_2, *rest = qs_desc.t.shape
+        *qs_batch_dims, qs_n, qs_group0, qs_bs_div_2 = qs_desc.t.shape
         torch._check(
-            len(rest) == 0 and (qs_group0 * qs_bs_div_2 * 2) == a_k,
+            (len(qs_batch_dims) == 0 or len(qs_batch_dims) == 1)
+            and (qs_group0 * qs_bs_div_2 * 2) == a_k,
+            # (len(qs_batch_dims) == 0 or len(qs_batch_dims) == 1 and qs_batch_dims ==a_batch_dims) and (qs_group0 * qs_bs_div_2 * 2) == a_k,
             lambda: f"mmt_block_scaled_offset_q4_unsigned arg 'qs': Incorrect shape (got {qs_desc.t.shape})",
         )
         block_size = qs_bs_div_2 * 2
 
         # d arg
-        d_n, d_group0, d_one, *rest = d_desc.t.shape
+        *d_batch_dims, d_n, d_group0, d_one = d_desc.t.shape
         torch._check(
-            len(rest) == 0
-            and (d_group0 * block_size) == a_k
-            and d_one == 1
-            and d_n == qs_n,
+            True
+            # d_batch_dims == qs_batch_dims
+            and (d_group0 * block_size) == a_k and d_one == 1 and d_n == qs_n,
             lambda: f"mmt_block_scaled_offset_q4_unsigned arg 'd': Incorrect shape (got {d_desc.t.shape})",
         )
 
         # m arg
-        m_n, m_group0, m_one, *rest = m_desc.t.shape
+        *m_batch_dims, m_n, m_group0, m_one = m_desc.t.shape
         torch._check(
-            len(rest) == 0
-            and (m_group0 * block_size) == a_k
-            and m_one == 1
-            and m_n == qs_n,
+            True
+            # m_batch_dims == qs_batch_dims
+            and (m_group0 * block_size) == a_k and m_one == 1 and m_n == qs_n,
             lambda: f"mmt_block_scaled_offset_q4_unsigned arg 'm': Incorrect shape (got {m_desc.t.shape})",
         )
         torch._check(
@@ -81,12 +81,17 @@ class mmt_block_scaled_offset_q4_unsigned(CustomOp):
 
         # Specialize on K, N, BS
         a_desc.specialize_dims(-1)
-        qs_desc.specialize_all_dims()
-        d_desc.specialize_all_dims()
-        m_desc.specialize_all_dims()
+        if len(qs_batch_dims) == 0:
+            qs_desc.specialize_all_dims()
+            d_desc.specialize_all_dims()
+            m_desc.specialize_all_dims()
+        else:
+            qs_desc.specialize_dims(1, 2, 3)
+            d_desc.specialize_dims(1, 2, 3)
+            m_desc.specialize_dims(1, 2, 3)
 
         # Shape batch..., m, n
-        c_desc = ksel.return_new_tensor(batch_dims + [a_m, d_n], dtype=a_desc.t.dtype)
+        c_desc = ksel.return_new_tensor(a_batch_dims + [a_m, d_n], dtype=a_desc.t.dtype)
         c_desc.specialize_dims(-1)
 
     def generate(self, ksel: KernelSelection, kb: KernelBuilder):
@@ -99,13 +104,14 @@ class mmt_block_scaled_offset_q4_unsigned(CustomOp):
 
         rank = a_tensor_type.rank
         k = a_tensor_type.get_dim_size(rank - 1)
-        n, group0, bs_i8 = qs_tensor_type.shape
+        *qs_batch_dims, n, group0, bs_i8 = qs_tensor_type.shape
+        batched_rhs = len(qs_batch_dims) == 1
         bs = bs_i8 * 2  # 2 nibbles per byte.
         a_type_str = str(a_tensor_type.element_type)
         scale_type_str = str(d_tensor_type.element_type)
 
         template_file = "mmt_block_scaled_offset_q4_unsigned.mlir"
-        target_function_name = f"sharktank_mmt_block_scaled_offset_q4_unsigned_3d_{n}_{k}_{bs}_{a_type_str}"
+        target_function_name = f"sharktank_mmt_block_scaled_offset_q4_unsigned_3d_{n}_{k}_{bs}_{a_type_str}_{batched_rhs}"
 
         target_function = inline_template_function(
             kb,
@@ -118,5 +124,6 @@ class mmt_block_scaled_offset_q4_unsigned(CustomOp):
             group0=group0,
             a_type=a_type_str,
             scale_type=scale_type_str,
+            batched_rhs=batched_rhs,
         )
         kb.yield_results(*call_function(target_function, *kb.arg_bindings))
