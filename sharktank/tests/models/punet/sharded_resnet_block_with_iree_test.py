@@ -19,6 +19,7 @@ from sharktank.types import *
 import iree.runtime
 from typing import List, Optional
 import os
+import pytest
 
 vm_context: iree.runtime.VmContext = None
 
@@ -207,19 +208,26 @@ def run_test_sharded_resnet_block_with_iree(
         parameters_path=parameters_path,
     )
     assert len(actual_result.shards) == len(expected_result.shards)
-    # TODO: reenable this check once numerical issues are resolved.
-    # See https://github.com/iree-org/iree/issues/18283
-    # for actual_shard, expected_shard in zip(
-    #     actual_result.shards, expected_result.shards
-    # ):
-    #     torch.testing.assert_close(
-    #         unbox_tensor(actual_shard), unbox_tensor(expected_shard)
-    #     )
+    # TODO: reenable this test once numerical issues are resolved.
+    # The absolute accuracy is > 0.00042. Is this good enough?
+    # Maybe add a test with fp64, where if the accuracy is high would give us more
+    # confidence that fp32 is also OK.
+    for actual_shard, expected_shard in zip(
+        actual_result.shards, expected_result.shards
+    ):
+        torch.testing.assert_close(
+            unbox_tensor(actual_shard), unbox_tensor(expected_shard)
+        )
 
     global vm_context
     del vm_context
 
 
+@pytest.mark.xfail(
+    reason="Maybe numerical issues with low accuracy.",
+    strict=True,
+    raises=AssertionError,
+)
 def test_sharded_resnet_block_with_iree(
     mlir_path: Optional[Path],
     module_path: Optional[Path],

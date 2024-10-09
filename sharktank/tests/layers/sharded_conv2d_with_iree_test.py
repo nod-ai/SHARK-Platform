@@ -173,14 +173,12 @@ def run_test_sharded_conv2d_with_iree(
     )
     assert len(actual_result.shards) == len(expected_result.shards)
     assert actual_result.shard_dim == expected_result.shard_dim
-    # TODO: reenable this check once numerical issues are resolved.
-    # See https://github.com/iree-org/iree/issues/18283
-    # for actual_shard, expected_shard in zip(
-    #     actual_result.shards, expected_result.shards
-    # ):
-    #     torch.testing.assert_close(
-    #         unbox_tensor(actual_shard), unbox_tensor(expected_shard)
-    #     )
+    for actual_shard, expected_shard in zip(
+        actual_result.shards, expected_result.shards
+    ):
+        torch.testing.assert_close(
+            unbox_tensor(actual_shard), unbox_tensor(expected_shard)
+        )
 
 
 def test_sharded_conv2d_with_iree(
