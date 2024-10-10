@@ -68,7 +68,9 @@ class GenerateReqInput:
                 raise ValueError("Positive, Negative text inputs should be same length")
             prev_input_len = len(i)
         if not self.num_output_images:
-            self.num_output_images = len[self.prompt] if self.prompt is not None else len(self.input_ids)
+            self.num_output_images = (
+                len[self.prompt] if self.prompt is not None else len(self.input_ids)
+            )
         if self.num_output_images > 1:
             is_single = False
         if self.sampling_params is None:

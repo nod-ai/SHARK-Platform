@@ -1,4 +1,3 @@
-
 """Configuration objects.
 
 Parameters that are intrinsic to a specific model.
@@ -57,7 +56,7 @@ class ModelParams:
     @property
     def max_clip_batch_size(self) -> int:
         return self.clip_batch_sizes[-1]
-    
+
     @property
     def max_unet_batch_size(self) -> int:
         return self.unet_batch_sizes[-1]

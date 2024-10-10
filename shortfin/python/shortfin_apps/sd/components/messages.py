@@ -34,25 +34,25 @@ class InferenceExecRequest(sf.Message):
     """
 
     def __init__(
-            self, 
-            phase: InferencePhase,
-            prompt: str | None = None,
-            neg_prompt: str | None = None,
-            height: int | None = None,
-            width: int | None = None,
-            steps: int | None = None,
-            guidance_scale: float | sfnp.device_array | None = None,
-            seed: int | None = None,
-            input_ids: sfnp.device_array | None = None,
-            neg_input_ids: sfnp.device_array | None = None,
-            sample: sfnp.device_array | None = None,
-            prompt_embeds: sfnp.device_array | None = None,
-            neg_embeds: sfnp.device_array | None = None,
-            timesteps: sfnp.device_array | None = None,
-            time_ids: sfnp.device_array | None = None,
-            denoised_latents: sfnp.device_array | None = None,
-            image_array: sfnp.device_array | None = None,
-        ):
+        self,
+        phase: InferencePhase,
+        prompt: str | None = None,
+        neg_prompt: str | None = None,
+        height: int | None = None,
+        width: int | None = None,
+        steps: int | None = None,
+        guidance_scale: float | sfnp.device_array | None = None,
+        seed: int | None = None,
+        input_ids: sfnp.device_array | None = None,
+        neg_input_ids: sfnp.device_array | None = None,
+        sample: sfnp.device_array | None = None,
+        prompt_embeds: sfnp.device_array | None = None,
+        neg_embeds: sfnp.device_array | None = None,
+        timesteps: sfnp.device_array | None = None,
+        time_ids: sfnp.device_array | None = None,
+        denoised_latents: sfnp.device_array | None = None,
+        image_array: sfnp.device_array | None = None,
+    ):
         super().__init__()
         self.phase = phase
 
@@ -77,7 +77,7 @@ class InferenceExecRequest(sf.Message):
         # guidance scale at denoise phase is a device array
         self.timesteps = timesteps
         self.time_ids = time_ids
-        
+
         # Decode phase.
         self.denoised_latents = denoised_latents
 
@@ -92,12 +92,7 @@ class InferenceExecRequest(sf.Message):
         self.return_host_array: bool = False
 
         # Result of inference phase.
-        # Phase 1: [sample, input_ids, neg_input_ids, guidance_scale, timesteps, time_ids]
-        # Phase 2: [prompt_embeds, neg_embeds]
-        # Phase 3: [denoised_latents]
-        # Phase 4: [image_array]
-        # Phase 5: [postprocessed_image]
-        self.payload = List[sfnp.device_array] | None = None
+        self.payload = None
 
     def reset(self, phase: InferencePhase):
         """Resets all per request state in preparation for an subsequent execution."""

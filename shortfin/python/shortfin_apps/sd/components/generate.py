@@ -21,6 +21,7 @@ from .tokenizer import Encoding
 
 logger = logging.getLogger(__name__)
 
+
 class GenerateImageProcess(sf.Process):
     """Process instantiated for every image generation.
 
@@ -46,12 +47,12 @@ class GenerateImageProcess(sf.Process):
     async def run(self):
         # TODO: make sure gen_req is being indexed for the singular image generation sequence's inputs.
         exec = InferenceExecRequest(
-            InferencePhase.PREPARE, 
-            [self.gen_req.prompt[self.index]], 
+            InferencePhase.PREPARE,
+            [self.gen_req.prompt[self.index]],
             [self.gen_req.neg_prompt[self.index]],
             self.gen_req.height[self.index],
             self.gen_req.width[self.index],
-            )
+        )
         self.client.batcher.submit(exec)
         await exec.done
         (
@@ -85,6 +86,7 @@ class GenerateImageProcess(sf.Process):
         self.client.batcher.submit(exec)
         await exec.done
         self.result_image = exec.payload
+
 
 class ClientGenerateBatchProcess(sf.Process):
     """Process instantiated for handling a batch from a client.
@@ -123,21 +125,19 @@ class ClientGenerateBatchProcess(sf.Process):
             # Launch all individual generate processes and wait for them to finish.
             gen_processes = []
             for index in range(self.gen_req.num_output_images):
-                gen_process = GenerateImageProcess(
-                    self, self.gen_req, index
-                )
+                gen_process = GenerateImageProcess(self, self.gen_req, index)
                 gen_processes.append(gen_process)
                 gen_process.launch()
 
             await asyncio.gather(*gen_processes)
 
-            #TODO: stream image outputs
+            # TODO: stream image outputs
             logging.debug("Responding to one shot batch")
             out = io.BytesIO()
             result_images = [p.result_image for p in gen_processes]
             for idx, result_image in enumerate(result_images):
                 out.write(f"generated image #{idx}")
-                #TODO: save or return images
+                # TODO: save or return images
             self.responder.send_response(out.getvalue())
         finally:
             self.responder.ensure_response()

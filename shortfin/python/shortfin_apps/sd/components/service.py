@@ -158,7 +158,7 @@ class BatcherProcess(sf.Process):
 
     def board_flights(self):
         waiting_count = (
-            len(self.pending_preps) 
+            len(self.pending_preps)
             + len(self.pending_encodes)
             + len(self.pending_denoises)
             + len(self.pending_decodes)
@@ -191,16 +191,16 @@ class BatcherProcess(sf.Process):
 
     def board_preps():
         pass
-    
+
     def board_encodes():
         pass
-    
+
     def board_denoises():
         pass
-    
+
     def board_decodes():
         pass
-    
+
     def board_postprocesses():
         pass
 
@@ -233,6 +233,7 @@ class InferenceExecProcessPrep(sf.Process):
                 req.payload = None
                 req.done.set_success()
 
+
 class InferenceExecProcessEncode(sf.Process):
     """Executes a CLIP encoding batch"""
 
@@ -255,6 +256,7 @@ class InferenceExecProcessEncode(sf.Process):
             for req in self.exec_requests:
                 req.payload = None
                 req.done.set_success()
+
 
 class InferenceExecProcessDenoise(sf.Process):
     """Executes a denoising loop for a batch of latents."""
@@ -279,6 +281,7 @@ class InferenceExecProcessDenoise(sf.Process):
                 req.payload = None
                 req.done.set_success()
 
+
 class InferenceExecProcessDecode(sf.Process):
     """Executes decoding for a batch of denoised latents."""
 
@@ -302,6 +305,7 @@ class InferenceExecProcessDecode(sf.Process):
                 req.payload = None
                 req.done.set_success()
 
+
 class InferenceExecProcessPostprocess(sf.Process):
     """Executes postprocessing for a batch of generated images."""
 
@@ -324,5 +328,3 @@ class InferenceExecProcessPostprocess(sf.Process):
             for req in self.exec_requests:
                 req.payload = None
                 req.done.set_success()
-
-
