@@ -26,9 +26,11 @@ from sharktank.models.grok.grok import *
 from sharktank.utils import cli
 from sharktank.utils.load_llm import *
 
-logging.basicConfig()
 logger = logging.getLogger("eval")
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
+logger.root.handlers[0].setFormatter(
+    logging.Formatter(fmt="\n%(levelname)s:%(name)-8s %(message)s")
+)
 
 __all__ = ["Perplexity", "run_perplexity"]
 
@@ -54,6 +56,8 @@ class Perplexity:
         self.bs = len(prompts)
         self.device = device
         self.kv_cache_type = kv_cache_type
+        self.activation_dtype = torch.float32
+        self.attention_dtype = torch.float32
 
     def timeit(func):
         def wrapper(*args, **kwargs):
@@ -74,6 +78,22 @@ class Perplexity:
 
         return wrapper
 
+    def print_token_comparison(self, i):
+        if i <= self.max_prompt_length:
+            batch_predicted_token_id = [[i[-1]] for i in self.batch.results]
+            batch_predicted_token = self.generator.tokenizer.decode(
+                batch_predicted_token_id
+            )
+            logger.debug(f"Predicted:")
+            logger.debug(f"{batch_predicted_token}")
+            logger.debug(f"{batch_predicted_token_id}")
+
+            expected_token_id = self.token_ids[:, i + 1 : i + 2].tolist()
+            expected_token = self.generator.tokenizer.decode(expected_token_id)
+            logger.debug(f"Expected:")
+            logger.debug(f"{expected_token}")
+            logger.debug(f"{expected_token_id}")
+
     @timeit
     def load_model(self, dataset, tokenizer):
 
@@ -84,8 +104,8 @@ class Perplexity:
             block_seq_stride=16,
             kv_cache_type=self.kv_cache_type,
             device=self.device,
-            activation_dtype=torch.float32,
-            attention_dtype=torch.float32,
+            activation_dtype=self.activation_dtype,
+            attention_dtype=self.attention_dtype,
         )
 
         if config.hp.expert_count:
@@ -107,59 +127,77 @@ class Perplexity:
             add_start_token=self.add_start_token,
         )
 
-        logger.info(f" Prompts:")
+        logger.info(f" Prompts for Evaluation:")
         for idx, prompt in enumerate(self.prompts):
-            logger.info(f" Prompt {idx} - {prompt.encode()}\n{token_ids[idx]}")
+            logger.info(
+                f" Prompt {idx}: \nTokens: {prompt.encode()}\nToken ids: {token_ids[idx]}\n"
+            )
 
-        max_prompt_length = max(seq_lens)
+        self.max_prompt_length = max(seq_lens)
 
         self.token_ids = torch.tensor(token_ids, device=self.device)
         self.attention_mask = (
             (self.token_ids != 0).int().detach().clone().to(self.device)
         )
 
-        is_first_token = True
+        is_prefill = True
         for i in tqdm(
-            range(0, max_prompt_length),
+            range(1, self.max_prompt_length - 1),
             desc="eval: Calculating logits",
         ):
-            token_batch = self.token_ids[:, : i + 1]
             logger.debug(f"Iteration: {i}")
-            logger.debug(
-                f"Input tokens: {self.generator.tokenizer.decode(token_batch)}"
-            )
 
-            token_batch, seq_lens_batch = self.generator.tokenizer.pad_tokens(
-                token_ids=token_batch.tolist(),
-                pad_to_multiple_of=self.generator.model.cache.pad_sequence_stride,
-            )
+            if is_prefill:
+                token_batch = self.token_ids[:, : i + 1]
 
-            token_batch = torch.tensor(token_batch, device=self.device)
-            seq_lens_batch = torch.tensor(seq_lens_batch, device=self.device)
+                logger.debug(f"Prefill:")
 
-            self.batch = self.generator.begin_eval_batch(
-                token_batch=token_batch,
-                seq_lens_batch=seq_lens_batch,
-                bs=self.bs,
-            )
+                logger.debug("Input:")
+                logger.debug(f"{self.generator.tokenizer.decode(token_batch)}")
 
-            self.cache_state = self.batch.prefill()
-            logger.debug(f"Prefill predicted token: {self.batch.detokenize()}")
-
-            if is_first_token:
-                self.out_logits = self.batch.prefill_logits[:, 0:1, :]
-                is_first_token = False
-            else:
-                self.out_logits = torch.cat(
-                    (self.out_logits, self.batch.prefill_logits[:, 0:1, :]), 1
+                token_batch, seq_lens_batch = self.generator.tokenizer.pad_tokens(
+                    token_ids=token_batch.tolist(),
+                    pad_to_multiple_of=self.generator.model.cache.pad_sequence_stride,
                 )
 
-            if i == max_prompt_length - 1:
-                self.pad_logits = self.batch.prefill_logits[:, i + 1 :, :]
+                logger.debug(f"{token_batch}")
 
-        self.out_logits = torch.cat((self.out_logits, self.pad_logits), 1).to(
-            self.device
-        )
+                token_batch = torch.tensor(token_batch, device=self.device)
+                seq_lens_batch = torch.tensor(seq_lens_batch, device=self.device)
+
+                self.batch = self.generator.begin_eval_batch(
+                    token_batch=token_batch,
+                    seq_lens_batch=seq_lens_batch,
+                    bs=self.bs,
+                )
+
+                self.batch.prefill()
+                self.pad_logits = self.batch.prefill_logits[:, :, :]
+                self.out_logits = self.batch.prefill_logits[:, 0:1, :]
+                is_prefill = False
+
+                self.print_token_comparison(i)
+
+            else:
+                token_batch = self.token_ids[:, i : i + 1]
+
+                logger.debug("Decode:")
+
+                logger.debug("Input:")
+                logger.debug(f"{self.generator.tokenizer.decode(token_batch)}")
+                logger.debug(f"{token_batch.tolist()}")
+
+                self.batch.decode(token_batch=token_batch)
+                self.out_logits = torch.cat(
+                    (self.out_logits, self.batch.decode_logits), 1
+                )
+
+                self.print_token_comparison(i)
+
+        pad_logits_shape = self.token_ids.shape[1] - self.out_logits.shape[1]
+        self.out_logits = torch.cat(
+            (self.out_logits, self.pad_logits[:, -pad_logits_shape:, :]), 1
+        ).to(self.device)
 
     @timeit
     def compute_perplexity(self):
@@ -185,17 +223,22 @@ class Perplexity:
 
         self.get_logits()
 
+        torch.save(
+            [self.out_logits, self.token_ids, self.attention_mask],
+            "/home/aramalin/sharktank/perplexity_logits_prompt0_sharktank_v1.pt",
+        )
+
         self.out_logits = self.out_logits[..., :-1, :].contiguous()
         self.token_ids = self.token_ids[..., 1:].contiguous()
         self.attention_mask = self.attention_mask[..., 1:].contiguous()
 
-        assert self.token_ids.shape == self.out_logits.shape[0:2]
-
-        logger.debug(f"Logits shape: {self.out_logits.shape}")
-        logger.debug(f"Token ids: {self.token_ids}, {self.token_ids.shape}")
+        logger.debug(f"Final Logits shape: {self.out_logits.shape}")
+        logger.debug(f"Token ids: {self.token_ids}, \n{self.token_ids.shape}")
         logger.debug(
-            f"Logits shape: {self.attention_mask}, {self.attention_mask.shape}"
+            f"Mask shape: {self.attention_mask}, \n{self.attention_mask.shape}"
         )
+
+        assert self.token_ids.shape == self.out_logits.shape[0:2]
 
         return self.compute_perplexity()
 

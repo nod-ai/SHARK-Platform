@@ -109,8 +109,6 @@ class Batch:
                 row.append(self.parent.alloc_page())
             self.seq_block_ids.append(row)
 
-        # print('free_pages, seq_lens', len(self.parent.free_pages), self.seq_lens)
-
     @property
     def done(self) -> bool:
         return len(self.done_result_indices) == self.bs
@@ -151,14 +149,9 @@ class Batch:
             model.input_mask(self.seq_lens, self.token_ids.shape[1])
         )
         seq_block_ids_tensor = self.pad_block_ids()
-        # print(f":: Invoke prefill:")
         trace_tensor("prefill.token_ids", self.token_ids)
         trace_tensor("prefill.seq_block_ids", seq_block_ids_tensor)
         trace_tensor("prefill.attention_mask", attention_mask)
-        # print("prefill.token_ids", self.token_ids)
-        # print("prefill.seq_block_ids", seq_block_ids_tensor)
-        # print("prefill.attention_mask", attention_mask.shape)
-        # print("prefill.cache_state", self.cache_state[0].shape)
         self.prefill_logits = model.prefill(
             self.token_ids,
             attention_mask=attention_mask,
@@ -172,13 +165,12 @@ class Batch:
         tokens = torch.tensor(
             model.extract_tokens_from_logits(self.prefill_logits, self.seq_lens)
         ).unsqueeze(1)
-        # print(f":: Prefill results:\n{tokens.tolist()}")
         self.add_result_token(tokens)
         self.next_tokens = tokens.to(device=model.device)
-        return self.cache_state
 
-    def decode(self, cache_state):
-        self.cache_state = cache_state
+    def decode(self, token_batch):
+        self.token_batch = token_batch
+
         model = self.parent.model
         start_positions = self.seq_lens.clone()
         self.seq_lens.add_(1)
@@ -195,18 +187,16 @@ class Batch:
         trace_tensor("decode.start_positions", start_positions)
         trace_tensor("decode.seq_block_ids", seq_block_ids_tensor)
         trace_tensor("decode.attention_mask", decode_attention_mask)
-        # print("decode.token_ids", self.token_ids)
 
         self.decode_logits = model.decode(
-            self.token_ids,
+            self.token_batch,
             attention_mask=decode_attention_mask,
             start_positions=start_positions,
             seq_block_ids=seq_block_ids_tensor,
             cache_state=self.cache_state,
         )
 
-        # print("decode", len(self.decode_logits))
-        # trace_tensor("decode.logits", self.decode_logits)
+        trace_tensor("decode.logits", self.decode_logits)
         # # TODO: Normalize the output of extract_tokens_from_logits into
         # # tensor [bs, 1].
         tokens = torch.tensor(
@@ -214,9 +204,7 @@ class Batch:
             device=self.parent.model.device,
         ).unsqueeze(1)
         self.add_result_token(tokens)
-        # self.next_tokens = tokens
-
-        return self.cache_state
+        self.next_tokens = tokens
 
     def pad_block_ids(self) -> torch.Tensor:
         max_length = max(len(r) for r in self.seq_block_ids)
