@@ -48,10 +48,13 @@ class GenerateImageProcess(sf.Process):
         # TODO: make sure gen_req is being indexed for the singular image generation sequence's inputs.
         exec = InferenceExecRequest(
             InferencePhase.PREPARE,
-            [self.gen_req.prompt[self.index]],
-            [self.gen_req.neg_prompt[self.index]],
+            self.gen_req.prompt[self.index],
+            self.gen_req.neg_prompt[self.index],
             self.gen_req.height[self.index],
             self.gen_req.width[self.index],
+            self.gen_req.steps[self.index],
+            self.gen_req.guidance_scale[self.index],
+            self.gen_req.seed[self.index],
         )
         self.client.batcher.submit(exec)
         await exec.done
