@@ -76,7 +76,7 @@ app.put("/generate")(generate_request)
 
 def configure(args) -> SystemManager:
     # Setup system (configure devices, etc).
-    sysman = SystemManager()
+    sysman = SystemManager(device=args.device)
 
     # Setup each service we are hosting.
     tokenizer = Tokenizer.from_tokenizer_json_file(args.tokenizer_json)
@@ -126,6 +126,9 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
         type=Path,
         nargs="*",
         help="Parameter archives to load",
+    )
+    parser.add_argument(
+        "--device", type=str, default="local-task", help="Device to serve on; e.g. local-task, hip. Same options as `iree-run-module --device` "
     )
     args = parser.parse_args(argv)
     global sysman
