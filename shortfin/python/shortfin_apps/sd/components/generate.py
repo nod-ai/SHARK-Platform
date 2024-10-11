@@ -58,37 +58,23 @@ class GenerateImageProcess(sf.Process):
         )
         self.client.batcher.submit(exec)
         await exec.done
-        (
-            exec.sample,
-            exec.input_ids,
-            exec.neg_input_ids,
-            exec.guidance_scale,
-            exec.timesteps,
-            exec.time_ids,
-        ) = exec.payload
 
         exec.reset(InferencePhase.ENCODE)
         self.client.batcher.submit(exec)
         await exec.done
-        (
-            exec.prompt_embeds,
-            exec.neg_embeds,
-        ) = exec.payload
 
         exec.reset(InferencePhase.DENOISE)
         self.client.batcher.submit(exec)
         await exec.done
-        exec.denoised_latents = exec.payload
 
         exec.reset(InferencePhase.DECODE)
         self.client.batcher.submit(exec)
         await exec.done
-        exec.image_array = exec.payload
 
         exec.reset(InferencePhase.POSTPROCESS)
         self.client.batcher.submit(exec)
         await exec.done
-        self.result_image = exec.payload
+        self.result_image = exec.result_image
 
 
 class ClientGenerateBatchProcess(sf.Process):

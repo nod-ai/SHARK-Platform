@@ -6,6 +6,7 @@
 
 import asyncio
 import logging
+import math
 from pathlib import Path
 
 import shortfin as sf
@@ -88,8 +89,6 @@ class GenerateService:
 # Batcher
 ########################################################################################
 
-import math
-
 
 class BatcherProcess(sf.Process):
     """The batcher is a persistent process responsible for flighting incoming work
@@ -137,7 +136,7 @@ class BatcherProcess(sf.Process):
             if isinstance(item, InferenceExecRequest):
                 phase = item.phase
                 if phase == InferencePhase.PREP:
-                    self.pending_preps.add(item)
+                    self.pending_reqs.add(item)
                 elif phase == InferencePhase.ENCODE:
                     self.pending_encodes.add(item)
                 elif phase == InferencePhase.DENOISE:

@@ -4,20 +4,13 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-"""Objects transferred between components.
-
-Portions adapted from API definitions originating in:
-
-sglang: Copyright 2023-2024 SGLang Team, Licensed under the Apache License, Version 2.0
-"""
-
 from typing import Dict, List, Optional, Union
 from dataclasses import dataclass
 import uuid
 
+import shortfin.array as sfnp
 
-# Adapted from:
-# https://github.com/sgl-project/sglang/blob/main/python/sglang/srt/managers/io_struct.py
+
 @dataclass
 class GenerateReqInput:
     # The input prompt. It can be a single prompt or a batch of prompts.

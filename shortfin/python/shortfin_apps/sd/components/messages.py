@@ -31,6 +31,8 @@ class InferenceExecRequest(sf.Message):
 
     Used for individual image requests. Bundled as lists by the batcher for inference processes,
     and inputs joined for programs with bs>1.
+
+    Inference execution processes are responsible for writing their outputs directly to the appropriate attributes here.
     """
 
     def __init__(
@@ -84,6 +86,8 @@ class InferenceExecRequest(sf.Message):
         # Postprocess.
         self.image_array = image_array
 
+        self.result_image = None
+
         self.done = sf.VoidFuture()
 
         # Response control.
@@ -91,15 +95,11 @@ class InferenceExecRequest(sf.Message):
         # available.
         self.return_host_array: bool = False
 
-        # Result of inference phase.
-        self.payload = None
-
     def reset(self, phase: InferencePhase):
         """Resets all per request state in preparation for an subsequent execution."""
         self.phase = phase
         self.done = sf.VoidFuture()
         self.return_host_array = True
-        self.payload = None
 
 
 class StrobeMessage(sf.Message):
