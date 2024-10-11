@@ -452,11 +452,11 @@ def generate_solutions(problem_size: ProblemSize, num_subgrups: int):
             lookup(subgroup_size),
             [lookup(wg_x), lookup(wg_y), lookup(wg_z)],
             MfmaIntrinsic(
-                problem_size.lhs_type.element_type,
+                problem_size.res_type.element_type,
                 lookup(intrinsic_mn),
                 lookup(intrinsic_mn),
                 lookup(intrinsic_k),
-                problem_size.res_type.element_type,
+                problem_size.lhs_type.element_type,
             ),
             [lookup(m), lookup(n), lookup(k)],
             lookup(sg_m_cnt),
