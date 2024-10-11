@@ -66,6 +66,7 @@ class DirectCacheMixtralModelV1(ThetaLayer):
         self.add_module("output_lm_head", LinearLayer(theta("output")))
 
         self.attn_blocks = nn.ModuleList()
+        self.moe_blocks = nn.ModuleList()
 
         for n in range(hp.block_count):
             self.attn_blocks.append(
@@ -78,7 +79,7 @@ class DirectCacheMixtralModelV1(ThetaLayer):
                     rms_epsilon=hp.attention_layer_norm_rms_epsilon,
                 )
             )
-            self.attn_blocks.append(
+            self.moe_blocks.append(
                 SparseMoeBlock(
                     theta("blk", n),
                     expert_count=hp.expert_count,
@@ -130,28 +131,29 @@ class DirectCacheMixtralModelV1(ThetaLayer):
         block_count = len(self.attn_blocks) // 2
         # print('local_kv_cache, #attn_blocks', len(local_kv_cache), block_count)
         # Iterate over attention + MoE blocks.
-        for block_idx, block in enumerate(self.attn_blocks):
+        for block_idx, (attn_block, moe_block) in enumerate(
+            zip(self.attn_blocks, self.moe_blocks)
+        ):
             # print("block_idx, block", block_idx, block)
             if block_idx == 0:
                 self.trace_tensor(f"mixtral.attn_block.{block_idx}.input", h)
 
-            if block.__class__.__name__ == "LlamaAttentionBlock":
-                attn_block_idx = block_idx // 2
-                block_cache_k = local_kv_cache[attn_block_idx]
-                block_cache_v = local_kv_cache[block_count + attn_block_idx]
-                h = block(
-                    h,
-                    cache_k=block_cache_k,
-                    cache_v=block_cache_v,
-                    start_index=start_index,
-                    attention_mask=attention_mask,
-                )
-                self.trace_tensor(f"mixtral.attn_block.{block_idx}.output", h)
-            elif block.__class__.__name__ == "SparseMoeBlock":
-                h = block(
-                    h,
-                )
-                self.trace_tensor(f"mixtral.moe_block.{block_idx}.output", h)
+            attn_block_idx = block_idx // 2
+            block_cache_k = local_kv_cache[attn_block_idx]
+            block_cache_v = local_kv_cache[block_count + attn_block_idx]
+            h = attn_block(
+                h,
+                cache_k=block_cache_k,
+                cache_v=block_cache_v,
+                start_index=start_index,
+                attention_mask=attention_mask,
+            )
+            self.trace_tensor(f"mixtral.attn_block.{block_idx}.output", h)
+
+            h = attn_block(
+                h,
+            )
+            self.trace_tensor(f"mixtral.moe_block.{block_idx}.output", h)
 
         h = self.output_norm(h)
         logits = self.output_lm_head(h)

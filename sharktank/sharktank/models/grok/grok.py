@@ -7,6 +7,7 @@
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 from ...layers import *
@@ -82,6 +83,7 @@ class PagedGrokModelV1(BaseCausalLMModel):
         self.add_module("output_lm_head", LinearLayer(theta("output")))
 
         self.attn_blocks = nn.ModuleList()
+        self.moe_blocks = nn.ModuleList()
 
         for n in range(hp.block_count):
             self.attn_blocks.append(
@@ -93,16 +95,15 @@ class PagedGrokModelV1(BaseCausalLMModel):
                     head_dim=hp.attn_head_dim,
                     head_count_kv=hp.attention_head_count_kv,
                     rms_epsilon=hp.attention_layer_norm_rms_epsilon,
-                    use_grok=True,
                 )
             )
-            self.attn_blocks.append(
+            self.moe_blocks.append(
                 PreGatherMoeBlock(
                     theta("blk", n),
                     expert_count=hp.expert_count,
                     expert_used_count=hp.expert_used_count,
                     rms_epsilon=hp.attention_layer_norm_rms_epsilon,
-                    use_grok=True,
+                    activation=F.gelu,
                 )
             )
 
@@ -122,33 +123,32 @@ class PagedGrokModelV1(BaseCausalLMModel):
         self._assert_device(seq_block_ids)
         self._assert_device(*cache_state, dtype=self.activation_dtype)
         h = self.token_embedding(tokens)
-        h *= 78.38367176906169
+        h *= math.sqrt(h.shape[-1])
         self.trace_tensor("grok.token_embedding", h)
 
         # Iterate over attention blocks.
-        for block_idx, block in enumerate(self.attn_blocks):
+        for block_idx, (attn_block, moe_block) in enumerate(
+            zip(self.attn_blocks, self.moe_blocks)
+        ):
             if block_idx == 0:
                 self.trace_tensor(f"grok.attn_block.{block_idx}.input", h)
 
-            if block.__class__.__name__ == "PagedLlamaAttentionBlock":
-                h = block(
-                    h,
-                    embedding=self.attention_embedding,
-                    start_index=0,
-                    attention_mask=attention_mask,
-                    cache_state=cache_state,
-                    seq_block_ids=seq_block_ids,
-                )
-                self.trace_tensor(f"grok.attn_block.{block_idx}.output", h)
-            elif block.__class__.__name__ == "PreGatherMoeBlock":
-                h = block(
-                    h,
-                )
-                self.trace_tensor(f"grok.moe_block.{block_idx}.output", h)
+            h = attn_block(
+                h,
+                embedding=self.attention_embedding,
+                start_index=0,
+                attention_mask=attention_mask,
+                cache_state=cache_state,
+                seq_block_ids=seq_block_ids,
+            )
+            self.trace_tensor(f"grok.attn_block.{block_idx}.output", h)
+
+            h = moe_block(h)
+            self.trace_tensor(f"grok.moe_block.{block_idx}.output", h)
 
         h = self.output_norm(h)
         logits = self.output_lm_head(h)
-        logits = logits * 0.5773502691896257
+        logits = logits / math.sqrt(3.0)
         return logits
 
     def decode(
@@ -200,34 +200,34 @@ class PagedGrokModelV1(BaseCausalLMModel):
         )
 
         h = self.token_embedding(tokens)
-        h *= 78.38367176906169
+        h *= math.sqrt(h.shape[-1])
         self.trace_tensor("grok.token_embedding", h)
 
         # Iterate over attention blocks.
-        for block_idx, block in enumerate(self.attn_blocks):
+        for block_idx, (attn_block, moe_block) in enumerate(
+            self.attn_blocks, self.moe_blocks
+        ):
             if block_idx == 0:
                 self.trace_tensor(f"grok.attn_block.{block_idx}.input", h)
 
-            if block.__class__.__name__ == "PagedLlamaAttentionBlock":
-                h = block(
-                    h,
-                    start_positions=start_positions,
-                    embedding=self.attention_embedding,
-                    embedding_batch_mask=embedding_batch_mask,
-                    attention_mask=attention_mask,
-                    cache_state=cache_state,
-                    seq_block_ids=seq_block_ids,
-                    xk_temp=xk_temp,
-                    xv_temp=xv_temp,
-                )
-                self.trace_tensor(f"grok.attn_block.{block_idx}.output", h)
-            elif block.__class__.__name__ == "PreGatherMoeBlock":
-                h = block(
-                    h,
-                )
-                self.trace_tensor(f"grok.moe_block.{block_idx}.output", h)
+            h = attn_block(
+                h,
+                start_positions=start_positions,
+                embedding=self.attention_embedding,
+                embedding_batch_mask=embedding_batch_mask,
+                attention_mask=attention_mask,
+                cache_state=cache_state,
+                seq_block_ids=seq_block_ids,
+                xk_temp=xk_temp,
+                xv_temp=xv_temp,
+                softcap=30.0,
+            )
+            self.trace_tensor(f"grok.attn_block.{block_idx}.output", h)
+
+            h = moe_block(h)
+            self.trace_tensor(f"grok.moe_block.{block_idx}.output", h)
 
         h = self.output_norm(h)
         logits = self.output_lm_head(h)
-        logits = logits * 0.5773502691896257
+        logits = logits / math.sqrt(3.0)
         return logits

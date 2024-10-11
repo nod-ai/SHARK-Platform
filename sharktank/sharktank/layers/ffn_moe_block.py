@@ -24,11 +24,10 @@ class PreGatherFFNMOE(ThetaLayer):
     def __init__(
         self,
         theta: Theta,
-        use_grok: bool = False,
+        activation=F.silu,
     ):
 
         super().__init__(theta)
-        self.use_grok = use_grok
 
         self.ffn_gate = theta.tensor("ffn_gate_exps", "weight")
         self.ffn_up = theta.tensor("ffn_up_exps", "weight")
@@ -63,10 +62,8 @@ class PreGatherFFNMOE(ThetaLayer):
         experts: torch.Tensor,
         expert_gate: torch.Tensor,
     ):
-        if self.use_grok:
-            ffn_gate = F.gelu(self.pre_matmul_gather(h, self.ffn_gate, experts))
-        else:
-            ffn_gate = F.silu(self.pre_matmul_gather(h, self.ffn_gate, experts))
+        ffn_gate = self.pre_matmul_gather(h, self.ffn_gate, experts)
+        ffn_gate = ops.elementwise(self.activation, ffn_gate)
 
         ffn_up = self.pre_matmul_gather(h, self.ffn_up, experts)
         ffn_down = self.pre_matmul_gather(

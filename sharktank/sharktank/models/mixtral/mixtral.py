@@ -85,6 +85,7 @@ class PagedMixtralModelV1(BaseCausalLMModel):
         self.add_module("output_lm_head", LinearLayer(theta("output")))
 
         self.attn_blocks = nn.ModuleList()
+        self.moe_blocks = nn.ModuleList()
 
         for n in range(hp.block_count):
             self.attn_blocks.append(
@@ -98,7 +99,7 @@ class PagedMixtralModelV1(BaseCausalLMModel):
                     rms_epsilon=hp.attention_layer_norm_rms_epsilon,
                 )
             )
-            self.attn_blocks.append(
+            self.moe_blocks.append(
                 SparseMoeBlock(
                     theta("blk", n),
                     expert_count=hp.expert_count,
@@ -126,25 +127,26 @@ class PagedMixtralModelV1(BaseCausalLMModel):
         self.trace_tensor("mixtral.token_embedding", h)
 
         # Iterate over attention blocks.
-        for block_idx, block in enumerate(self.attn_blocks):
+        for block_idx, (attn_block, moe_block) in enumerate(
+            zip(self.attn_blocks, self.moe_blocks)
+        ):
             if block_idx == 0:
                 self.trace_tensor(f"mixtral.attn_block.{block_idx}.input", h)
 
-            if block.__class__.__name__ == "PagedLlamaAttentionBlock":
-                h = block(
-                    h,
-                    embedding=self.attention_embedding,
-                    start_index=0,
-                    attention_mask=attention_mask,
-                    cache_state=cache_state,
-                    seq_block_ids=seq_block_ids,
-                )
-                self.trace_tensor(f"mixtral.attn_block.{block_idx}.output", h)
-            elif block.__class__.__name__ == "SparseMoeBlock":
-                h = block(
-                    h,
-                )
-                self.trace_tensor(f"mixtral.moe_block.{block_idx}.output", h)
+            h = attn_block(
+                h,
+                embedding=self.attention_embedding,
+                start_index=0,
+                attention_mask=attention_mask,
+                cache_state=cache_state,
+                seq_block_ids=seq_block_ids,
+            )
+            self.trace_tensor(f"mixtral.attn_block.{block_idx}.output", h)
+
+            h = moe_block(
+                h,
+            )
+            self.trace_tensor(f"mixtral.moe_block.{block_idx}.output", h)
 
         h = self.output_norm(h)
         logits = self.output_lm_head(h)
@@ -202,28 +204,29 @@ class PagedMixtralModelV1(BaseCausalLMModel):
         self.trace_tensor("mixtral.token_embedding", h)
 
         # Iterate over attention blocks.
-        for block_idx, block in enumerate(self.attn_blocks):
+        for block_idx, (attn_block, moe_block) in enumerate(
+            zip(self.attn_blocks, self.moe_blocks)
+        ):
             if block_idx == 0:
                 self.trace_tensor(f"mixtral.attn_block.{block_idx}.input", h)
 
-            if block.__class__.__name__ == "PagedLlamaAttentionBlock":
-                h = block(
-                    h,
-                    start_positions=start_positions,
-                    embedding=self.attention_embedding,
-                    embedding_batch_mask=embedding_batch_mask,
-                    attention_mask=attention_mask,
-                    cache_state=cache_state,
-                    seq_block_ids=seq_block_ids,
-                    xk_temp=xk_temp,
-                    xv_temp=xv_temp,
-                )
-                self.trace_tensor(f"mixtral.attn_block.{block_idx}.output", h)
-            elif block.__class__.__name__ == "SparseMoeBlock":
-                h = block(
-                    h,
-                )
-                self.trace_tensor(f"mixtral.moe_block.{block_idx}.output", h)
+            h = attn_block(
+                h,
+                start_positions=start_positions,
+                embedding=self.attention_embedding,
+                embedding_batch_mask=embedding_batch_mask,
+                attention_mask=attention_mask,
+                cache_state=cache_state,
+                seq_block_ids=seq_block_ids,
+                xk_temp=xk_temp,
+                xv_temp=xv_temp,
+            )
+            self.trace_tensor(f"mixtral.attn_block.{block_idx}.output", h)
+
+            h = moe_block(
+                h,
+            )
+            self.trace_tensor(f"mixtral.moe_block.{block_idx}.output", h)
 
         h = self.output_norm(h)
         logits = self.output_lm_head(h)

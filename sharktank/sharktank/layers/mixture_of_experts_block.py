@@ -110,8 +110,8 @@ class SparseMoeBlock(ThetaLayer):
             current_expert = current_expert.reshape(-1, feature_dim)
 
             moe_output.index_add_(0, token_idx, current_expert.to(ffn_input.dtype))
-        moe_output = moe_output.reshape(batch_size, sequence_length, feature_dim)
 
+        moe_output = moe_output.reshape(batch_size, sequence_length, feature_dim)
         moe_output = self.layer_output_norm(moe_output)
         return h + moe_output
 
@@ -130,13 +130,12 @@ class PreGatherMoeBlock(ThetaLayer):
         expert_count: int,
         expert_used_count: int,
         rms_epsilon: float,
-        use_grok: Optional[bool] = False,
+        moe_activation=F.silu,
     ):
         super().__init__(theta)
 
         self.expert_count = expert_count
         self.expert_used_count = expert_used_count
-        self.use_grok = use_grok
 
         # Add router gate
         self.add_module("ffn_gate_inp", LinearLayer(theta("ffn_gate_inp")))
@@ -146,15 +145,17 @@ class PreGatherMoeBlock(ThetaLayer):
             "ffn_norm", RMSNormLayer(theta("ffn_norm"), epsilon=rms_epsilon)
         )
 
-        # Add FFN output norm layer for Grok
-        if self.use_grok:
+        # Add optional FFN output norm layer
+        if theta.optional_tensor("layer_output_norm") is not None:
             self.add_module(
                 "layer_output_norm",
                 RMSNormLayer(theta("layer_output_norm"), epsilon=rms_epsilon),
             )
+        else:
+            self.add_module("layer_output_norm", torch.nn.Identity())
 
         # Add expert_count x FFN
-        self.experts = PreGatherFFNMOE(theta, use_grok=self.use_grok)
+        self.experts = PreGatherFFNMOE(theta, activation=moe_activation)
 
     def forward(
         self,
@@ -180,7 +181,6 @@ class PreGatherMoeBlock(ThetaLayer):
         moe_output = self.experts(ffn_input, top_k_experts, expert_gate)
         moe_output = moe_output.reshape(batch_size, sequence_length, feature_dim)
 
-        if self.use_grok:
-            moe_output = self.layer_output_norm(moe_output)
+        moe_output = self.layer_output_norm(moe_output)
 
         return h + moe_output

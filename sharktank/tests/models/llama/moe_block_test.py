@@ -21,7 +21,6 @@ class SparseMoeBlockTest(unittest.TestCase):
             expert_count=8,
             expert_used_count=2,
             rms_epsilon=1e-5,
-            use_grok=False,
         )
         fxb = FxProgramsBuilder(model)
         input = make_rand_torch((2, 32, 6144))
