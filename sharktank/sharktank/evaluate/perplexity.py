@@ -8,10 +8,11 @@ import sys
 import logging
 import time
 from datetime import timedelta
-
 import json
 import numpy as np
 from tqdm import tqdm
+
+from datasets import load_dataset
 
 import torch
 from torch.nn import CrossEntropyLoss
@@ -27,7 +28,7 @@ from sharktank.utils import cli
 from sharktank.utils.load_llm import *
 
 logger = logging.getLogger("eval")
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 logger.root.handlers[0].setFormatter(
     logging.Formatter(fmt="\n%(levelname)s:%(name)-8s %(message)s")
 )
@@ -141,6 +142,14 @@ class Perplexity:
         )
 
         is_prefill = True
+        start = 0
+        n_context = 5
+        first = n_context // 2
+        self.inferenced_tokens = []
+        # for i in tqdm(
+        #     range(first, self.max_prompt_length - 1),
+        #     desc="eval: Calculating logits",
+        # ):
         for i in tqdm(
             range(1, self.max_prompt_length - 1),
             desc="eval: Calculating logits",
@@ -148,8 +157,13 @@ class Perplexity:
             logger.debug(f"Iteration: {i}")
 
             if is_prefill:
-                token_batch = self.token_ids[:, : i + 1]
+                # end = start+i*n_context+first + 1
+                # token_batch = self.token_ids[start: end]
+                # self.inferenced_tokens.append(self.token_ids[end])
+                #  TODO: start=0, first is first half of context window (n_context= 5, first=2) window = start + i*n_context + first
+                #  TODO: experiment with context sizes in llama with llam3 8b to see which perplexity is better
 
+                token_batch = self.token_ids[:, : i + 1]
                 logger.debug(f"Prefill:")
 
                 logger.debug("Input:")
@@ -194,10 +208,20 @@ class Perplexity:
 
                 self.print_token_comparison(i)
 
+        # print(f"Final Logits shape 1: {self.out_logits.shape, self.token_ids.shape, self.pad_logits.shape}")
+
         pad_logits_shape = self.token_ids.shape[1] - self.out_logits.shape[1]
-        self.out_logits = torch.cat(
-            (self.out_logits, self.pad_logits[:, -pad_logits_shape:, :]), 1
-        ).to(self.device)
+
+        self.pad_logits = torch.zeros(
+            self.out_logits.shape[0], pad_logits_shape, self.out_logits.shape[2]
+        )
+
+        self.out_logits = torch.cat((self.out_logits, self.pad_logits), 1).to(
+            self.device
+        )
+
+        # self.attention_mask = [1 if t in self.inferenced_tokens else 0 for t in self.token_ids]
+        # print(f"Final Logits shape 2: {pad_logits_shape, self.out_logits.shape, self.pad_logits.shape}")
 
     @timeit
     def compute_perplexity(self):
@@ -238,6 +262,12 @@ class Perplexity:
             f"Mask shape: {self.attention_mask}, \n{self.attention_mask.shape}"
         )
 
+        # print(f"Final Logits shape 3: {self.out_logits.shape}")
+        # print(f"Token ids: {self.token_ids.shape}")
+        # print(
+        #     f"Mask shape: {self.attention_mask.shape}"
+        # )
+
         assert self.token_ids.shape == self.out_logits.shape[0:2]
 
         return self.compute_perplexity()
@@ -272,9 +302,17 @@ def main(argv):
     dataset = cli.get_input_dataset(args)
     tokenizer = cli.get_tokenizer(args)
 
-    prompt_path = "sharktank/evaluate/data/eval_prompts.txt"
-    with open(prompt_path, "r") as f:
-        input_texts = f.read().splitlines()
+    # prompt_path = "sharktank/evaluate/data/eval_prompts.txt"
+    # with open(prompt_path, "r") as f:
+    #     input_texts = f.read().splitlines()
+
+    input_texts = load_dataset("wikitext", "wikitext-2-raw-v1", split="test")["text"][
+        :20
+    ]
+    input_texts = [s for s in input_texts if s != "" and len(s.split()) > 5]
+    # print('# prompts', len(input_texts))
+
+    # input_texts = ["Robert Boulter is an English film , television and theatre actor ."]
 
     ppl = run_perplexity(
         prompts=input_texts,
