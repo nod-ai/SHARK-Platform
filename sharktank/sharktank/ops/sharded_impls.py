@@ -300,11 +300,29 @@ def split_elementwise_binary(
 
 @elementwise.override(SplitPrimitiveTensor, Number)
 def elementwise_binary_split_lhs_scalar_rhs(
-    operator, x: SplitPrimitiveTensor, y: Number, *args, **kwargs
+    operator,
+    x: SplitPrimitiveTensor,
+    y: Number,
+    out: SplitPrimitiveTensor = None,
+    *args,
+    **kwargs,
 ):
-    pt_xs = [unbox_tensor(pt) for pt in x.shards]
-    partials = [operator(pt_x, y, *args, **kwargs) for pt_x in pt_xs]
-    return SplitPrimitiveTensor(shard_dim=x.shard_dim, shape=x.shape, ts=partials)
+    x_shards = [unbox_tensor(pt) for pt in x.shards]
+    out_shards = (
+        [None] * len(x.shards)
+        if out is None
+        else [unbox_tensor(shard) for shard in out.shards]
+    )
+    partials = [
+        operator(x_shard, y, out=out_shard, *args, **kwargs)
+        for x_shard, out_shard in zip(x_shards, out_shards)
+    ]
+    return SplitPrimitiveTensor(
+        shard_dim=x.shard_dim,
+        shape=x.shape,
+        ts=partials,
+        insert_device_assignment=out is None,
+    )
 
 
 @elementwise.override(SplitPrimitiveTensor, Tensor)

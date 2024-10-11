@@ -207,7 +207,9 @@ class PagedKVCache(BaseKVCache):
                 )
                 for shard in page_slab.shards
             ]
-            return SplitPrimitiveTensor(ts=shards, shard_dim=4)
+            return SplitPrimitiveTensor(
+                ts=shards, shard_dim=4, insert_device_assignment=False
+            )
 
     def shard_state(
         self, state: List[torch.Tensor]
@@ -236,7 +238,9 @@ class PagedKVCache(BaseKVCache):
         shards = [
             ops.flatten(shard, start_dim=1) for shard in sharded_page_table.shards
         ]
-        flat_sharded_page_table = SplitPrimitiveTensor(ts=shards, shard_dim=1)
+        flat_sharded_page_table = SplitPrimitiveTensor(
+            ts=shards, shard_dim=1, insert_device_assignment=False
+        )
         return [flat_sharded_page_table]
 
     @property
