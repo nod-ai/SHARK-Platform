@@ -128,7 +128,10 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
         help="Parameter archives to load",
     )
     parser.add_argument(
-        "--device", type=str, default="local-task", help="Device to serve on; e.g. local-task, hip. Same options as `iree-run-module --device` "
+        "--device",
+        type=str,
+        default="local-task",
+        help="Device to serve on; e.g. local-task, hip. Same options as `iree-run-module --device` ",
     )
     args = parser.parse_args(argv)
     global sysman
