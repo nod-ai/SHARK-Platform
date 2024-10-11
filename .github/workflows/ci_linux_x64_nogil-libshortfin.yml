@@ -86,9 +86,8 @@ jobs:
           -DCMAKE_CXX_COMPILER=clang++-18 \
           -DCMAKE_LINKER_TYPE=LLD \
           -DSHORTFIN_BUNDLE_DEPS=ON \
-          -DSHORTFIN_IREE_SOURCE_DIR=${{ env.IREE_REPO_DIR }} \
-          -DSHORTFIN_BUILD_PYTHON_BINDINGS=ON \
-          ..
+          -DSHORTFIN_IREE_SOURCE_DIR="${{ env.IREE_REPO_DIR }}" \
+          -DSHORTFIN_BUILD_PYTHON_BINDINGS=ON
         cmake --build build --target all
         pip install -v -e build/
 

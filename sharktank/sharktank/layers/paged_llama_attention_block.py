@@ -39,7 +39,7 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         rms_epsilon: float,
         use_grok: Optional[bool] = False,
         attention_kernel: str = "decomposed",
-        use_grok: bool = False,
+
     ):
         super().__init__(theta)
 
@@ -64,7 +64,6 @@ class PagedLlamaAttentionBlock(ThetaLayer):
                 RMSNormLayer(theta("attn_output_norm"), epsilon=rms_epsilon),
             )
         self.attention_kernel = attention_kernel
-        self.use_grok = use_grok
 
     def forward(
         self,
@@ -195,6 +194,7 @@ class PagedLlamaAttentionBlock(ThetaLayer):
                 is_causal=is_causal,  # assumes causal masking when true
                 scale=None,  # defaults to 1/sqrt(dim)
             )
+
 
         attn_output = attn_output.transpose(1, 2).reshape(bs, batch_seq_len, -1)
         # Project.
