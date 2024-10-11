@@ -49,10 +49,8 @@ def test_sharded_rotary_table():
     sq, sk = shard_layer(xq=xq, xk=xk, start_index=0)
 
     # Gathering and unboxing should yield the same results
-    sq = ops.all_gather(sq)
-    sk = ops.all_gather(sk)
-    sq = unbox_tensor(sq.shards[0])
-    sk = unbox_tensor(sk.shards[0])
+    sq = ops.unshard(sq)
+    sk = ops.unshard(sk)
 
     torch.testing.assert_close(sq, oq)
     torch.testing.assert_close(sk, ok)
