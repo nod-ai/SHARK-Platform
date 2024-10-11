@@ -4,7 +4,6 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-import unittest
 import logging
 import pytest
 
@@ -27,8 +26,8 @@ class PerplexityTest:
 
         llama8b_perplexity = perplexity.main(
             [
-                f"--gguf-file{llama8b_f16_gguf_path}",
-                f"--tokenizer-config-json{llama8b_f16_tokenizer_path}",
+                f"--gguf-file=/data/llm-dev/llama3_8b/llama8b_f16.gguf",
+                f"--tokenizer-config-json=/data/llm-dev/llama3_8b/tokenizer_config.json",
                 f"--kv-cache-type={kv_cache_type}",
             ]
         )
