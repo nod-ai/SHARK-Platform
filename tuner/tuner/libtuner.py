@@ -36,6 +36,7 @@ from dataclasses import dataclass, field
 from typing import Type, Optional, Callable, Iterable, Any
 import pickle
 import random
+import json
 from abc import ABC, abstractmethod
 import iree.runtime as ireert
 from . import candidate_gen
@@ -236,19 +237,47 @@ class ParsedDisptachBenchmarkResult:
 class IREEBenchmarkResult:
     # Default format follows output of iree-benchmark-module
     candidate_id: int
-    result_str: str
 
-    def get_mean_time(self) -> Optional[float]:
-        if not self.result_str:
+    # A list of dictionaries, each representing a benchmark result
+    # Each dictionary contains fields like: aggregate_name: string, real_time: float, cpu_time: float, time_unit: str, repetitions: int, etc.
+    result_json: list[dict[str, Any]]
+
+    def get_mean_time_us(self) -> Optional[float]:
+        """Compute the mean time (in microseconds) for all of the benchmarks"""
+        if not self.result_json:
             return None
-        pattern = r"process_time/real_time_mean\s+([\d.]+)\s\w{2}"
-        match = re.search(pattern, self.result_str)
-        if not match:
-            return None
-        try:
-            return float(match.group(1))
-        except ValueError:
-            return None
+
+        mean_benchmark = self.find_mean_benchmark(self.result_json)
+
+        if mean_benchmark:
+            real_time = mean_benchmark.get("real_time")
+            time_unit = mean_benchmark.get("time_unit")
+
+            if real_time is not None:
+                return self.unit_to_microseconds(real_time, time_unit)
+
+        return None
+
+    @staticmethod
+    def find_mean_benchmark(result_json: list[dict[str, Any]]) -> Optional[dict]:
+        for benchmark in result_json:
+            if benchmark.get("aggregate_name") == "mean":
+                return benchmark
+
+        return None
+
+    @staticmethod
+    def unit_to_microseconds(real_time: float, time_unit: str) -> float:
+        unit_conversions = {
+            "s": 1e6,
+            "ms": 1e3,
+            "us": 1,
+            "ns": 1e-3,
+        }
+
+        assert time_unit in unit_conversions, f"Unsupported time unit: {time_unit}"
+
+        return real_time * unit_conversions[time_unit]
 
 
 def generate_display_DBR(candidate_id: int, mean_time: float) -> str:
@@ -619,6 +648,26 @@ def multiprocess_progress_wrapper(
     return results
 
 
+def extract_benchmark_from_run_result(
+    run_result: RunResult,
+) -> Optional[list[dict[str, Any]]]:
+    """Extract the benchmark from the result JSON"""
+    if run_result.process_res and run_result.process_res.stdout:
+        try:
+            result_json = json.loads(run_result.process_res.stdout)
+
+            return result_json.get("benchmarks", None)
+        except json.JSONDecodeError as e:
+            handle_error(
+                condition=True,
+                msg=f"Failed to parse JSON from stdout: {e}",
+                error_type=ValueError,
+                exit_program=True,
+            )
+
+    return None
+
+
 def numerical_sort_key(path: Path) -> tuple[int | float, str]:
     """
     Define a sort key function that splits the filename into a numeric and a string part.
@@ -896,9 +945,9 @@ def parse_dispatch_benchmark_results(
                 incomplete_list.append(candidate_id)
             continue
 
-        res_str = process_res.stdout
-        res = IREEBenchmarkResult(candidate_id, res_str)
-        benchmark_time = res.get_mean_time()
+        res_json = extract_benchmark_from_run_result(benchmark_result.run_result)
+        res = IREEBenchmarkResult(candidate_id, res_json)
+        benchmark_time = res.get_mean_time_us()
         assert benchmark_time is not None
         candidate_trackers[candidate_id].first_benchmark_time = benchmark_time
         candidate_trackers[
@@ -1185,9 +1234,9 @@ def parse_model_benchmark_results(
                     baseline_time = None
                 continue
 
-            result_str = process_res.stdout
-            res = IREEBenchmarkResult(candidate_id, result_str)
-            benchmark_time = res.get_mean_time()
+            result_json = extract_benchmark_from_run_result(task_result.run_result)
+            res = IREEBenchmarkResult(candidate_id, result_json)
+            benchmark_time = res.get_mean_time_us()
             assert benchmark_time is not None
 
             # Record baseline benchmarking result and skip rest processes
@@ -1328,7 +1377,7 @@ def benchmark_models(
     )
 
 
-def summerize_top_candidates(
+def summarize_top_candidates(
     path_config: PathConfig, candidate_trackers: list[CandidateTracker]
 ):
     dump_list = []
