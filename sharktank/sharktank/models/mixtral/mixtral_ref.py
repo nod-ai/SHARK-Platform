@@ -80,7 +80,7 @@ class DirectCacheMixtralModelV1(ThetaLayer):
                 )
             )
             self.moe_blocks.append(
-                SparseMoeBlock(
+                MoeBlock(
                     theta("blk", n),
                     expert_count=hp.expert_count,
                     expert_used_count=hp.expert_used_count,

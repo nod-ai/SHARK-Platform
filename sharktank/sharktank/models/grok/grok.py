@@ -98,7 +98,7 @@ class PagedGrokModelV1(BaseCausalLMModel):
                 )
             )
             self.moe_blocks.append(
-                PreGatherMoeBlock(
+                MoeBlock(
                     theta("blk", n),
                     expert_count=hp.expert_count,
                     expert_used_count=hp.expert_used_count,
