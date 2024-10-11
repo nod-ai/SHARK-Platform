@@ -14,7 +14,7 @@ def test_generate():
     
     # Create a GenerateReqInput-like structure
     data = {
-        "text": "The meaning of life is",
+        "text": "1 2 3 4 5",
         "sampling_params": {
             "max_tokens": 50,
             "temperature": 0.7
