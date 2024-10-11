@@ -16,7 +16,7 @@ from sharktank import ops
 
 class MoeBlockTest(unittest.TestCase):
     def test(self):
-        model = PreGatherMoeBlock(
+        model = MoeBlock(
             theta=make_moe_block_theta()("blk.0"),
             expert_count=8,
             expert_used_count=2,

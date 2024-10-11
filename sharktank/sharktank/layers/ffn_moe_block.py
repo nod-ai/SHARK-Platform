@@ -12,7 +12,7 @@ import torch.nn.functional as F
 from .base import ThetaLayer
 from .linear import LinearLayer
 from ..types import Theta, DefaultPrimitiveTensor
-from ..ops import einsum_2args
+from ..ops import einsum_2args, elementwise
 
 __all__ = [
     "FFNMOE",
@@ -32,6 +32,7 @@ class PreGatherFFNMOE(ThetaLayer):
         self.ffn_gate = theta.tensor("ffn_gate_exps", "weight")
         self.ffn_up = theta.tensor("ffn_up_exps", "weight")
         self.ffn_down = theta.tensor("ffn_down_exps", "weight")
+        self.activation = activation
 
     def pre_matmul_gather(self, inputs, weights, experts, einstring="mk,menk->men"):
         inputs = inputs[:, :]
@@ -63,7 +64,7 @@ class PreGatherFFNMOE(ThetaLayer):
         expert_gate: torch.Tensor,
     ):
         ffn_gate = self.pre_matmul_gather(h, self.ffn_gate, experts)
-        ffn_gate = ops.elementwise(self.activation, ffn_gate)
+        ffn_gate = elementwise(self.activation, ffn_gate)
 
         ffn_up = self.pre_matmul_gather(h, self.ffn_up, experts)
         ffn_down = self.pre_matmul_gather(
