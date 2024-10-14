@@ -40,8 +40,8 @@ def main():
         action="store_true",
     )
     parser.add_argument(
-        "--use-grok",
-        help="Enable to export Grok model's version of MOE block",
+        "--use-gelu",
+        help="Enable to use gelu for moe activation",
         action="store_true",
     )
 
@@ -54,7 +54,7 @@ def main():
         expert_count=8,
         expert_used_count=2,
         rms_epsilon=1e-5,
-        moe_activation=F.gelu if args.use_grok else F.silu,
+        moe_activation=F.gelu if args.use_gelu else F.silu,
     )
     fxb = FxProgramsBuilder(model)
     input = make_rand_torch((bs, 32, 6144))

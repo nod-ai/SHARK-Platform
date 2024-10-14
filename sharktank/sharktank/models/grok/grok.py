@@ -103,7 +103,7 @@ class PagedGrokModelV1(BaseCausalLMModel):
                     expert_count=hp.expert_count,
                     expert_used_count=hp.expert_used_count,
                     rms_epsilon=hp.attention_layer_norm_rms_epsilon,
-                    activation=F.gelu,
+                    moe_activation=F.gelu,
                 )
             )
 
@@ -123,7 +123,7 @@ class PagedGrokModelV1(BaseCausalLMModel):
         self._assert_device(seq_block_ids)
         self._assert_device(*cache_state, dtype=self.activation_dtype)
         h = self.token_embedding(tokens)
-        h *= math.sqrt(h.shape[-1])
+        h *= tanh.sqrt(h.shape[-1])
         self.trace_tensor("grok.token_embedding", h)
 
         # Iterate over attention blocks.
@@ -148,7 +148,7 @@ class PagedGrokModelV1(BaseCausalLMModel):
 
         h = self.output_norm(h)
         logits = self.output_lm_head(h)
-        logits = logits / math.sqrt(3.0)
+        logits = logits / torch.sqrt(3.0)
         return logits
 
     def decode(
@@ -200,7 +200,7 @@ class PagedGrokModelV1(BaseCausalLMModel):
         )
 
         h = self.token_embedding(tokens)
-        h *= math.sqrt(h.shape[-1])
+        h *= torch.sqrt(h.shape[-1])
         self.trace_tensor("grok.token_embedding", h)
 
         # Iterate over attention blocks.
@@ -220,7 +220,7 @@ class PagedGrokModelV1(BaseCausalLMModel):
                 seq_block_ids=seq_block_ids,
                 xk_temp=xk_temp,
                 xv_temp=xv_temp,
-                softcap=30.0,
+                softcap=30.0,  # https://github.com/xai-org/grok-1/blob/7050ed204b8206bb8645c7b7bbef7252f79561b0/model.py#L864
             )
             self.trace_tensor(f"grok.attn_block.{block_idx}.output", h)
 
@@ -229,5 +229,5 @@ class PagedGrokModelV1(BaseCausalLMModel):
 
         h = self.output_norm(h)
         logits = self.output_lm_head(h)
-        logits = logits / math.sqrt(3.0)
+        logits = logits / torch.sqrt(3.0)
         return logits

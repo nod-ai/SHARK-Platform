@@ -110,7 +110,9 @@ class LlamaAttentionBlock(ThetaLayer):
         values = values.transpose(1, 2)
 
         # Flash attention.
-        attn_weights = torch.matmul(xq, keys.transpose(2, 3)) / math.sqrt(self.head_dim)
+        attn_weights = torch.matmul(xq, keys.transpose(2, 3)) / torch.sqrt(
+            self.head_dim
+        )
 
         # Apply attention mask.
         if attention_mask is not None:
