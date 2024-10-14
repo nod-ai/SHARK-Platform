@@ -11,7 +11,7 @@ from sharktank.layers import (
     RotaryEmbeddingLayer,
 )
 from sharktank.layers.testing import make_llama_attention_block_theta, make_rand_torch
-from sharktank.layers.sharding import PagedLlamaAttentionBlockSharding
+from sharktank.models.llama.sharding import PagedLlamaAttentionBlockSharding
 from sharktank.types import SplitPrimitiveTensor, unbox_tensor
 import torch
 from sharktank import ops
@@ -84,6 +84,23 @@ class ShardedPagedLlamaAttentionBlockTest(unittest.TestCase):
             sharded_cache_state,
         ) = make_unsharded_and_sharded_equal_cache_states()
 
+        input_tensor = make_rand_torch(
+            (
+                self.batch_size,
+                self.max_seqlen,
+                self.attention_head_count * self.attention_head_dim,
+            ),
+            dtype=dtype,
+        )
+        seq_block_ids = torch.arange(self.batch_size * self.block_seqlen).view(
+            self.batch_size, -1
+        )
+        embedding_module = RotaryEmbeddingLayer(
+            rope_dimension_count=self.rope_dimension_count,
+            max_seqlen=self.max_seqlen,
+            rope_freq_base=self.rope_freq_base,
+        )
+
         theta = make_llama_attention_block_theta(
             head_count=self.attention_head_count,
             head_count_kv=self.head_count_kv,
@@ -99,29 +116,21 @@ class ShardedPagedLlamaAttentionBlockTest(unittest.TestCase):
             head_count_kv=self.head_count_kv,
             rms_epsilon=self.rms_epsilon,
         )
-        embedding_module = RotaryEmbeddingLayer(
-            rope_dimension_count=self.rope_dimension_count,
-            max_seqlen=self.max_seqlen,
-            rope_freq_base=self.rope_freq_base,
-        )
-
-        input_tensor = make_rand_torch(
-            (
-                self.batch_size,
-                self.max_seqlen,
-                self.attention_head_count * self.attention_head_dim,
-            ),
-            dtype=dtype,
-        )
-        seq_block_ids = torch.arange(self.batch_size * self.block_seqlen).view(
-            self.batch_size, -1
-        )
         expected_result = attention_block(
             input_tensor,
             embedding=embedding_module,
             seq_block_ids=seq_block_ids,
             start_index=self.start_index,
             cache_state=cache_state,
+        )
+
+        sharded_input_tensor = ops.replicate(input_tensor, count=self.shard_count)
+        sharded_seq_block_ids = ops.replicate(seq_block_ids, count=self.shard_count)
+        sharded_embedding_module = RotaryEmbeddingLayer(
+            rope_dimension_count=self.rope_dimension_count,
+            max_seqlen=self.max_seqlen,
+            rope_freq_base=self.rope_freq_base,
+            tensor_parallelism_size=self.shard_count,
         )
 
         theta_sharding = PagedLlamaAttentionBlockSharding(shard_count=self.shard_count)
@@ -135,14 +144,6 @@ class ShardedPagedLlamaAttentionBlockTest(unittest.TestCase):
             head_count_kv=self.head_count_kv,
             rms_epsilon=self.rms_epsilon,
         )
-        sharded_embedding_module = RotaryEmbeddingLayer(
-            rope_dimension_count=self.rope_dimension_count,
-            max_seqlen=self.max_seqlen,
-            rope_freq_base=self.rope_freq_base,
-            tensor_parallelism_size=self.shard_count,
-        )
-        sharded_input_tensor = ops.replicate(input_tensor, count=self.shard_count)
-        sharded_seq_block_ids = ops.replicate(seq_block_ids, count=self.shard_count)
         sharded_result = sharded_attention_block(
             sharded_input_tensor,
             embedding=sharded_embedding_module,
