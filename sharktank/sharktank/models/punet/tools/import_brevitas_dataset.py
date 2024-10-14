@@ -208,7 +208,7 @@ def apply_per_layer_quant(
         bias_scale = 1.0 / (input_scale * weight_scale)
         bias_quantizer = StaticScaledQuantizer(
             scale=bias_scale,
-            dtype=torch.int32,
+            dtype=torch.int32 if quantization_dtype == torch.int8 else torch.float16,
             disable_saturate=True,
         )
         bias_quant = bias_quantizer.quantize(bias, name=bias_name)

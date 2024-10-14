@@ -15,7 +15,7 @@ module {
 util.func private @sharktank_batch_matmul_transpose_b_{{spec_sig}}(
     %a: !a_tensor_type, %b: !b_tensor_type)
     -> !c_tensor_type {
-  %zero = arith.constant 0: !dtype
+  %zero = arith.constant 0.: !dtype
   %c0 = arith.constant 0: index
   %c1 = arith.constant 1: index
   %batch_dim = tensor.dim %a, %c0 : !a_tensor_type  // b, m, k

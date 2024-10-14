@@ -31,7 +31,7 @@ from .signatures import (
 )
 
 
-def qconv2d_tensor_scaled_integer(
+def qconv2d_tensor_scaled(
     input: QuantizedTensor,
     weight: QuantizedTensor,
     bias: Optional[AnyTensor] = None,
@@ -59,10 +59,10 @@ def qconv2d_tensor_scaled_integer(
     input_layout: TensorScaledLayout = input.unpack()
     weight_layout: TensorScaledLayout = weight.unpack()
 
-    # Only handle integer quantizations.
+    # # Handle integer and fp8 quantizations.
     if (
-        input_layout.qs.dtype.is_floating_point
-        or weight_layout.qs.dtype.is_floating_point
+        input_layout.qs.dtype != torch.float8_e4m3fnuz
+        and weight_layout.qs.dtype != torch.float8_e4m3fnuz
     ):
         return NotImplemented
 
@@ -85,7 +85,10 @@ def qconv2d_tensor_scaled_integer(
 
     # Alias components (d=scale, qs=quantized samples, m=offset).
     if accum_dtype is None:
-        accum_dtype = torch.int32
+        if weight_layout.qs.dtype.is_floating_point:
+            accum_dtype = torch.float32
+        else:
+            accum_dtype = torch.int32
     input_d = input_layout.d
     input_dtype = input_layout.dtype
     input_qs = input_layout.qs
@@ -114,7 +117,7 @@ def qconv2d_tensor_scaled_integer(
     dilation = _expand_int_to_2_tuple(dilation)
     extended_padding_list = [item for item in padding for _ in range(2)]
     padded_input = _pad_last_2d(input_qs, extended_padding_list)
-    y_qs = _invoke_int32_conv2d(
+    y_qs = _invoke_conv2d_kernel(
         padded_input,
         weight_qs,
         bias_qs.to(accum_dtype) if bias_qs is not None else None,
@@ -145,7 +148,7 @@ def qconv2d_tensor_scaled_integer(
         weight_offset_fix = torch.sum(
             padded_input, dim=1, keepdim=True, dtype=accum_dtype
         )
-        weight_offset_fix = _invoke_int32_pooling_sum(
+        weight_offset_fix = _invoke_pooling_sum_kernel(
             weight_offset_fix,
             [weight_qs.shape[2], weight_qs.shape[3]],
             stride,
@@ -188,13 +191,11 @@ def qconv2d_tensor_scaled_integer(
     return y
 
 
-conv2d.override(QuantizedTensor, QuantizedTensor)(qconv2d_tensor_scaled_integer)
-conv2d.override(QuantizedTensor, QuantizedTensor, AnyTensor)(
-    qconv2d_tensor_scaled_integer
-)
+conv2d.override(QuantizedTensor, QuantizedTensor)(qconv2d_tensor_scaled)
+conv2d.override(QuantizedTensor, QuantizedTensor, AnyTensor)(qconv2d_tensor_scaled)
 
 
-def _invoke_int32_conv2d(input, weight, bias, stride, dilation, *, accum_dtype):
+def _invoke_conv2d_kernel(input, weight, bias, stride, dilation, *, accum_dtype):
     """Does a low level invocation of a conv2d integer kernel on an explicitly padded input.
 
     This presumes that the stride/padding/dilation have already been normalized
@@ -233,7 +234,7 @@ def _invoke_int32_conv2d(input, weight, bias, stride, dilation, *, accum_dtype):
     return y_qs
 
 
-def _invoke_int32_pooling_sum(input, kernel_size, stride, dilation, *, accum_dtype):
+def _invoke_pooling_sum_kernel(input, kernel_size, stride, dilation, *, accum_dtype):
     """Invokes either a custom integer pooling sum or the built-in fp avg_pool2d
     kernel on an explicitly padded input.
     """
