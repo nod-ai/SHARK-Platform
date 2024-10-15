@@ -123,6 +123,7 @@ class ShardedPagedKVCacheTest(unittest.TestCase):
             read_into_partitions=read_into_partitions,
             transformer_block_index=transformer_block_index,
             page_ids=page_ids,
+            seq_len=self.block_seq_len * self.block_seq_stride
         )
         sharded_read_into_partitions = deepcopy(
             [
@@ -136,6 +137,7 @@ class ShardedPagedKVCacheTest(unittest.TestCase):
             read_into_partitions=sharded_read_into_partitions,
             transformer_block_index=transformer_block_index,
             page_ids=sharded_page_ids,
+            seq_len=self.block_seq_len * self.block_seq_stride
         )
         for unsharded, sharded in zip(
             read_into_partitions, sharded_read_into_partitions
