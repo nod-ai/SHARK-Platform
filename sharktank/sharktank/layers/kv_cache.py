@@ -115,19 +115,27 @@ class DirectKVCache(BaseKVCache):
 
         Each tensor has shape: [bs, sl, attn_head_count, attn_head_dim]
         """
-        shards = [[torch.empty(
-                [bs, self.seq_length, self.attn_head_count // self.shard_count, self.attn_head_dim],
+        allocations = [
+            torch.empty(
+                [
+                    bs,
+                    self.seq_length,
+                    self.attn_head_count,
+                    self.attn_head_dim,
+                ],
                 dtype=self.dtype,
                 device=self.device,
-            ) for i in range(self.shard_count)] 
+            )
             for _ in range(2 * self.transformer_block_count)
         ]
 
         if self.shard_count == 1:
-            return [shard[0] for shard in shards]
+            return allocations
 
-        return [SplitPrimitiveTensor(ts=shrds, shard_dim=2) for shrds in shards]
-
+        return [
+            ops.reshard_split(allocation, dim=2, count=self.shard_count)
+            for allocation in allocations
+        ]
 
     def read(
         self,
@@ -156,7 +164,9 @@ class DirectKVCache(BaseKVCache):
         read_count = len(read_into_partitions)
         reads = []
         for i in range(read_count):
-            reads.append(state[transformer_block_index * read_count + i][:, :seq_len, :, :])
+            reads.append(
+                state[transformer_block_index * read_count + i][:, :seq_len, :, :]
+            )
 
         return tuple(reads)
 
