@@ -168,12 +168,12 @@ def main():
     parser.add_argument(
         "--output-mlir",
         help="Output file path for exported MLIR file",
-        default="/home/aramalin/sharktank/artifacts/paged_llama.mlir",
+        default="/tmp/sharktank/artifacts/paged_llama.mlir",
     )
     parser.add_argument(
         "--output-config",
         help="Output file path for exported config file",
-        default="/home/aramalin/sharktank/artifacts/paged_llama.json",
+        default="/tmp/sharktank/artifacts/paged_llama.json",
     )
     parser.add_argument(
         "--bs",
@@ -191,6 +191,12 @@ def main():
         "--is-causal",
         help="Enable Causal attention",
         action="store_true",
+    )
+
+    parser.add_argument(
+        "--attention_kernel",
+        help="decomposed/torch",
+        default="decomposed",
     )
 
     args = cli.parse(parser)
@@ -227,6 +233,7 @@ def main():
         attention_block_theta, context_length=llama_config.hp.context_length
     )
 
+    print(args.attention_kernel)
     model = PagedLlamaAttentionBlock(
         theta=attention_block_theta,
         block_index=0,
@@ -235,6 +242,7 @@ def main():
         head_dim=llama_config.hp.attn_head_dim,
         head_count_kv=llama_config.hp.attention_head_count_kv,
         rms_epsilon=llama_config.hp.attention_layer_norm_rms_epsilon,
+        attention_kernel=args.attention_kernel
     )
 
     def generate_params_json(hp, prefill_bs: list[int], decode_bs: list[int]):
@@ -396,7 +404,7 @@ def main():
     bsizes = []
     for bs in llama_config.bs:
         generate_batch_prefill(bs)
-        generate_batch_decode(bs)
+        #generate_batch_decode(bs)
         bsizes.append(bs)
 
     if args.verbose:

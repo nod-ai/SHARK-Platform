@@ -78,6 +78,7 @@ class PagedLlamaModelV1(BaseCausalLMModel):
         self.cache = create_kv_cache(self.config)
         self.activation_dtype = config.activation_dtype
         self.use_hf = config.use_hf
+        self.attention_kernel = config.attention_kernel
 
         self.add_module(
             "token_embedding",
@@ -112,6 +113,7 @@ class PagedLlamaModelV1(BaseCausalLMModel):
                     head_dim=hp.attn_head_dim,
                     head_count_kv=hp.attention_head_count_kv,
                     rms_epsilon=hp.attention_layer_norm_rms_epsilon,
+                    attention_kernel=self.attention_kernel,
                 )
                 for n in range(hp.block_count)
             ]
@@ -328,6 +330,7 @@ class AttentionFFNBlock(ThetaLayer):
         head_dim: int,
         head_count_kv: int,
         rms_epsilon: float,
+        attention_kernel: str = "decomposed",
     ):
         super().__init__(theta)
         self.add_module(
@@ -340,6 +343,7 @@ class AttentionFFNBlock(ThetaLayer):
                 head_dim=head_dim,
                 head_count_kv=head_count_kv,
                 rms_epsilon=rms_epsilon,
+                attention_kernel=attention_kernel,
             ),
         )
         self.add_module(
