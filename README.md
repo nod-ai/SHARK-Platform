@@ -12,6 +12,10 @@ Use this as a guide to get started developing the project using pinned,
 pre-release dependencies. You are welcome to deviate as you see fit, but
 these canonical directions mirror what the CI does.
 
+### Requirements
+
+- Python3.12
+
 ### Setup a venv
 
 We recommend setting up a virtual environment (venv). The project is configured
