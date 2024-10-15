@@ -67,6 +67,7 @@ def test_get_mmt_tile_sizes():
         tile_sizes=[128, 320, 32],
         subgroup_m_count=0,
         subgroup_n_count=0,
+        gpu_pipeline_options=candidate_gen.GpuPipelineOptions(),
         waves_per_eu=0,
     )
     assert candidate_gen.get_mmt_tile_sizes(config) == [128, 320, 32]
@@ -80,6 +81,7 @@ def test_get_conv_tile_sizes():
         tile_sizes=[464, 320, 16],
         subgroup_m_count=1,
         subgroup_n_count=4,
+        gpu_pipeline_options=candidate_gen.GpuPipelineOptions(),
         waves_per_eu=1,
     )
     assert candidate_gen.ConvTuner().get_conv_tile_sizes(config) == [
@@ -93,6 +95,32 @@ def test_get_conv_tile_sizes():
     ]
 
 
+def test_gpu_pipeline_options():
+    options = candidate_gen.GpuPipelineOptions()
+    assert options.all_default()
+    assert str(options) == "#iree_gpu.pipeline_options<>"
+
+    options.prefetch_shared_memory = True
+    assert not options.all_default()
+    assert str(options) == "#iree_gpu.pipeline_options<prefetch_shared_memory = true>"
+
+    options.no_reduce_shared_memory_bank_conflicts = False
+    assert (
+        str(options)
+        == "#iree_gpu.pipeline_options<prefetch_shared_memory = true, no_reduce_shared_memory_bank_conflicts = false>"
+    )
+
+    options = candidate_gen.GpuPipelineOptions()
+    options.reorder_workgroups_strategy = (
+        candidate_gen.ReorderWorkgroupsStrategy.TRANSPOSE
+    )
+    assert not options.all_default()
+    assert (
+        str(options)
+        == "#iree_gpu.pipeline_options<reorder_workgroups_strategy = Transpose>"
+    )
+
+
 def test_get_contract_tile_sizes():
     config = candidate_gen.Configuration(
         subgroup_size=32,
@@ -101,6 +129,7 @@ def test_get_contract_tile_sizes():
         tile_sizes=[4, 8, 16],
         subgroup_m_count=1,
         subgroup_n_count=1,
+        gpu_pipeline_options=candidate_gen.GpuPipelineOptions(),
         waves_per_eu=2,
     )
     assert candidate_gen.get_contract_tile_sizes(config, ["m", "n", "k"]) == [4, 8, 16]
@@ -114,28 +143,28 @@ def test_get_contract_tile_sizes():
 
 
 def test_get_pipeline_config():
-    config1 = candidate_gen.Configuration(
+    config = candidate_gen.Configuration(
         subgroup_size=32,
         workgroup_size=[16, 16, 1],
         intrinsic="",
         tile_sizes=[4, 8, 16],
         subgroup_m_count=1,
         subgroup_n_count=1,
+        gpu_pipeline_options=candidate_gen.GpuPipelineOptions(),
         waves_per_eu=2,
     )
-    config2 = candidate_gen.Configuration(
-        subgroup_size=32,
-        workgroup_size=[16, 16, 1],
-        intrinsic="",
-        tile_sizes=[4, 8, 16],
-        subgroup_m_count=1,
-        subgroup_n_count=1,
-        waves_per_eu=4,
-    )
-    assert candidate_gen.get_pipeline_config(config1) == ", prefetch_shared_memory"
+    config1_str: str = candidate_gen.get_pipeline_config(config)
+    assert config1_str == ""
+
+    config.waves_per_eu = 4
+    config2_str: str = candidate_gen.get_pipeline_config(config)
+    assert config2_str == ', llvm_func_attrs = {"amdgpu-waves-per-eu" = "4"}'
+
+    config.gpu_pipeline_options.prefetch_shared_memory = True
+    config3_str = candidate_gen.get_pipeline_config(config)
     assert (
-        candidate_gen.get_pipeline_config(config2)
-        == ', prefetch_shared_memory, llvm_func_attrs = {"amdgpu-waves-per-eu" = "4"}'
+        config3_str
+        == ', gpu_pipeline_options = #iree_gpu.pipeline_options<prefetch_shared_memory = true>, llvm_func_attrs = {"amdgpu-waves-per-eu" = "4"}'
     )
 
 
@@ -409,11 +438,18 @@ def test_generate_constraints_invalid_input():
     assert solver.check() == candidate_gen.z3.unsat
 
 
+def remove_comments(mlir: str) -> str:
+    return "\n".join(
+        filter(lambda x: not x.lstrip().startswith("//"), mlir.splitlines())
+    )
+
+
 def test_apply_params_mmt():
     mlir_template = [
         "<intrinsic = #iree_gpu.mma_layout<MFMA_F32_32x32x8_F16>, subgroup_m_count = 16, subgroup_n_count = 16>",
         "<LLVMGPUVectorDistribute workgroup_size = [16, 16] subgroup_size = 16,",
         "<tile_sizes = [[8, 8, 8]]>",
+        "gpu_pipeline_options = #iree_gpu.pipeline_options<reorder_workgroups_strategy = None>",
         '{llvm_func_attrs = {"amdgpu-waves-per-eu" = "4"}',
     ]
 
@@ -426,6 +462,9 @@ def test_apply_params_mmt():
         tile_sizes=[8, 8, 8],
         subgroup_m_count=16,
         subgroup_n_count=16,
+        gpu_pipeline_options=candidate_gen.GpuPipelineOptions(
+            prefetch_shared_memory=True
+        ),
         waves_per_eu=8,
     )
 
@@ -442,6 +481,7 @@ def test_apply_params_mmt():
     embeddable = tf_mlir.embeddable
 
     assert modified
+    modified = remove_comments(modified)
     assert embeddable
     assert (
         "intrinsic = #iree_gpu.mma_layout<MFMA_F32_16x16x16_F16>, subgroup_m_count = 16, subgroup_n_count = 16"
@@ -452,6 +492,10 @@ def test_apply_params_mmt():
         in modified
     )
     assert "tile_sizes = [[8, 8, 8]]" in modified
+    assert (
+        "gpu_pipeline_options = #iree_gpu.pipeline_options<prefetch_shared_memory = true>"
+        in modified
+    )
     assert '{llvm_func_attrs = {"amdgpu-waves-per-eu" = "8"}' in modified
 
 
@@ -460,7 +504,7 @@ def test_apply_params_conv():
         "<intrinsic = #iree_gpu.mma_layout<MFMA_F32_16x16x16_F16>, subgroup_m_count = 16, subgroup_n_count = 16>",
         "<LLVMGPUVectorDistribute workgroup_size = [256, 1, 1] subgroup_size = 64,",
         "<tile_sizes = [[1, 1, 64, 128, 1, 1, 32]]>",
-        '{llvm_func_attrs = {"amdgpu-waves-per-eu" = "4"}',
+        'gpu_pipeline_options = #iree_gpu.pipeline_options<prefetch_shared_memory = true>, {llvm_func_attrs = {"amdgpu-waves-per-eu" = "4"}',
     ]
 
     n, oh, ow, oc, fh, fw, ic = 2, 64, 64, 640, 3, 3, 640
@@ -472,6 +516,9 @@ def test_apply_params_conv():
         tile_sizes=[464, 320, 16],
         subgroup_m_count=1,
         subgroup_n_count=4,
+        gpu_pipeline_options=candidate_gen.GpuPipelineOptions(
+            reorder_workgroups_strategy=candidate_gen.ReorderWorkgroupsStrategy.TRANSPOSE
+        ),
         waves_per_eu=2,
     )
 
@@ -492,6 +539,8 @@ def test_apply_params_conv():
     embeddable = tf_mlir.embeddable
 
     assert modified
+    modified = remove_comments(modified)
+
     assert embeddable
     assert (
         "intrinsic = #iree_gpu.mma_layout<MFMA_F32_16x16x16_F16>, subgroup_m_count = 1, subgroup_n_count = 4"
@@ -502,6 +551,10 @@ def test_apply_params_conv():
         in modified
     )
     assert "tile_sizes = [[1, 1, 464, 320, 1, 1, 16]]" in modified
+    assert (
+        "gpu_pipeline_options = #iree_gpu.pipeline_options<reorder_workgroups_strategy = Transpose>"
+        in modified
+    )
     assert '{llvm_func_attrs = {"amdgpu-waves-per-eu" = "2"}' in modified
 
 
@@ -529,6 +582,7 @@ def test_apply_params_contract():
         tile_sizes=[480, 384, 32],
         subgroup_m_count=1,
         subgroup_n_count=4,
+        gpu_pipeline_options=candidate_gen.GpuPipelineOptions(),
         waves_per_eu=2,
     )
 
@@ -575,6 +629,7 @@ def test_apply_params_batch_matmul():
         tile_sizes=[416, 320, 128],
         subgroup_m_count=2,
         subgroup_n_count=2,
+        gpu_pipeline_options=candidate_gen.GpuPipelineOptions(),
         waves_per_eu=2,
     )
 
@@ -586,6 +641,8 @@ def test_apply_params_batch_matmul():
     embeddable = tf_mlir.embeddable
 
     assert modified
+    modified = remove_comments(modified)
+
     assert embeddable
     assert (
         "intrinsic = #iree_gpu.mma_layout<MFMA_F32_32x32x8_F16>, subgroup_m_count = 2, subgroup_n_count = 2"
@@ -622,6 +679,7 @@ def test_apply_params_batch_mmt_float():
         tile_sizes=[128, 64, 128],
         subgroup_m_count=2,
         subgroup_n_count=2,
+        gpu_pipeline_options=candidate_gen.GpuPipelineOptions(),
         waves_per_eu=2,
     )
 
@@ -669,6 +727,7 @@ def test_apply_params_batch_mmt_int():
         tile_sizes=[128, 64, 128],
         subgroup_m_count=2,
         subgroup_n_count=2,
+        gpu_pipeline_options=candidate_gen.GpuPipelineOptions(),
         waves_per_eu=4,
     )
 
@@ -681,6 +740,8 @@ def test_apply_params_batch_mmt_int():
 
     assert modified
     assert "//   transform.named_sequence @match_batch_mmt_2x4096x640x640(" in modified
+    modified = remove_comments(modified)
+
     assert (
         "intrinsic = #iree_gpu.mma_layout<MFMA_I32_32x32x16_I8>, subgroup_m_count = 2, subgroup_n_count = 2"
         in modified
@@ -737,6 +798,7 @@ def test_apply_params_broadcast_rhs_mmt():
         tile_sizes=[128, 64, 128],
         subgroup_m_count=2,
         subgroup_n_count=2,
+        gpu_pipeline_options=candidate_gen.GpuPipelineOptions(),
         waves_per_eu=4,
     )
 
@@ -752,6 +814,8 @@ def test_apply_params_broadcast_rhs_mmt():
         "//   transform.named_sequence @match_broadcast_rhs_mmt_Bx4096x640x640("
         in modified
     )
+    modified = remove_comments(modified)
+
     assert (
         "intrinsic = #iree_gpu.mma_layout<MFMA_I32_32x32x16_I8>, subgroup_m_count = 2, subgroup_n_count = 2"
         in modified
