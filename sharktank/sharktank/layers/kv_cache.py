@@ -92,6 +92,7 @@ class DirectKVCache(BaseKVCache):
         attn_head_count: int,
         attn_head_dim: int,
         seq_length: int,
+        shard_count: int = 1,
         dtype: torch.dtype = torch.float32,
         device: Optional[torch.device] = None,
     ):
@@ -100,6 +101,7 @@ class DirectKVCache(BaseKVCache):
         self.attn_head_count = attn_head_count
         self.attn_head_dim = attn_head_dim
         self.seq_length = seq_length
+        self.shard_count = shard_count
         self.device = device
         self.dtype = dtype
 
@@ -113,14 +115,19 @@ class DirectKVCache(BaseKVCache):
 
         Each tensor has shape: [bs, sl, attn_head_count, attn_head_dim]
         """
-        return [
-            torch.empty(
-                [bs, self.seq_length, self.attn_head_count, self.attn_head_dim],
+        shards = [[torch.empty(
+                [bs, self.seq_length, self.attn_head_count // self.shard_count, self.attn_head_dim],
                 dtype=self.dtype,
                 device=self.device,
-            )
+            ) for i in range(self.shard_count)] 
             for _ in range(2 * self.transformer_block_count)
         ]
+
+        if self.shard_count == 1:
+            return [shard[0] for shard in shards]
+
+        return [SplitPrimitiveTensor(ts=shrds, shard_dim=2) for shrds in shards]
+
 
     def read(
         self,
@@ -149,7 +156,7 @@ class DirectKVCache(BaseKVCache):
         read_count = len(read_into_partitions)
         reads = []
         for i in range(read_count):
-            reads.append(state[transformer_block_index * read_count + i][:, :seq_len])
+            reads.append(state[transformer_block_index * read_count + i][:, :seq_len, :, :])
 
         return tuple(reads)
 
@@ -199,7 +206,7 @@ class DirectKVCache(BaseKVCache):
         for idx, update_src in enumerate(cache_partitions):
             cache_dest = state[transformer_block_index * update_count + idx]
             _, batch_seq_len, _, _ = update_src.shape
-            cache_dest[:, :batch_seq_len] = update_src
+            cache_dest[:, :batch_seq_len, :, :] = update_src
 
 
 class PagedKVCache(BaseKVCache):
@@ -317,24 +324,19 @@ class PagedKVCache(BaseKVCache):
         """Allocates tensor state for a page table for the given capacity in
         pages.
         """
+        shards = [
+            torch.empty(
+                [page_count, self.page_slab_flat_dim],
+                dtype=self.dtype,
+                device=self.device,
+            )
+            for _ in range(self.shard_count)
+        ]
+
         if self.shard_count == 1:
-            return [
-                torch.empty(
-                    [page_count, self.page_slab_flat_dim],
-                    dtype=self.dtype,
-                    device=self.device,
-                )
-            ]
-        else:
-            shards = [
-                torch.empty(
-                    [page_count, self.page_slab_flat_dim],
-                    dtype=self.dtype,
-                    device=self.device,
-                )
-                for _ in range(self.shard_count)
-            ]
-            return [SplitPrimitiveTensor(ts=shards, shard_dim=1)]
+            return shards
+
+        return [SplitPrimitiveTensor(ts=shards, shard_dim=1)]
 
     def read(
         self,
