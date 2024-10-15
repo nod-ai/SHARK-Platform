@@ -61,10 +61,14 @@ def qconv2d_tensor_scaled(
 
     # # Handle integer and fp8 quantizations.
     if (
-        input_layout.qs.dtype != torch.float8_e4m3fnuz
-        and weight_layout.qs.dtype != torch.float8_e4m3fnuz
+        input_layout.qs.dtype.is_floating_point
+        or weight_layout.qs.dtype.is_floating_point
     ):
-        return NotImplemented
+        if (
+            input_layout.qs.dtype != torch.float8_e4m3fnuz
+            or weight_layout.qs.dtype != torch.float8_e4m3fnuz
+        ):
+            return NotImplemented
 
     # Bias is both optional and may either be quantized or fp.
     bias_qs = None
@@ -270,9 +274,9 @@ def _pad_last_2d(input_tensor, pad_width):
     )
 
     # Copy the values from the input tensor to the appropriate location in the padded tensor
-    padded_tensor[
-        :, :, pad_top : pad_top + height, pad_left : pad_left + width
-    ] = input_tensor
+    padded_tensor[:, :, pad_top : pad_top + height, pad_left : pad_left + width] = (
+        input_tensor
+    )
     return padded_tensor
 
 
