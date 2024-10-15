@@ -122,6 +122,85 @@ class DirectKVCache(BaseKVCache):
             for _ in range(2 * self.transformer_block_count)
         ]
 
+    def read(
+        self,
+        state: list[Union[torch.Tensor, SplitPrimitiveTensor]],
+        *,
+        read_into_partitions: list[Union[torch.Tensor, SplitPrimitiveTensor]],
+        transformer_block_index: int,
+        seq_len: int,
+        page_ids: Optional[Union[torch.Tensor, ReplicatedTensor]] = None,
+    ):
+        """Reads cache partitions from the page table for the given page_ids.
+
+        Args:
+        state: State struct as returned from allocate().
+        read_into_partitions: List of cache partitions to read into in-place.
+        transformer_block_index: The index of the transformer block accessing
+            the cache.
+        page_ids: Tensor of [bs, max_seqlen // block_pos_stride] of page ids
+            to access.
+
+        Returns a tuple of cache partitions (i.e. k and v caches for the transformer
+        block), linearized. Note that this reference approach to reading by
+        materializing linearly may not be terribly efficient unless if the
+        compiler can fuse the gather.
+        """
+        read_count = len(read_into_partitions)
+        reads = []
+        for i in range(read_count):
+            reads.append(state[transformer_block_index * read_count + i][:, :seq_len])
+
+        return tuple(reads)
+
+    def write_timestep(
+        self,
+        state: list[Union[torch.Tensor, SplitPrimitiveTensor]],
+        # List of [bs, 1, attn_head_count, attn_head_dim]
+        cache_partitions: list[Union[torch.Tensor, SplitPrimitiveTensor]],
+        *,
+        transformer_block_index: int,
+        # [bs]
+        seq_positions: Union[torch.Tensor, ReplicatedTensor],
+        # [bs, max_seqlen // block_pos_stride]
+        page_ids: Optional[Union[torch.Tensor, ReplicatedTensor]] = None,
+    ):
+        """Writes a single batched timestep across all cache partitions.
+
+        Note that this internally loops over the batch size, which cannot be
+        dynamic.
+        """
+        bs, _, _, _ = cache_partitions[0].shape
+        update_count = len(cache_partitions)
+
+        for b in range(bs):
+            row_index = torch.tensor(b, dtype=torch.int64)
+            row_start_pos = seq_positions[row_index]
+
+            for i, update in enumerate(cache_partitions):
+                cache = state[transformer_block_index * update_count + i]
+                cache.index_put_((row_index, row_start_pos), update[row_index, 0])
+
+    def write(
+        self,
+        state: list[Union[torch.Tensor, SplitPrimitiveTensor]],
+        cache_partitions: list[Union[torch.Tensor, SplitPrimitiveTensor]],
+        *,
+        transformer_block_index: int,
+        page_ids: Optional[Union[torch.Tensor, ReplicatedTensor]] = None,
+    ):
+        """Writes cache partitions from a linear layout to the page table.
+
+        This is the inverse of the linear read. The same caveat applies if the
+        in-place scatter cannot be fused.
+        """
+        update_count = len(cache_partitions)
+
+        for idx, update_src in enumerate(cache_partitions):
+            cache_dest = state[transformer_block_index * update_count + idx]
+            _, batch_seq_len, _, _ = update_src.shape
+            cache_dest[:, :batch_seq_len] = update_src
+
 
 class PagedKVCache(BaseKVCache):
     """Implementation of a KV cache on top of a 'page table'.
@@ -263,6 +342,7 @@ class PagedKVCache(BaseKVCache):
         *,
         read_into_partitions: list[Union[torch.Tensor, SplitPrimitiveTensor]],
         transformer_block_index: int,
+        seq_len: int,
         page_ids: Union[torch.Tensor, ReplicatedTensor],
     ):
         """Reads cache partitions from the page table for the given page_ids.
@@ -330,6 +410,8 @@ class PagedKVCache(BaseKVCache):
 
         for index, read_into_partition in enumerate(read_into_partitions):
             read_cache_partition(index, read_into_partition)
+
+        return tuple([p[:, :seq_len, :] for p in read_into_partitions])
 
     def write_timestep(
         self,
