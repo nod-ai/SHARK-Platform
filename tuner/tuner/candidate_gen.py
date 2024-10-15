@@ -111,40 +111,40 @@ class ProblemSize:
 
 @dataclass
 class MfmaIntrinsic:
-    input_type: ElementType
+    output_type: ElementType
     m: int
     n: int
     k: int
-    output_type: ElementType
+    input_type: ElementType
 
     def __str__(self) -> str:
         input = str(self.input_type).upper()
         output = str(self.output_type).upper()
-        return f"MFMA_{input}_{self.m}x{self.n}x{self.k}_{output}"
+        return f"MFMA_{output}_{self.m}x{self.n}x{self.k}_{input}"
 
     @staticmethod
-    def mfma_f16_16x16x16_f32():
-        return MfmaIntrinsic(ElementType.f16, 16, 16, 16, ElementType.f32)
+    def mfma_f32_16x16x16_f16():
+        return MfmaIntrinsic(ElementType.f32, 16, 16, 16, ElementType.f16)
 
     @staticmethod
-    def mfma_f16_32x32x8_f32():
-        return MfmaIntrinsic(ElementType.f16, 32, 32, 8, ElementType.f32)
+    def mfma_f32_32x32x8_f16():
+        return MfmaIntrinsic(ElementType.f32, 32, 32, 8, ElementType.f16)
 
     @staticmethod
-    def mfma_i8_16x16x32_i32():
-        return MfmaIntrinsic(ElementType.i8, 16, 16, 32, ElementType.i32)
+    def mfma_i32_16x16x32_i8():
+        return MfmaIntrinsic(ElementType.i32, 16, 16, 32, ElementType.i8)
 
     @staticmethod
-    def mfma_i8_32x32x16_i32():
-        return MfmaIntrinsic(ElementType.i8, 32, 32, 16, ElementType.i32)
+    def mfma_i32_32x32x16_i8():
+        return MfmaIntrinsic(ElementType.i32, 32, 32, 16, ElementType.i8)
 
     @staticmethod
     def all():
         return [
-            MfmaIntrinsic.mfma_f16_16x16x16_f32(),
-            MfmaIntrinsic.mfma_f16_32x32x8_f32(),
-            MfmaIntrinsic.mfma_i8_16x16x32_i32(),
-            MfmaIntrinsic.mfma_i8_32x32x16_i32(),
+            MfmaIntrinsic.mfma_f32_16x16x16_f16(),
+            MfmaIntrinsic.mfma_f32_32x32x8_f16(),
+            MfmaIntrinsic.mfma_i32_16x16x32_i8(),
+            MfmaIntrinsic.mfma_i32_32x32x16_i8(),
         ]
 
 
@@ -159,9 +159,12 @@ class Configuration:
     waves_per_eu: int
 
 
-class MlirRegex(str, Enum):
+class MlirRegex(Enum):
     ssa_value = r"%[a-zA-Z0-9-_]+"
     tensor_type = r"tensor<(([0-9]+x)+((f|i)[0-9]+))>"
+
+    def __str__(self) -> str:
+        return self.value
 
     @staticmethod
     def dps_ins_two_args() -> str:
@@ -259,7 +262,7 @@ def apply_configuration(
 
 
 def parse_tensor_type(tensor_type: str) -> ShapedType:
-    shape_match = re.search(MlirRegex.tensor_type, tensor_type)
+    shape_match = re.search(str(MlirRegex.tensor_type), tensor_type)
     assert shape_match
 
     shape_str = shape_match.group(1)
@@ -449,11 +452,11 @@ def generate_solutions(problem_size: ProblemSize, num_subgrups: int):
             lookup(subgroup_size),
             [lookup(wg_x), lookup(wg_y), lookup(wg_z)],
             MfmaIntrinsic(
-                problem_size.lhs_type.element_type,
+                problem_size.res_type.element_type,
                 lookup(intrinsic_mn),
                 lookup(intrinsic_mn),
                 lookup(intrinsic_k),
-                problem_size.res_type.element_type,
+                problem_size.lhs_type.element_type,
             ),
             [lookup(m), lookup(n), lookup(k)],
             lookup(sg_m_cnt),

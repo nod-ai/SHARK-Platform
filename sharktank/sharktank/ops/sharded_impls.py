@@ -61,8 +61,18 @@ def all_reduce_split_or_unreduced(
     return ReplicatedTensor(ts=shards)
 
 
+@cat.override(AllOfType(ReplicatedTensor))
+def cat_replicated(tensors: Sequence[ReplicatedTensor], dim: int) -> ReplicatedTensor:
+    assert len(tensors) > 0
+    shard_count = tensors[0].shard_count
+    assert all([t.shard_count == shard_count for t in tensors])
+
+    shards = [cat(shards, dim) for shards in zip(*[t.shards for t in tensors])]
+    return ReplicatedTensor(ts=shards)
+
+
 @cat.override(AllOfType(SplitPrimitiveTensor))
-def cat_sharded(
+def cat_split(
     tensors: Sequence[SplitPrimitiveTensor], dim: int
 ) -> SplitPrimitiveTensor:
     assert len(tensors) > 0
@@ -456,6 +466,18 @@ def flatten_split(
     return SplitPrimitiveTensor(ts=shards, shard_dim=shard_dim)
 
 
+@gather.override(ReplicatedTensor, ReplicatedTensor)
+def gather_replicated(
+    input: ReplicatedTensor, dim: int, index: ReplicatedTensor
+) -> Tensor:
+    assert input.shard_count == index.shard_count
+    shards = [
+        gather(input_shard, dim, index_shard)
+        for input_shard, index_shard in zip(input.shards, index.shards)
+    ]
+    return ReplicatedTensor(ts=shards)
+
+
 @group_norm_affine.override(
     SplitPrimitiveTensor, SplitPrimitiveTensor, SplitPrimitiveTensor
 )
@@ -800,6 +822,12 @@ def permute_split(tensor: SplitPrimitiveTensor, dims: List[int]):
 def permute_replicated(tensor: ReplicatedTensor, dims: List[int]):
     permuted_shards = [permute(shard, dims) for shard in tensor.shards]
     return ReplicatedTensor(ts=permuted_shards)
+
+
+@repeat.override(ReplicatedTensor)
+def repeat_replicated(input: ReplicatedTensor, *sizes: List[int]) -> ReplicatedTensor:
+    shards = [repeat(shard, *sizes) for shard in input.shards]
+    return ReplicatedTensor(ts=shards)
 
 
 @replicate.override(ReplicatedTensor)

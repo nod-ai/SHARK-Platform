@@ -4,13 +4,14 @@
 ## Prerequisites
 [Optional] Using virtual environments:
 ```shell
-cd tuning
+cd tuner
 python -m venv .venv
 source .venv/bin/activate
 ```
 Install python dependencies:
 ```shell
-pip install -r ./requirements-tuner.txt
+pip install -r requirements-tuner.txt
+pip install -r requirements-dev.txt
 ```
 Using the IREE's Python bindings:
    - Building with CMake
@@ -53,7 +54,7 @@ cp dump-winograd/*_141_*benchmark.mlir ./141.mlir
 6. Run the tuning script.
    - Example:
     ```shell
-    python punet_autotune.py 141.mlir --devices=hip://GPU-0,hip://GPU-4 --num-candidates=1024
+    python -m examples.punet 141.mlir --devices=hip://GPU-0,hip://GPU-4 --num-candidates=1024
     ```
 
 7. Check the winner candidate in `result_summary.log`, find and copy the transform spec.

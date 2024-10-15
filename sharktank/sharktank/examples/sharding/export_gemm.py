@@ -4,7 +4,7 @@ import argparse
 import torch
 from torch import Tensor
 from sharktank import ops
-from shark_turbine import aot
+from iree.turbine import aot
 
 
 def export_gemm(

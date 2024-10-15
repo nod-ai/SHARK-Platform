@@ -24,7 +24,7 @@ from ..types import (
 from ..types.tensors import unbox_tensor, AnyTensor
 from ._registry import AllOfType, AllOfExprs, AllOfExprsVariadic, IsOfType
 from .signatures import *
-import shark_turbine.ops.iree
+import iree.turbine.ops.iree
 
 
 @cat.override(AllOfType(Tensor, PrimitiveTensor))
@@ -69,9 +69,56 @@ conv2d.override(Tensor, Tensor, Tensor, auto_dequant=True)(conv2d_default)
 conv2d.override(Tensor, Tensor, auto_dequant=True)(conv2d_default)
 
 # Einsum
-@einsum_2args.override(AllOfType(Tensor, PrimitiveTensor))
-def einsum_2args(x, y, einsum_str):
-    return torch.einsum(einsum_str, unbox_tensor(x), unbox_tensor(y))
+def mk_menk_men(inputs, weights):
+    # batch dims: m, lhs pdims: none, lhs rdims: k, rhs pdims: en, rhs rdims: k
+    inputs = inputs.unsqueeze(1)
+    weights_shape = weights.shape
+    weights = weights.view(
+        weights_shape[0], weights_shape[1] * weights_shape[2], weights_shape[3]
+    )
+    result = matmul(inputs, weights, transpose_rhs=True)
+    result = result.view(weights_shape[0], weights_shape[1], weights_shape[2])
+    return result
+
+
+def mek_menk_men(inputs, weights):
+    # batch dims: me, lhs pdims: none, lhs rdims: k, rhs pdims: n, rhs rdims: k
+    inputs_shape = inputs.shape
+    inputs = inputs.view(inputs_shape[0] * inputs_shape[1], 1, inputs_shape[2])
+    weights_shape = weights.shape
+    weights = weights.view(
+        weights_shape[0] * weights_shape[1], weights_shape[2], weights_shape[3]
+    )
+    result = matmul(inputs, weights, transpose_rhs=True)
+    result = result.view(weights_shape[0], weights_shape[1], weights_shape[2])
+    return result
+
+
+def me_men_men(inputs, weights):
+    # batch dims: me, lhs pdims: none, lhs rdims: none, rhs pdims: n, rhs rdims: none
+    inputs_shape = inputs.shape
+    inputs = inputs.view(inputs_shape[0] * inputs_shape[1], 1, 1)
+    weights_shape = weights.shape
+    weights = weights.view(weights_shape[0] * weights_shape[1], weights_shape[2], 1)
+    result = matmul(inputs, weights, transpose_rhs=True)
+    result = result.view(weights_shape[0], weights_shape[1], weights_shape[2])
+    return result
+
+
+@einsum_2args.override(AllOfType(Tensor, PrimitiveTensor, QuantizedTensor))
+def einsum_2args(input0, input1, einsum_str):
+    # Special optimized einsum kernels that lower to batch matmul
+    if einsum_str == "mk,menk->men":
+        return mk_menk_men(input0, input1)
+    elif einsum_str == "mek,menk->men":
+        return mek_menk_men(input0, input1)
+    elif einsum_str == "me,men->men":
+        return me_men_men(input0, input1)
+    # Default non-QuantizedTensor einsum
+    if not isinstance(input1, QuantizedTensor):
+        return torch.einsum(einsum_str, unbox_tensor(x), unbox_tensor(y))
+    # Fallback to other kernels
+    return NotImplemented
 
 
 # Elementwise
@@ -155,6 +202,15 @@ def flatten_default(
     input: Union[Tensor, PrimitiveTensor], start_dim: int, end_dim: int
 ) -> Tensor:
     return torch.flatten(unbox_tensor(input), start_dim, end_dim)
+
+
+@gather.override(Tensor, Tensor)
+def gather_default(
+    input: Union[Tensor, PrimitiveTensor],
+    dim: int,
+    index: Union[Tensor, PrimitiveTensor],
+) -> Tensor:
+    return torch.gather(unbox_tensor(input), dim, unbox_tensor(index))
 
 
 @get_index.override(AllOfType(Tensor, PrimitiveTensor))
@@ -298,7 +354,7 @@ def matmul_default(lhs, rhs, *, transpose_rhs: bool) -> Tensor:
     lhs = unbox_tensor(lhs)
     rhs = unbox_tensor(rhs)
     if transpose_rhs:
-        rhs = rhs.T
+        rhs = rhs.mT
     return torch.matmul(lhs, rhs.to(lhs.dtype))
 
 
@@ -331,6 +387,11 @@ def module_register_buffer_default(
     module: torch.nn.Module, name: str, tensor: Union[Tensor, InferenceTensor]
 ) -> None:
     return module.register_buffer(name, unbox_tensor(tensor))
+
+
+@repeat.override(Tensor)
+def repeat_default(input: Union[Tensor, PrimitiveTensor], *sizes: List[int]) -> Tensor:
+    return unbox_tensor(input).repeat(*sizes)
 
 
 @reshape.override(Tensor)
@@ -379,7 +440,7 @@ def to_default(tensor: Tensor, *args, **kwargs):
 
 @transfer_to_logical_device.override(Tensor)
 def transfer_to_logical_device_default(tensor: Tensor, ordinal: int):
-    return shark_turbine.ops.iree.transfer_to_logical_device(
+    return iree.turbine.ops.iree.transfer_to_logical_device(
         f"{ordinal}", unbox_tensor(tensor)
     )
 
@@ -419,3 +480,19 @@ def unsqueeze_default(tensor: Union[Tensor, PrimitiveTensor], dim: int) -> Tenso
 @view.override(Tensor)
 def view_default(tensor: Union[Tensor, PrimitiveTensor], shape: List[int]) -> Tensor:
     return unbox_tensor(tensor).view(*shape)
+
+
+@view.override(QuantizedTensor)
+def view_QuantizedTensor(tensor: QuantizedTensor, shape):
+    unpacked = tensor.unpack()
+    if not isinstance(unpacked, BlockScaledI4Layout):
+        return NotImplemented
+    bs = 16
+    shape = list(shape)
+    new_d = unpacked._d.view(shape[:-1] + [shape[-1] // 32, 1])
+    qs_shape = shape[:-1] + [shape[-1] // 32, 16]
+    new_qs = unpacked._qs.view(qs_shape)
+    if unpacked.m is not None:
+        new_m = unpacked.m.view(shape[:-1] + [shape[-1] // 32, 1])
+    layout = BlockScaledI4Layout(shape=shape, d=new_d, qs=new_qs, m=new_m)
+    return PlanarQuantizedTensor(shape=shape, layout=layout)
