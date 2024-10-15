@@ -121,11 +121,13 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
         required=True,
         help="Model VMFB to load",
     )
+    # parameters are loaded with `iree_io_parameters_module_create`
     parser.add_argument(
         "--parameters",
         type=Path,
         nargs="*",
-        help="Parameter archives to load",
+        help="Parameter archives to load (supports: gguf, irpa, safetensors).",
+        metavar="FILE",
     )
     parser.add_argument(
         "--device",
