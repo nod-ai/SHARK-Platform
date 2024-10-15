@@ -378,7 +378,7 @@ class InferenceTensor(ABC):
     def view(self, *args: Union[List[List[int]], List[int]]) -> "AnyTensor":
         from ..ops import view
 
-        if all(isinstance(a, int) for a in args):
+        if all(isinstance(a, int) or isinstance(a, torch.SymInt) for a in args):
             shape = args
         else:
             assert len(args) == 1
