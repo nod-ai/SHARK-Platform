@@ -51,6 +51,12 @@ def main():
         help="Enables strictness during export",
         action="store_true",
     )
+    parser.add_argument(
+        "--attn-kernel",
+        type=str,
+        default="decomposed",
+        help='["decomposed", "torch_sdpa"],',
+    )
 
     args = cli.parse(parser)
     dataset_type = cli.get_input_data_files(args)
