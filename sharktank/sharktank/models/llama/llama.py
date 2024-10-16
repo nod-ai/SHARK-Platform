@@ -7,7 +7,6 @@
 from typing import Optional
 
 from dataclasses import dataclass
-import math
 from typing import Union
 
 import torch

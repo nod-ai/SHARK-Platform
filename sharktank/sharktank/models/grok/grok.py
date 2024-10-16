@@ -95,6 +95,7 @@ class PagedGrokModelV1(BaseCausalLMModel):
                     head_dim=hp.attn_head_dim,
                     head_count_kv=hp.attention_head_count_kv,
                     rms_epsilon=hp.attention_layer_norm_rms_epsilon,
+                    softcap=30.0,  # https://github.com/xai-org/grok-1/blob/7050ed204b8206bb8645c7b7bbef7252f79561b0/model.py#L864
                 )
             )
             self.moe_blocks.append(
@@ -123,7 +124,7 @@ class PagedGrokModelV1(BaseCausalLMModel):
         self._assert_device(seq_block_ids)
         self._assert_device(*cache_state, dtype=self.activation_dtype)
         h = self.token_embedding(tokens)
-        h *= tanh.sqrt(h.shape[-1])
+        h *= torch.sqrt(h.shape[-1])
         self.trace_tensor("grok.token_embedding", h)
 
         # Iterate over attention blocks.
@@ -220,7 +221,6 @@ class PagedGrokModelV1(BaseCausalLMModel):
                 seq_block_ids=seq_block_ids,
                 xk_temp=xk_temp,
                 xv_temp=xv_temp,
-                softcap=30.0,  # https://github.com/xai-org/grok-1/blob/7050ed204b8206bb8645c7b7bbef7252f79561b0/model.py#L864
             )
             self.trace_tensor(f"grok.attn_block.{block_idx}.output", h)
 

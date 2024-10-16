@@ -31,6 +31,7 @@ class InferenceTokenizer(ABC):
         raw_rows = self._encode(texts)
         max_length = 0
         lengths: list[int] = []
+        raw_rows = [row[1:] for row in raw_rows]
         for row in raw_rows:
             lengths.append(len(row))
             max_length = max(max_length, len(row))

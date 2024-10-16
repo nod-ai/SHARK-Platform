@@ -156,7 +156,7 @@ class PagedLlamaAttentionBlock(ThetaLayer):
 
         attn_weights = ops.matmul(xq, keys.transpose(2, 3))
         if self.attention_scale is None:
-            attn_weights = attn_weights / torch.sqrt(self.head_dim)
+            attn_weights = attn_weights / math.sqrt(self.head_dim)
         else:
             attn_weights = attn_weights * self.attention_scale
 

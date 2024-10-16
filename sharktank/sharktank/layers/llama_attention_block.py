@@ -6,8 +6,6 @@
 
 from typing import Optional
 
-import math
-
 import torch
 import torch.nn.functional as F
 
