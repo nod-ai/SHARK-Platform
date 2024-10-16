@@ -1,10 +1,10 @@
-name: Integration Tests
+name: Evaluation Tests
 
 on:
   workflow_dispatch:
   schedule:
-    # Weekdays at 13:00 UTC = 05:00 PST / 06:00 PDT.
-    - cron: "5 4 * * 1-5"
+    # Weekdays nightly at 07:00 UTC = 23:00 PST / 00:00 PDT.
+    - cron: "0 7 * * 1-5"
 
 concurrency:
   # A PR number if a pull request and otherwise the commit hash. This cancels
@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   test_perplexity:
-    name: "Integration Tests - perplexity"
+    name: "Evaluation Tests - perplexity"
     strategy:
       matrix:
         version: [3.11]
@@ -57,4 +57,4 @@ jobs:
           pip install --no-compile -r requirements.txt -e sharktank/ shortfin/
 
       - name: Run perplexity test
-        run:  python tests/evaluate/perplexity_test.py
+        run:  pytest sharktank/tests/evaluate/perplexity_test.py
