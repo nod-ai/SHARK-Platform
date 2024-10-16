@@ -96,7 +96,7 @@ class BaseBenchmarkTest(unittest.TestCase):
             compile_cmd: Command used to compile the program, for inclusion in error messages.
         Raises Exception if running fails for some reason.
         """
-        run_args = [
+        benchmark_args = [
             f"ROCR_VISIBLE_DEVICES={hip_device_id}",
             "iree-benchmark-module",
             f"--device=hip://{hip_device_id}",
@@ -106,8 +106,8 @@ class BaseBenchmarkTest(unittest.TestCase):
             f"--module={vmfb_name}",
             f"--parameters=model={irpa_path}",
         ]
-        run_args += args
-        cmd = subprocess.list2cmdline(run_args)
+        benchmark_args += args
+        cmd = subprocess.list2cmdline(benchmark_args)
         logging.getLogger().info(f"Launching run command:\n" f"cd {cwd} && {cmd}")
         proc = subprocess.run(cmd, shell=True, capture_output=True, cwd=cwd)
         return_code = proc.returncode
@@ -118,9 +118,7 @@ class BaseBenchmarkTest(unittest.TestCase):
 class BenchmarkLlama3_1_8B_f16(BaseBenchmarkTest):
     def setUp(self):
         # TODO: add numpy files to Azure and download from it
-        self.repo_root = (
-            "/home/avsharma/SHARK-Platform/"  # os.getenv("SHARK_PLATFORM_REPO_ROOT")
-        )
+        self.repo_root = os.getenv("SHARK_PLATFORM_REPO_ROOT")
         artifacts_dir = "/data/extra/models/llama3.1_8B/"
         self.irpa_path = artifacts_dir + "llama8b_f16.irpa"
         self.output_mlir = self.repo_root + "llama8b_f16.mlir"
