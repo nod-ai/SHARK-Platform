@@ -57,4 +57,4 @@ jobs:
           pip install --no-compile -r requirements.txt -e sharktank/ shortfin/
 
       - name: Run perplexity test
-        run:  pytest sharktank/tests/evaluate/perplexity_test.py
+        run:  pytest sharktank/tests/evaluate/perplexity_test.py  --longrun

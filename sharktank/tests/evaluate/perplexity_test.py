@@ -13,6 +13,7 @@ longrun = pytest.mark.skipif("not config.getoption('longrun')")
 
 
 class PerplexityTest(unittest.TestCase):
+    @longrun
     def test_llama3_8B_f16_decomposed(self):
 
         # Llama 3.1 8B decomposed
@@ -51,6 +52,7 @@ class PerplexityTest(unittest.TestCase):
         )
 
     @pytest.mark.xfail
+    @longrun
     def test_llama3_8B_f16_non_decomposed(self):
 
         # Llama 3.1 8B non-decomposed
@@ -91,6 +93,7 @@ class PerplexityTest(unittest.TestCase):
         )
 
     @pytest.mark.xfail
+    @longrun
     def test_llama3_8B_fp8_decomposed(self):
 
         # Llama 3.1 8B decomposed
@@ -130,6 +133,7 @@ class PerplexityTest(unittest.TestCase):
         )
 
     @pytest.mark.xfail
+    @longrun
     def test_llama3_8B_fp8_non_decomposed(self):
 
         # Llama 3.1 8B non-decomposed
@@ -169,6 +173,7 @@ class PerplexityTest(unittest.TestCase):
             msg=f"Perplexity is deviating more than {delta}",
         )
 
+    @longrun
     def test_llama3_405B_f16_decomposed(self):
 
         # Llama 3.1 405B decomposed
@@ -212,6 +217,7 @@ class PerplexityTest(unittest.TestCase):
         )
 
     @pytest.mark.xfail
+    @longrun
     def test_llama3_405B_f16_non_decomposed(self):
 
         # Llama 3.1 405B non-decomposed
@@ -256,6 +262,7 @@ class PerplexityTest(unittest.TestCase):
         )
 
     @pytest.mark.xfail
+    @longrun
     def test_llama3_405B_fp8_decomposed(self):
 
         # Llama 3.1 405B decomposed
@@ -297,6 +304,7 @@ class PerplexityTest(unittest.TestCase):
         )
 
     @pytest.mark.xfail
+    @longrun
     def test_llama3_405B_fp8_non_decomposed(self):
 
         # Llama 3.1 405B non-decomposed
