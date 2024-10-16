@@ -6,6 +6,7 @@
 
 import logging
 import os
+import sys
 import unittest
 import pytest
 import subprocess
@@ -121,7 +122,7 @@ class BaseBenchmarkTest(unittest.TestCase):
         benchmark_args += args
         cmd = subprocess.list2cmdline(benchmark_args)
         logging.getLogger().info(f"Launching run command:\n" f"cd {cwd} && {cmd}")
-        proc = subprocess.run(cmd, shell=True, capture_output=True, cwd=cwd)
+        proc = subprocess.run(cmd, shell=True, stdout=sys.stdout, cwd=cwd)
         return_code = proc.returncode
         if return_code != 0:
             raise Exception(f"{cmd} failed to run")
@@ -134,16 +135,9 @@ class BenchmarkLlama3_1_8B_f16(BaseBenchmarkTest):
         artifacts_dir = "/data/extra/models/llama3.1_8B/"
         self.irpa_path = artifacts_dir + "llama8b_f16.irpa"
         self.irpa_path_fp8 = artifacts_dir + "llama8b_fp8.irpa"
-        self.output_mlir = self.repo_root + "llama8b_f16.mlir"
-        self.output_json = self.repo_root + "llama8b_f16.json"
-        self.output_vmfb = self.repo_root + "llama8b_f16.vmfb"
-        self.output_mlir_fp8 = self.repo_root + "llama8b_fp8.mlir"
-        self.output_json_fp8 = self.repo_root + "llama8b_fp8.json"
-        self.output_vmfb_fp8 = self.repo_root + "llama8b_fp8.vmfb"
         self.iree_compile_args = [
             "--iree-hal-target-backends=rocm",
             "--iree-hip-target=gfx942",
-            f"--iree-hal-dump-executable-files-to={self.repo_root}/files/llama",
         ]
         self.prefill_args_f16 = artifacts_dir + "prefill_args"
         self.decode_args_f16 = artifacts_dir + "decode_args"
@@ -185,49 +179,24 @@ class BenchmarkLlama3_1_8B_f16(BaseBenchmarkTest):
         ]
 
     def testBenchmark8B_f16_Decomposed(self):
+        output_mlir = self.repo_root + "llama8b_f16_decomposed.mlir"
+        output_json = self.repo_root + "llama8b_f16_decomposed.json"
+        output_vmfb = self.repo_root + "llama8b_f16_decomposed.vmfb"
         self.export_mlir(
             "decomposed",
             self.irpa_path,
-            self.output_mlir,
-            self.output_json,
+            output_mlir,
+            output_json,
             self.repo_root,
         )
-        self.iree_compile(
-            self.output_mlir, self.output_vmfb, self.iree_compile_args, self.repo_root
-        )
+        iree_compile_args = self.iree_compile_args + [
+            f"--iree-hal-dump-executable-files-to={self.repo_root}/files/llama-8b/f16-decomposed"
+        ]
+        self.iree_compile(output_mlir, output_vmfb, iree_compile_args, self.repo_root)
         # benchmark prefill
         self.iree_benchmark_module(
             "0",
-            self.output_vmfb_fp8,
-            self.irpa_path_fp8,
-            self.iree_run_prefill_args_fp8,
-            self.repo_root,
-        )
-        # benchmark decode
-        self.iree_benchmark_module(
-            "0",
-            self.output_vmfb_fp8,
-            self.irpa_path_fp8,
-            self.iree_run_decode_args_fp8,
-            self.repo_root,
-        )
-
-    @pytest.mark.xfail
-    def testBenchmark8B_f16_Non_Decomposed(self):
-        self.export_mlir(
-            "torch_sdpa",
-            self.irpa_path,
-            self.output_mlir,
-            self.output_json,
-            self.repo_root,
-        )
-        self.iree_compile(
-            self.output_mlir, self.output_vmfb, self.iree_compile_args, self.repo_root
-        )
-        # benchmark prefill
-        self.iree_benchmark_module(
-            "0",
-            self.output_vmfb,
+            output_vmfb,
             self.irpa_path,
             self.iree_run_prefill_args,
             self.repo_root,
@@ -235,7 +204,40 @@ class BenchmarkLlama3_1_8B_f16(BaseBenchmarkTest):
         # benchmark decode
         self.iree_benchmark_module(
             "0",
-            self.output_vmfb,
+            output_vmfb,
+            self.irpa_path,
+            self.iree_run_decode_args,
+            self.repo_root,
+        )
+
+    @pytest.mark.skip(reason="TODO: Need to plumb through attention_kernel")
+    def testBenchmark8B_f16_Non_Decomposed(self):
+        output_mlir = self.repo_root + "llama8b_f16_torch_sdpa.mlir"
+        output_json = self.repo_root + "llama8b_f16_torch_sdpa.json"
+        output_vmfb = self.repo_root + "llama8b_f16_torch_sdpa.vmfb"
+        self.export_mlir(
+            "torch_sdpa",
+            self.irpa_path,
+            output_mlir,
+            output_json,
+            self.repo_root,
+        )
+        iree_compile_args = self.iree_compile_args + [
+            f"--iree-hal-dump-executable-files-to={self.repo_root}/files/llama-8b/f16-torch-sdpa"
+        ]
+        self.iree_compile(output_mlir, output_vmfb, iree_compile_args, self.repo_root)
+        # benchmark prefill
+        self.iree_benchmark_module(
+            "0",
+            output_vmfb,
+            self.irpa_path,
+            self.iree_run_prefill_args,
+            self.repo_root,
+        )
+        # benchmark decode
+        self.iree_benchmark_module(
+            "0",
+            output_vmfb,
             self.irpa_path,
             self.iree_run_decode_args,
             self.repo_root,
@@ -243,23 +245,29 @@ class BenchmarkLlama3_1_8B_f16(BaseBenchmarkTest):
 
     @pytest.mark.xfail
     def testBenchmark8B_fp8_Decomposed(self):
+        output_mlir = self.repo_root + "llama8b_fp8_decomposed.mlir"
+        output_json = self.repo_root + "llama8b_fp8_decomposed.json"
+        output_vmfb = self.repo_root + "llama8b_fp8_decomposed.vmfb"
         self.export_mlir(
             "decomposed",
             self.irpa_path_fp8,
-            self.output_mlir_fp8,
-            self.output_json_fp8,
+            output_mlir,
+            output_json,
             self.repo_root,
         )
+        iree_compile_args = self.iree_compile_args + [
+            f"--iree-hal-dump-executable-files-to={self.repo_root}/files/llama-8b/fp8-decomposed"
+        ]
         self.iree_compile(
-            self.output_mlir_fp8,
-            self.output_vmfb_fp8,
+            output_mlir,
+            output_vmfb,
             self.iree_compile_args,
             self.repo_root,
         )
         # benchmark prefill
         self.iree_benchmark_module(
             "0",
-            self.output_vmfb,
+            output_vmfb,
             self.irpa_path,
             self.iree_run_prefill_args,
             self.repo_root,
@@ -267,7 +275,7 @@ class BenchmarkLlama3_1_8B_f16(BaseBenchmarkTest):
         # benchmark decode
         self.iree_benchmark_module(
             "0",
-            self.output_vmfb,
+            output_vmfb,
             self.irpa_path,
             self.iree_run_decode_args,
             self.repo_root,
@@ -275,23 +283,29 @@ class BenchmarkLlama3_1_8B_f16(BaseBenchmarkTest):
 
     @pytest.mark.xfail
     def testBenchmark8B_fp8_Non_Decomposed(self):
+        output_mlir = self.repo_root + "llama8b_fp8_torch_sdpa.mlir"
+        output_json = self.repo_root + "llama8b_fp8_torch_sdpa.json"
+        output_vmfb = self.repo_root + "llama8b_fp8_torch_sdpa.vmfb"
         self.export_mlir(
             "torch_sdpa",
             self.irpa_path_fp8,
-            self.output_mlir_fp8,
-            self.output_json_fp8,
+            output_mlir,
+            output_json,
             self.repo_root,
         )
+        iree_compile_args = self.iree_compile_args + [
+            f"--iree-hal-dump-executable-files-to={self.repo_root}/files/llama-8b/fp8-torch-sdpa"
+        ]
         self.iree_compile(
-            self.output_mlir_fp8,
-            self.output_vmfb_fp8,
+            output_mlir,
+            output_vmfb,
             self.iree_compile_args,
             self.repo_root,
         )
         # benchmark prefill
         self.iree_benchmark_module(
             "0",
-            self.output_vmfb_fp8,
+            output_vmfb,
             self.irpa_path_fp8,
             self.iree_run_prefill_args_fp8,
             self.repo_root,
@@ -299,7 +313,7 @@ class BenchmarkLlama3_1_8B_f16(BaseBenchmarkTest):
         # benchmark decode
         self.iree_benchmark_module(
             "0",
-            self.output_vmfb_fp8,
+            output_vmfb,
             self.irpa_path_fp8,
             self.iree_run_decode_args_fp8,
             self.repo_root,

@@ -1,4 +1,4 @@
-name: Integration Tests
+name: Llama Benchmarking Tests
 
 on:
   workflow_dispatch:
@@ -16,11 +16,11 @@ concurrency:
 
 jobs:
   test_llama:
-    name: "Integration Tests - llama"
+    name: "Llama Benchmarking Tests"
     strategy:
       matrix:
         version: [3.11]
-        os: [ubuntu-latest, windows-latest]
+        os: [llama-mi300]
       fail-fast: false
     runs-on: ${{matrix.os}}
     defaults:
@@ -68,3 +68,9 @@ jobs:
 
       - name: Run llama test
         run: pytest sharktank/tests/models/llama/benchmark-tests.py
+
+      - name: Upload llama executable files
+        uses: actions/upload-artifact@v4
+        with:
+          name: llama-files
+          path: ${{ github.workspace }}/files/
