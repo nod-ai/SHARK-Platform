@@ -128,4 +128,11 @@ class BenchmarkLlama3_1_8B_f16(BaseBenchmarkTest):
     def testExport8B_f16(self):
         self.export_mlir(self.irpa_path, self.output_mlir, self.output_json, self.repo_root)
         self.iree_compile(self.output_mlir, self.output_vmfb, self.iree_compile_args, self.repo_root)
+        # benchmark prefill
         self.iree_benchmark_module("0", self.output_vmfb, self.irpa_path, self.iree_run_prefill_args, self.repo_root)
+        # benchmark decode
+        self.iree_benchmark_module("0", self.output_vmfb, self.irpa_path, self.iree_run_decode_args, self.repo_root)
+
+
+if __name__ == "__main__":
+    unittest.main()
