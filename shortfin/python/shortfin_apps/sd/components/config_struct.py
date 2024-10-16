@@ -4,8 +4,6 @@ Parameters that are intrinsic to a specific model.
 
 Typically represented in something like a Huggingface config.json,
 we extend the configuration to enumerate inference boundaries of some given set of compiled modules.
-
-This is much less complex in Stable Diffusion where we aren't keeping a KVCache, but is still useful for serving.
 """
 
 from dataclasses import dataclass
