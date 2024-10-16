@@ -11,12 +11,10 @@
 # Others.
 
 # nanobind
-# Pinned to a pre 2.2.0 commit hash which includes free threaded support.
-# TODO: Bump to 2.2.0 when available.
 FetchContent_Declare(
   nanobind
   GIT_REPOSITORY https://github.com/wjakob/nanobind.git
-  GIT_TAG        8ce0dee7f62add575f85c0de386a9c819e4d50af # HEAD > 2.1.0
+  GIT_TAG        784efa2a0358a4dc5432c74f5685ee026e20f2b6 # 2.2.0
 )
 FetchContent_MakeAvailable(nanobind)
 

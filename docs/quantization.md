@@ -277,9 +277,9 @@ is everything). We're just starting to exploit some of this as the PyTorch
 level. Some examples:
 
 * Something as simple as a humble runtime
-[tensor trace/print](https://github.com/iree-org/iree-turbine/blob/main/shark_turbine/ops/iree.py#L52)
-* [Simple linalg based template expansion](https://github.com/iree-org/iree-turbine/blob/main/shark_turbine/ops/_jinja_test_ops.py#L28)
-  (see backing example [jinja template](https://github.com/iree-org/iree-turbine/blob/main/shark_turbine/ops/templates/test_add_jinja.mlir)).
+[tensor trace/print](https://github.com/iree-org/iree-turbine/blob/main/iree.turbine/ops/iree.py#L52)
+* [Simple linalg based template expansion](https://github.com/iree-org/iree-turbine/blob/main/iree.turbine/ops/_jinja_test_ops.py#L28)
+  (see backing example [jinja template](https://github.com/iree-org/iree-turbine/blob/main/iree.turbine/ops/templates/test_add_jinja.mlir)).
 * Optimal linalg-based [8-bit block scaled mmt for weight compression](https://github.com/nod-ai/sharktank/blob/main/sharktank/sharktank/kernels/mmt_block_scaled_q8.py)
   (see backing [jinja template](https://github.com/nod-ai/sharktank/blob/main/sharktank/sharktank/kernels/templates/mmt_block_scaled_q8_3d.mlir)).
 * DSL based [like this fused attention kernel](https://github.com/iree-org/iree-turbine/blob/main/tests/kernel/fused_attention_test.py#L20)

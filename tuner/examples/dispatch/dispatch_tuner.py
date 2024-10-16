@@ -58,6 +58,7 @@ class DispatchTuner(libtuner.TuningClient):
             f"--module={compiled_vmfb_path.resolve()}",
             "--batch_size=1000",
             "--benchmark_repetitions=3",
+            "--benchmark_format=json",
         ]
 
         return command

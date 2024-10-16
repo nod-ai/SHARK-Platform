@@ -89,7 +89,7 @@ def main(raw_args=None):
     ds = Dataset.load(args.output_irpa_file)
 
     mdl = ShardedFFN(ds.root_theta)
-    from shark_turbine import aot
+    from iree.turbine import aot
 
     example_arg = torch.empty(bs, sl, primary_dim, dtype=torch.float16)
     ep = torch.export.export(mdl, (example_arg,))

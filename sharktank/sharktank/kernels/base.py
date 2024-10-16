@@ -12,7 +12,7 @@ import textwrap
 
 from jinja2 import Environment, PackageLoader, select_autoescape
 
-from shark_turbine.support.ir_imports import (
+from iree.turbine.support.ir_imports import (
     FlatSymbolRefAttr,
     FunctionType,
     IrType,
@@ -24,7 +24,7 @@ from shark_turbine.support.ir_imports import (
     Value,
 )
 
-from shark_turbine.runtime.op_reg import (
+from iree.turbine.runtime.op_reg import (
     def_library,
     CustomOp,
     KernelBuilder,
@@ -32,7 +32,7 @@ from shark_turbine.runtime.op_reg import (
     TensorArg,
 )
 
-from shark_turbine.transforms.merger import Merger
+from iree.turbine.transforms.merger import Merger
 
 from ..utils.logging import get_logger
 

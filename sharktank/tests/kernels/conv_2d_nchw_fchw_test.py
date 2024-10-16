@@ -13,7 +13,7 @@ from parameterized import parameterized
 
 import torch
 
-from shark_turbine import aot
+from iree.turbine import aot
 from sharktank import kernels
 from sharktank.ops.qconv_impls import _pad_last_2d
 

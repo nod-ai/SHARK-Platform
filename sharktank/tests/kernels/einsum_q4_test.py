@@ -13,7 +13,7 @@ from parameterized import parameterized
 
 import torch
 
-from shark_turbine import aot
+from iree.turbine import aot
 from sharktank import kernels
 from sharktank.types import layout_utils
 
