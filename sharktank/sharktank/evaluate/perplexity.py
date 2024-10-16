@@ -35,7 +35,7 @@ log_levels = {
 }
 logger = logging.getLogger("eval")
 
-logger.setLevel(log_levels["debug"])
+logger.setLevel(log_levels["info"])
 
 logger.root.handlers[0].setFormatter(
     logging.Formatter(fmt="\n%(levelname)s:%(name)-8s %(message)s")
