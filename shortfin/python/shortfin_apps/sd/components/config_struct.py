@@ -26,6 +26,9 @@ class ModelParams:
     # Maximum length of prompt sequence.
     max_seq_len: int
 
+    # Channel dim of latents.
+    num_latents_channels: int
+
     # Batch sizes that each stage is compiled for. These are expected to be
     # functions exported from the model with suffixes of "_bs{batch_size}". Must
     # be in ascending order.

@@ -17,7 +17,6 @@ from shortfin.interop.fastapi import FastAPIResponder
 from .io_struct import GenerateReqInput
 from .messages import InferenceExecRequest, InferencePhase
 from .service import GenerateService
-from .tokenizer import Encoding
 
 logger = logging.getLogger(__name__)
 
@@ -125,8 +124,9 @@ class ClientGenerateBatchProcess(sf.Process):
             out = io.BytesIO()
             result_images = [p.result_image for p in gen_processes]
             for idx, result_image in enumerate(result_images):
-                out.write(f"generated image #{idx}")
+                out.write(result_image)
                 # TODO: save or return images
+                logging.debug("Wrote images as bytes to response.")
             self.responder.send_response(out.getvalue())
         finally:
             self.responder.ensure_response()

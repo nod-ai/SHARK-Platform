@@ -8,6 +8,9 @@ import asyncio
 import logging
 import math
 from pathlib import Path
+from PIL import Image
+
+import torch
 
 import shortfin as sf
 import shortfin.array as sfnp
@@ -36,17 +39,21 @@ class GenerateService:
         *,
         name: str,
         sysman: SystemManager,
-        tokenizer: Tokenizer,
+        tokenizers: list[Tokenizer],
         model_params: ModelParams,
     ):
         self.name = name
 
         # Application objects.
         self.sysman = sysman
-        self.tokenizer = tokenizer
+        self.tokenizers = tokenizers
         self.model_params = model_params
         self.inference_parameters: list[sf.BaseProgramParameters] = []
         self.inference_modules: list[sf.ProgramModule] = []
+
+        self.encode_functions: dict[int, sf.ProgramFunction] = {}
+        self.denoise_functions: dict[int, sf.ProgramFunction] = {}
+        self.decode_functions: dict[int, sf.ProgramFunction] = {}
 
         self.main_worker = sysman.ls.create_worker(f"{name}-inference")
         self.main_fiber = sysman.ls.create_fiber(self.main_worker)
@@ -80,7 +87,6 @@ class GenerateService:
             f"ServiceManager(\n"
             f"  model_params={self.model_params}\n"
             f"  inference_modules={self.inference_modules}\n"
-            f"  page_cache={self.page_cache}\n"
             f")"
         )
 
@@ -108,9 +114,16 @@ class BatcherProcess(sf.Process):
         self.pending_denoises: set[InferenceExecRequest] = set()
         self.pending_decodes: set[InferenceExecRequest] = set()
         self.pending_postprocesses: set[InferenceExecRequest] = set()
+        self.phase_map = {
+            InferencePhase.PREPARE: self.pending_preps,
+            InferencePhase.ENCODE: self.pending_encodes,
+            InferencePhase.DENOISE: self.pending_denoises,
+            InferencePhase.DECODE: self.pending_decodes,
+            InferencePhase.POSTPROCESS: self.pending_postprocesses,
+        }
         self.strobe_enabled = True
         self.strobes: int = 0
-        self.ideal_batch_size: int = max(service.model_params.submodel_batch_sizes)
+        self.ideal_batch_size: int = max(service.model_params.max_batch_size)
 
     def shutdown(self):
         self.batcher_infeed.close()
@@ -135,16 +148,8 @@ class BatcherProcess(sf.Process):
             self.strobe_enabled = False
             if isinstance(item, InferenceExecRequest):
                 phase = item.phase
-                if phase == InferencePhase.PREP:
-                    self.pending_reqs.add(item)
-                elif phase == InferencePhase.ENCODE:
-                    self.pending_encodes.add(item)
-                elif phase == InferencePhase.DENOISE:
-                    self.pending_denoises.add(item)
-                elif phase == InferencePhase.DECODE:
-                    self.pending_decodes.add(item)
-                elif phase == InferencePhase.POSTPROCESS:
-                    self.pending_postprocesses.add(item)
+                if phase in self.phase_map.keys():
+                    self.phase_map[phase].add(item)
                 else:
                     logger.error("Illegal InferenceExecRequest phase: %r", phase)
             elif isinstance(item, StrobeMessage):
@@ -156,13 +161,7 @@ class BatcherProcess(sf.Process):
         await strober_task
 
     def board_flights(self):
-        waiting_count = (
-            len(self.pending_preps)
-            + len(self.pending_encodes)
-            + len(self.pending_denoises)
-            + len(self.pending_decodes)
-            + len(self.pending_postprocesses)
-        )
+        waiting_count = sum([len(val) for val in self.phase_map.values()])
         if waiting_count == 0:
             return
         if waiting_count < self.ideal_batch_size and self.strobes < 2:
@@ -170,38 +169,29 @@ class BatcherProcess(sf.Process):
             return
         self.strobes = 0
 
-        self.board_preps()
-        self.board_encodes()
-        self.board_denoises()
-        self.board_decodes()
-        self.board_postprocesses()
+        for phase in self.phase_map.keys():
+            self.board(phase)
 
         # For now, kill anything that is left.
-        for i in [
-            self.pending_preps,
-            self.pending_encodes,
-            self.pending_denoises,
-            self.pending_decodes,
-            self.pending_postprocesses,
-        ]:
+        for i in self.phase_map.values():
             for request in i:
                 request.done.set_success()
             i.clear()
 
-    def board_preps():
-        pass
-
-    def board_encodes():
-        pass
-
-    def board_denoises():
-        pass
-
-    def board_decodes():
-        pass
-
-    def board_postprocesses():
-        pass
+    def board(self, phase: InferencePhase):
+        pending = self.phase_map[phase]
+        if len(pending) == 0:
+            return
+        exec_process = InferenceExecutorProcess(self.service)
+        for req in pending:
+            assert req.phase == phase
+            if len(exec_process.exec_requests) >= self.ideal_batch_size:
+                break
+            exec_process.exec_requests.append(req)
+        if exec_process.exec_requests:
+            for flighted_request in exec_process.exec_requests:
+                self.phase_map[phase].remove(flighted_request)
+            exec_process.launch()
 
 
 ########################################################################################
@@ -209,8 +199,8 @@ class BatcherProcess(sf.Process):
 ########################################################################################
 
 
-class InferenceExecProcessPrep(sf.Process):
-    """Executes a prep batch"""
+class InferenceExecutorProcess(sf.Process):
+    """Executes a stable diffusion inference batch"""
 
     def __init__(
         self,
@@ -222,108 +212,130 @@ class InferenceExecProcessPrep(sf.Process):
 
     async def run(self):
         try:
+            phase = None
+            for req in self.exec_requests:
+                if phase:
+                    assert phase == req.phase
+                phase = req.phase
+            is_prep = phase == InferencePhase.PREPARE
+            is_encode = phase == InferencePhase.ENCODE
+            is_denoise = phase == InferencePhase.DENOISE
+            is_decode = phase == InferencePhase.DECODE
+            is_postprocess = phase == InferencePhase.POSTPROCESS
+            req_count = len(self.exec_requests)
+            device0 = self.fiber.device(0)
+
+            if is_prep:
+                await self._prepare(device=device0, requests=self.exec_requests)
+            elif is_encode:
+                await self._encode(device=device0, requests=self.exec_requests)
+            elif is_denoise:
+                await self._denoise(device=device0, requests=self.exec_requests)
+            elif is_decode:
+                await self._decode(device=device0, requests=self.exec_requests)
+            elif is_postprocess:
+                await self._postprocess(device=device0, requests=self.exec_requests)
+
             for i in range(req_count):
+                req = self.exec_requests[i]
                 req.done.set_success()
 
         except Exception:
-            logger.exception("Fatal error in inputs preparation")
+            logger.exception("Fatal error in image generation")
             # TODO: Cancel and set error correctly
             for req in self.exec_requests:
-                req.payload = None
                 req.done.set_success()
 
+    async def _prepare(self, device, requests):
+        torch_dtypes = {
+            sfnp.float16: torch.float16,
+            sfnp.float32: torch.float32,
+            sfnp.int8: torch.int8,
+            sfnp.bfloat16: torch.bfloat16,
+        }
+        for request in requests:
+            # Tokenize prompts and negative prompts. We tokenize in bs1 for now and join later.
+            input_ids_list = []
+            prompts = [
+                request.prompt,
+                request.neg_prompt,
+            ]
+            for tokenizer, prompt in zip(self.service.tokenizers, prompts):
+                input_ids = tokenizer.encode(prompt)
+                input_ids_list.append(input_ids)
 
-class InferenceExecProcessEncode(sf.Process):
-    """Executes a CLIP encoding batch"""
+            request.input_ids = input_ids_list
 
-    def __init__(
-        self,
-        service: GenerateService,
-    ):
-        super().__init__(fiber=service.main_fiber)
-        self.service = service
-        self.exec_requests: list[InferenceExecRequest] = []
+            # Generate random sample latents.
+            # TODO: use our own RNG
+            seed = request.seed
+            channels = self.service.model_params.num_latents_channels
+            unet_dtype = self.service.model_params.unet_dtype
+            latents_shape = (
+                1,
+                channels,
+                request.height // 8,
+                request.width // 8,
+            )
+            generator = torch.manual_seed(seed)
+            rand_sample = torch.randn(
+                latents_shape,
+                generator=generator,
+                dtype=torch_dtypes[unet_dtype],
+            ).numpy()
 
-    async def run(self):
-        try:
-            for i in range(req_count):
-                req.done.set_success()
+            # Create and populate sample device array.
+            request.sample = sfnp.device_array.for_device(
+                device, latents_shape, unet_dtype
+            )
+            sample_host = request.sample.for_transfer()
+            with sample_host.map(discard=True) as m:
+                m.fill(rand_sample)
 
-        except Exception:
-            logger.exception("Fatal error in text encoding invocation")
-            # TODO: Cancel and set error correctly
-            for req in self.exec_requests:
-                req.payload = None
-                req.done.set_success()
+            # Guidance scale.
+            guidance_scale = sfnp.device_array.for_device(device, [1], unet_dtype)
+            guidance_scale_float = sfnp.device_array.for_device(
+                device, [1], sfnp.float32
+            )
+            guidance_float_host = guidance_scale_float.for_transfer()
+            with guidance_float_host.map(discard=True) as m:
+                m.items = [request.guidance_scale]
+            guidance_host = guidance_scale.for_transfer()
+            with guidance_host.map(discard=True) as m:
+                guidance_scale_float.copy_to(guidance_host)
+            request.guidance_scale = guidance_scale
+        return
 
+    async def _encode(self, device, requests):
+        req_bs = len(requests)
+        # Encode inputs
+        entrypoints = self.service.encode_functions
+        for bs, fn in entrypoints.items():
+            if bs >= req_bs:
+                break
+        return
 
-class InferenceExecProcessDenoise(sf.Process):
-    """Executes a denoising loop for a batch of latents."""
+    async def _denoise(self, device, requests):
+        req_bs = len(requests)
+        # Produce denoised latents
+        entrypoints = self.service.denoise_functions
+        for bs, fn in entrypoints.items():
+            if bs >= req_bs:
+                break
+        return
 
-    def __init__(
-        self,
-        service: GenerateService,
-    ):
-        super().__init__(fiber=service.main_fiber)
-        self.service = service
-        self.exec_requests: list[InferenceExecRequest] = []
+    async def _decode(self, device, requests):
+        req_bs = len(requests)
+        # Decode latents to images
+        entrypoints = self.service.decode_functions
+        for bs, fn in entrypoints.items():
+            if bs >= req_bs:
+                func = fn
+                break
+        return
 
-    async def run(self):
-        try:
-            for i in range(req_count):
-                req.done.set_success()
-
-        except Exception:
-            logger.exception("Fatal error in denoising loop invocation.")
-            # TODO: Cancel and set error correctly
-            for req in self.exec_requests:
-                req.payload = None
-                req.done.set_success()
-
-
-class InferenceExecProcessDecode(sf.Process):
-    """Executes decoding for a batch of denoised latents."""
-
-    def __init__(
-        self,
-        service: GenerateService,
-    ):
-        super().__init__(fiber=service.main_fiber)
-        self.service = service
-        self.exec_requests: list[InferenceExecRequest] = []
-
-    async def run(self):
-        try:
-            for i in range(req_count):
-                req.done.set_success()
-
-        except Exception:
-            logger.exception("Fatal error in decoding image latents.")
-            # TODO: Cancel and set error correctly
-            for req in self.exec_requests:
-                req.payload = None
-                req.done.set_success()
-
-
-class InferenceExecProcessPostprocess(sf.Process):
-    """Executes postprocessing for a batch of generated images."""
-
-    def __init__(
-        self,
-        service: GenerateService,
-    ):
-        super().__init__(fiber=service.main_fiber)
-        self.service = service
-        self.exec_requests: list[InferenceExecRequest] = []
-
-    async def run(self):
-        try:
-            for i in range(req_count):
-                req.done.set_success()
-
-        except Exception:
-            logger.exception("Fatal error in postprocessing images.")
-            # TODO: Cancel and set error correctly
-            for req in self.exec_requests:
-                req.payload = None
-                req.done.set_success()
+    async def _postprocess(self, device, requests):
+        # Process output images
+        for req in requests:
+            req.result_image = Image.open("sample.png", mode="r").tobytes()
+        return

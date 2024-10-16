@@ -30,8 +30,6 @@ class GenerateReqInput:
     input_ids: Optional[Union[List[List[int]], List[int]]] = None
     # Negative token ids: only used in place of negative prompt.
     neg_input_ids: Optional[Union[List[List[int]], List[int]]] = None
-    # Noisy latents, optionally specified for advanced workflows / inference comparisons
-    latents: Optional[Union[List[sfnp.device_array], sfnp.device_array]] = None
     # The sampling parameters.
     sampling_params: Optional[Union[List[Dict], Dict]] = None
     # Output image format. Defaults to base64. One string ("PIL", "base64")
@@ -57,8 +55,9 @@ class GenerateReqInput:
                 continue
             if not isinstance(i, list):
                 raise ValueError("Text inputs should be strings or lists.")
-            if prev_input_len and not (prev_input_len == len[i]):
+            if prev_input_len and not (prev_input_len == len(i)):
                 raise ValueError("Positive, Negative text inputs should be same length")
+            self.num_output_images = len(i)
             prev_input_len = len(i)
         if not self.num_output_images:
             self.num_output_images = (

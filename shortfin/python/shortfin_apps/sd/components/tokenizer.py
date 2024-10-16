@@ -6,41 +6,48 @@
 
 from pathlib import Path
 
-import tokenizers
+from transformers import CLIPTokenizer, BatchEncoding
+
+import numpy as np
 
 import shortfin as sf
 import shortfin.array as sfnp
 
-# Type alias from the backing library.
-Encoding = tokenizers.Encoding
-
 
 class Tokenizer:
-    def __init__(self, raw_tk: tokenizers.Tokenizer, pad_id: int = 0):
+    def __init__(
+        self,
+        raw_tk: CLIPTokenizer,
+        max_length: int = 64,
+        pad_id: int = 0,
+        attn_mask=False,
+    ):
         self.pad_id = pad_id
         self._raw = raw_tk
-        self._raw.enable_padding(pad_id=pad_id)
+        self.max_length = 64
+        self.return_attention_mask = attn_mask
 
     @staticmethod
-    def from_pretrained(name: str) -> "Tokenizer":
-        raw_tk = tokenizers.Tokenizer.from_pretrained(name)
+    def from_pretrained(name: str, subfolder: str) -> "Tokenizer":
+        raw_tk = CLIPTokenizer.from_pretrained(name, subfolder=subfolder)
         return Tokenizer(raw_tk)
 
-    @staticmethod
-    def from_tokenizer_json_file(json_path: Path | str):
-        return Tokenizer(tokenizers.Tokenizer.from_file(str(json_path)))
-
-    def encode(self, texts: list[str]) -> list[tokenizers.Encoding]:
+    def encode(self, texts: list[str]):
         """Encodes a batch of texts, applying no padding."""
-        return self._raw.encode_batch(texts)
+        return self._raw(
+            texts,
+            padding="max_length",
+            max_length=self.max_length,
+            truncation=True,
+            return_tensors="np",
+            return_attention_mask=False,
+        )
 
-    def encoding_length(self, enc: tokenizers.Encoding) -> int:
+    def encoding_length(self, enc: BatchEncoding) -> int:
         """Gets the length of an encoding."""
         return len(enc.ids)
 
-    def post_process_encodings(
-        self, encs: list[tokenizers.Encoding], batch_seq_len: int
-    ):
+    def post_process_encodings(self, encs: list[BatchEncoding], batch_seq_len: int):
         """Truncates and pads to a requested size."""
         for enc in encs:
             enc.truncate(batch_seq_len)
@@ -49,7 +56,7 @@ class Tokenizer:
     def encodings_to_array(
         self,
         device: sf.ScopedDevice,
-        encs: list[tokenizers.Encoding],
+        encs: dict[str, BatchEncoding],
         batch_seq_len: int,
         *,
         dtype: sfnp.DType = sfnp.int32,
@@ -61,13 +68,13 @@ class Tokenizer:
         """
         ary = sfnp.device_array.for_host(device, [len(encs), batch_seq_len], dtype)
         for i, enc in enumerate(encs):
-            ary.view(i).items = enc.ids
+            ary.view(i).items = enc.input_ids
         return ary
 
     def attention_masks_to_array(
         self,
         device: sf.ScopedDevice,
-        encs: list[tokenizers.Encoding],
+        encs: list[BatchEncoding],
         batch_seq_len: int,
         *,
         dtype: sfnp.DType = sfnp.int32,

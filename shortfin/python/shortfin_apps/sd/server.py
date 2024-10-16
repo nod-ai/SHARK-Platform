@@ -10,6 +10,7 @@ import argparse
 import logging
 from pathlib import Path
 import sys
+import os
 
 import uvicorn.logging
 
@@ -79,15 +80,19 @@ def configure(args) -> SystemManager:
     sysman = SystemManager()
 
     # Setup each service we are hosting.
-    tokenizer = Tokenizer.from_tokenizer_json_file(args.tokenizer_json)
+    tokenizers = []
+    for idx, tok_name in enumerate(args.tokenizers):
+        subfolder = f"tokenizer_{idx + 1}" if idx > 0 else "tokenizer"
+        tokenizers.append(Tokenizer.from_pretrained(tok_name, subfolder))
+
     model_params = ModelParams.load_json(args.model_config)
     sm = GenerateService(
-        name="default", sysman=sysman, tokenizer=tokenizer, model_params=model_params
+        name="default", sysman=sysman, tokenizers=tokenizers, model_params=model_params
     )
-    sm.load_inference_module(args.clip_vmfb)
-    sm.load_inference_module(args.unet_vmfb)
-    sm.load_inference_module(args.vae_vmfb)
-    sm.load_inference_parameters(*args.parameters, parameter_scope="model")
+    # sm.load_inference_module(args.clip_vmfb)
+    # sm.load_inference_module(args.unet_vmfb)
+    # sm.load_inference_module(args.vae_vmfb)
+    # sm.load_inference_parameters(*args.parameters, parameter_scope="model")
     services[sm.name] = sm
     return sysman
 
@@ -106,10 +111,14 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
         "--timeout-keep-alive", type=int, default=5, help="Keep alive timeout"
     )
     parser.add_argument(
-        "--tokenizer_json",
+        "--tokenizers",
         type=Path,
-        required=True,
-        help="Path to a tokenizer config file",
+        nargs="*",
+        default=[
+            "stabilityai/stable-diffusion-xl-base-1.0",
+            "stabilityai/stable-diffusion-xl-base-1.0",
+        ],
+        help="HF repo from which to load tokenizer(s).",
     )
     parser.add_argument(
         "--model_config",
@@ -120,19 +129,19 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
     parser.add_argument(
         "--clip_vmfb",
         type=Path,
-        required=True,
+        # required=True,
         help="Model VMFB to load",
     )
     parser.add_argument(
         "--unet_vmfb",
         type=Path,
-        required=True,
+        # required=True,
         help="Model VMFB to load",
     )
     parser.add_argument(
         "--vae_vmfb",
         type=Path,
-        required=True,
+        # required=True,
         help="Model VMFB to load",
     )
     parser.add_argument(

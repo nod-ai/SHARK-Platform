@@ -45,11 +45,10 @@ class InferenceExecRequest(sf.Message):
         steps: int | None = None,
         guidance_scale: float | sfnp.device_array | None = None,
         seed: int | None = None,
-        input_ids: sfnp.device_array | None = None,
-        neg_input_ids: sfnp.device_array | None = None,
+        input_ids: list[list[int]] | None = None,
         sample: sfnp.device_array | None = None,
         prompt_embeds: sfnp.device_array | None = None,
-        neg_embeds: sfnp.device_array | None = None,
+        add_text_embeds: sfnp.device_array | None = None,
         timesteps: sfnp.device_array | None = None,
         time_ids: sfnp.device_array | None = None,
         denoised_latents: sfnp.device_array | None = None,
@@ -64,21 +63,21 @@ class InferenceExecRequest(sf.Message):
         self.neg_prompt = neg_prompt
         self.height = height
         self.width = width
-        self.steps = steps
-        self.guidance_scale = guidance_scale
         self.seed = seed
 
         # Encode phase.
+        # This is a list of sequenced positive and negative token ids and pooler token ids.
         self.input_ids = input_ids
-        self.neg_input_ids = neg_input_ids
 
         # Denoise phase.
         self.prompt_embeds = prompt_embeds
-        self.neg_embeds = neg_embeds
+        self.add_text_embeds = add_text_embeds
         self.sample = sample
         # guidance scale at denoise phase is a device array
+        self.steps = steps
         self.timesteps = timesteps
         self.time_ids = time_ids
+        self.guidance_scale = guidance_scale
 
         # Decode phase.
         self.denoised_latents = denoised_latents
