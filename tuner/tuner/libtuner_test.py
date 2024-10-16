@@ -6,11 +6,12 @@
 
 import argparse
 import pytest
+import json
 from unittest.mock import call, patch, MagicMock
 from . import libtuner
 
 """
-Usage: python -m pytest test_libtuner.py
+Usage: python -m pytest libtuner_test.py
 """
 
 
@@ -57,34 +58,77 @@ def test_collision_handler():
 
 
 def test_IREEBenchmarkResult_get():
-    # Time is int
-    normal_str = r"""
-    ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-    Benchmark                                                                                                                                      Time             CPU   Iterations UserCounters...
-    ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-    BM_main$async_dispatch_311_rocm_hsaco_fb_main$async_dispatch_311_matmul_like_2x1024x1280x5120_i8xi8xi32/process_time/real_time               271 us          275 us         3000 items_per_second=3.65611k/s
-    BM_main$async_dispatch_311_rocm_hsaco_fb_main$async_dispatch_311_matmul_like_2x1024x1280x5120_i8xi8xi32/process_time/real_time               274 us          275 us         3000 items_per_second=3.65481k/s
-    BM_main$async_dispatch_311_rocm_hsaco_fb_main$async_dispatch_311_matmul_like_2x1024x1280x5120_i8xi8xi32/process_time/real_time               273 us          275 us         3000 items_per_second=3.65671k/s
-    BM_main$async_dispatch_311_rocm_hsaco_fb_main$async_dispatch_311_matmul_like_2x1024x1280x5120_i8xi8xi32/process_time/real_time_mean          274 us          275 us            3 items_per_second=3.65587k/s
-    BM_main$async_dispatch_311_rocm_hsaco_fb_main$async_dispatch_311_matmul_like_2x1024x1280x5120_i8xi8xi32/process_time/real_time_mean        275 us          275 us            3 items_per_second=3.65611k/s
-    BM_main$async_dispatch_311_rocm_hsaco_fb_main$async_dispatch_311_matmul_like_2x1024x1280x5120_i8xi8xi32/process_time/real_time_stddev      0.073 us        0.179 us            3 items_per_second=0.971769/s
-    BM_main$async_dispatch_311_rocm_hsaco_fb_main$async_dispatch_311_matmul_like_2x1024x1280x5120_i8xi8xi32/process_time/real_time_cv           0.03 %          0.07 %             3 items_per_second=0.03%
-    """
-    res = libtuner.IREEBenchmarkResult(candidate_id=1, result_str=normal_str)
-    assert res.get_mean_time() == float(274)
+    # Time is int in us
+    int_json = [{"aggregate_name": "mean", "real_time": 1, "time_unit": "us"}]
 
-    # Time is float
+    res = libtuner.IREEBenchmarkResult(candidate_id=1, result_json=int_json)
+    assert res.get_mean_time_us() == float(1)
+
+    # Time is float in us
+    float_json = [{"aggregate_name": "mean", "real_time": 123.45, "time_unit": "us"}]
+
+    res = libtuner.IREEBenchmarkResult(candidate_id=2, result_json=float_json)
+    assert res.get_mean_time_us() == 123.45
+
+    # Time is in seconds
+    seconds_json = [{"aggregate_name": "mean", "real_time": 1.0, "time_unit": "s"}]
+
+    res = libtuner.IREEBenchmarkResult(candidate_id=3, result_json=seconds_json)
+    assert res.get_mean_time_us() == 1.0 * 1e6
+
+    # Time is in miliseconds
+    miliseconds_json = [{"aggregate_name": "mean", "real_time": 1.0, "time_unit": "ms"}]
+
+    res = libtuner.IREEBenchmarkResult(candidate_id=4, result_json=miliseconds_json)
+    assert res.get_mean_time_us() == 1.0 * 1e3
+
+    # Time is in nanoseconds
+    nanoseconds_json = [{"aggregate_name": "mean", "real_time": 1.0, "time_unit": "ns"}]
+
+    res = libtuner.IREEBenchmarkResult(candidate_id=5, result_json=nanoseconds_json)
+    assert res.get_mean_time_us() == 1.0 * 1e-3
+
+    small_number_json = [
+        {
+            "aggregate_name": "mean",
+            "real_time": 3.4591828516259519e-02,
+            "time_unit": "ms",
+        }
+    ]
+
+    res = libtuner.IREEBenchmarkResult(candidate_id=6, result_json=small_number_json)
+    assert res.get_mean_time_us() == 34.591828516259519
+
+    # Invalid json: missing real_time
+    invalid_real_time_json = [{"aggregate_name": "mean", "real_time": None}]
+
     res = libtuner.IREEBenchmarkResult(
-        candidate_id=2,
-        result_str="process_time/real_time_mean 123.45 us, process_time/real_time_mean 246.78 us",
+        candidate_id=7, result_json=invalid_real_time_json
     )
-    assert res.get_mean_time() == 123.45
+    assert res.get_mean_time_us() == None
 
-    # Invalid str
-    res = libtuner.IREEBenchmarkResult(candidate_id=3, result_str="hello world")
-    assert res.get_mean_time() == None
-    res = libtuner.IREEBenchmarkResult(candidate_id=4, result_str="")
-    assert res.get_mean_time() == None
+    # Invalid json: empty dictionary
+    res = libtuner.IREEBenchmarkResult(candidate_id=8, result_json={})
+    assert res.get_mean_time_us() is None
+
+    # Invalid json: invalid time unit
+    invalid_time_unit_json = [
+        {"aggregate_name": "mean", "real_time": 1.0, "time_unit": "invalid_unit"}
+    ]
+
+    with pytest.raises(AssertionError, match="Unsupported time unit: invalid_unit"):
+        res = libtuner.IREEBenchmarkResult(
+            candidate_id=9, result_json=invalid_time_unit_json
+        )
+        res.get_mean_time_us()
+
+    # Invalid json: missing aggregate_name
+    invalid_aggregate_name_json = [{"real_time": 1.0, "time_unit": "us"}]
+
+    res = libtuner.IREEBenchmarkResult(
+        candidate_id=10, result_json=invalid_aggregate_name_json
+    )
+    assert res.get_mean_time_us() is None
 
 
 def test_generate_display_BR():
@@ -110,15 +154,37 @@ def test_parse_dispatch_benchmark_results():
     object.__setattr__(path_config, "specs_dir", spec_dir)
 
     mock_result_1 = MagicMock()
-    mock_result_1.run_result.process_res.stdout = "process_time/real_time_mean 100.0 us"
+    mock_json_1 = {
+        "benchmarks": [
+            {"aggregate_name": "mean", "real_time": 100.0, "time_unit": "us"}
+        ]
+    }
+    mock_result_1.run_result.process_res.stdout = json.dumps(mock_json_1)
     mock_result_1.candidate_id = 1
     mock_result_2 = MagicMock()
-    mock_result_2.run_result.process_res.stdout = "process_time/real_time_mean 200.0 us"
+    mock_json_2 = {
+        "benchmarks": [
+            {"aggregate_name": "mean", "real_time": 200.0, "time_unit": "us"}
+        ]
+    }
+    mock_result_2.run_result.process_res.stdout = json.dumps(mock_json_2)
     mock_result_2.candidate_id = 2
     mock_result_3 = MagicMock()
-    mock_result_3.run_result.process_res = None  # Incomplete result
+    mock_json_3 = {
+        "benchmarks": [
+            {
+                "aggregate_name": "mean",
+                "real_time": 3.4591828516259519e-02,
+                "time_unit": "ms",
+            }
+        ]
+    }
+    mock_result_3.run_result.process_res.stdout = json.dumps(mock_json_3)
     mock_result_3.candidate_id = 3
-    benchmark_results = [mock_result_1, mock_result_2, mock_result_3]
+    mock_result_4 = MagicMock()
+    mock_result_4.run_result.process_res = None  # Incomplete result
+    mock_result_4.candidate_id = 4
+    benchmark_results = [mock_result_1, mock_result_2, mock_result_3, mock_result_4]
 
     candidate_trackers = []
     for i in range(4):
@@ -139,11 +205,18 @@ def test_parse_dispatch_benchmark_results():
             candidate_mlir=libtuner.Path("/mock/mlir/path/2.mlir"),
             candidate_spec_mlir=libtuner.Path("/mock/base/dir/specs/2_spec.mlir"),
         ),
+        libtuner.ParsedDisptachBenchmarkResult(
+            candidate_id=3,
+            benchmark_time_in_seconds=34.591828516259519,
+            candidate_mlir=libtuner.Path("/mock/mlir/path/3.mlir"),
+            candidate_spec_mlir=libtuner.Path("/mock/base/dir/specs/3_spec.mlir"),
+        ),
     ]
     expected_dump_list = [
         "1\tMean Time: 100.0\n",
         "2\tMean Time: 200.0\n",
-        "Candidate 3 not completed",
+        "3\tMean Time: 34.6\n",
+        "Candidate 4 not completed",
     ]
 
     parsed_results, dump_list = libtuner.parse_dispatch_benchmark_results(
@@ -159,6 +232,10 @@ def test_parse_dispatch_benchmark_results():
     assert candidate_trackers[2].first_benchmark_time == 200.0
     assert candidate_trackers[2].spec_path == libtuner.Path(
         "/mock/base/dir/specs/2_spec.mlir"
+    )
+    assert candidate_trackers[3].first_benchmark_time == 34.591828516259519
+    assert candidate_trackers[3].spec_path == libtuner.Path(
+        "/mock/base/dir/specs/3_spec.mlir"
     )
 
 
@@ -180,22 +257,26 @@ def test_parse_model_benchmark_results():
 
     # Setup mock data for task results
     result1 = MagicMock()
-    result1.run_result.process_res.stdout = "1.23"
+    result_json_1 = {"benchmarks": [{"real_time": 1.23}]}
+    result1.run_result.process_res.stdout = json.dumps(result_json_1)
     result1.candidate_id = 1
     result1.device_id = "device1"
 
     result2 = MagicMock()
-    result2.run_result.process_res.stdout = "4.56"
+    result_json_2 = {"benchmarks": [{"real_time": 4.56}]}
+    result2.run_result.process_res.stdout = json.dumps(result_json_2)
     result2.candidate_id = 2
     result2.device_id = "device2"
 
     result3 = MagicMock()
-    result3.run_result.process_res.stdout = "0.98"
+    result_json_3 = {"benchmarks": [{"real_time": 0.98}]}
+    result3.run_result.process_res.stdout = json.dumps(result_json_3)
     result3.candidate_id = 0
     result3.device_id = "device1"
 
     result4 = MagicMock()
-    result4.run_result.process_res.stdout = "4.13"
+    result_json_4 = {"benchmarks": [{"real_time": 4.13}]}
+    result4.run_result.process_res.stdout = json.dumps(result_json_4)
     result4.candidate_id = 0
     result4.device_id = "device2"
 
@@ -206,7 +287,8 @@ def test_parse_model_benchmark_results():
     result5.device_id = "device3"
 
     result6 = MagicMock()
-    result6.run_result.process_res.stdout = "3.38"
+    result_json_6 = {"benchmarks": [{"real_time": 3.38}]}
+    result6.run_result.process_res.stdout = json.dumps(result_json_6)
     result6.candidate_id = 3
     result6.device_id = "device3"
 
@@ -214,12 +296,13 @@ def test_parse_model_benchmark_results():
     baseline_results = [result3, result4, result5]
 
     # Skip real benchmark extraction, directly use given values from above
-    def mock_get_mean_time(self):
-        return float(self.result_str) if self.result_str else None
+    def mock_get_mean_time_us(self):
+        return float(self.result_json[0]["real_time"]) if self.result_json else None
 
     # Mock IREEBenchmarkResult to return wanted benchmark times
     with patch(
-        f"{libtuner.__name__}.IREEBenchmarkResult.get_mean_time", new=mock_get_mean_time
+        f"{libtuner.__name__}.IREEBenchmarkResult.get_mean_time_us",
+        new=mock_get_mean_time_us,
     ):
         # Mock handle_error to avoid actual logging during tests
         with patch(f"{libtuner.__name__}.handle_error") as mock_handle_error:

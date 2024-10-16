@@ -13,7 +13,7 @@ from typing import Optional
 
 import torch.nn.functional as F
 
-from shark_turbine.aot import *
+from iree.turbine.aot import *
 
 from sharktank.layers import *
 from sharktank.types import *

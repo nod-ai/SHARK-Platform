@@ -4,7 +4,7 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-name: CI - shortfin - Python 3.13 Free-threaded
+name: CI - shortfin - Windows
 
 on:
   workflow_dispatch:
@@ -13,7 +13,7 @@ on:
     branches:
       - main
     paths:
-      - '.github/workflows/ci_linux_x64-libshortfin.yml'
+      - '.github/workflows/ci_windows_x64-libshortfin.yml'
       - 'shortfin/**'
 
 permissions:
@@ -34,13 +34,11 @@ env:
 jobs:
   build-and-test:
     name: Build and test
-    runs-on: ubuntu-24.04
+    runs-on: windows-2022
 
     steps:
-    - name: Install dependencies
-      run: |
-        sudo apt update
-        sudo apt install clang lld cmake ninja-build
+    - name: Configure MSVC
+      uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
 
     - name: Checkout repository
       uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
@@ -65,35 +63,33 @@ jobs:
         git submodule update --init --depth 1 -- third_party/hip-build-deps/
 
     - name: Setup Python
-      uses: deadsnakes/action@e640ac8743173a67cca4d7d77cd837e514bf98e8 # v3.2.0
+      uses: actions/setup-python@39cd14951b08e74b54015e9e001cdefcf80e669f # v5.1.1
       with:
-        python-version: "3.13-dev"
-        nogil : true
+        python-version: "3.12"
+        cache: "pip"
     - name: Install Python packages
+      working-directory: ${{ env.LIBSHORTFIN_DIR }}
       run: |
-        pip install -r ${{ env.LIBSHORTFIN_DIR }}/requirements-tests-nogil.txt
+        pip install -r requirements-tests.txt
+        pip install -r requirements-iree-compiler.txt
         pip freeze
 
     - name: Build shortfin (full)
       working-directory: ${{ env.LIBSHORTFIN_DIR }}
+      shell: bash
       run: |
         mkdir build
         cmake -GNinja \
           -S. \
           -Bbuild \
-          -DCMAKE_BUILD_TYPE=Debug \
-          -DCMAKE_C_COMPILER=clang-18 \
-          -DCMAKE_CXX_COMPILER=clang++-18 \
-          -DCMAKE_LINKER_TYPE=LLD \
           -DSHORTFIN_BUNDLE_DEPS=ON \
           -DSHORTFIN_IREE_SOURCE_DIR="${{ env.IREE_REPO_DIR }}" \
           -DSHORTFIN_BUILD_PYTHON_BINDINGS=ON
         cmake --build build --target all
         pip install -v -e build/
 
-    - name: Run shortfin Python tests (full)
+    - name: Test shortfin (full)
       working-directory: ${{ env.LIBSHORTFIN_DIR }}
       run: |
-        pytest -s --ignore=tests/examples/fastapi_test.py
-      # TODO: Enable further tests and switch to
-      # pytest -s
+        ctest --timeout 30 --output-on-failure --test-dir build
+        pytest -s

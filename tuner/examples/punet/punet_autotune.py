@@ -58,8 +58,7 @@ class PunetClient(libtuner.TuningClient):
             "--hip_allow_inline_execution=true",
             "--batch_size=1000",
             "--benchmark_repetitions=3",
-            f"--benchmark_out=dispatch_{candidate_tracker.candidate_id}_bm.json",
-            "--benchmark_out_format=json",
+            "--benchmark_format=json",
         ]
 
         return command
@@ -110,8 +109,7 @@ class PunetClient(libtuner.TuningClient):
             "--input=2x6xf16",
             "--input=1xf16",
             "--benchmark_repetitions=5",
-            f"--benchmark_out=model_{candidate_tracker.candidate_id}_bm.json",
-            "--benchmark_out_format=json",
+            "--benchmark_format=json",
         ]
         return command
 
