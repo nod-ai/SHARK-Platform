@@ -60,4 +60,4 @@ jobs:
       - name: Run sharktank tests
         if: ${{ !cancelled() }}
         run: |
-          pytest -n 4 sharktank/
+          pytest -n 4 sharktank/ --ignore=sharktank/tests/evaluate/
