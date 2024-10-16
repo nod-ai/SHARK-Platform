@@ -24,11 +24,19 @@ from sharktank.models.llama.llama import *
 from sharktank.models.mixtral.mixtral import *
 from sharktank.models.grok.grok import *
 
+from ..models.llama.sharding import shard_theta
+
 from sharktank.utils import cli
 from sharktank.utils.load_llm import *
 
+log_levels = {
+    "info": logging.INFO,
+    "debug": logging.DEBUG,
+}
 logger = logging.getLogger("eval")
-logger.setLevel(logging.INFO)
+
+logger.setLevel(log_levels["debug"])
+
 logger.root.handlers[0].setFormatter(
     logging.Formatter(fmt="\n%(levelname)s:%(name)-8s %(message)s")
 )
@@ -96,9 +104,7 @@ class Perplexity:
             logger.debug(f"{expected_token_id}")
 
     @timeit
-    def load_model(self, dataset, tokenizer):
-
-        theta = dataset.root_theta
+    def load_model(self, dataset, tokenizer, tensor_parallelism_size, attention_kernel):
 
         config = LlamaModelConfig(
             hp=configs.LlamaHParams.from_gguf_props(dataset.properties),
@@ -108,6 +114,11 @@ class Perplexity:
             activation_dtype=self.activation_dtype,
             attention_dtype=self.attention_dtype,
         )
+
+        if tensor_parallelism_size > 1:
+            dataset.root_theta = shard_theta(dataset.root_theta, config)
+
+        theta = dataset.root_theta
 
         if config.hp.expert_count:
             if config.hp.model_arch == "grok":
@@ -141,27 +152,15 @@ class Perplexity:
             (self.token_ids != 0).int().detach().clone().to(self.device)
         )
 
-        is_prefill = True
+        is_first_token = True
         start = 0
-        n_context = 5
-        first = n_context // 2
-        self.inferenced_tokens = []
-        # for i in tqdm(
-        #     range(first, self.max_prompt_length - 1),
-        #     desc="eval: Calculating logits",
-        # ):
         for i in tqdm(
-            range(1, self.max_prompt_length - 1),
+            range(start, self.max_prompt_length - 1),
             desc="eval: Calculating logits",
         ):
             logger.debug(f"Iteration: {i}")
 
-            if is_prefill:
-                # end = start+i*n_context+first + 1
-                # token_batch = self.token_ids[start: end]
-                # self.inferenced_tokens.append(self.token_ids[end])
-                #  TODO: start=0, first is first half of context window (n_context= 5, first=2) window = start + i*n_context + first
-                #  TODO: experiment with context sizes in llama with llam3 8b to see which perplexity is better
+            if is_first_token:
 
                 token_batch = self.token_ids[:, : i + 1]
                 logger.debug(f"Prefill:")
@@ -186,9 +185,8 @@ class Perplexity:
                 )
 
                 self.batch.prefill()
-                self.pad_logits = self.batch.prefill_logits[:, :, :]
                 self.out_logits = self.batch.prefill_logits[:, 0:1, :]
-                is_prefill = False
+                is_first_token = False
 
                 self.print_token_comparison(i)
 
@@ -208,8 +206,6 @@ class Perplexity:
 
                 self.print_token_comparison(i)
 
-        # print(f"Final Logits shape 1: {self.out_logits.shape, self.token_ids.shape, self.pad_logits.shape}")
-
         pad_logits_shape = self.token_ids.shape[1] - self.out_logits.shape[1]
 
         self.pad_logits = torch.zeros(
@@ -219,9 +215,6 @@ class Perplexity:
         self.out_logits = torch.cat((self.out_logits, self.pad_logits), 1).to(
             self.device
         )
-
-        # self.attention_mask = [1 if t in self.inferenced_tokens else 0 for t in self.token_ids]
-        # print(f"Final Logits shape 2: {pad_logits_shape, self.out_logits.shape, self.pad_logits.shape}")
 
     @timeit
     def compute_perplexity(self):
@@ -247,11 +240,6 @@ class Perplexity:
 
         self.get_logits()
 
-        torch.save(
-            [self.out_logits, self.token_ids, self.attention_mask],
-            "/home/aramalin/sharktank/perplexity_logits_prompt0_sharktank_v1.pt",
-        )
-
         self.out_logits = self.out_logits[..., :-1, :].contiguous()
         self.token_ids = self.token_ids[..., 1:].contiguous()
         self.attention_mask = self.attention_mask[..., 1:].contiguous()
@@ -261,12 +249,6 @@ class Perplexity:
         logger.debug(
             f"Mask shape: {self.attention_mask}, \n{self.attention_mask.shape}"
         )
-
-        # print(f"Final Logits shape 3: {self.out_logits.shape}")
-        # print(f"Token ids: {self.token_ids.shape}")
-        # print(
-        #     f"Mask shape: {self.attention_mask.shape}"
-        # )
 
         assert self.token_ids.shape == self.out_logits.shape[0:2]
 
@@ -279,10 +261,12 @@ def run_perplexity(
     tokenizer,
     device,
     kv_cache_type,
+    tensor_parallelism_size,
+    attention_kernel,
 ):
     perplexity = Perplexity(prompts=prompts, device=device, kv_cache_type=kv_cache_type)
 
-    perplexity.load_model(dataset, tokenizer)
+    perplexity.load_model(dataset, tokenizer, tensor_parallelism_size, attention_kernel)
     ppl = perplexity.get_perplexity()
 
     return ppl
@@ -292,6 +276,19 @@ def main(argv):
     parser = cli.create_parser()
     parser.add_argument("--kv-cache-type", default="paged", help="KV cache type")
     parser.add_argument("--device", help="Torch device (or default)")
+    parser.add_argument(
+        "--attention-kernel",
+        type=str,
+        default="decomposed",
+        choices=["decomposed", "torch_sdpa"],
+    )
+
+    parser.add_argument(
+        "--tensor-parallelism-size",
+        type=int,
+        default=1,
+        help="Number of devices for tensor parallel sharding.",
+    )
 
     cli.add_input_dataset_options(parser)
     cli.add_tokenizer_options(parser)
@@ -302,17 +299,14 @@ def main(argv):
     dataset = cli.get_input_dataset(args)
     tokenizer = cli.get_tokenizer(args)
 
-    # prompt_path = "sharktank/evaluate/data/eval_prompts.txt"
-    # with open(prompt_path, "r") as f:
-    #     input_texts = f.read().splitlines()
-
     input_texts = load_dataset("wikitext", "wikitext-2-raw-v1", split="test")["text"][
         :20
     ]
-    input_texts = [s for s in input_texts if s != "" and len(s.split()) > 5]
-    # print('# prompts', len(input_texts))
 
-    # input_texts = ["Robert Boulter is an English film , television and theatre actor ."]
+    # Ignore prompts that are: empty, less than 5 words or a title.
+    input_texts = [
+        s for s in input_texts if s != "" and len(s.split()) > 5 and s.count("=") < 2
+    ]
 
     ppl = run_perplexity(
         prompts=input_texts,
@@ -320,6 +314,8 @@ def main(argv):
         tokenizer=tokenizer,
         device=device,
         kv_cache_type=kv_cache_type,
+        tensor_parallelism_size=args.tensor_parallelism_size,
+        attention_kernel=args.attention_kernel,
     )
 
     logger.info(f"\n{json.dumps(ppl, indent=2)}")
