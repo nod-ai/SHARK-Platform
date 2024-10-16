@@ -20,7 +20,7 @@ jobs:
     strategy:
       matrix:
         version: [3.11]
-        os: [ubuntu-latest, windows-latest]
+        os: [llama-mi300]
       fail-fast: false
     runs-on: ${{matrix.os}}
     defaults:
