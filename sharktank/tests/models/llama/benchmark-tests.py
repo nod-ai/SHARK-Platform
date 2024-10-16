@@ -122,8 +122,8 @@ class BenchmarkLlama3_1_8B_f16(BaseBenchmarkTest):
         self.iree_compile_args = ["--iree-hal-target-backends=rocm", "--iree-hip-target=gfx942", f"--iree-hal-dump-executable-files-to={self.repo_root}/files/llama"]
         self.prefill_args_f16 = artifacts_dir + "prefill_args"
         self.decode_args_f16 = artifacts_dir + "decode_args"
-        self.iree_run_prefill_args = ["--function=prefill_bs4", f"--input=4x16xsi64=@{self.prefill_args_f16}/tokens.npy", f"--input=4xsi64=@{self.prefill_args_f16}/seq_lens.npy", f"--input=4x1xsi64=@{self.prefill_args_f16}/seq_block_ids.npy", f"--input=128x1048576xf16=@{self.prefill_args_f16}/cache_state_f16.npy", "--benchmark_repetitions=3"]
-        self.iree_run_decode_args = ["--function=decode_bs4", f"--input=4x16xsi64=@{self.decode_args_f16}/tokens.npy", f"--input=4xsi64=@{self.decode_args_f16}/seq_lens.npy", f"--input=4xsi64=@{self.decode_args_f16}/start_positions.npy", f"--input=4x1xsi64=@{self.decode_args_f16}/seq_block_ids.npy", f"--input=128x1048576xf16=@{self.decode_args_f16}/cache_state_f16.npy", "--benchmark_repetitions=3"]
+        self.iree_run_prefill_args = ["--function=prefill_bs4", f"--input=@{self.prefill_args_f16}/tokens.npy", f"--input=@{self.prefill_args_f16}/seq_lens.npy", f"--input=@{self.prefill_args_f16}/seq_block_ids.npy", f"--input=@{self.prefill_args_f16}/cache_state_f16.npy", "--benchmark_repetitions=3"]
+        self.iree_run_decode_args = ["--function=decode_bs4", f"--input=@{self.decode_args_f16}/tokens.npy", f"--input=@{self.decode_args_f16}/seq_lens.npy", f"--input=@{self.decode_args_f16}/start_positions.npy", f"--input=@{self.decode_args_f16}/seq_block_ids.npy", f"--input=@{self.decode_args_f16}/cache_state_f16.npy", "--benchmark_repetitions=3"]
 
     def testExport8B_f16(self):
         self.export_mlir(self.irpa_path, self.output_mlir, self.output_json, self.repo_root)
