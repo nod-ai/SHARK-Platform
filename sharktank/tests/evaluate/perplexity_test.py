@@ -9,6 +9,8 @@ import pytest
 
 from sharktank.evaluate import perplexity
 
+longrun = pytest.mark.skipif("not config.getoption('longrun')")
+
 
 class PerplexityTest(unittest.TestCase):
     def test_llama3_8B_f16_decomposed(self):
@@ -188,17 +190,16 @@ class PerplexityTest(unittest.TestCase):
             ]
         )
 
-        # dummy data
         baseline_llama_405b_perplexity = {
             "perplexities": [
-                9.875290870666504,
-                8.075149536132812,
-                16.164775848388672,
-                11.06580924987793,
-                11.46964168548584,
-                12.714613914489746,
+                2.0203986167907715,
+                4.045348644256592,
+                4.452215671539307,
+                4.009974479675293,
+                5.169974327087402,
+                5.516016960144043,
             ],
-            "mean_perplexity": 11.560880184173584,
+            "mean_perplexity": 4.202321449915568,
         }
 
         delta = 5e-1
@@ -233,17 +234,16 @@ class PerplexityTest(unittest.TestCase):
             ]
         )
 
-        # dummy data
         baseline_llama_405b_perplexity = {
             "perplexities": [
-                9.875290870666504,
-                8.075149536132812,
-                16.164775848388672,
-                11.06580924987793,
-                11.46964168548584,
-                12.714613914489746,
+                2.0203986167907715,
+                4.045348644256592,
+                4.452215671539307,
+                4.009974479675293,
+                5.169974327087402,
+                5.516016960144043,
             ],
-            "mean_perplexity": 11.560880184173584,
+            "mean_perplexity": 4.202321449915568,
         }
 
         delta = 5e-1
@@ -275,17 +275,16 @@ class PerplexityTest(unittest.TestCase):
             ]
         )
 
-        # dummy data
         baseline_llama_405b_perplexity = {
             "perplexities": [
-                9.875290870666504,
-                8.075149536132812,
-                16.164775848388672,
-                11.06580924987793,
-                11.46964168548584,
-                12.714613914489746,
+                2.0203986167907715,
+                4.045348644256592,
+                4.452215671539307,
+                4.009974479675293,
+                5.169974327087402,
+                5.516016960144043,
             ],
-            "mean_perplexity": 11.560880184173584,
+            "mean_perplexity": 4.202321449915568,
         }
 
         delta = 5e-1
@@ -318,17 +317,16 @@ class PerplexityTest(unittest.TestCase):
             ]
         )
 
-        # dummy data
         baseline_llama_405b_perplexity = {
             "perplexities": [
-                9.875290870666504,
-                8.075149536132812,
-                16.164775848388672,
-                11.06580924987793,
-                11.46964168548584,
-                12.714613914489746,
+                2.0203986167907715,
+                4.045348644256592,
+                4.452215671539307,
+                4.009974479675293,
+                5.169974327087402,
+                5.516016960144043,
             ],
-            "mean_perplexity": 11.560880184173584,
+            "mean_perplexity": 4.202321449915568,
         }
 
         delta = 5e-1
