@@ -78,24 +78,30 @@ class BaseBenchmarkTest(unittest.TestCase):
         if return_code != 0:
             raise Exception(f"{cmd} failed to compile.")
 
-    def iree_run_module(self, vmfb_name: str, args: List[str], cwd: str | Path, compile_cmd: str):
-        """Runs a compiled program with the given args using `iree-run-module`.
-        This assumes that the `iree-run-module` command is available (usually via PATH).
+    def iree_benchmark_module(self, hip_device_id: str, vmfb_name: str, irpa_path: str, args: List[str], cwd: str | Path):
+        """Runs a compiled program with the given args using `iree-benchmark-module`.
+        This assumes that the `iree-benchmark-module` command is available (usually via PATH).
         Args:
             vmfb_name: Name of the .vmfb file (relative to `cwd`).
-            args: List of arguments to pass to `iree-run-module`.
+            args: List of arguments to pass to `iree-benchmark-module`.
             cwd: Working directory to run the command within. (either string or Path works)
             compile_cmd: Command used to compile the program, for inclusion in error messages.
-        Raises IreeRunException if running fails for some reason.
+        Raises Exception if running fails for some reason.
         """
         run_args = [
-            "iree-run-module",
-            f"--module={vmfb_name}"
+            f"ROCR_VISIBLE_DEVICES={hip_device_id}",
+            "iree-benchmark-module",
+            f"--device=hip://{hip_device_id}",
+            "--hip_use_streams=true",
+            "--hip_allow_inline_execution=true",
+            "--device_allocator=caching",
+            f"--module={vmfb_name}",
+            f"--parameters=model={irpa_path}"
         ]
         run_args += args
         cmd = subprocess.list2cmdline(run_args)
         logging.getLogger().info(
-            f"Launching run command:\n"  #
+            f"Launching run command:\n"
             f"cd {cwd} && {cmd}"
         )
         proc = subprocess.run(cmd, shell=True, capture_output=True, cwd=cwd)
@@ -116,7 +122,10 @@ class BenchmarkLlama3_1_8B_f16(BaseBenchmarkTest):
         self.iree_compile_args = ["--iree-hal-target-backends=rocm", "--iree-hip-target=gfx942", f"--iree-hal-dump-executable-files-to={self.repo_root}/files/llama"]
         self.prefill_args_f16 = artifacts_dir + "prefill_args"
         self.decode_args_f16 = artifacts_dir + "decode_args"
+        self.iree_run_prefill_args = ["--function=prefill_bs4", f"--input=4x16xsi64=@{self.prefill_args_f16}/tokens.npy", f"--input=4xsi64=@{self.prefill_args_f16}/seq_lens.npy", f"--input=4x1xsi64=@{self.prefill_args_f16}/seq_block_ids.npy", f"--input=128x1048576xf16=@{self.prefill_args_f16}/cache_state_f16.npy", "--benchmark_repetitions=3"]
+        self.iree_run_decode_args = ["--function=decode_bs4", f"--input=4x16xsi64=@{self.decode_args_f16}/tokens.npy", f"--input=4xsi64=@{self.decode_args_f16}/seq_lens.npy", f"--input=4xsi64=@{self.decode_args_f16}/start_positions.npy", f"--input=4x1xsi64=@{self.decode_args_f16}/seq_block_ids.npy", f"--input=128x1048576xf16=@{self.decode_args_f16}/cache_state_f16.npy", "--benchmark_repetitions=3"]
 
     def testExport8B_f16(self):
         self.export_mlir(self.irpa_path, self.output_mlir, self.output_json, self.repo_root)
         self.iree_compile(self.output_mlir, self.output_vmfb, self.iree_compile_args, self.repo_root)
+        self.iree_benchmark_module("0", self.output_vmfb, self.irpa_path, self.iree_run_prefill_args, self.repo_root)
