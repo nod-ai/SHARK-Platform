@@ -22,25 +22,19 @@ class InferenceTokenizer(ABC):
     """Simple inference tokenizer."""
 
     def encode(
-        self, texts: list[str], pad_to_multiple_of: int = 1, pad_token: int = 0
+        self,
+        texts: list[str],
+        pad_to_multiple_of: int = 1,
+        add_start_token: bool = True,
     ) -> tuple[list[list[int]]]:
         """Encodes a list of texts into a padded list of tokens.
 
         Returns a list of list of tokens and a list of unpadded lengths.
         """
-        raw_rows = self._encode(texts)
-        max_length = 0
-        lengths: list[int] = []
-        for row in raw_rows:
-            lengths.append(len(row))
-            max_length = max(max_length, len(row))
-        if pad_to_multiple_of > 1:
-            max_length = int(
-                pad_to_multiple_of * math.ceil(max_length / pad_to_multiple_of)
-            )
-        for row in raw_rows:
-            pad_count = max_length - len(row)
-            row.extend(pad_count * [pad_token])
+        raw_rows = self._encode(texts, add_start_token)
+        raw_rows, lengths = self.pad_tokens(
+            token_ids=raw_rows, pad_to_multiple_of=pad_to_multiple_of
+        )
         return raw_rows, lengths
 
     def decode(self, tokens: Union[list[list[int]]], lens: Optional[list[int]] = None):
@@ -50,6 +44,35 @@ class InferenceTokenizer(ABC):
             for i, row_length in enumerate(lens):
                 tokens[i] = tokens[i][0:row_length]
         return self._decode(tokens)
+
+    def get_prompt_lengths(
+        self,
+        token_ids: list[list[int]],
+    ):
+        max_length = 0
+        lengths: list[int] = []
+        for row in token_ids:
+            lengths.append(len(row))
+            max_length = max(max_length, len(row))
+
+        return lengths, max_length
+
+    def pad_tokens(
+        self,
+        token_ids: list[list[int]],
+        pad_to_multiple_of: int,
+        pad_token: int = 0,
+    ):
+        lengths, max_length = self.get_prompt_lengths(token_ids)
+        if pad_to_multiple_of > 1:
+            max_length = int(
+                pad_to_multiple_of * math.ceil(max_length / pad_to_multiple_of)
+            )
+        for row in token_ids:
+            pad_count = max_length - len(row)
+            row.extend(pad_count * [pad_token])
+
+        return token_ids, lengths
 
     @abstractmethod
     def _encode(self, texts: list[str]) -> list[list[int]]:
@@ -76,9 +99,10 @@ def _create_transformers_tokenizer(model_path: os.PathLike) -> InferenceTokenize
         def __init__(self, t: AutoTokenizer):
             self._t = t
 
-        def _encode(self, texts: list[str]) -> list[list[int]]:
+        def _encode(self, texts: list[str], add_start_token: bool) -> list[list[int]]:
             results = t.batch_encode_plus(
                 texts,
+                add_special_tokens=add_start_token,
                 padding=False,
                 truncation=False,
             )

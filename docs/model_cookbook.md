@@ -257,6 +257,16 @@ iree-run-module \
   --parameters=model=/tmp/open_llama_3b_v2/open-llama-3b-v2-f16.gguf
 ```
 
+## Evaluation pipeline
+
+Run perplexity test:
+
+```bash
+python -m  sharktank.evaluate.perplexity \
+  --gguf-file=llama8b_f16.gguf \
+  --tokenizer-config-json=tokenizer_config.json
+```
+
 ## Generating data for llama models
 
 ```bash
