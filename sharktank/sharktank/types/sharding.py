@@ -60,15 +60,17 @@ class ThetaSharding(dict):
         for k, v in d.items():
             d[k] = tree.map_nodes(
                 tree=v,
-                f=lambda x: x
-                if isinstance(
-                    x,
-                    (
-                        TensorSharding,
-                        ThetaSharding,
-                    ),
-                )
-                else ThetaSharding(x),
+                f=lambda x: (
+                    x
+                    if isinstance(
+                        x,
+                        (
+                            TensorSharding,
+                            ThetaSharding,
+                        ),
+                    )
+                    else ThetaSharding(x)
+                ),
             )
         super().__init__(d)
 

@@ -11,7 +11,15 @@ from typing import Optional, Sequence, Union, List, Tuple
 import torch
 import numbers
 from torch import Tensor, dtype
-from ..types import AnyTensor, ShardedTensor, Theta, sharding, InferenceTensor
+from ..types import (
+    AnyTensor,
+    ShardedTensor,
+    Theta,
+    sharding,
+    InferenceTensor,
+    QuantizedTensor,
+    PlanarQuantizedTensor,
+)
 from numbers import Number
 
 from ._registry import *
@@ -59,6 +67,7 @@ __all__ = [
     "unshard",
     "unsqueeze",
     "view",
+    "split",
 ]
 
 IntOrSequenceInt = Union[int, Sequence[int]]
@@ -976,14 +985,18 @@ def _to_trampoline(d: SignatureDispatcher, tensor: AnyTensor, *args, **kwargs):
 
 
 @overridable
-def transfer_to_logical_device(tensor: AnyTensor, ordinal: int) -> AnyTensor:
+def transfer_to_logical_device(
+    tensor: Union[AnyTensor, QuantizedTensor, PlanarQuantizedTensor], ordinal: int
+) -> Union[AnyTensor, QuantizedTensor, PlanarQuantizedTensor]:
     """Transfer the tensor to a device with ordinal `ordinal`."""
     ...
 
 
 @transfer_to_logical_device.trampoline
 def _transfer_to_logical_device_trampoline(
-    d: SignatureDispatcher, tensor: AnyTensor, ordinal: int
+    d: SignatureDispatcher,
+    tensor: Union[AnyTensor, QuantizedTensor, PlanarQuantizedTensor],
+    ordinal: int,
 ):
     tensors = (tensor,)
     for override in d.find_overrides(tensors):
@@ -1085,3 +1098,27 @@ def _view_trampoline(
             return override, result
     else:
         d.fail(tensors)
+
+
+@overridable
+def split(
+    tensor: QuantizedTensor, split_size_or_sections: List[int], dim: int
+) -> [QuantizedTensor]:
+    """See torch.Tensor.split"""
+    ...
+
+
+@split.trampoline
+def _split_trampoline(
+    d: SignatureDispatcher,
+    tensor: QuantizedTensor,
+    split_size_or_sections: List[int],
+    dim: int,
+) -> [QuantizedTensor]:
+    tensors = (tensor,)
+    for override in d.find_overrides(tensors):
+        result = override(tensor, split_size_or_sections, dim)
+        if result is not NotImplemented:
+            return override, result
+        else:
+            d.fail(tensors)

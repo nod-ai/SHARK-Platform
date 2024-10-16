@@ -15,6 +15,8 @@ from ..types import (
     AnyTensor,
     DefaultPrimitiveTensor,
     InferenceTensor,
+    QuantizedTensor,
+    PlanarQuantizedTensor,
     PrimitiveTensor,
     ReplicatedTensor,
     ShardedTensor,
@@ -28,6 +30,8 @@ from ._registry import AllOfType, AllOfExprsVariadic, IsOfType
 from .signatures import *
 from .shape import broadcast_dims, broadcast_dim, unbroadcast_dim
 from ..utils import longest_equal_range
+from ..utils.math import ceildiv
+from sharktank.types.tensors import REGISTERED_LAYOUT_CLASSES
 
 
 @all_gather.override(SplitPrimitiveTensor)
@@ -1264,3 +1268,82 @@ def view_split(tensor: SplitPrimitiveTensor, shape: List[int]) -> SplitPrimitive
     res = SplitPrimitiveTensor(shard_dim=shard_dim, ts=shards)
     assert math.prod(res.shape) == math.prod(tensor.shape)
     return res
+
+
+@split.override(QuantizedTensor)
+def split_QuantizedTensor(tensor: QuantizedTensor, split_size_or_sections, dim):
+    tensors = []
+    unpacked = tensor.unpack()
+    num_outputs = ceildiv(unpacked._qs.shape[dim], split_size_or_sections)
+    new_shape = unpacked._shape
+    new_shape[dim] = split_size_or_sections
+    new_qs = torch.split(unpacked._qs, split_size_or_sections, dim)
+    if unpacked._d.ndim > 0:
+        new_d = torch.split(unpacked._d, split_size_or_sections, dim)
+    if unpacked.serialized_name() == "SuperBlockOffsetScaled_4_6_Layout":
+        new_dmin = torch.split(unpacked._dmin, split_size_or_sections, dim)
+        new_sb_scales_high = torch.split(
+            unpacked._sb_scales_high, split_size_or_sections, dim
+        )
+        new_sb_scales_low = torch.split(
+            unpacked._sb_scales_low, split_size_or_sections, dim
+        )
+        new_sb_mins_high = torch.split(
+            unpacked._sb_mins_high, split_size_or_sections, dim
+        )
+        new_sb_mins_low = torch.split(
+            unpacked._sb_mins_low, split_size_or_sections, dim
+        )
+        for i in range(num_outputs):
+            layout_clazz = REGISTERED_LAYOUT_CLASSES[unpacked.serialized_name()]
+            new_layout = layout_clazz(
+                shape=new_shape,
+                d=new_d[i],
+                dmin=new_dmin[i],
+                sb_scales_high=new_sb_scales_high[i],
+                sb_scales_low=new_sb_scales_low[i],
+                sb_mins_high=new_sb_mins_high[i],
+                sb_mins_low=new_sb_mins_low[i],
+                qs=new_qs[i],
+            )
+            new_tensor = tensor.__class__
+            new_tensor_layout = new_layout.create(
+                new_layout.shape, new_layout.metadata, new_layout.planes
+            )
+            new_tensor = tensor.__class__(
+                shape=new_shape, layout=new_tensor_layout, name=tensor._name + str(i)
+            )
+            tensors.append(new_tensor)
+    else:
+        if split_size_or_sections > unpacked._qs.shape[dim]:
+            raise ValueError("split size greater than tensor dim")
+
+        if unpacked._m is not None:
+            if unpacked._m.ndim > 0:
+                new_m = torch.split(unpacked._m, split_size_or_sections, dim)
+        for i in range(num_outputs):
+            layout_clazz = REGISTERED_LAYOUT_CLASSES[unpacked.serialized_name()]
+            if unpacked._m is not None:
+                if unpacked._d.ndim > 0:
+                    new_layout = layout_clazz(
+                        shape=new_shape, d=new_d[i], qs=new_qs[i], m=new_m[i]
+                    )
+                else:
+                    new_layout = layout_clazz(
+                        shape=new_shape, d=unpacked._d, qs=new_qs[i], m=unpacked._m
+                    )
+            else:
+                if unpacked._d.ndim > 0:
+                    new_layout = layout_clazz(shape=new_shape, d=new_d[i], qs=new_qs[i])
+                else:
+                    new_layout = layout_clazz(
+                        shape=new_shape, d=unpacked._d, qs=new_qs[i]
+                    )
+            new_tensor_layout = new_layout.create(
+                new_layout.shape, new_layout.metadata, new_layout.planes
+            )
+            new_tensor = tensor.__class__(
+                shape=new_shape, layout=new_tensor_layout, name=tensor._name + str(i)
+            )
+            tensors.append(new_tensor)
+        return tensors

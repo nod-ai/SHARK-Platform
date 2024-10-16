@@ -581,6 +581,11 @@ class QuantizedTensor(InferenceTensor, Generic[QuantizedLayoutT]):
         """
         return self.to_planar().add_to_archive(builder)
 
+    def split(self, split_size_or_sections: [int], dim: int) -> "[QuantizedTensor]":
+        from ..ops import split
+
+        return split(self, split_size_or_sections, dim)
+
 
 @register_inference_tensor
 class PlanarQuantizedTensor(QuantizedTensor):
@@ -764,12 +769,14 @@ class ShardedTensorBase(ShardedTensor):
         assert shard_dim is None or (shard_dim >= 0 and len(ts[0].shape) > shard_dim)
         super().__init__(name=name, shape=shape, shard_dim=shard_dim)
         self._shards: tuple[DefaultPrimitiveTensor] = tuple(
-            DefaultPrimitiveTensor(
-                name=f"{name}.shard.{i}",
-                data=t,
+            (
+                DefaultPrimitiveTensor(
+                    name=f"{name}.shard.{i}",
+                    data=t,
+                )
+                if isinstance(t, torch.Tensor)
+                else t
             )
-            if isinstance(t, torch.Tensor)
-            else t
             for i, t in enumerate(ts)
         )
 
@@ -941,7 +948,7 @@ class SplitPrimitiveTensor(ShardedTensorBase):
         will be split along dimension `shard_dim` into `shard_count`
         number of pieces.
         """
-        if isinstance(ts, torch.Tensor):
+        if isinstance(ts, torch.Tensor) or isinstance(ts, InferenceTensor):
             from ..ops import transfer_to_logical_device
 
             assert shard_count is not None
@@ -1082,12 +1089,14 @@ class ReplicatedTensor(ShardedTensor):
             assert shape == list(shard.shape)
 
         self._shards: tuple[DefaultPrimitiveTensor] = tuple(
-            DefaultPrimitiveTensor(
-                name=f"{name}.shard.{i}",
-                data=t,
+            (
+                DefaultPrimitiveTensor(
+                    name=f"{name}.shard.{i}",
+                    data=t,
+                )
+                if isinstance(t, torch.Tensor)
+                else t
             )
-            if isinstance(t, torch.Tensor)
-            else t
             for i, t in enumerate(ts)
         )
 
