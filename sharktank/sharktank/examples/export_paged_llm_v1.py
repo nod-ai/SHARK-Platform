@@ -52,10 +52,10 @@ def main():
         action="store_true",
     )
     parser.add_argument(
-        "--attn-kernel",
+        "--attention-kernel",
         type=str,
         default="decomposed",
-        help='["decomposed", "torch_sdpa"],',
+        choices=["decomposed", "torch_sdpa"],
     )
 
     args = cli.parse(parser)
