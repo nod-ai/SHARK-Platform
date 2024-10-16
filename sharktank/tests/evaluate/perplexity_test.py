@@ -62,7 +62,7 @@ class PerplexityTest(unittest.TestCase):
             [
                 f"--gguf-file={llama_8b_f16_gguf_path}",
                 f"--tokenizer-config-json={llama_8b_f16_tokenizer_path}",
-                f"--attn-kernel=torch_sdpa",
+                f"--attention-kernel=torch_sdpa",
             ]
         )
 
@@ -141,7 +141,7 @@ class PerplexityTest(unittest.TestCase):
             [
                 f"--gguf-file={llama_8b_fp8_gguf_path}",
                 f"--tokenizer-config-json={llama_8b_fp8_tokenizer_path}",
-                f"--attn-kernel=torch_sdpa",
+                f"--attention-kernel=torch_sdpa",
             ]
         )
 
@@ -229,7 +229,7 @@ class PerplexityTest(unittest.TestCase):
                 f"--gguf-file={llama_405b_f16_gguf_path}",
                 f"--tokenizer-config-json={llama_405b_f16_tokenizer_path}",
                 f"--tensor-parallelism-size={tensor_parallelism_size}",
-                f"--attn-kernel=torch_sdpa",
+                f"--attention-kernel=torch_sdpa",
             ]
         )
 
@@ -314,7 +314,7 @@ class PerplexityTest(unittest.TestCase):
                 f"--gguf-file={llama_405b_fp8_gguf_path}",
                 f"--tokenizer-config-json={llama_405b_fp8_tokenizer_path}",
                 f"--tensor-parallelism-size={tensor_parallelism_size}",
-                f"--attn-kernel=torch_sdpa",
+                f"--attention-kernel=torch_sdpa",
             ]
         )
 
