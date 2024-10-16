@@ -4,6 +4,7 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
+import math
 
 import torch
 import torch.nn as nn
@@ -124,7 +125,7 @@ class PagedGrokModelV1(BaseCausalLMModel):
         self._assert_device(seq_block_ids)
         self._assert_device(*cache_state, dtype=self.activation_dtype)
         h = self.token_embedding(tokens)
-        h *= torch.sqrt(h.shape[-1])
+        h *= math.sqrt(h.shape[-1])
         self.trace_tensor("grok.token_embedding", h)
 
         # Iterate over attention blocks.
@@ -149,7 +150,7 @@ class PagedGrokModelV1(BaseCausalLMModel):
 
         h = self.output_norm(h)
         logits = self.output_lm_head(h)
-        logits = logits / torch.sqrt(3.0)
+        logits = logits / math.sqrt(3.0)
         return logits
 
     def decode(
@@ -201,12 +202,12 @@ class PagedGrokModelV1(BaseCausalLMModel):
         )
 
         h = self.token_embedding(tokens)
-        h *= torch.sqrt(h.shape[-1])
+        h *= math.sqrt(h.shape[-1])
         self.trace_tensor("grok.token_embedding", h)
 
         # Iterate over attention blocks.
         for block_idx, (attn_block, moe_block) in enumerate(
-            self.attn_blocks, self.moe_blocks
+            zip(self.attn_blocks, self.moe_blocks)
         ):
             if block_idx == 0:
                 self.trace_tensor(f"grok.attn_block.{block_idx}.input", h)
@@ -229,5 +230,5 @@ class PagedGrokModelV1(BaseCausalLMModel):
 
         h = self.output_norm(h)
         logits = self.output_lm_head(h)
-        logits = logits / torch.sqrt(3.0)
+        logits = logits / math.sqrt(3.0)
         return logits
