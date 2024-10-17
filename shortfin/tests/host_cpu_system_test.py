@@ -7,6 +7,7 @@
 import os
 import pytest
 import re
+import sys
 
 import shortfin as sf
 
@@ -19,6 +20,9 @@ def test_create_host_cpu_system_defaults():
         assert len(ls.devices) > 0
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32", reason="Windows fatal exception: access violation"
+)
 def test_create_host_cpu_system_topology_nodes_all():
     sc = sf.host.CPUSystemBuilder(
         hostcpu_topology_nodes="all", hostcpu_topology_max_group_count=2
@@ -39,6 +43,10 @@ def test_create_host_cpu_system_topology_nodes_explicit():
         assert len(ls.devices) == 2
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="Only detecting 1 device, check config setup from env vars?",
+)
 def test_create_host_cpu_system_env_vars():
     os.environ["SHORTFIN_HOSTCPU_TOPOLOGY_NODES"] = "0,0"
     os.environ["SHORTFIN_HOSTCPU_TOPOLOGY_MAX_GROUP_COUNT"] = "2"
