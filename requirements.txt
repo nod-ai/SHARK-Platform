@@ -4,6 +4,7 @@ numpy==1.26.3
 onnx==1.15.0
 
 # Model deps.
+datasets==3.0.1
 huggingface-hub==0.22.2
 transformers==4.40.0
 sentencepiece==0.2.0
