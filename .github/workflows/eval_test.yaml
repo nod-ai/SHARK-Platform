@@ -20,9 +20,9 @@ jobs:
     strategy:
       matrix:
         version: [3.11]
-        os: [llama-mi300]
+        runs-on: [llama-mi300]
       fail-fast: false
-    runs-on: ${{matrix.os}}
+    runs-on: ${{matrix.runs-on}}
     defaults:
       run:
         shell: bash
