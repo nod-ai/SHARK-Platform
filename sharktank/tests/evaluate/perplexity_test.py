@@ -174,6 +174,47 @@ class PerplexityTest(unittest.TestCase):
         )
 
     @longrun
+    def test_llama3_8B_f16_tp8_decomposed(self):
+
+        # Llama 3.1 8B decomposed
+
+        llama_8b_f16_gguf_path = "/data/extra/models/llama3.1_8B/llama8b_f16.gguf"
+        llama_8b_f16_tokenizer_path = (
+            "/data/extra/models/llama3.1_8B/tokenizer_config.json"
+        )
+
+        tensor_parallelism_size = 8
+
+        llama_8b_perplexity = perplexity.main(
+            [
+                f"--gguf-file={llama_8b_f16_gguf_path}",
+                f"--tokenizer-config-json={llama_8b_f16_tokenizer_path}",
+                f"--tensor-parallelism-size={tensor_parallelism_size}",
+            ]
+        )
+
+        baseline_llama_8b_perplexity = {
+            "perplexities": [
+                9.875290870666504,
+                8.075149536132812,
+                16.164775848388672,
+                11.06580924987793,
+                11.46964168548584,
+                12.714613914489746,
+            ],
+            "mean_perplexity": 11.560880184173584,
+        }
+
+        delta = 5e-1
+
+        self.assertAlmostEqual(
+            baseline_llama_8b_perplexity["mean_perplexity"],
+            llama_8b_perplexity["mean_perplexity"],
+            delta=delta,
+            msg=f"Perplexity is deviating more than {delta}",
+        )
+
+    @longrun
     def test_llama3_405B_f16_decomposed(self):
 
         # Llama 3.1 405B decomposed
