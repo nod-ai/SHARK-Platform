@@ -24,10 +24,10 @@ import math
 import pickle
 import re
 import z3
-from dataclasses import asdict, dataclass
+from dataclasses import astuple, dataclass
 from enum import Enum
 from os import mkdir, path, makedirs
-from typing import Callable, Optional
+from typing import Optional
 from textwrap import indent
 from abc import ABC, abstractmethod
 
@@ -148,6 +148,44 @@ class MfmaIntrinsic:
         ]
 
 
+class ReorderWorkgroupsStrategy(Enum):
+    NONE = 0
+    SWIZZLE = 1
+    TRANSPOSE = 2
+
+    def __str__(self) -> str:
+        return self.name.title()
+
+
+@dataclass
+class GpuPipelineOptions:
+    """Represents the `iree_gpu.pipeline_options` attribute"""
+
+    prefetch_shared_memory: Optional[bool] = None
+    no_reduce_shared_memory_bank_conflicts: Optional[bool] = None
+    reorder_workgroups_strategy: Optional[ReorderWorkgroupsStrategy] = None
+
+    def all_default(self) -> bool:
+        return all(x is None for x in astuple(self))
+
+    def __str__(self) -> str:
+        options: list[str] = []
+        if self.prefetch_shared_memory is not None:
+            options.append(
+                f"prefetch_shared_memory = {str(self.prefetch_shared_memory).lower()}"
+            )
+        if self.no_reduce_shared_memory_bank_conflicts is not None:
+            options.append(
+                f"no_reduce_shared_memory_bank_conflicts = {str(self.no_reduce_shared_memory_bank_conflicts).lower()}"
+            )
+        if self.reorder_workgroups_strategy is not None:
+            options.append(
+                f"reorder_workgroups_strategy = {self.reorder_workgroups_strategy}"
+            )
+
+        return f"#iree_gpu.pipeline_options<{', '.join(options)}>"
+
+
 @dataclass
 class Configuration:
     subgroup_size: int
@@ -156,6 +194,7 @@ class Configuration:
     tile_sizes: list[int]
     subgroup_m_count: int
     subgroup_n_count: int
+    gpu_pipeline_options: GpuPipelineOptions
     waves_per_eu: int
 
 
@@ -223,7 +262,9 @@ def get_batch_mmt_tile_sizes(configuration: Configuration) -> list[int]:
 
 
 def get_pipeline_config(configuration: Configuration) -> str:
-    extra_config = ", prefetch_shared_memory"
+    extra_config = ""
+    if not configuration.gpu_pipeline_options.all_default():
+        extra_config += f", gpu_pipeline_options = {configuration.gpu_pipeline_options}"
     if configuration.waves_per_eu != 2:
         extra_config += f', llvm_func_attrs = {{"amdgpu-waves-per-eu" = "{configuration.waves_per_eu}"}}'
     return extra_config
@@ -234,17 +275,19 @@ def apply_configuration(
 ) -> str:
     tune_logger.info(f"Applying: {configuration}")
     expr0 = re.compile(
-        r"<intrinsic = #iree_gpu.mma_layout<(.+)>, subgroup_m_count = ([0-9]+), subgroup_n_count = ([0-9]+)>"
+        r"<intrinsic = #iree_gpu\.mma_layout<(.+)>, subgroup_m_count = ([0-9]+), subgroup_n_count = ([0-9]+)>"
     )
     expr1 = re.compile(
         r"LLVMGPUVectorDistribute workgroup_size = \[.+\] subgroup_size = ([0-9]+),"
     )
     expr2 = re.compile(r"tile_sizes = \[\[([0-9]+)(, ([0-9]+))+\]\]")
-    expr3 = re.compile(r"\"amdgpu-waves-per-eu\" = \"([0-9])\"")
+    expr3 = re.compile(r"gpu_pipeline_options = #iree_gpu\.pipeline_options<([^>]*)>")
+    expr4 = re.compile(r"\"amdgpu-waves-per-eu\" = \"([0-9])\"")
     repl0 = f"<intrinsic = #iree_gpu.mma_layout<{configuration.intrinsic}>, subgroup_m_count = {configuration.subgroup_m_count}, subgroup_n_count = {configuration.subgroup_n_count}>"
     repl1 = f'LLVMGPUVectorDistribute workgroup_size = [{", ".join(map(str, configuration.workgroup_size))}] subgroup_size = {configuration.subgroup_size},'
     repl2 = f'tile_sizes = [[{", ".join(map(str, tile_sizes))}]]'
-    repl3 = f'"amdgpu-waves-per-eu" = "{configuration.waves_per_eu}"'
+    repl3 = f"gpu_pipeline_options = {configuration.gpu_pipeline_options}"
+    repl4 = f'"amdgpu-waves-per-eu" = "{configuration.waves_per_eu}"'
 
     new_mlir = ""
     for line in template:
@@ -254,8 +297,10 @@ def apply_configuration(
             line = re.sub(expr1, repl1, line)
         if "tile_sizes" in line:
             line = re.sub(expr2, repl2, line)
-        if "amdgpu-waves-per-eu" in line:
+        if "gpu_pipeline_options =" in line:
             line = re.sub(expr3, repl3, line)
+        if "amdgpu-waves-per-eu" in line:
+            line = re.sub(expr4, repl4, line)
         new_mlir += line
 
     return new_mlir
@@ -461,6 +506,7 @@ def generate_solutions(problem_size: ProblemSize, num_subgrups: int):
             [lookup(m), lookup(n), lookup(k)],
             lookup(sg_m_cnt),
             lookup(sg_n_cnt),
+            GpuPipelineOptions(),
             lookup(waves_per_eu),
         )
         solver.add(z3.simplify(z3.Not(z3.And(list(x == model[x] for x in all_vars)))))

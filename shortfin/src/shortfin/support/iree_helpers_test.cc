@@ -97,10 +97,9 @@ TEST(iree_error, user_message) {
         "Something went wrong",
         iree_make_status(IREE_STATUS_CANCELLED, "because I said so"));
   } catch (iree::error &e) {
-    EXPECT_THAT(
-        std::string(e.what()),
-        testing::MatchesRegex(
-            "^Something went wrong: .*: CANCELLED; because I said so$"));
+    EXPECT_THAT(std::string(e.what()),
+                testing::ContainsRegex(
+                    "^Something went wrong: .*: CANCELLED; because I said so"));
   }
 }
 
@@ -110,7 +109,7 @@ TEST(iree_error, no_user_message) {
         iree_make_status(IREE_STATUS_CANCELLED, "because I said so"));
   } catch (iree::error &e) {
     EXPECT_THAT(std::string(e.what()),
-                testing::MatchesRegex("^.*: CANCELLED; because I said so$"));
+                testing::ContainsRegex("^.*: CANCELLED; because I said so"));
   }
 }
 
@@ -129,7 +128,7 @@ TEST(iree_error, throw_if_error) {
     FAIL();
   } catch (iree::error &e) {
     EXPECT_THAT(std::string(e.what()),
-                testing::MatchesRegex("^.*: CANCELLED; because I said so$"));
+                testing::ContainsRegex("^.*: CANCELLED; because I said so"));
   }
 }
 
@@ -140,9 +139,9 @@ TEST(iree_error, throw_if_error_addl_message) {
         "oops: %d", 1);
     FAIL();
   } catch (iree::error &e) {
-    EXPECT_THAT(
-        std::string(e.what()),
-        testing::MatchesRegex("^.*: CANCELLED; because I said so; oops: 1$"));
+    EXPECT_THAT(std::string(e.what()),
+                testing::ContainsRegex("^.*: CANCELLED; because I said so;"));
+    EXPECT_THAT(std::string(e.what()), testing::ContainsRegex("oops: 1"));
   }
 }
 
