@@ -274,9 +274,9 @@ def _pad_last_2d(input_tensor, pad_width):
     )
 
     # Copy the values from the input tensor to the appropriate location in the padded tensor
-    padded_tensor[:, :, pad_top : pad_top + height, pad_left : pad_left + width] = (
-        input_tensor
-    )
+    padded_tensor[
+        :, :, pad_top : pad_top + height, pad_left : pad_left + width
+    ] = input_tensor
     return padded_tensor
 
 
