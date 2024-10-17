@@ -94,16 +94,15 @@ def configure(args) -> SystemManager:
     sm.load_inference_module(args.scheduler_vmfb, component="scheduler")
     sm.load_inference_module(args.vae_vmfb, component="vae")
     sm.load_inference_parameters(
-        *args.clip_params, parameter_scope="model", format="irpa", component="clip"
+        *args.clip_params, parameter_scope="model", component="clip"
     )
     sm.load_inference_parameters(
         *args.unet_params,
         parameter_scope="model",
-        format="safetensors",
         component="unet",
     )
     sm.load_inference_parameters(
-        *args.vae_params, parameter_scope="model", format="safetensors", component="vae"
+        *args.vae_params, parameter_scope="model", component="vae"
     )
     services[sm.name] = sm
     return sysman

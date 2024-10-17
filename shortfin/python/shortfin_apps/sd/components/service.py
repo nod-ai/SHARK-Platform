@@ -116,8 +116,7 @@ class GenerateService:
 
 class BatcherProcess(sf.Process):
     """The batcher is a persistent process responsible for flighting incoming work
-    into batches and handling the requisite cache allocations (since every batch needs
-    committed cache state).
+    into batches.
     """
 
     STROBE_SHORT_DELAY = 0.1
