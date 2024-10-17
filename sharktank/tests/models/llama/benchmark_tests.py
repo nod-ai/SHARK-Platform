@@ -13,6 +13,8 @@ import subprocess
 from pathlib import Path
 from typing import List
 
+longrun = pytest.mark.skipif("not config.getoption('longrun')")
+
 
 class BaseBenchmarkTest(unittest.TestCase):
     def setUp(self):
@@ -21,6 +23,7 @@ class BaseBenchmarkTest(unittest.TestCase):
     def get_export_cmd(
         self,
         attention_kernel: str,
+        tensor_parallelism_size: int,
         irpa_path: str,
         output_mlir_path: str,
         output_json_path: str,
@@ -39,6 +42,9 @@ class BaseBenchmarkTest(unittest.TestCase):
         if attention_kernel in ["decomposed", "torch_sdpa"]:
             export_args.append("--attention-kernel")
             export_args.append(attention_kernel)
+        if tensor_parallelism_size:
+            export_args.append("--tensor-parallelism-size")
+            export_args.append(str(tensor_parallelism_size))
 
         cmd = subprocess.list2cmdline(export_args)
         return cmd
@@ -53,6 +59,7 @@ class BaseBenchmarkTest(unittest.TestCase):
     def export_mlir(
         self,
         attention_kernel: str,
+        tensor_parallelism_size: int,
         irpa_path: str,
         output_mlir_path: str,
         output_json_path: str,
@@ -65,7 +72,11 @@ class BaseBenchmarkTest(unittest.TestCase):
             output_json_path: Path to the file to save the config json file.
         """
         cmd = self.get_export_cmd(
-            attention_kernel, irpa_path, output_mlir_path, output_json_path
+            attention_kernel,
+            tensor_parallelism_size,
+            irpa_path,
+            output_mlir_path,
+            output_json_path,
         )
         logging.getLogger().info(f"Launching export command:\n" f"cd {cwd} && {cmd}")
         proc = subprocess.run(cmd, shell=True, capture_output=True, cwd=cwd)
@@ -127,14 +138,36 @@ class BaseBenchmarkTest(unittest.TestCase):
         if return_code != 0:
             raise Exception(f"{cmd} failed to run")
 
+    def cleanup_output_files(
+        self, output_mlir_path: str, output_json_path: str, output_file: str
+    ):
+        try:
+            # Removing output_mlir_path
+            subprocess.run(["rm", output_mlir_path], shell=True, check=True)
+            print(f"Removed: {output_mlir_path}")
 
-class BenchmarkLlama3_1_8B_f16(BaseBenchmarkTest):
+            # Removing output_json_path
+            subprocess.run(["rm", output_json_path], shell=True, check=True)
+            print(f"Removed: {output_json_path}")
+
+            # Removing output_file
+            subprocess.run(["rm", output_file], shell=True, check=True)
+            print(f"Removed: {output_file}")
+
+        except subprocess.CalledProcessError as e:
+            print(f"Error removing files: {e}")
+
+
+class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
     def setUp(self):
         # TODO: add numpy files to Azure and download from it
-        self.repo_root = os.getenv("SHARK_PLATFORM_REPO_ROOT")
+        self.repo_root = (
+            "/home/avsharma/SHARK-Platform/"  # os.getenv("SHARK_PLATFORM_REPO_ROOT")
+        )
         artifacts_dir = "/data/extra/models/llama3.1_8B/"
         self.irpa_path = artifacts_dir + "llama8b_f16.irpa"
         self.irpa_path_fp8 = artifacts_dir + "llama8b_fp8.irpa"
+        self.tensor_parallelism_size = None
         self.iree_compile_args = [
             "--iree-hal-target-backends=rocm",
             "--iree-hip-target=gfx942",
@@ -178,12 +211,14 @@ class BenchmarkLlama3_1_8B_f16(BaseBenchmarkTest):
             "--benchmark_repetitions=3",
         ]
 
+    @longrun
     def testBenchmark8B_f16_Decomposed(self):
         output_mlir = self.repo_root + "llama8b_f16_decomposed.mlir"
         output_json = self.repo_root + "llama8b_f16_decomposed.json"
         output_vmfb = self.repo_root + "llama8b_f16_decomposed.vmfb"
         self.export_mlir(
             "decomposed",
+            self.tensor_parallelism_size,
             self.irpa_path,
             output_mlir,
             output_json,
@@ -209,14 +244,17 @@ class BenchmarkLlama3_1_8B_f16(BaseBenchmarkTest):
             self.iree_run_decode_args,
             self.repo_root,
         )
+        self.cleanup_output_files(output_mlir, output_json, output_vmfb)
 
     @pytest.mark.skip(reason="TODO: Need to plumb through attention_kernel")
+    @longrun
     def testBenchmark8B_f16_Non_Decomposed(self):
         output_mlir = self.repo_root + "llama8b_f16_torch_sdpa.mlir"
         output_json = self.repo_root + "llama8b_f16_torch_sdpa.json"
         output_vmfb = self.repo_root + "llama8b_f16_torch_sdpa.vmfb"
         self.export_mlir(
             "torch_sdpa",
+            self.tensor_parallelism_size,
             self.irpa_path,
             output_mlir,
             output_json,
@@ -242,14 +280,17 @@ class BenchmarkLlama3_1_8B_f16(BaseBenchmarkTest):
             self.iree_run_decode_args,
             self.repo_root,
         )
+        self.cleanup_output_files(output_mlir, output_json, output_vmfb)
 
     @pytest.mark.xfail
+    @longrun
     def testBenchmark8B_fp8_Decomposed(self):
         output_mlir = self.repo_root + "llama8b_fp8_decomposed.mlir"
         output_json = self.repo_root + "llama8b_fp8_decomposed.json"
         output_vmfb = self.repo_root + "llama8b_fp8_decomposed.vmfb"
         self.export_mlir(
             "decomposed",
+            self.tensor_parallelism_size,
             self.irpa_path_fp8,
             output_mlir,
             output_json,
@@ -280,14 +321,17 @@ class BenchmarkLlama3_1_8B_f16(BaseBenchmarkTest):
             self.iree_run_decode_args,
             self.repo_root,
         )
+        self.cleanup_output_files(output_mlir, output_json, output_vmfb)
 
     @pytest.mark.xfail
+    @longrun
     def testBenchmark8B_fp8_Non_Decomposed(self):
         output_mlir = self.repo_root + "llama8b_fp8_torch_sdpa.mlir"
         output_json = self.repo_root + "llama8b_fp8_torch_sdpa.json"
         output_vmfb = self.repo_root + "llama8b_fp8_torch_sdpa.vmfb"
         self.export_mlir(
             "torch_sdpa",
+            self.tensor_parallelism_size,
             self.irpa_path_fp8,
             output_mlir,
             output_json,
@@ -318,6 +362,421 @@ class BenchmarkLlama3_1_8B_f16(BaseBenchmarkTest):
             self.iree_run_decode_args_fp8,
             self.repo_root,
         )
+        self.cleanup_output_files(output_mlir, output_json, output_vmfb)
+
+
+class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
+    def setUp(self):
+        # TODO: add numpy files to Azure and download from it
+        self.repo_root = (
+            "/home/avsharma/SHARK-Platform/"  # os.getenv("SHARK_PLATFORM_REPO_ROOT")
+        )
+        artifacts_dir = "/data/extra/models/llama3.1_70B/"
+        self.irpa_path = artifacts_dir + "llama70b_f16.irpa"
+        self.irpa_path_fp8 = artifacts_dir + "llama70b_fp8.irpa"
+        self.tensor_parallelism_size = 1
+        self.iree_compile_args = [
+            "--iree-hal-target-backends=rocm",
+            "--iree-hip-target=gfx942",
+        ]
+        self.prefill_args_f16 = artifacts_dir + "prefill_args"
+        self.decode_args_f16 = artifacts_dir + "decode_args"
+        self.prefill_args_fp8 = artifacts_dir + "prefill_args_fp8"
+        self.decode_args_fp8 = artifacts_dir + "decode_args_fp8"
+        self.iree_run_prefill_args = [
+            "--function=prefill_bs4",
+            f"--input=@{self.prefill_args_f16}/tokens.npy",
+            f"--input=@{self.prefill_args_f16}/seq_lens.npy",
+            f"--input=@{self.prefill_args_f16}/seq_block_ids.npy",
+            f"--input=@{self.prefill_args_f16}/cache_state_f16.npy",
+            "--benchmark_repetitions=3",
+        ]
+        self.iree_run_decode_args = [
+            "--function=decode_bs4",
+            f"--input=@{self.decode_args_f16}/tokens.npy",
+            f"--input=@{self.decode_args_f16}/seq_lens.npy",
+            f"--input=@{self.decode_args_f16}/start_positions.npy",
+            f"--input=@{self.decode_args_f16}/seq_block_ids.npy",
+            f"--input=@{self.decode_args_f16}/cache_state_f16.npy",
+            "--benchmark_repetitions=3",
+        ]
+        self.iree_run_prefill_args_fp8 = [
+            "--function=prefill_bs4",
+            f"--input=@{self.prefill_args_fp8}/tokens.npy",
+            f"--input=@{self.prefill_args_fp8}/seq_lens.npy",
+            f"--input=@{self.prefill_args_fp8}/seq_block_ids.npy",
+            f"--input=@{self.prefill_args_fp8}/cache_state_f16.npy",
+            "--benchmark_repetitions=3",
+        ]
+        self.iree_run_decode_args_fp8 = [
+            "--function=decode_bs4",
+            f"--input=@{self.decode_args_fp8}/tokens.npy",
+            f"--input=@{self.decode_args_fp8}/seq_lens.npy",
+            f"--input=@{self.decode_args_fp8}/start_positions.npy",
+            f"--input=@{self.decode_args_fp8}/seq_block_ids.npy",
+            f"--input=@{self.decode_args_fp8}/cache_state_f16.npy",
+            "--benchmark_repetitions=3",
+        ]
+
+    @longrun
+    def testBenchmark70B_f16_Decomposed(self):
+        output_mlir = self.repo_root + "llama70b_f16_decomposed.mlir"
+        output_json = self.repo_root + "llama70b_f16_decomposed.json"
+        output_vmfb = self.repo_root + "llama70b_f16_decomposed.vmfb"
+        self.export_mlir(
+            "decomposed",
+            self.tensor_parallelism_size,
+            self.irpa_path,
+            output_mlir,
+            output_json,
+            self.repo_root,
+        )
+        iree_compile_args = self.iree_compile_args + [
+            f"--iree-hal-dump-executable-files-to={self.repo_root}/files/llama-70b/f16-decomposed"
+        ]
+        self.iree_compile(output_mlir, output_vmfb, iree_compile_args, self.repo_root)
+        # benchmark prefill
+        self.iree_benchmark_module(
+            "0",
+            output_vmfb,
+            self.irpa_path,
+            self.iree_run_prefill_args,
+            self.repo_root,
+        )
+        # benchmark decode
+        self.iree_benchmark_module(
+            "0",
+            output_vmfb,
+            self.irpa_path,
+            self.iree_run_decode_args,
+            self.repo_root,
+        )
+        self.cleanup_output_files(output_mlir, output_json, output_vmfb)
+
+    @pytest.mark.skip(reason="TODO: Need to plumb through attention_kernel")
+    @longrun
+    def testBenchmark70B_f16_Non_Decomposed(self):
+        output_mlir = self.repo_root + "llama70b_f16_torch_sdpa.mlir"
+        output_json = self.repo_root + "llama70b_f16_torch_sdpa.json"
+        output_vmfb = self.repo_root + "llama70b_f16_torch_sdpa.vmfb"
+        self.export_mlir(
+            "torch_sdpa",
+            self.tensor_parallelism_size,
+            self.irpa_path,
+            output_mlir,
+            output_json,
+            self.repo_root,
+        )
+        iree_compile_args = self.iree_compile_args + [
+            f"--iree-hal-dump-executable-files-to={self.repo_root}/files/llama-70b/f16-torch-sdpa"
+        ]
+        self.iree_compile(output_mlir, output_vmfb, iree_compile_args, self.repo_root)
+        # benchmark prefill
+        self.iree_benchmark_module(
+            "0",
+            output_vmfb,
+            self.irpa_path,
+            self.iree_run_prefill_args,
+            self.repo_root,
+        )
+        # benchmark decode
+        self.iree_benchmark_module(
+            "0",
+            output_vmfb,
+            self.irpa_path,
+            self.iree_run_decode_args,
+            self.repo_root,
+        )
+        self.cleanup_output_files(output_mlir, output_json, output_vmfb)
+
+    @pytest.mark.xfail
+    @longrun
+    def testBenchmark70B_fp8_Decomposed(self):
+        output_mlir = self.repo_root + "llama70b_fp8_decomposed.mlir"
+        output_json = self.repo_root + "llama70b_fp8_decomposed.json"
+        output_vmfb = self.repo_root + "llama70b_fp8_decomposed.vmfb"
+        self.export_mlir(
+            "decomposed",
+            self.tensor_parallelism_size,
+            self.irpa_path_fp8,
+            output_mlir,
+            output_json,
+            self.repo_root,
+        )
+        iree_compile_args = self.iree_compile_args + [
+            f"--iree-hal-dump-executable-files-to={self.repo_root}/files/llama-70b/fp8-decomposed"
+        ]
+        self.iree_compile(
+            output_mlir,
+            output_vmfb,
+            self.iree_compile_args,
+            self.repo_root,
+        )
+        # benchmark prefill
+        self.iree_benchmark_module(
+            "0",
+            output_vmfb,
+            self.irpa_path,
+            self.iree_run_prefill_args,
+            self.repo_root,
+        )
+        # benchmark decode
+        self.iree_benchmark_module(
+            "0",
+            output_vmfb,
+            self.irpa_path,
+            self.iree_run_decode_args,
+            self.repo_root,
+        )
+        self.cleanup_output_files(output_mlir, output_json, output_vmfb)
+
+    @pytest.mark.xfail
+    @longrun
+    def testBenchmark70B_fp8_Non_Decomposed(self):
+        output_mlir = self.repo_root + "llama70b_fp8_torch_sdpa.mlir"
+        output_json = self.repo_root + "llama70b_fp8_torch_sdpa.json"
+        output_vmfb = self.repo_root + "llama70b_fp8_torch_sdpa.vmfb"
+        self.export_mlir(
+            "torch_sdpa",
+            self.tensor_parallelism_size,
+            self.irpa_path_fp8,
+            output_mlir,
+            output_json,
+            self.repo_root,
+        )
+        iree_compile_args = self.iree_compile_args + [
+            f"--iree-hal-dump-executable-files-to={self.repo_root}/files/llama-70b/fp8-torch-sdpa"
+        ]
+        self.iree_compile(
+            output_mlir,
+            output_vmfb,
+            self.iree_compile_args,
+            self.repo_root,
+        )
+        # benchmark prefill
+        self.iree_benchmark_module(
+            "0",
+            output_vmfb,
+            self.irpa_path_fp8,
+            self.iree_run_prefill_args_fp8,
+            self.repo_root,
+        )
+        # benchmark decode
+        self.iree_benchmark_module(
+            "0",
+            output_vmfb,
+            self.irpa_path_fp8,
+            self.iree_run_decode_args_fp8,
+            self.repo_root,
+        )
+        self.cleanup_output_files(output_mlir, output_json, output_vmfb)
+
+
+class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
+    def setUp(self):
+        # TODO: add numpy files to Azure and download from it
+        self.repo_root = (
+            "/home/avsharma/SHARK-Platform/"  # os.getenv("SHARK_PLATFORM_REPO_ROOT")
+        )
+        artifacts_dir = "/data/extra/models/llama3.1_405B/"
+        self.irpa_path = artifacts_dir + "llama405b_f16.irpa"
+        self.irpa_path_fp8 = artifacts_dir + "llama405b_fp8.irpa"
+        self.tensor_parallelism_size = 8
+        self.iree_compile_args = [
+            "--iree-hal-target-backends=rocm",
+            "--iree-hip-target=gfx942",
+        ]
+        self.prefill_args_f16 = artifacts_dir + "prefill_args"
+        self.decode_args_f16 = artifacts_dir + "decode_args"
+        self.prefill_args_fp8 = artifacts_dir + "prefill_args_fp8"
+        self.decode_args_fp8 = artifacts_dir + "decode_args_fp8"
+        self.iree_run_prefill_args = [
+            "--function=prefill_bs4",
+            f"--input=@{self.prefill_args_f16}/tokens.npy",
+            f"--input=@{self.prefill_args_f16}/seq_lens.npy",
+            f"--input=@{self.prefill_args_f16}/seq_block_ids.npy",
+            f"--input=@{self.prefill_args_f16}/cache_state_f16.npy",
+            "--benchmark_repetitions=3",
+        ]
+        self.iree_run_decode_args = [
+            "--function=decode_bs4",
+            f"--input=@{self.decode_args_f16}/tokens.npy",
+            f"--input=@{self.decode_args_f16}/seq_lens.npy",
+            f"--input=@{self.decode_args_f16}/start_positions.npy",
+            f"--input=@{self.decode_args_f16}/seq_block_ids.npy",
+            f"--input=@{self.decode_args_f16}/cache_state_f16.npy",
+            "--benchmark_repetitions=3",
+        ]
+        self.iree_run_prefill_args_fp8 = [
+            "--function=prefill_bs4",
+            f"--input=@{self.prefill_args_fp8}/tokens.npy",
+            f"--input=@{self.prefill_args_fp8}/seq_lens.npy",
+            f"--input=@{self.prefill_args_fp8}/seq_block_ids.npy",
+            f"--input=@{self.prefill_args_fp8}/cache_state_f16.npy",
+            "--benchmark_repetitions=3",
+        ]
+        self.iree_run_decode_args_fp8 = [
+            "--function=decode_bs4",
+            f"--input=@{self.decode_args_fp8}/tokens.npy",
+            f"--input=@{self.decode_args_fp8}/seq_lens.npy",
+            f"--input=@{self.decode_args_fp8}/start_positions.npy",
+            f"--input=@{self.decode_args_fp8}/seq_block_ids.npy",
+            f"--input=@{self.decode_args_fp8}/cache_state_f16.npy",
+            "--benchmark_repetitions=3",
+        ]
+
+    @longrun
+    def testBenchmark405B_f16_Decomposed(self):
+        output_mlir = self.repo_root + "llama405b_f16_decomposed.mlir"
+        output_json = self.repo_root + "llama405b_f16_decomposed.json"
+        output_vmfb = self.repo_root + "llama405b_f16_decomposed.vmfb"
+        self.export_mlir(
+            "decomposed",
+            self.tensor_parallelism_size,
+            self.irpa_path,
+            output_mlir,
+            output_json,
+            self.repo_root,
+        )
+        iree_compile_args = self.iree_compile_args + [
+            f"--iree-hal-dump-executable-files-to={self.repo_root}/files/llama-405b/f16-decomposed"
+        ]
+        self.iree_compile(output_mlir, output_vmfb, iree_compile_args, self.repo_root)
+        # benchmark prefill
+        self.iree_benchmark_module(
+            "0",
+            output_vmfb,
+            self.irpa_path,
+            self.iree_run_prefill_args,
+            self.repo_root,
+        )
+        # benchmark decode
+        self.iree_benchmark_module(
+            "0",
+            output_vmfb,
+            self.irpa_path,
+            self.iree_run_decode_args,
+            self.repo_root,
+        )
+        self.cleanup_output_files(output_mlir, output_json, output_vmfb)
+
+    @pytest.mark.skip(reason="TODO: Need to plumb through attention_kernel")
+    @longrun
+    def testBenchmark405B_f16_Non_Decomposed(self):
+        output_mlir = self.repo_root + "llama405b_f16_torch_sdpa.mlir"
+        output_json = self.repo_root + "llama405b_f16_torch_sdpa.json"
+        output_vmfb = self.repo_root + "llama405b_f16_torch_sdpa.vmfb"
+        self.export_mlir(
+            "torch_sdpa",
+            self.tensor_parallelism_size,
+            self.irpa_path,
+            output_mlir,
+            output_json,
+            self.repo_root,
+        )
+        iree_compile_args = self.iree_compile_args + [
+            f"--iree-hal-dump-executable-files-to={self.repo_root}/files/llama-405b/f16-torch-sdpa"
+        ]
+        self.iree_compile(output_mlir, output_vmfb, iree_compile_args, self.repo_root)
+        # benchmark prefill
+        self.iree_benchmark_module(
+            "0",
+            output_vmfb,
+            self.irpa_path,
+            self.iree_run_prefill_args,
+            self.repo_root,
+        )
+        # benchmark decode
+        self.iree_benchmark_module(
+            "0",
+            output_vmfb,
+            self.irpa_path,
+            self.iree_run_decode_args,
+            self.repo_root,
+        )
+        self.cleanup_output_files(output_mlir, output_json, output_vmfb)
+
+    @pytest.mark.xfail
+    @longrun
+    def testBenchmark405B_fp8_Decomposed(self):
+        output_mlir = self.repo_root + "llama405b_fp8_decomposed.mlir"
+        output_json = self.repo_root + "llama405b_fp8_decomposed.json"
+        output_vmfb = self.repo_root + "llama405b_fp8_decomposed.vmfb"
+        self.export_mlir(
+            "decomposed",
+            self.tensor_parallelism_size,
+            self.irpa_path_fp8,
+            output_mlir,
+            output_json,
+            self.repo_root,
+        )
+        iree_compile_args = self.iree_compile_args + [
+            f"--iree-hal-dump-executable-files-to={self.repo_root}/files/llama-405b/fp8-decomposed"
+        ]
+        self.iree_compile(
+            output_mlir,
+            output_vmfb,
+            self.iree_compile_args,
+            self.repo_root,
+        )
+        # benchmark prefill
+        self.iree_benchmark_module(
+            "0",
+            output_vmfb,
+            self.irpa_path,
+            self.iree_run_prefill_args,
+            self.repo_root,
+        )
+        # benchmark decode
+        self.iree_benchmark_module(
+            "0",
+            output_vmfb,
+            self.irpa_path,
+            self.iree_run_decode_args,
+            self.repo_root,
+        )
+        self.cleanup_output_files(output_mlir, output_json, output_vmfb)
+
+    @pytest.mark.xfail
+    @longrun
+    def testBenchmark405B_fp8_Non_Decomposed(self):
+        output_mlir = self.repo_root + "llama405b_fp8_torch_sdpa.mlir"
+        output_json = self.repo_root + "llama405b_fp8_torch_sdpa.json"
+        output_vmfb = self.repo_root + "llama405b_fp8_torch_sdpa.vmfb"
+        self.export_mlir(
+            "torch_sdpa",
+            self.tensor_parallelism_size,
+            self.irpa_path_fp8,
+            output_mlir,
+            output_json,
+            self.repo_root,
+        )
+        iree_compile_args = self.iree_compile_args + [
+            f"--iree-hal-dump-executable-files-to={self.repo_root}/files/llama-405b/fp8-torch-sdpa"
+        ]
+        self.iree_compile(
+            output_mlir,
+            output_vmfb,
+            self.iree_compile_args,
+            self.repo_root,
+        )
+        # benchmark prefill
+        self.iree_benchmark_module(
+            "0",
+            output_vmfb,
+            self.irpa_path_fp8,
+            self.iree_run_prefill_args_fp8,
+            self.repo_root,
+        )
+        # benchmark decode
+        self.iree_benchmark_module(
+            "0",
+            output_vmfb,
+            self.irpa_path_fp8,
+            self.iree_run_decode_args_fp8,
+            self.repo_root,
+        )
+        self.cleanup_output_files(output_mlir, output_json, output_vmfb)
 
 
 if __name__ == "__main__":
