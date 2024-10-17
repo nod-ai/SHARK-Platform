@@ -28,7 +28,7 @@ from .signatures import *
 from sharktank import kernels
 
 
-def qlinear_tensor_scaled_integer(
+def qlinear_tensor_scaled(
     x: QuantizedTensor,
     weight: QuantizedTensor,
     bias: Optional[AnyTensor],
@@ -48,8 +48,11 @@ def qlinear_tensor_scaled_integer(
     x_layout: TensorScaledLayout = x.unpack()
     weight_layout: TensorScaledLayout = weight.unpack()
 
-    # Only handle integer quantizations.
-    if x_layout.qs.dtype.is_floating_point or weight_layout.qs.dtype.is_floating_point:
+    # Handle integer and fp8 quantizations.
+    if (
+        x_layout.qs.dtype != torch.float8_e4m3fnuz
+        and weight_layout.qs.dtype != torch.float8_e4m3fnuz
+    ):
         return NotImplemented
 
     # Bias.
@@ -64,7 +67,10 @@ def qlinear_tensor_scaled_integer(
 
     # Alias components (d=scale, qs=quantized samples, m=offset)
     if accum_dtype is None:
-        accum_dtype = torch.int32
+        if weight_layout.qs.dtype.is_floating_point:
+            accum_dtype = torch.float32
+        else:
+            accum_dtype = torch.int32
     x_d = x_layout.d
     x_dtype = x_layout.dtype
     x_qs = x_layout.qs
@@ -86,7 +92,7 @@ def qlinear_tensor_scaled_integer(
     # TODO: Handle permutation that we have a kernel for.
 
     # Fall back to automatic fusion based on integer, high precision matmul.
-    y_qs = _invoke_int32_mmt(x_qs, weight_qs, accum_dtype=accum_dtype)
+    y_qs = _invoke_mmt_kernel(x_qs, weight_qs, accum_dtype=accum_dtype)
 
     # Offset correction. By applying the offset correction in post, it is
     # set up to fuse with its consumer, which is already doing additional
@@ -143,10 +149,8 @@ def qlinear_tensor_scaled_integer(
 
 
 # Overrload for both bias and no bias.
-linear.override(QuantizedTensor, QuantizedTensor)(qlinear_tensor_scaled_integer)
-linear.override(QuantizedTensor, QuantizedTensor, AnyTensor)(
-    qlinear_tensor_scaled_integer
-)
+linear.override(QuantizedTensor, QuantizedTensor)(qlinear_tensor_scaled)
+linear.override(QuantizedTensor, QuantizedTensor, AnyTensor)(qlinear_tensor_scaled)
 
 
 def linear_quantized_weight(
@@ -166,19 +170,30 @@ linear.override(Tensor, QuantizedTensor)(linear_quantized_weight)
 linear.override(Tensor, QuantizedTensor, AnyTensor)(linear_quantized_weight)
 
 
-def _invoke_int32_mmt(lhs, rhs, *, accum_dtype):
+def _invoke_mmt_kernel(lhs, rhs, *, accum_dtype):
     if debugging.flags.use_custom_iree_kernels:
         # The custom kernel requires that the lhs and rhs be the same
         # rank. Broadcast the rhs to match.
         lhs_rank = len(lhs.shape)
         rhs_rank = len(rhs.shape)
+        # If input to the kernel is 2D, expand the tensor to add the batch
+        # dimension.
+        if lhs_rank == 2:
+            lhs_size = [1] + list(lhs.shape)
+            lhs = lhs.unsqueeze(0).expand(lhs_size)
+            lhs_rank = len(lhs.shape)
         if rhs_rank < lhs_rank:
             assert (rhs_rank + 1) == lhs_rank
             rhs_size = [lhs.shape[0]] + list(rhs.shape)
             rhs = rhs.unsqueeze(0).expand(rhs_size)
+            rhs_rank = len(rhs.shape)
         y_qs = kernels.batch_matmul_transpose_b(
             lhs.to(accum_dtype), rhs.to(accum_dtype)
         )
+        # Squeeze the batch dimension to maintain shape parity with other
+        # layers.
+        if len(y_qs.shape) > 2:
+            y_qs = y_qs.squeeze(0)
     else:
         # FP emulation.
         y_qs = torch.matmul(
