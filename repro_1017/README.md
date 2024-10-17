@@ -1,1 +1,11 @@
+- install shortfin SD
+```
+#temporary req
+pip install transformers
+
+pip install shortfin/
+```
+- run:
+```
 python -m shortfin_apps.sd.server --model_config=./repro_1017/sdxl_config.json --clip_vmfb=./repro_1017/stable_diffusion_xl_base_1_0_bs1_64_fp16_text_encoder_gfx942.vmfb --unet_vmfb=./repro_1017/stable_diffusion_xl_base_1_0_bs1_64_1024x1024_fp16_unet_gfx942.vmfb --scheduler_vmfb=./repro_1017/stable_diffusion_xl_base_1_0_EulerDiscreteScheduler_bs1_1024x1024_fp16_20_gfx942.vmfb --vae_vmfb=./repro_1017/stable_diffusion_xl_base_1_0_bs1_1024x1024_fp16_vae_gfx942.vmfb --clip_params=./repro_1017/clip_splat.irpa --unet_params=./repro_1017/unet_splat.irpa --vae_params=./repro_1017/vae_splat.irpa --device=hip
+```
