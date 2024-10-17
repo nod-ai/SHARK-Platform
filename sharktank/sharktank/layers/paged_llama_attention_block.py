@@ -37,7 +37,8 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         head_dim: int,
         head_count_kv: int,
         rms_epsilon: float,
-        use_grok: Optional[bool] = False,
+        attention_scale: Optional[float] = None,
+        softcap: Optional[float] = None,
     ):
         super().__init__(theta)
 
@@ -46,7 +47,8 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         self.head_count = head_count
         self.head_dim = head_dim
         self.head_count_kv = head_count_kv
-        self.use_grok = use_grok
+        self.attention_scale = attention_scale
+        self.softcap = softcap
 
         self.add_module(
             "attn_norm", RMSNormLayer(theta("attn_norm"), epsilon=rms_epsilon)
@@ -56,7 +58,12 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         self.add_module("attn_v", LinearLayer(theta("attn_v")))
         self.add_module("attn_output", LinearLayer(theta("attn_output")))
 
-        if self.use_grok:
+        if theta.optional_tensor("attn_output_norm") is None:
+            self.add_module(
+                "attn_output_norm",
+                torch.nn.Identity(),
+            )
+        else:
             self.add_module(
                 "attn_output_norm",
                 RMSNormLayer(theta("attn_output_norm"), epsilon=rms_epsilon),
@@ -147,16 +154,16 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         keys = xk.transpose(1, 2)
         values = xv.transpose(1, 2)
 
+        attn_weights = ops.matmul(xq, keys.transpose(2, 3))
+        if self.attention_scale is None:
+            attn_weights = attn_weights / math.sqrt(self.head_dim)
+        else:
+            attn_weights = attn_weights * self.attention_scale
+
         # Flash attention.
-        if not self.use_grok:
-            attn_weights = ops.matmul(xq, keys.transpose(2, 3)) / math.sqrt(
-                self.head_dim
-            )
-        elif self.use_grok:
-            attn_weights = ops.matmul(xq, keys.transpose(2, 3))
-            attn_weights = 30.0 * torch.tanh(
-                attn_weights * (0.08838834764831845 / 30.0)
-            )
+        if self.softcap is not None:
+            attn_weights = self.softcap * torch.tanh(attn_weights / self.softcap)
+
         self.assert_not_nan(attn_weights)
 
         # Apply attention mask.
@@ -172,12 +179,9 @@ class PagedLlamaAttentionBlock(ThetaLayer):
 
         # Project.
         attn_output = self.attn_output(attn_output)
-
-        if self.use_grok:
-            attn_output = self.attn_output_norm(attn_output)
+        attn_output = self.attn_output_norm(attn_output)
 
         h = h + attn_output
-
         return h
 
     def transact_cache_direct(

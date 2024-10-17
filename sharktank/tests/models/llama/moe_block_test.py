@@ -10,18 +10,17 @@ from typing import List
 import torch
 from iree.turbine.aot import *
 from sharktank.models.llama.testing import make_moe_block_theta, make_rand_torch
-from sharktank.layers.mixture_of_experts_block import PreGatherMoeBlock
+from sharktank.layers.mixture_of_experts_block import MoeBlock
 from sharktank import ops
 
 
-class SparseMoeBlockTest(unittest.TestCase):
+class MoeBlockTest(unittest.TestCase):
     def test(self):
-        model = PreGatherMoeBlock(
+        model = MoeBlock(
             theta=make_moe_block_theta()("blk.0"),
             expert_count=8,
             expert_used_count=2,
             rms_epsilon=1e-5,
-            use_grok=False,
         )
         fxb = FxProgramsBuilder(model)
         input = make_rand_torch((2, 32, 6144))
