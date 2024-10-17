@@ -161,9 +161,7 @@ class BaseBenchmarkTest(unittest.TestCase):
 class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
     def setUp(self):
         # TODO: add numpy files to Azure and download from it
-        self.repo_root = (
-            "/home/avsharma/SHARK-Platform/"  # os.getenv("SHARK_PLATFORM_REPO_ROOT")
-        )
+        self.repo_root = os.getenv("SHARK_PLATFORM_REPO_ROOT")
         artifacts_dir = "/data/extra/models/llama3.1_8B/"
         self.irpa_path = artifacts_dir + "llama8b_f16.irpa"
         self.irpa_path_fp8 = artifacts_dir + "llama8b_fp8.irpa"
@@ -368,9 +366,7 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
 class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
     def setUp(self):
         # TODO: add numpy files to Azure and download from it
-        self.repo_root = (
-            "/home/avsharma/SHARK-Platform/"  # os.getenv("SHARK_PLATFORM_REPO_ROOT")
-        )
+        self.repo_root = os.getenv("SHARK_PLATFORM_REPO_ROOT")
         artifacts_dir = "/data/extra/models/llama3.1_70B/"
         self.irpa_path = artifacts_dir + "llama70b_f16.irpa"
         self.irpa_path_fp8 = artifacts_dir + "llama70b_fp8.irpa"
@@ -576,9 +572,7 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
 class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
     def setUp(self):
         # TODO: add numpy files to Azure and download from it
-        self.repo_root = (
-            "/home/avsharma/SHARK-Platform/"  # os.getenv("SHARK_PLATFORM_REPO_ROOT")
-        )
+        self.repo_root = os.getenv("SHARK_PLATFORM_REPO_ROOT")
         artifacts_dir = "/data/extra/models/llama3.1_405B/"
         self.irpa_path = artifacts_dir + "llama405b_f16.irpa"
         self.irpa_path_fp8 = artifacts_dir + "llama405b_fp8.irpa"
