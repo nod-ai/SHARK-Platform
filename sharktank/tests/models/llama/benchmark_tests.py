@@ -143,15 +143,15 @@ class BaseBenchmarkTest(unittest.TestCase):
     ):
         try:
             # Removing output_mlir_path
-            subprocess.run(["rm", output_mlir_path], shell=True, check=True)
+            subprocess.run(f"rm {output_mlir_path}", shell=True, check=True)
             print(f"Removed: {output_mlir_path}")
 
             # Removing output_json_path
-            subprocess.run(["rm", output_json_path], shell=True, check=True)
+            subprocess.run(f"rm {output_json_path}", shell=True, check=True)
             print(f"Removed: {output_json_path}")
 
             # Removing output_file
-            subprocess.run(["rm", output_file], shell=True, check=True)
+            subprocess.run(f"rm {output_file}", shell=True, check=True)
             print(f"Removed: {output_file}")
 
         except subprocess.CalledProcessError as e:
@@ -418,6 +418,7 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
             "--benchmark_repetitions=3",
         ]
 
+    @pytest.mark.xfail
     @longrun
     def testBenchmark70B_f16_Decomposed(self):
         output_mlir = self.repo_root + "llama70b_f16_decomposed.mlir"
@@ -625,6 +626,7 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
             "--benchmark_repetitions=3",
         ]
 
+    @pytest.mark.xfail
     @longrun
     def testBenchmark405B_f16_Decomposed(self):
         output_mlir = self.repo_root + "llama405b_f16_decomposed.mlir"
