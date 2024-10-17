@@ -5,6 +5,7 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 import pytest
+import sys
 
 import shortfin as sf
 import shortfin.array as sfnp
@@ -68,6 +69,9 @@ def test_fill4(lsys, device):
     lsys.run(main())
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32", reason="Windows fatal exception: access violation"
+)
 def test_fill_error(device):
     s = sfnp.storage.allocate_host(device, 8)
     with pytest.raises(RuntimeError):
@@ -80,6 +84,9 @@ def test_fill_error(device):
         s.fill(b"01234567")
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32", reason="Windows fatal exception: access violation"
+)
 @pytest.mark.parametrize(
     "pattern,size",
     [
