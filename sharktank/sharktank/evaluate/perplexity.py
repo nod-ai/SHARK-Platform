@@ -250,9 +250,11 @@ class Perplexity:
             crossentropy_loss / self.attention_mask.sum(1)
         ).tolist()
 
+        perplexity_batch = [round(ppl, 6) for ppl in perplexity_batch]
+
         return {
             "perplexities": perplexity_batch,
-            "mean_perplexity": np.mean(perplexity_batch),
+            "mean_perplexity": round(np.mean(perplexity_batch), 6),
         }
 
     @timeit
