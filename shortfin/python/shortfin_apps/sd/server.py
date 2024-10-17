@@ -77,7 +77,7 @@ app.put("/generate")(generate_request)
 
 def configure(args) -> SystemManager:
     # Setup system (configure devices, etc).
-    sysman = SystemManager()
+    sysman = SystemManager(args.device)
 
     # Setup each service we are hosting.
     tokenizers = []
@@ -89,10 +89,22 @@ def configure(args) -> SystemManager:
     sm = GenerateService(
         name="default", sysman=sysman, tokenizers=tokenizers, model_params=model_params
     )
-    # sm.load_inference_module(args.clip_vmfb)
-    # sm.load_inference_module(args.unet_vmfb)
-    # sm.load_inference_module(args.vae_vmfb)
-    # sm.load_inference_parameters(*args.parameters, parameter_scope="model")
+    sm.load_inference_module(args.clip_vmfb, component="clip")
+    sm.load_inference_module(args.unet_vmfb, component="unet")
+    sm.load_inference_module(args.scheduler_vmfb, component="scheduler")
+    sm.load_inference_module(args.vae_vmfb, component="vae")
+    sm.load_inference_parameters(
+        *args.clip_params, parameter_scope="model", format="irpa", component="clip"
+    )
+    sm.load_inference_parameters(
+        *args.unet_params,
+        parameter_scope="model",
+        format="safetensors",
+        component="unet",
+    )
+    sm.load_inference_parameters(
+        *args.vae_params, parameter_scope="model", format="safetensors", component="vae"
+    )
     services[sm.name] = sm
     return sysman
 
@@ -109,6 +121,13 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
     )
     parser.add_argument(
         "--timeout-keep-alive", type=int, default=5, help="Keep alive timeout"
+    )
+    parser.add_argument(
+        "--device",
+        type=str,
+        required=True,
+        choices=["local-task", "hip", "amdgpu"],
+        help="Primary inferencing device",
     )
     parser.add_argument(
         "--tokenizers",
@@ -129,23 +148,36 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
     parser.add_argument(
         "--clip_vmfb",
         type=Path,
-        # required=True,
+        required=True,
         help="Model VMFB to load",
     )
     parser.add_argument(
         "--unet_vmfb",
         type=Path,
-        # required=True,
+        required=True,
         help="Model VMFB to load",
     )
+    parser.add_argument("--scheduler_vmfb", type=Path, help="Scheduler VMFB to load.")
     parser.add_argument(
         "--vae_vmfb",
         type=Path,
-        # required=True,
+        required=True,
         help="Model VMFB to load",
     )
     parser.add_argument(
-        "--parameters",
+        "--clip_params",
+        type=Path,
+        nargs="*",
+        help="Parameter archives to load",
+    )
+    parser.add_argument(
+        "--unet_params",
+        type=Path,
+        nargs="*",
+        help="Parameter archives to load",
+    )
+    parser.add_argument(
+        "--vae_params",
         type=Path,
         nargs="*",
         help="Parameter archives to load",

@@ -26,13 +26,9 @@ logger = logging.getLogger(__name__)
 class GenerateService:
     """Top level service interface for image generation."""
 
-    encode_program: sf.Program
-    denoise_program: sf.Program
-    decode_program: sf.Program
+    inference_programs: dict[str, sf.Program]
 
-    encode_functions: dict[int, sf.ProgramFunction]
-    denoise_functions: dict[int, sf.ProgramFunction]
-    decode_functions: dict[int, sf.ProgramFunction]
+    inference_functions: dict[str, dict[str, sf.ProgramFunction]]
 
     def __init__(
         self,
@@ -48,35 +44,56 @@ class GenerateService:
         self.sysman = sysman
         self.tokenizers = tokenizers
         self.model_params = model_params
-        self.inference_parameters: list[sf.BaseProgramParameters] = []
-        self.inference_modules: list[sf.ProgramModule] = []
-
-        self.encode_functions: dict[int, sf.ProgramFunction] = {}
-        self.denoise_functions: dict[int, sf.ProgramFunction] = {}
-        self.decode_functions: dict[int, sf.ProgramFunction] = {}
-
-        self.main_worker = sysman.ls.create_worker(f"{name}-inference")
-        self.main_fiber = sysman.ls.create_fiber(self.main_worker)
+        self.inference_parameters: dict[str, list[sf.BaseProgramParameters]] = {}
+        self.inference_modules: dict[str, sf.ProgramModule] = {}
+        self.inference_functions: dict[str, dict[str, sf.ProgramFunction]] = {}
+        self.inference_programs: dict[str, sf.Program] = {}
+        self.workers = []
+        self.fibers = []
+        for idx, device in enumerate(self.sysman.ls.devices):
+            worker = sysman.ls.create_worker(f"{name}-inference-{device.name}")
+            fiber = sysman.ls.create_fiber(worker, devices=[device])
+            self.workers.append(worker)
+            self.fibers.append(fiber)
 
         # Scope dependent objects.
         self.batcher = BatcherProcess(self)
 
-    def load_inference_module(self, vmfb_path: Path):
-        self.inference_modules.append(sf.ProgramModule.load(self.sysman.ls, vmfb_path))
+    def load_inference_module(self, vmfb_path: Path, component: str = None):
+        if not self.inference_modules.get(component):
+            self.inference_modules[component] = []
+        self.inference_modules[component].append(
+            sf.ProgramModule.load(self.sysman.ls, vmfb_path)
+        )
 
     def load_inference_parameters(
-        self, *paths: Path, parameter_scope: str, format: str = ""
+        self,
+        *paths: Path,
+        parameter_scope: str,
+        format: str = "",
+        component: str = None,
     ):
         p = sf.StaticProgramParameters(self.sysman.ls, parameter_scope=parameter_scope)
         for path in paths:
             logging.info("Loading parameter fiber '%s' from: %s", parameter_scope, path)
             p.load(path, format=format)
-        self.inference_parameters.append(p)
+        if not self.inference_parameters.get(component):
+            self.inference_parameters[component] = []
+        self.inference_parameters[component].append(p)
 
     def start(self):
-        # Initiate inference programs.
-        # Resolve all function entrypoints.
-        # Start persistent processes.
+        for component in self.inference_modules:
+            component_modules = [
+                sf.ProgramModule.parameter_provider(
+                    self.sysman.ls, *self.inference_parameters.get(component, [])
+                ),
+                *self.inference_modules[component],
+            ]
+            self.inference_programs[component] = sf.Program(
+                modules=component_modules,
+                fiber=self.fibers[0],
+                trace_execution=False,
+            )
         self.batcher.launch()
 
     def shutdown(self):
@@ -87,6 +104,7 @@ class GenerateService:
             f"ServiceManager(\n"
             f"  model_params={self.model_params}\n"
             f"  inference_modules={self.inference_modules}\n"
+            f"  inference_parameters={self.inference_parameters}\n"
             f")"
         )
 
@@ -106,7 +124,7 @@ class BatcherProcess(sf.Process):
     STROBE_LONG_DELAY = 0.25
 
     def __init__(self, service: GenerateService):
-        super().__init__(fiber=service.main_fiber)
+        super().__init__(fiber=service.fibers[0])
         self.service = service
         self.batcher_infeed = self.system.create_queue()
         self.pending_preps: set[InferenceExecRequest] = set()
@@ -206,7 +224,7 @@ class InferenceExecutorProcess(sf.Process):
         self,
         service: GenerateService,
     ):
-        super().__init__(fiber=service.main_fiber)
+        super().__init__(fiber=service.fibers[0])
         self.service = service
         self.exec_requests: list[InferenceExecRequest] = []
 

@@ -42,7 +42,7 @@ class ModelParams:
     dims: list[list[int]]
 
     # Name of the IREE module for each submodel.
-    clip_module_name: str = "compiled_text_encoder"
+    clip_module_name: str = "compiled_clip"
     unet_module_name: str = "compiled_punet"
     vae_module_name: str = "compiled_vae"
 
