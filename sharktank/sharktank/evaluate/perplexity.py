@@ -136,7 +136,7 @@ class Perplexity:
             "text"
         ]
 
-        num_test_prompts = 250
+        num_test_prompts = 219
 
         random.seed(0)
         test_prompts = random.sample(test_prompts, num_test_prompts)
@@ -147,6 +147,8 @@ class Perplexity:
             for s in test_prompts
             if s != "" and len(s.split()) >= 20 and s.count("=") < 2
         ]
+
+        logger.info(f" num_test_prompts: {len(test_prompts)}")
 
         return test_prompts
 

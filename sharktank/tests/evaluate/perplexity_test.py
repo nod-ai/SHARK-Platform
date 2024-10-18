@@ -6,171 +6,133 @@
 
 import unittest
 import pytest
+import json
 
 from sharktank.evaluate import perplexity
 
 longrun = pytest.mark.skipif("not config.getoption('longrun')")
 
 
+@pytest.mark.usefixtures("get_model_path")
 class PerplexityTest(unittest.TestCase):
+    def setUp(self):
+        self.current_perplexity_all = {}
+        self.delta = 5e-1
+        self.tensor_parallelism_size = 1
+
+        with open(self.baseline_perplexity_score_json, "r") as f:
+            self.baseline_perplexity = json.load(f)
+
+    def save_perplexity(self, model_name: str, current_perplexity: dict):
+        self.current_perplexity_all = {model_name: current_perplexity}
+        with open(self.current_perplexity_scores_json, "w") as f:
+            json.dump(self.current_perplexity_all, f)
+
     @longrun
     def test_llama3_8B_f16_decomposed(self):
 
         # Llama 3.1 8B decomposed
 
-        llama_8b_f16_gguf_path = "/data/extra/models/llama3.1_8B/llama8b_f16.gguf"
-        llama_8b_f16_tokenizer_path = (
-            "/data/extra/models/llama3.1_8B/tokenizer_config.json"
-        )
+        model_name = "llama3_8B_f16_decomposed"
+        baseline_perplexity = self.baseline_perplexity[model_name]
 
-        llama_8b_perplexity = perplexity.main(
+        current_perplexity = perplexity.main(
             [
-                f"--gguf-file={llama_8b_f16_gguf_path}",
-                f"--tokenizer-config-json={llama_8b_f16_tokenizer_path}",
+                f"--gguf-file={self.llama3_8b_f16_model}",
+                f"--tokenizer-config-json={self.llama3_8b_tokenizer}",
             ]
         )
 
-        baseline_llama_8b_perplexity = {
-            "perplexities": [
-                9.875290870666504,
-                8.075149536132812,
-                16.164775848388672,
-                11.06580924987793,
-                11.46964168548584,
-                12.714613914489746,
-            ],
-            "mean_perplexity": 11.560880184173584,
-        }
-
-        delta = 5e-1
+        self.save_perplexity(model_name, current_perplexity)
 
         self.assertAlmostEqual(
-            baseline_llama_8b_perplexity["mean_perplexity"],
-            llama_8b_perplexity["mean_perplexity"],
-            delta=delta,
-            msg=f"Perplexity is deviating more than {delta}",
+            baseline_perplexity["mean_perplexity"],
+            current_perplexity["mean_perplexity"],
+            delta=self.delta,
+            msg=f"Perplexity is deviating more than {self.delta}",
         )
 
-    @pytest.mark.xfail
+    @pytest.mark.xfail(
+        reason="Non-decomposed attention is not supported yet",
+    )
     @longrun
     def test_llama3_8B_f16_non_decomposed(self):
 
         # Llama 3.1 8B non-decomposed
 
-        llama_8b_f16_gguf_path = "/data/extra/models/llama3.1_8B/llama8b_f16.gguf"
-        llama_8b_f16_tokenizer_path = (
-            "/data/extra/models/llama3.1_8B/tokenizer_config.json"
-        )
+        model_name = "llama3_8B_f16_non_decomposed"
+        baseline_perplexity = self.baseline_perplexity[model_name]
 
-        llama_8b_perplexity = perplexity.main(
+        current_perplexity = perplexity.main(
             [
-                f"--gguf-file={llama_8b_f16_gguf_path}",
-                f"--tokenizer-config-json={llama_8b_f16_tokenizer_path}",
+                f"--gguf-file={self.llama3_8b_f16_model}",
+                f"--tokenizer-config-json={self.llama3_8b_tokenizer}",
                 f"--attention-kernel=torch_sdpa",
             ]
         )
 
-        # dummy data
-        baseline_llama_8b_perplexity = {
-            "perplexities": [
-                9.875290870666504,
-                8.075149536132812,
-                16.164775848388672,
-                11.06580924987793,
-                11.46964168548584,
-                12.714613914489746,
-            ],
-            "mean_perplexity": 11.560880184173584,
-        }
-
-        delta = 5e-1
+        self.save_perplexity(model_name, current_perplexity)
 
         self.assertAlmostEqual(
-            baseline_llama_8b_perplexity["mean_perplexity"],
-            llama_8b_perplexity["mean_perplexity"],
-            delta=delta,
-            msg=f"Perplexity is deviating more than {delta}",
+            baseline_perplexity["mean_perplexity"],
+            current_perplexity["mean_perplexity"],
+            delta=self.delta,
+            msg=f"Perplexity is deviating more than {self.delta}",
         )
 
-    @pytest.mark.xfail
+    @pytest.mark.xfail(
+        reason="FP8 model is unsupported",
+    )
     @longrun
     def test_llama3_8B_fp8_decomposed(self):
 
         # Llama 3.1 8B decomposed
 
-        llama_8b_fp8_gguf_path = "/data/extra/models/llama3.1_8B/llama8b_fp8.gguf"
-        llama_8b_fp8_tokenizer_path = (
-            "/data/extra/models/llama3.1_8B/tokenizer_config.json"
-        )
+        model_name = "llama3_8B_fp8_decomposed"
+        baseline_perplexity = self.baseline_perplexity[model_name]
 
-        llama_8b_perplexity = perplexity.main(
+        current_perplexity = perplexity.main(
             [
-                f"--gguf-file={llama_8b_fp8_gguf_path}",
-                f"--tokenizer-config-json={llama_8b_fp8_tokenizer_path}",
+                f"--gguf-file={self.llama3_8b_fp8_model}",
+                f"--tokenizer-config-json={self.llama3_8b_tokenizer}",
             ]
         )
 
-        # dummy data
-        baseline_llama_8b_perplexity = {
-            "perplexities": [
-                9.875290870666504,
-                8.075149536132812,
-                16.164775848388672,
-                11.06580924987793,
-                11.46964168548584,
-                12.714613914489746,
-            ],
-            "mean_perplexity": 11.560880184173584,
-        }
-
-        delta = 5e-1
+        self.save_perplexity(model_name, current_perplexity)
 
         self.assertAlmostEqual(
-            baseline_llama_8b_perplexity["mean_perplexity"],
-            llama_8b_perplexity["mean_perplexity"],
-            delta=delta,
-            msg=f"Perplexity is deviating more than {delta}",
+            baseline_perplexity["mean_perplexity"],
+            current_perplexity["mean_perplexity"],
+            delta=self.delta,
+            msg=f"Perplexity is deviating more than {self.delta}",
         )
 
-    @pytest.mark.xfail
+    @pytest.mark.xfail(
+        reason="Non-decomposed attention is not supported yet",
+    )
     @longrun
     def test_llama3_8B_fp8_non_decomposed(self):
 
         # Llama 3.1 8B non-decomposed
 
-        llama_8b_fp8_gguf_path = "/data/extra/models/llama3.1_8B/llama8b_fp8.gguf"
-        llama_8b_fp8_tokenizer_path = (
-            "/data/extra/models/llama3.1_8B/tokenizer_config.json"
-        )
+        model_name = "llama3_8B_fp8_non_decomposed"
+        baseline_perplexity = self.baseline_perplexity[model_name]
 
-        llama_8b_perplexity = perplexity.main(
+        current_perplexity = perplexity.main(
             [
-                f"--gguf-file={llama_8b_fp8_gguf_path}",
-                f"--tokenizer-config-json={llama_8b_fp8_tokenizer_path}",
+                f"--gguf-file={self.llama3_8b_fp8_model}",
+                f"--tokenizer-config-json={self.llama3_8b_tokenizer}",
                 f"--attention-kernel=torch_sdpa",
             ]
         )
 
-        # dummy data
-        baseline_llama_8b_perplexity = {
-            "perplexities": [
-                9.875290870666504,
-                8.075149536132812,
-                16.164775848388672,
-                11.06580924987793,
-                11.46964168548584,
-                12.714613914489746,
-            ],
-            "mean_perplexity": 11.560880184173584,
-        }
-
-        delta = 5e-1
+        self.save_perplexity(model_name, current_perplexity)
 
         self.assertAlmostEqual(
-            baseline_llama_8b_perplexity["mean_perplexity"],
-            llama_8b_perplexity["mean_perplexity"],
-            delta=delta,
-            msg=f"Perplexity is deviating more than {delta}",
+            baseline_perplexity["mean_perplexity"],
+            current_perplexity["mean_perplexity"],
+            delta=self.delta,
+            msg=f"Perplexity is deviating more than {self.delta}",
         )
 
     @longrun
@@ -178,172 +140,110 @@ class PerplexityTest(unittest.TestCase):
 
         # Llama 3.1 405B decomposed
 
-        llama_405b_f16_gguf_path = (
-            "/data/extra/models/llama3.1_405B/llama405b_fp16.gguf"
-        )
-        llama_405b_f16_tokenizer_path = (
-            "/data/extra/models/llama3.1_405B/tokenizer_config.json"
-        )
+        model_name = "llama3_405B_f16_decomposed"
+        baseline_perplexity = self.baseline_perplexity[model_name]
 
-        tensor_parallelism_size = 8
-
-        llama_405b_perplexity = perplexity.main(
+        current_perplexity = perplexity.main(
             [
-                f"--gguf-file={llama_405b_f16_gguf_path}",
-                f"--tokenizer-config-json={llama_405b_f16_tokenizer_path}",
-                f"--tensor-parallelism-size={tensor_parallelism_size}",
+                f"--gguf-file={self.llama3_405b_f16_model}",
+                f"--tokenizer-config-json={self.llama3_405b_tokenizer}",
+                f"--tensor-parallelism-size={self.tensor_parallelism_size}",
             ]
         )
 
-        baseline_llama_405b_perplexity = {
-            "perplexities": [
-                2.0203986167907715,
-                4.045348644256592,
-                4.452215671539307,
-                4.009974479675293,
-                5.169974327087402,
-                5.516016960144043,
-            ],
-            "mean_perplexity": 4.202321449915568,
-        }
-
-        delta = 5e-1
+        self.save_perplexity(model_name, current_perplexity)
 
         self.assertAlmostEqual(
-            baseline_llama_405b_perplexity["mean_perplexity"],
-            llama_405b_perplexity["mean_perplexity"],
-            delta=delta,
-            msg=f"Perplexity is deviating more than {delta}",
+            baseline_perplexity["mean_perplexity"],
+            current_perplexity["mean_perplexity"],
+            delta=self.delta,
+            msg=f"Perplexity is deviating more than {self.delta}",
         )
 
-    @pytest.mark.xfail
+    @pytest.mark.xfail(
+        reason="Non-decomposed attention is not supported yet",
+    )
     @longrun
     def test_llama3_405B_f16_non_decomposed(self):
 
         # Llama 3.1 405B non-decomposed
 
-        llama_405b_f16_gguf_path = (
-            "/data/extra/models/llama3.1_405B/llama405b_fp16.gguf"
-        )
-        llama_405b_f16_tokenizer_path = (
-            "/data/extra/models/llama3.1_405B/tokenizer_config.json"
-        )
+        model_name = "llama3_405B_f16_non_decomposed"
+        baseline_perplexity = self.baseline_perplexity[model_name]
 
-        tensor_parallelism_size = 8
-
-        llama_405b_perplexity = perplexity.main(
+        current_perplexity = perplexity.main(
             [
-                f"--gguf-file={llama_405b_f16_gguf_path}",
-                f"--tokenizer-config-json={llama_405b_f16_tokenizer_path}",
-                f"--tensor-parallelism-size={tensor_parallelism_size}",
+                f"--gguf-file={self.llama3_405b_f16_model}",
+                f"--tokenizer-config-json={self.llama3_405b_tokenizer}",
+                f"--tensor-parallelism-size={self.tensor_parallelism_size}",
                 f"--attention-kernel=torch_sdpa",
             ]
         )
 
-        baseline_llama_405b_perplexity = {
-            "perplexities": [
-                2.0203986167907715,
-                4.045348644256592,
-                4.452215671539307,
-                4.009974479675293,
-                5.169974327087402,
-                5.516016960144043,
-            ],
-            "mean_perplexity": 4.202321449915568,
-        }
-
-        delta = 5e-1
+        self.save_perplexity(model_name, current_perplexity)
 
         self.assertAlmostEqual(
-            baseline_llama_405b_perplexity["mean_perplexity"],
-            llama_405b_perplexity["mean_perplexity"],
-            delta=delta,
-            msg=f"Perplexity is deviating more than {delta}",
+            baseline_perplexity["mean_perplexity"],
+            current_perplexity["mean_perplexity"],
+            delta=self.delta,
+            msg=f"Perplexity is deviating more than {self.delta}",
         )
 
-    @pytest.mark.xfail
+    @pytest.mark.xfail(
+        reason="FP8 model is unsupported",
+    )
     @longrun
     def test_llama3_405B_fp8_decomposed(self):
 
         # Llama 3.1 405B decomposed
 
-        llama_405b_fp8_gguf_path = "/data/extra/models/llama3.1_405B/llama405b_fp8.gguf"
-        llama_405b_fp8_tokenizer_path = (
-            "/data/extra/models/llama3.1_405B/tokenizer_config.json"
-        )
+        model_name = "llama3_405B_fp8_decomposed"
+        baseline_perplexity = self.baseline_perplexity[model_name]
 
-        tensor_parallelism_size = 8
-
-        llama_405b_perplexity = perplexity.main(
+        current_perplexity = perplexity.main(
             [
-                f"--gguf-file={llama_405b_fp8_gguf_path}",
-                f"--tokenizer-config-json={llama_405b_fp8_tokenizer_path}",
-                f"--tensor-parallelism-size={tensor_parallelism_size}",
+                f"--gguf-file={self.llama3_405b_fp8_model}",
+                f"--tokenizer-config-json={self.llama3_405b_tokenizer}",
+                f"--tensor-parallelism-size={self.tensor_parallelism_size}",
             ]
         )
 
-        baseline_llama_405b_perplexity = {
-            "perplexities": [
-                2.0203986167907715,
-                4.045348644256592,
-                4.452215671539307,
-                4.009974479675293,
-                5.169974327087402,
-                5.516016960144043,
-            ],
-            "mean_perplexity": 4.202321449915568,
-        }
-
-        delta = 5e-1
+        self.save_perplexity(model_name, current_perplexity)
 
         self.assertAlmostEqual(
-            baseline_llama_405b_perplexity["mean_perplexity"],
-            llama_405b_perplexity["mean_perplexity"],
-            delta=delta,
-            msg=f"Perplexity is deviating more than {delta}",
+            baseline_perplexity["mean_perplexity"],
+            current_perplexity["mean_perplexity"],
+            delta=self.delta,
+            msg=f"Perplexity is deviating more than {self.delta}",
         )
 
-    @pytest.mark.xfail
+    @pytest.mark.xfail(
+        reason="Non-decomposed attention is not supported yet",
+    )
     @longrun
     def test_llama3_405B_fp8_non_decomposed(self):
 
         # Llama 3.1 405B non-decomposed
 
-        llama_405b_fp8_gguf_path = "/data/extra/models/llama3.1_405B/llama405b_fp8.gguf"
-        llama_405b_fp8_tokenizer_path = (
-            "/data/extra/models/llama3.1_405B/tokenizer_config.json"
-        )
+        model_name = "llama3_405B_fp8_non_decomposed"
+        baseline_perplexity = self.baseline_perplexity[model_name]
 
-        tensor_parallelism_size = 8
-
-        llama_405b_perplexity = perplexity.main(
+        current_perplexity = perplexity.main(
             [
-                f"--gguf-file={llama_405b_fp8_gguf_path}",
-                f"--tokenizer-config-json={llama_405b_fp8_tokenizer_path}",
-                f"--tensor-parallelism-size={tensor_parallelism_size}",
+                f"--gguf-file={self.llama3_405b_fp8_model}",
+                f"--tokenizer-config-json={self.llama3_405b_tokenizer}",
+                f"--tensor-parallelism-size={self.tensor_parallelism_size}",
                 f"--attention-kernel=torch_sdpa",
             ]
         )
 
-        baseline_llama_405b_perplexity = {
-            "perplexities": [
-                2.0203986167907715,
-                4.045348644256592,
-                4.452215671539307,
-                4.009974479675293,
-                5.169974327087402,
-                5.516016960144043,
-            ],
-            "mean_perplexity": 4.202321449915568,
-        }
-
-        delta = 5e-1
+        self.save_perplexity(model_name, current_perplexity)
 
         self.assertAlmostEqual(
-            baseline_llama_405b_perplexity["mean_perplexity"],
-            llama_405b_perplexity["mean_perplexity"],
-            delta=delta,
-            msg=f"Perplexity is deviating more than {delta}",
+            baseline_perplexity["mean_perplexity"],
+            current_perplexity["mean_perplexity"],
+            delta=self.delta,
+            msg=f"Perplexity is deviating more than {self.delta}",
         )
 
 
