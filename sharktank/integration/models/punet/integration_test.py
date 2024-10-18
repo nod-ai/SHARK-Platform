@@ -89,12 +89,12 @@ def sdxl_fp16_dataset(sdxl_fp16_base_files, temp_dir):
 def sdxl_int8_base_files():
     from huggingface_hub import hf_hub_download
 
-    REPO_ID = "amd-shark/sdxl-quant-models"
-    REVISION = "942e771bf0c2657a8b33380103d04747a75dfa4a"
+    REPO_ID = "amd-shark/sdxl-quant-int8"
+    REVISION = "efda8afb35fd72c1769e02370b320b1011622958"
 
     def download(filename):
         return hf_hub_download(
-            repo_id=REPO_ID, subfolder="unet/int8", filename=filename, revision=REVISION
+            repo_id=REPO_ID, subfolder="mi300_all_sym_8_step14_fp32", filename=filename, revision=REVISION
         )
 
     return {
