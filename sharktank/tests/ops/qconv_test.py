@@ -71,7 +71,7 @@ class QConvTest(unittest.TestCase):
         )
         self.assertIs(
             ops._registry._test_get_last_op_dispatch(),
-            ops.qconv_impls.qconv2d_tensor_scaled_integer,
+            ops.qconv_impls.qconv2d_tensor_scaled,
         )
         y_ref = torch.nn.functional.conv2d(
             input_q.unpack().dequant(),
@@ -105,7 +105,7 @@ class QConvTest(unittest.TestCase):
         y_actual = ops.conv2d(input_q, weight_q, bias, stride=1, padding=(1, 1))
         self.assertIs(
             ops._registry._test_get_last_op_dispatch(),
-            ops.qconv_impls.qconv2d_tensor_scaled_integer,
+            ops.qconv_impls.qconv2d_tensor_scaled,
         )
         y_ref = torch.nn.functional.conv2d(
             input_q.unpack().dequant(),
@@ -147,7 +147,7 @@ class QConvTest(unittest.TestCase):
         )
         self.assertIs(
             ops._registry._test_get_last_op_dispatch(),
-            ops.qconv_impls.qconv2d_tensor_scaled_integer,
+            ops.qconv_impls.qconv2d_tensor_scaled,
         )
         y_ref = torch.nn.functional.conv2d(
             input_q.unpack().dequant(),
@@ -184,7 +184,7 @@ class QConvTest(unittest.TestCase):
         )
         self.assertIs(
             ops._registry._test_get_last_op_dispatch(),
-            ops.qconv_impls.qconv2d_tensor_scaled_integer,
+            ops.qconv_impls.qconv2d_tensor_scaled,
         )
         y_ref = torch.nn.functional.conv2d(
             input_q.unpack().dequant(),
@@ -224,7 +224,7 @@ class QConvTest(unittest.TestCase):
         )
         self.assertIs(
             ops._registry._test_get_last_op_dispatch(),
-            ops.qconv_impls.qconv2d_tensor_scaled_integer,
+            ops.qconv_impls.qconv2d_tensor_scaled,
         )
         y_ref = torch.nn.functional.conv2d(
             input_q.unpack().dequant(),
