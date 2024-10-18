@@ -1161,22 +1161,36 @@ def _reshape_get_single_split_dim(
     from_shape: List[int], to_shape: List[int]
 ) -> Optional[Tuple[int, int]]:
     """If a reshape would split a single dimension, return its index and the length of the new dimensions.
-    If the reshape is not of that kind return `None`."""
+    If the reshape is not of that kind return `None`.
+    E.g.
+    _reshape_get_single_split_dim(from_shape=(2, 12, 5), to_shape=(2, 3, 4, 5))
+    results in
+    (1, 2)"""
     from_shape, to_shape = _reshape_infer_dynamic_dim(from_shape, to_shape)
 
     if len(to_shape) < len(from_shape):
         return None
     i = longest_equal_range(from_shape, to_shape)
+    split_dims_length = len(to_shape) - len(from_shape) + 1
     if i == len(from_shape):
-        return i
+        return (
+            i,
+            split_dims_length,
+        )
     j = len(to_shape) - longest_equal_range(reversed(from_shape), reversed(to_shape))
     assert i < j
     expected_split_dim_size = math.prod(to_shape[i:j])
+    if expected_split_dim_size == 1:
+        # 1's were inserted.
+        return (
+            i,
+            split_dims_length,
+        )
     if expected_split_dim_size != from_shape[i]:
         return None
     return (
         i,
-        j - i,
+        split_dims_length,
     )
 
 

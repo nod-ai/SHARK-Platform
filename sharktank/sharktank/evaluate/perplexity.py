@@ -112,9 +112,10 @@ class Perplexity:
             device=self.device,
             activation_dtype=self.activation_dtype,
             attention_dtype=self.attention_dtype,
+            tensor_parallelism_size=tensor_parallelism_size,
         )
 
-        if tensor_parallelism_size > 1:
+        if config.tensor_parallelism_size > 1:
             dataset.root_theta = shard_theta(dataset.root_theta, config)
 
         theta = dataset.root_theta
