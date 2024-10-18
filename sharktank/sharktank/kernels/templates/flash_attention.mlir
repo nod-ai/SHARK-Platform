@@ -41,7 +41,10 @@ util.func private @sharktank_flash_attention_{{l}}_{{s}}_{{d}}_{{e}}_{{i_type}}_
                     affine_map<(d0, d1, d2, d3, d4, d5) -> (d0, d1, d4, d5)>,
                     affine_map<(d0, d1, d2, d3, d4, d5) -> ()>,
                     affine_map<(d0, d1, d2, d3, d4, d5) -> (d0, d1, d2, d5)>]}
-                    ins(%q, %k, %v, %scale : !q_type, !k_type, !v_type, {{scale_type}}) outs(%empty : !o_type) -> !o_type
+                    ins(%q, %k, %v, %scale : !q_type, !k_type, !v_type, {{scale_type}}) outs(%empty : !o_type) {
+                      ^bb0(%score: f32):
+                        iree_linalg_ext.yield %score : f32
+                    } -> !o_type
         util.return %atten : !o_type
     }
 }
