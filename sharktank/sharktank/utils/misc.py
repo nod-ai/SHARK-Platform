@@ -15,7 +15,7 @@ def longest_equal_range(l1: List[Any], l2: List[Any]) -> int:
     for i, (a, b) in enumerate(zip(l1, l2)):
         if a != b:
             return i
-    return len(zip(l1, l2))
+    return min(len(l1), len(l2))
 
 
 def iterables_equal(iterable1: Iterable, iterable2: Iterable) -> bool:
