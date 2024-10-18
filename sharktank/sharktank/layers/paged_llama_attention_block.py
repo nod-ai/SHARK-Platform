@@ -111,27 +111,16 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         # Full sequence length.
         kv_seq_len = seq_block_ids.shape[1] * self.cache.block_seq_stride
 
-        if self.cache.is_paged:
-            xk, xv = self.transact_cache_paged(
-                xk_cache_update=xk,
-                xv_cache_update=xv,
-                seq_block_ids=seq_block_ids,
-                kv_seq_len=kv_seq_len,
-                start_positions=start_positions,
-                cache_state=cache_state,
-                xk_temp=xk_temp,
-                xv_temp=xv_temp,
-            )
-        elif self.cache.is_direct:
-            xk, xv = self.transact_cache_direct(
-                xk_cache_update=xk,
-                xv_cache_update=xv,
-                start_positions=start_positions,
-                kv_seq_len=kv_seq_len,
-                cache_state=cache_state,
-            )
-        else:
-            raise NotImplementedError(f"Unsupported KV cache type: {type(self.cache)}")
+        xk, xv = self.transact_cache(
+            xk_cache_update=xk,
+            xv_cache_update=xv,
+            seq_block_ids=seq_block_ids,
+            kv_seq_len=kv_seq_len,
+            start_positions=start_positions,
+            cache_state=cache_state,
+            xk_temp=xk_temp,
+            xv_temp=xv_temp,
+        )
 
         # Expand kv heads for GQA.
         gqa_n_rep = self.head_count // self.head_count_kv
@@ -184,58 +173,20 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         h = h + attn_output
         return h
 
-    def transact_cache_direct(
-        self,
-        *,
-        cache_state: list[torch.Tensor],
-        xk_cache_update: torch.Tensor,
-        xv_cache_update: torch.Tensor,
-        kv_seq_len: int,
-        start_positions: Optional[torch.Tensor] = None,
-    ):
-        bs, batch_seq_len, _, _ = xk_cache_update.shape
-        cache_k = cache_state[self.block_index * 2]
-        cache_v = cache_state[self.block_index * 2 + 1]
-
-        if start_positions is None:
-            # Prefill. Write the entire cache.
-            cache_k[:, :batch_seq_len] = xk_cache_update
-            cache_v[:, :batch_seq_len] = xv_cache_update
-            return xk_cache_update, xv_cache_update
-        else:
-            # Decode. Write a single timestep.
-            # TODO: This needs to be reworked with index ops.
-            assert xk_cache_update.shape[1] == 1
-            assert xv_cache_update.shape[1] == 1
-            for b in range(bs):
-                # Make a tensor because indices must be all tensors, so we can avoid
-                # doing start_positions[row_index].item(), which generates a lot of SymInts.
-                row_index = torch.tensor(
-                    b, dtype=torch.int64, device=xk_cache_update.device
-                )
-                row_start_pos = start_positions[row_index]
-                cache_k.index_put(
-                    (row_index, row_start_pos), xk_cache_update[row_index, 0]
-                )
-                cache_v.index_put(
-                    (row_index, row_start_pos), xv_cache_update[row_index, 0]
-                )
-            return cache_k[:, :kv_seq_len], cache_v[:, :kv_seq_len]
-
-    def transact_cache_paged(
+    def transact_cache(
         self,
         *,
         xk_cache_update: torch.Tensor,
         xv_cache_update: torch.Tensor,
         cache_state: list[torch.Tensor],
         # [bs, batch_seq_len // block_seq_stride]
-        seq_block_ids: torch.Tensor,
+        seq_block_ids: Optional[torch.Tensor],
         kv_seq_len: int,
         start_positions: Optional[torch.Tensor] = None,
         xk_temp: Optional[torch.Tensor] = None,
         xv_temp: Optional[torch.Tensor] = None,
     ):
-        cache = self.cache.paged
+        cache = self.cache
         # Manage the cache.
         if start_positions is None:
             # Prefill: Write the entire cache.
@@ -246,46 +197,45 @@ class PagedLlamaAttentionBlock(ThetaLayer):
                 page_ids=seq_block_ids,
             )
             return xk_cache_update, xv_cache_update
-        else:
-            # Decode at ragged start positions.
-            # We need to initialize/read the K/V from the cache for the whole
-            # sequence. Note that at this point, it is possible to fork and
-            # use a memory efficient attention kernel that can do indirect
-            # reads, skipping this materialization. This path is taken for
-            # a decode step.
-            assert xk_temp is not None and xv_temp is not None
-            assert xk_cache_update.shape[1] == 1
-            assert xv_cache_update.shape[1] == 1
-            assert kv_seq_len == seq_block_ids.shape[1] * cache.block_seq_stride
 
-            # Write our one updated cache row into the cache.
-            cache.write_timestep(
-                cache_state,
-                cache_partitions=[
-                    xk_cache_update,
-                    xv_cache_update,
-                ],
-                transformer_block_index=self.block_index,
-                seq_positions=start_positions,
-                page_ids=seq_block_ids,
-            )
+        # Decode at ragged start positions.
+        # We need to initialize/read the K/V from the cache for the whole
+        # sequence. Note that at this point, it is possible to fork and
+        # use a memory efficient attention kernel that can do indirect
+        # reads, skipping this materialization. This path is taken for
+        # a decode step.
+        assert xk_temp is not None and xv_temp is not None
+        assert xk_cache_update.shape[1] == 1
+        assert xv_cache_update.shape[1] == 1
+        assert kv_seq_len == seq_block_ids.shape[1] * cache.block_seq_stride
 
-            # Restore from the cache.
-            cache.read(
-                cache_state,
-                read_into_partitions=[
-                    xk_temp[:, 0:kv_seq_len, ...],
-                    xv_temp[:, 0:kv_seq_len, ...],
-                ],
-                transformer_block_index=self.block_index,
-                page_ids=seq_block_ids,
-            )
+        # Write our one updated cache row into the cache.
+        cache.write_timestep(
+            cache_state,
+            cache_partitions=[
+                xk_cache_update,
+                xv_cache_update,
+            ],
+            transformer_block_index=self.block_index,
+            seq_positions=start_positions,
+            page_ids=seq_block_ids,
+        )
 
-            # For computation, we create a subview of the xk/xv tensors to have
-            # a sequence length covering the blocked size. This must include
-            # the newly added row (the caller is responsible for ensuring that
-            # every block has at least one row left). We'll compute on this
-            # ragged view and use an appropriate mask.
-            xk = xk_temp[:, 0:kv_seq_len, ...]
-            xv = xv_temp[:, 0:kv_seq_len, ...]
-            return xk, xv
+        # Restore from the cache.
+        xk, xv = cache.read(
+            cache_state,
+            read_into_partitions=[
+                xk_temp[:, 0:kv_seq_len, ...],
+                xv_temp[:, 0:kv_seq_len, ...],
+            ],
+            transformer_block_index=self.block_index,
+            page_ids=seq_block_ids,
+            seq_len=kv_seq_len,
+        )
+
+        # For computation, we create a subview of the xk/xv tensors to have
+        # a sequence length covering the blocked size. This must include
+        # the newly added row (the caller is responsible for ensuring that
+        # every block has at least one row left). We'll compute on this
+        # ragged view and use an appropriate mask.
+        return xk, xv
