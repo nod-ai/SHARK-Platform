@@ -109,3 +109,8 @@ def path_prefix(request: FixtureRequest) -> Optional[str]:
 @pytest.fixture(scope="class")
 def caching(request: FixtureRequest) -> Optional[bool]:
     return set_fixture_from_cli_option(request, "caching")
+
+
+@pytest.fixture(scope="class")
+def longrun(request: FixtureRequest) -> Optional[bool]:
+    return set_fixture_from_cli_option(request, "longrun")
