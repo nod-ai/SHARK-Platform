@@ -16,6 +16,7 @@ from sharktank.types import *
 
 # TODO: Should be using a base class with the protocol supported.
 from ..models.llama.llama import LlamaModelConfig, PagedLlamaModelV1
+from ..models.llama.sharding import shard_theta
 from ..models.mixtral.mixtral import *
 from ..models.grok.grok import *
 
@@ -51,6 +52,18 @@ def main():
         help="Enables strictness during export",
         action="store_true",
     )
+    parser.add_argument(
+        "--attention-kernel",
+        type=str,
+        default="decomposed",
+        choices=["decomposed", "torch_sdpa"],
+    )
+    parser.add_argument(
+        "--tensor-parallelism-size",
+        type=int,
+        default=1,
+        help="How many devices are involved for tensor parallel sharding.",
+    )
 
     args = cli.parse(parser)
     dataset_type = cli.get_input_data_files(args)
@@ -59,6 +72,8 @@ def main():
 
     hp = configs.LlamaHParams.from_gguf_props(dataset.properties)
     llama_config = LlamaModelConfig(hp)
+    if args.tensor_parallelism_size > 1:
+        dataset.root_theta = shard_theta(dataset.root_theta, llama_config)
     llama_config.use_hf = False
     llama_config.static_tables = False  # Rely on the compiler for hoisting tables.
     llama_config.kv_cache_type = "direct" if args.bs == [1] else "paged"

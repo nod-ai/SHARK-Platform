@@ -63,6 +63,13 @@ def pytest_addoption(parser):
         default=False,
         help="Load cached results if present instead of recomputing.",
     )
+    parser.addoption(
+        "--longrun",
+        action="store_true",
+        dest="longrun",
+        default=False,
+        help="Enable long and slow tests",
+    )
 
 
 def set_fixture_from_cli_option(
@@ -102,3 +109,8 @@ def path_prefix(request: FixtureRequest) -> Optional[str]:
 @pytest.fixture(scope="class")
 def caching(request: FixtureRequest) -> Optional[bool]:
     return set_fixture_from_cli_option(request, "caching")
+
+
+@pytest.fixture(scope="class")
+def longrun(request: FixtureRequest) -> Optional[bool]:
+    return set_fixture_from_cli_option(request, "longrun")
