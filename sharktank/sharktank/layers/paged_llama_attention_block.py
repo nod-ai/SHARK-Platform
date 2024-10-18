@@ -140,11 +140,9 @@ class PagedLlamaAttentionBlock(ThetaLayer):
 
             def repeat_kv(x: torch.Tensor) -> torch.Tensor:
                 bs, slen, n_kv_heads, head_dim = x.shape
-                return (
-                    x.unsqueeze(-2)
-                    .expand(bs, slen, n_kv_heads, gqa_n_rep, head_dim)
-                    .reshape(bs, slen, n_kv_heads * gqa_n_rep, head_dim)
-                )
+                unsq = x.unsqueeze(-2)
+                exp = ops.expand(unsq, (bs, slen, n_kv_heads, gqa_n_rep, head_dim))
+                return exp.flatten(2, 3)
 
             xk = repeat_kv(xk)
             xv = repeat_kv(xv)
@@ -175,7 +173,8 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         attn_weights = ops.softmax(ops.to(attn_weights, dtype=torch.float32), dim=-1)
         attn_weights = ops.to(attn_weights, dtype=xq.dtype)
         attn_output = ops.matmul(attn_weights, values)  # (bs, heads, slen, head_dim)
-        attn_output = attn_output.transpose(1, 2).reshape(bs, batch_seq_len, -1)
+        attn_output = attn_output.transpose(1, 2)
+        attn_output = attn_output.flatten(2, 3)
 
         # Project.
         attn_output = self.attn_output(attn_output)
