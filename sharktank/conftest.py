@@ -63,13 +63,6 @@ def pytest_addoption(parser):
         default=False,
         help="Load cached results if present instead of recomputing.",
     )
-    parser.addoption(
-        "--longrun",
-        action="store_true",
-        dest="longrun",
-        default=False,
-        help="Enable long and slow tests",
-    )
 
     parser.addoption(
         "--longrun",

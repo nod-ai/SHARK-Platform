@@ -5,6 +5,7 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 import logging
+from datetime import datetime
 import os
 import sys
 import unittest
@@ -12,16 +13,37 @@ import pytest
 import subprocess
 from pathlib import Path
 from typing import List
+import tempfile
 
 longrun = pytest.mark.skipif("not config.getoption('longrun')")
 
 
 class BaseBenchmarkTest(unittest.TestCase):
     def setUp(self):
-        raise NotImplementedError("Subclasses should implement this method.")
+        self.current_date = datetime.now()
+        self.dir_path_prefix = self.current_date.strftime("%Y-%m-%d")
+        self.repo_root = (
+            "/home/avsharma/SHARK-Platform/"  # os.getenv("SHARK_PLATFORM_REPO_ROOT")
+        )
+        tempfile.tempdir = self.repo_root
+        self.hip_device_id = "0"
+
+    def create_temp_dir(self, *, prefix):
+        temp_dir_path = tempfile.mkdtemp(prefix=prefix)
+        return temp_dir_path
+
+    def create_temp_file(self, *, suffix, prefix):
+        output_file_path = ""
+        with tempfile.NamedTemporaryFile(
+            suffix=suffix, prefix=prefix, delete=False
+        ) as temp_file:
+            temp_file_path = temp_file.name
+            output_file_path = temp_file_path
+        return output_file_path
 
     def get_export_cmd(
         self,
+        *,
         attention_kernel: str,
         tensor_parallelism_size: int,
         irpa_path: str,
@@ -49,15 +71,18 @@ class BaseBenchmarkTest(unittest.TestCase):
         cmd = subprocess.list2cmdline(export_args)
         return cmd
 
-    def get_compile_cmd(self, mlir_path: str, output_file: str, args: [str]):
-        compile_args = ["iree-compile", mlir_path]
+    def get_compile_cmd(
+        self, *, output_mlir_path: str, output_vmfb_path: str, args: [str]
+    ):
+        compile_args = ["iree-compile", output_mlir_path]
         compile_args += args
-        compile_args += ["-o", output_file]
+        compile_args += ["-o", output_vmfb_path]
         cmd = subprocess.list2cmdline(compile_args)
         return cmd
 
     def export_mlir(
         self,
+        *,
         attention_kernel: str,
         tensor_parallelism_size: int,
         irpa_path: str,
@@ -72,11 +97,11 @@ class BaseBenchmarkTest(unittest.TestCase):
             output_json_path: Path to the file to save the config json file.
         """
         cmd = self.get_export_cmd(
-            attention_kernel,
-            tensor_parallelism_size,
-            irpa_path,
-            output_mlir_path,
-            output_json_path,
+            attention_kernel=attention_kernel,
+            tensor_parallelism_size=tensor_parallelism_size,
+            irpa_path=irpa_path,
+            output_mlir_path=output_mlir_path,
+            output_json_path=output_json_path,
         )
         logging.getLogger().info(f"Launching export command:\n" f"cd {cwd} && {cmd}")
         proc = subprocess.run(cmd, shell=True, capture_output=True, cwd=cwd)
@@ -85,18 +110,27 @@ class BaseBenchmarkTest(unittest.TestCase):
             raise Exception(f"{cmd} failed to export.")
 
     def iree_compile(
-        self, mlir_path: str, output_file: str, args: List[str], cwd: str | Path
+        self,
+        *,
+        output_mlir_path: str,
+        output_vmfb_path: str,
+        args: List[str],
+        cwd: str | Path,
     ):
         """Compiles an input MLIR file to an output .vmfb file.
         This assumes that the `iree-compile` command is available (usually via PATH).
         Args:
             mlir_path: Path to the input MLIR file.
-            output_file: Path for the output file. The directory must already exist.
+            vmfb_path: Path for the output .vmfb file. The directory must already exist.
             args: List of arguments to pass to `iree-compile`.
             cwd: current working directory
         Raises Exception if compilation fails for some reason.
         """
-        cmd = self.get_compile_cmd(mlir_path, output_file, args)
+        cmd = self.get_compile_cmd(
+            output_mlir_path=output_mlir_path,
+            output_vmfb_path=output_vmfb_path,
+            args=args,
+        )
         logging.getLogger().info(f"Launching compile command:\n" f"cd {cwd} && {cmd}")
         proc = subprocess.run(cmd, shell=True, capture_output=True, cwd=cwd)
         return_code = proc.returncode
@@ -105,6 +139,7 @@ class BaseBenchmarkTest(unittest.TestCase):
 
     def iree_benchmark_module(
         self,
+        *,
         hip_device_id: str,
         vmfb_name: str,
         irpa_path: str,
@@ -138,34 +173,19 @@ class BaseBenchmarkTest(unittest.TestCase):
         if return_code != 0:
             raise Exception(f"{cmd} failed to run")
 
-    def cleanup_output_files(
-        self, output_mlir_path: str, output_json_path: str, output_file: str
-    ):
-        try:
-            # Removing output_mlir_path
-            subprocess.run(f"rm {output_mlir_path}", shell=True, check=True)
-            print(f"Removed: {output_mlir_path}")
-
-            # Removing output_json_path
-            subprocess.run(f"rm {output_json_path}", shell=True, check=True)
-            print(f"Removed: {output_json_path}")
-
-            # Removing output_file
-            subprocess.run(f"rm {output_file}", shell=True, check=True)
-            print(f"Removed: {output_file}")
-
-        except subprocess.CalledProcessError as e:
-            print(f"Error removing files: {e}")
-
 
 class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
     def setUp(self):
+        super().setUp()
         # TODO: add numpy files to Azure and download from it
-        self.repo_root = os.getenv("SHARK_PLATFORM_REPO_ROOT")
         artifacts_dir = "/data/extra/models/llama3.1_8B/"
         self.irpa_path = artifacts_dir + "llama8b_f16.irpa"
         self.irpa_path_fp8 = artifacts_dir + "llama8b_fp8.irpa"
         self.tensor_parallelism_size = None
+        self.temp_dir = self.create_temp_dir(prefix=self.dir_path_prefix)
+        self.dir_path_8b = self.temp_dir + "/llama-8b/"
+        self.temp_dir_8b = Path(self.dir_path_8b)
+        self.temp_dir_8b.mkdir(parents=True, exist_ok=True)
         self.iree_compile_args = [
             "--iree-hal-target-backends=rocm",
             "--iree-hip-target=gfx942",
@@ -211,162 +231,172 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
 
     @longrun
     def testBenchmark8B_f16_Decomposed(self):
-        output_mlir = self.repo_root + "llama8b_f16_decomposed.mlir"
-        output_json = self.repo_root + "llama8b_f16_decomposed.json"
-        output_vmfb = self.repo_root + "llama8b_f16_decomposed.vmfb"
+        output_file_name = self.dir_path_8b + "f16_decomposed"
+        output_mlir = self.create_temp_file(suffix=".mlir", prefix=output_file_name)
+        output_json = self.create_temp_file(suffix=".json", prefix=output_file_name)
+        output_vmfb = self.create_temp_file(suffix=".vmfb", prefix=output_file_name)
         self.export_mlir(
-            "decomposed",
-            self.tensor_parallelism_size,
-            self.irpa_path,
-            output_mlir,
-            output_json,
-            self.repo_root,
+            attention_kernel="decomposed",
+            tensor_parallelism_size=self.tensor_parallelism_size,
+            irpa_path=self.irpa_path,
+            output_mlir_path=output_mlir,
+            output_json_path=output_json,
+            cwd=self.repo_root,
         )
         iree_compile_args = self.iree_compile_args + [
-            f"--iree-hal-dump-executable-files-to={self.repo_root}/files/llama-8b/f16-decomposed"
+            f"--iree-hal-dump-executable-files-to={output_file_name}/files"
         ]
-        self.iree_compile(output_mlir, output_vmfb, iree_compile_args, self.repo_root)
+        self.iree_compile(
+            output_mlir_path=output_mlir,
+            output_vmfb_path=output_vmfb,
+            args=iree_compile_args,
+            cwd=self.repo_root,
+        )
         # benchmark prefill
         self.iree_benchmark_module(
-            "0",
-            output_vmfb,
-            self.irpa_path,
-            self.iree_run_prefill_args,
-            self.repo_root,
+            hip_device_id=self.hip_device_id,
+            vmfb_name=output_vmfb,
+            irpa_path=self.irpa_path,
+            args=self.iree_run_prefill_args,
+            cwd=self.repo_root,
         )
         # benchmark decode
         self.iree_benchmark_module(
-            "0",
-            output_vmfb,
-            self.irpa_path,
-            self.iree_run_decode_args,
-            self.repo_root,
+            hip_device_id=self.hip_device_id,
+            vmfb_name=output_vmfb,
+            irpa_path=self.irpa_path,
+            args=self.iree_run_decode_args,
+            cwd=self.repo_root,
         )
-        self.cleanup_output_files(output_mlir, output_json, output_vmfb)
 
     @pytest.mark.skip(reason="TODO: Need to plumb through attention_kernel")
     @longrun
     def testBenchmark8B_f16_Non_Decomposed(self):
-        output_mlir = self.repo_root + "llama8b_f16_torch_sdpa.mlir"
-        output_json = self.repo_root + "llama8b_f16_torch_sdpa.json"
-        output_vmfb = self.repo_root + "llama8b_f16_torch_sdpa.vmfb"
+        output_file_name = self.dir_path_8b + "f16_torch_sdpa"
+        output_mlir = self.create_temp_file(suffix=".mlir", prefix=output_file_name)
+        output_json = self.create_temp_file(suffix=".json", prefix=output_file_name)
+        output_vmfb = self.create_temp_file(suffix=".vmfb", prefix=output_file_name)
         self.export_mlir(
-            "torch_sdpa",
-            self.tensor_parallelism_size,
-            self.irpa_path,
-            output_mlir,
-            output_json,
-            self.repo_root,
+            attention_kernel="torch_sdpa",
+            tensor_parallelism_size=self.tensor_parallelism_size,
+            irpa_path=self.irpa_path,
+            output_mlir_path=output_mlir,
+            output_json_path=output_json,
+            cwd=self.repo_root,
         )
         iree_compile_args = self.iree_compile_args + [
-            f"--iree-hal-dump-executable-files-to={self.repo_root}/files/llama-8b/f16-torch-sdpa"
+            f"--iree-hal-dump-executable-files-to={output_file_name}/files"
         ]
-        self.iree_compile(output_mlir, output_vmfb, iree_compile_args, self.repo_root)
+        self.iree_compile(
+            output_mlir_path=output_mlir,
+            output_vmfb_path=output_vmfb,
+            args=iree_compile_args,
+            cwd=self.repo_root,
+        )
         # benchmark prefill
         self.iree_benchmark_module(
-            "0",
-            output_vmfb,
-            self.irpa_path,
-            self.iree_run_prefill_args,
-            self.repo_root,
+            hip_device_id=self.hip_device_id,
+            vmfb_name=output_vmfb,
+            irpa_path=self.irpa_path,
+            args=self.iree_run_prefill_args,
+            cwd=self.repo_root,
         )
         # benchmark decode
         self.iree_benchmark_module(
-            "0",
-            output_vmfb,
-            self.irpa_path,
-            self.iree_run_decode_args,
-            self.repo_root,
+            hip_device_id=self.hip_device_id,
+            vmfb_name=output_vmfb,
+            irpa_path=self.irpa_path,
+            args=self.iree_run_decode_args,
+            cwd=self.repo_root,
         )
-        self.cleanup_output_files(output_mlir, output_json, output_vmfb)
 
     @pytest.mark.xfail
     @longrun
     def testBenchmark8B_fp8_Decomposed(self):
-        output_mlir = self.repo_root + "llama8b_fp8_decomposed.mlir"
-        output_json = self.repo_root + "llama8b_fp8_decomposed.json"
-        output_vmfb = self.repo_root + "llama8b_fp8_decomposed.vmfb"
+        output_file_name = self.dir_path_8b + "fp8_decomposed"
+        output_mlir = self.create_temp_file(suffix=".mlir", prefix=output_file_name)
+        output_json = self.create_temp_file(suffix=".json", prefix=output_file_name)
+        output_vmfb = self.create_temp_file(suffix=".vmfb", prefix=output_file_name)
         self.export_mlir(
-            "decomposed",
-            self.tensor_parallelism_size,
-            self.irpa_path_fp8,
-            output_mlir,
-            output_json,
-            self.repo_root,
+            attention_kernel="decomposed",
+            tensor_parallelism_size=self.tensor_parallelism_size,
+            irpa_path=self.irpa_path_fp8,
+            output_mlir_path=output_mlir,
+            output_json_path=output_json,
+            cwd=self.repo_root,
         )
         iree_compile_args = self.iree_compile_args + [
-            f"--iree-hal-dump-executable-files-to={self.repo_root}/files/llama-8b/fp8-decomposed"
+            f"--iree-hal-dump-executable-files-to={output_file_name}/files"
         ]
         self.iree_compile(
-            output_mlir,
-            output_vmfb,
-            self.iree_compile_args,
-            self.repo_root,
+            output_mlir_path=output_mlir,
+            output_vmfb_path=output_vmfb,
+            args=self.iree_compile_args,
+            cwd=self.repo_root,
         )
         # benchmark prefill
         self.iree_benchmark_module(
-            "0",
-            output_vmfb,
-            self.irpa_path,
-            self.iree_run_prefill_args,
-            self.repo_root,
+            hip_device_id=self.hip_device_id,
+            vmfb_name=output_vmfb,
+            irpa_path=self.irpa_path_fp8,
+            args=self.iree_run_prefill_args,
+            cwd=self.repo_root,
         )
         # benchmark decode
         self.iree_benchmark_module(
-            "0",
-            output_vmfb,
-            self.irpa_path,
-            self.iree_run_decode_args,
-            self.repo_root,
+            hip_device_id=self.hip_device_id,
+            vmfb_name=output_vmfb,
+            irpa_path=self.irpa_path_fp8,
+            args=self.iree_run_decode_args,
+            cwd=self.repo_root,
         )
-        self.cleanup_output_files(output_mlir, output_json, output_vmfb)
 
     @pytest.mark.xfail
     @longrun
     def testBenchmark8B_fp8_Non_Decomposed(self):
-        output_mlir = self.repo_root + "llama8b_fp8_torch_sdpa.mlir"
-        output_json = self.repo_root + "llama8b_fp8_torch_sdpa.json"
-        output_vmfb = self.repo_root + "llama8b_fp8_torch_sdpa.vmfb"
+        output_file_name = self.dir_path_8b + "fp8_torch_sdpa"
+        output_mlir = self.create_temp_file(suffix=".mlir", prefix=output_file_name)
+        output_json = self.create_temp_file(suffix=".json", prefix=output_file_name)
+        output_vmfb = self.create_temp_file(suffix=".vmfb", prefix=output_file_name)
         self.export_mlir(
-            "torch_sdpa",
-            self.tensor_parallelism_size,
-            self.irpa_path_fp8,
-            output_mlir,
-            output_json,
-            self.repo_root,
+            attention_kernel="torch_sdpa",
+            tensor_parallelism_size=self.tensor_parallelism_size,
+            irpa_path=self.irpa_path_fp8,
+            output_mlir_path=output_mlir,
+            output_json_path=output_json,
+            cwd=self.repo_root,
         )
         iree_compile_args = self.iree_compile_args + [
-            f"--iree-hal-dump-executable-files-to={self.repo_root}/files/llama-8b/fp8-torch-sdpa"
+            f"--iree-hal-dump-executable-files-to={output_file_name}/files"
         ]
         self.iree_compile(
-            output_mlir,
-            output_vmfb,
-            self.iree_compile_args,
-            self.repo_root,
+            output_mlir_path=output_mlir,
+            output_vmfb_path=output_vmfb,
+            args=self.iree_compile_args,
+            cwd=self.repo_root,
         )
         # benchmark prefill
         self.iree_benchmark_module(
-            "0",
-            output_vmfb,
-            self.irpa_path_fp8,
-            self.iree_run_prefill_args_fp8,
-            self.repo_root,
+            hip_device_id=self.hip_device_id,
+            vmfb_name=output_vmfb,
+            irpa_path=self.irpa_path_fp8,
+            args=self.iree_run_prefill_args_fp8,
+            cwd=self.repo_root,
         )
         # benchmark decode
         self.iree_benchmark_module(
-            "0",
-            output_vmfb,
-            self.irpa_path_fp8,
-            self.iree_run_decode_args_fp8,
-            self.repo_root,
+            hip_device_id=self.hip_device_id,
+            vmfb_name=output_vmfb,
+            irpa_path=self.irpa_path_fp8,
+            args=self.iree_run_decode_args_fp8,
+            cwd=self.repo_root,
         )
-        self.cleanup_output_files(output_mlir, output_json, output_vmfb)
 
 
 class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
     def setUp(self):
+        super().setUp()
         # TODO: add numpy files to Azure and download from it
-        self.repo_root = os.getenv("SHARK_PLATFORM_REPO_ROOT")
         artifacts_dir = "/data/extra/models/llama3.1_70B/"
         self.irpa_path = artifacts_dir + "llama70b_f16.irpa"
         self.irpa_path_fp8 = artifacts_dir + "llama70b_fp8.irpa"
@@ -571,8 +601,8 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
 
 class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
     def setUp(self):
+        super().setUp()
         # TODO: add numpy files to Azure and download from it
-        self.repo_root = os.getenv("SHARK_PLATFORM_REPO_ROOT")
         artifacts_dir = "/data/extra/models/llama3.1_405B/"
         self.irpa_path = artifacts_dir + "llama405b_f16.irpa"
         self.irpa_path_fp8 = artifacts_dir + "llama405b_fp8.irpa"
