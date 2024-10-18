@@ -82,7 +82,7 @@ class batch_matmul_transpose_b(CustomOp):
         spec_sig = f"L{a_ident}_R{b_ident}"
         template_file = "batch_matmul_transpose_b.mlir"
         target_function_name = f"sharktank_batch_matmul_transpose_b_{spec_sig}"
-        cst_zero = "0" if isinstance(accum_type, IntegerType) else "0."
+        cst_zero = "0" if IntegerType.isinstance(accum_type) else "0."
         # Template params.
         c_asm_type = f"tensor<{'x'.join('?' if d is None else str(d) for d in result_desc.spec_dims)}x{accum_type}>"
 

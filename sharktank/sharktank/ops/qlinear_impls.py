@@ -48,12 +48,13 @@ def qlinear_tensor_scaled(
     x_layout: TensorScaledLayout = x.unpack()
     weight_layout: TensorScaledLayout = weight.unpack()
 
-    # Handle integer and fp8 quantizations.
-    if (
-        x_layout.qs.dtype != torch.float8_e4m3fnuz
-        and weight_layout.qs.dtype != torch.float8_e4m3fnuz
-    ):
-        return NotImplemented
+    # Handle only integer and fp8 quantizations.
+    if x_layout.qs.dtype.is_floating_point or weight_layout.qs.dtype.is_floating_point:
+        if (
+            x_layout.qs.dtype != torch.float8_e4m3fnuz
+            or weight_layout.qs.dtype != torch.float8_e4m3fnuz
+        ):
+            return NotImplemented
 
     # Bias.
     quantized_bias_accum = False
