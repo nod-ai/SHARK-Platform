@@ -133,11 +133,15 @@ def elementwise_unary(operator, x, *args, **kwargs):
         IsOfType(Tensor, PrimitiveTensor), IsOfType(Tensor, PrimitiveTensor, Number)
     )
 )
-def elementwise_binary(operator, x, y, *args, **kwargs):
+def elementwise_binary(
+    operator, x, y, out: Optional[Tensor | PrimitiveTensor] = None, *args, **kwargs
+):
     x = unbox_tensor(x)
     if isinstance(y, PrimitiveTensor):
         y = unbox_tensor(y)
-    return operator(x, y, *args, **kwargs)
+    if isinstance(out, PrimitiveTensor):
+        out = unbox_tensor(out)
+    return operator(x, y, *args, out=out, **kwargs)
 
 
 @elementwise.override(
@@ -441,6 +445,13 @@ def to_default(tensor: Tensor, *args, **kwargs):
 @transfer_to_logical_device.override(Tensor)
 def transfer_to_logical_device_default(tensor: Tensor, ordinal: int):
     return iree.turbine.ops.iree.transfer_to_logical_device(
+        f"{ordinal}", unbox_tensor(tensor)
+    )
+
+
+@transfer_to_logical_device_.override(Tensor)
+def transfer_to_logical_device__default(tensor: Tensor, ordinal: int):
+    iree.turbine.ops.iree.transfer_to_logical_device_(
         f"{ordinal}", unbox_tensor(tensor)
     )
 
