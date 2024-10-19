@@ -59,7 +59,6 @@ class Perplexity:
         device,
         kv_cache_type,
     ):
-        self.add_start_token = False
         self.batch_size = 16
 
         self.device = device
@@ -159,7 +158,6 @@ class Perplexity:
         token_ids, seq_lens = self.generator.tokenizer.encode(
             self.test_prompts,
             pad_to_multiple_of=self.generator.model.cache.pad_sequence_stride,
-            add_start_token=self.add_start_token,
         )
 
         logger.info(f" Prompts for Evaluation:")
