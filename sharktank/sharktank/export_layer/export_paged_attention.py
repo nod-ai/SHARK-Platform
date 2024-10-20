@@ -233,7 +233,6 @@ def main():
         attention_block_theta, context_length=llama_config.hp.context_length
     )
 
-    print(args.attention_kernel)
     model = PagedLlamaAttentionBlock(
         theta=attention_block_theta,
         block_index=0,
@@ -404,7 +403,7 @@ def main():
     bsizes = []
     for bs in llama_config.bs:
         generate_batch_prefill(bs)
-        #generate_batch_decode(bs)
+        generate_batch_decode(bs)
         bsizes.append(bs)
 
     if args.verbose:

@@ -106,6 +106,12 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         # Full sequence length.
         kv_seq_len = seq_block_ids.shape[1] * self.cache.block_seq_stride
 
+        print("all",
+                start_positions,
+                cache_state,
+                xk_temp,
+                xv_temp,
+            )
         if self.cache.is_paged:
             xk, xv = self.transact_cache_paged(
                 xk_cache_update=xk,
@@ -150,33 +156,33 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         values = xv.transpose(1, 2)
 
         print("attention_kernel: ", self.attention_kernel)
-#        if self.attention_kernel == "decomposed":
-#            # Flash attention.
-#            attn_weights = torch.matmul(xq, keys.transpose(2, 3)) / math.sqrt(
-#                self.head_dim
-#            )
-#            self.assert_not_nan(attn_weights)
-#            # Apply attention mask.
-#            self.trace_tensor("attn_weights", attn_weights, values=False)
-#            if attention_mask is not None:
-#                # self.trace_tensor("attn_mask", attention_mask)
-#                attn_weights = attn_weights + attention_mask
-#            attn_weights = F.softmax(attn_weights.float(), dim=-1).type_as(xq)
-#            attn_output = torch.matmul(
-#                attn_weights, values
-#            )  # (bs, heads, slen, head_dim)
-#        else:
-        is_causal = attention_mask is None and batch_seq_len == 1
-        attn_output = torch.nn.functional.scaled_dot_product_attention(
-            query=xq,  # [bs, ..., sl, dim]
-            key=keys,  # [bs, ..., sl, dim]
-            value=values,  # [bs, ..., sl, dim]
-            attn_mask=attention_mask,  # [bs, ..., sl, sl]
-            dropout_p=0.0,
-            is_causal=is_causal,  # assumes causal masking when true
-            scale=None,  # defaults to 1/sqrt(dim)
-        )
-        attn_output = attn_output.transpose(1, 2).reshape(bs, batch_seq_len, -1)
+        if self.attention_kernel == "decomposed":
+            # Flash attention.
+            attn_weights = torch.matmul(xq, keys.transpose(2, 3)) / math.sqrt(
+                self.head_dim
+            )
+            self.assert_not_nan(attn_weights)
+            # Apply attention mask.
+            self.trace_tensor("attn_weights", attn_weights, values=False)
+            if attention_mask is not None:
+                # self.trace_tensor("attn_mask", attention_mask)
+                attn_weights = attn_weights + attention_mask
+            attn_weights = F.softmax(attn_weights.float(), dim=-1).type_as(xq)
+            attn_output = torch.matmul(
+                attn_weights, values
+            )  # (bs, heads, slen, head_dim)
+        else:
+            is_causal = attention_mask is None and batch_seq_len == 1
+            attn_output = torch.nn.functional.scaled_dot_product_attention(
+                query=xq,  # [bs, ..., sl, dim]
+                key=keys,  # [bs, ..., sl, dim]
+                value=values,  # [bs, ..., sl, dim]
+                attn_mask=attention_mask,  # [bs, ..., sl, sl]
+                dropout_p=0.0,
+                is_causal=is_causal,  # assumes causal masking when true
+                scale=None,  # defaults to 1/sqrt(dim)
+            )
+            attn_output = attn_output.transpose(1, 2).reshape(bs, batch_seq_len, -1)
 
         # Project.
         attn_output = self.attn_output(attn_output)
