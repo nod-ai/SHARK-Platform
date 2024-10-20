@@ -810,6 +810,42 @@ class ReshapeTest(unittest.TestCase):
         actual_result = ops.reshape(sharded_tensor, new_shape)
         assert expected_result.is_deep_equal(actual_result)
 
+    def testSplitTensorInsertSize1DimBeforeSplitDim(self):
+        tensor = torch.rand(4, 5, 6, 7)
+        new_shape = [4, 1, 5, 6, 7]
+        unsharded_expected_result = torch.reshape(tensor, new_shape)
+        shard_dim = 2
+        expected_result = ops.reshard_split(
+            unsharded_expected_result, dim=shard_dim + 1, count=2
+        )
+        sharded_tensor = ops.reshard_split(tensor, dim=shard_dim, count=2)
+        actual_result = ops.reshape(sharded_tensor, new_shape)
+        assert expected_result.is_deep_equal(actual_result)
+
+    def testSplitTensorInsertMultipleSize1DimsBeforeSplitDim(self):
+        tensor = torch.rand(4, 5, 6, 7)
+        new_shape = [4, 1, 1, 5, 6, 7]
+        unsharded_expected_result = torch.reshape(tensor, new_shape)
+        shard_dim = 2
+        expected_result = ops.reshard_split(
+            unsharded_expected_result, dim=shard_dim + 2, count=2
+        )
+        sharded_tensor = ops.reshard_split(tensor, dim=shard_dim, count=2)
+        actual_result = ops.reshape(sharded_tensor, new_shape)
+        assert expected_result.is_deep_equal(actual_result)
+
+    def testSplitTensorInsertMultipleSize1TrailingDimsNotRightAfterSplitDim(self):
+        tensor = torch.rand(4, 5, 6, 7)
+        new_shape = [4, 5, 6, 7, 1, 1]
+        unsharded_expected_result = torch.reshape(tensor, new_shape)
+        shard_dim = 2
+        expected_result = ops.reshard_split(
+            unsharded_expected_result, dim=shard_dim, count=2
+        )
+        sharded_tensor = ops.reshard_split(tensor, dim=shard_dim, count=2)
+        actual_result = ops.reshape(sharded_tensor, new_shape)
+        assert expected_result.is_deep_equal(actual_result)
+
     def testSplitTensorUnflattenNonSplitDim(self):
         tensor = torch.rand(3, 20, 6)
         new_shape = [3, 4, 5, 6]
@@ -819,12 +855,30 @@ class ReshapeTest(unittest.TestCase):
         actual_result = ops.reshape(sharded_tensor, new_shape)
         assert expected_result.is_deep_equal(actual_result)
 
+    def testSplitTensorUnflattenTrailingNonSplitDim(self):
+        tensor = torch.rand(3, 4, 30)
+        new_shape = [3, 4, 5, 6]
+        unsharded_expected_result = torch.reshape(tensor, new_shape)
+        expected_result = ops.reshard_split(unsharded_expected_result, dim=1, count=2)
+        sharded_tensor = ops.reshard_split(tensor, dim=1, count=2)
+        actual_result = ops.reshape(sharded_tensor, new_shape)
+        assert expected_result.is_deep_equal(actual_result)
+
     def testSplitTensorUnflattenSplitDim(self):
         tensor = torch.rand(3, 20, 6)
         new_shape = [3, 4, 5, 6]
         unsharded_expected_result = torch.reshape(tensor, new_shape)
         expected_result = ops.reshard_split(unsharded_expected_result, dim=1, count=2)
         sharded_tensor = ops.reshard_split(tensor, dim=1, count=2)
+        actual_result = ops.reshape(sharded_tensor, new_shape)
+        assert expected_result.is_deep_equal(actual_result)
+
+    def testSplitTensorUnflattenTrailingSplitDim(self):
+        tensor = torch.rand(2, 3, 20)
+        new_shape = [2, 3, 4, 5]
+        unsharded_expected_result = torch.reshape(tensor, new_shape)
+        expected_result = ops.reshard_split(unsharded_expected_result, dim=2, count=2)
+        sharded_tensor = ops.reshard_split(tensor, dim=2, count=2)
         actual_result = ops.reshape(sharded_tensor, new_shape)
         assert expected_result.is_deep_equal(actual_result)
 

@@ -78,11 +78,10 @@ setup(
     name=f"sharktank",
     version=f"{PACKAGE_VERSION}",
     author="SHARK Authors",
-    author_email="stella@nod.ai",
     description="SHARK layers and inference models for genai",
     long_description=README,
     long_description_content_type="text/markdown",
-    url="https://github.com/nod-ai/sharktank",
+    url="https://github.com/nod-ai/SHARK-Platform",
     license="Apache-2.0",
     classifiers=[
         "Development Status :: 3 - Alpha",

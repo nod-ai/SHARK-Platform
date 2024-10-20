@@ -37,8 +37,9 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         head_dim: int,
         head_count_kv: int,
         rms_epsilon: float,
-        use_grok: Optional[bool] = False,
         attention_kernel: str = "decomposed",
+        attention_scale: Optional[float] = None,
+        softcap: Optional[float] = None,
     ):
         super().__init__(theta)
 
@@ -47,8 +48,9 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         self.head_count = head_count
         self.head_dim = head_dim
         self.head_count_kv = head_count_kv
-        self.use_grok = use_grok
         self.attention_kernel = attention_kernel
+        self.attention_scale = attention_scale
+        self.softcap = softcap
 
         self.add_module(
             "attn_norm", RMSNormLayer(theta("attn_norm"), epsilon=rms_epsilon)
@@ -58,7 +60,12 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         self.add_module("attn_v", LinearLayer(theta("attn_v")))
         self.add_module("attn_output", LinearLayer(theta("attn_output")))
 
-        if self.use_grok:
+        if theta.optional_tensor("attn_output_norm") is None:
+            self.add_module(
+                "attn_output_norm",
+                torch.nn.Identity(),
+            )
+        else:
             self.add_module(
                 "attn_output_norm",
                 RMSNormLayer(theta("attn_output_norm"), epsilon=rms_epsilon),
@@ -155,22 +162,28 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         keys = xk.transpose(1, 2)
         values = xv.transpose(1, 2)
 
-        print("attention_kernel: ", self.attention_kernel)
         if self.attention_kernel == "decomposed":
+            attn_weights = ops.matmul(xq, keys.transpose(2, 3))
+            if self.attention_scale is None:
+                attn_weights = attn_weights / math.sqrt(self.head_dim)
+            else:
+                attn_weights = attn_weights * self.attention_scale
+
             # Flash attention.
-            attn_weights = torch.matmul(xq, keys.transpose(2, 3)) / math.sqrt(
-                self.head_dim
-            )
+            if self.softcap is not None:
+                attn_weights = self.softcap * torch.tanh(attn_weights / self.softcap)
+
             self.assert_not_nan(attn_weights)
+
             # Apply attention mask.
             self.trace_tensor("attn_weights", attn_weights, values=False)
             if attention_mask is not None:
                 # self.trace_tensor("attn_mask", attention_mask)
                 attn_weights = attn_weights + attention_mask
-            attn_weights = F.softmax(attn_weights.float(), dim=-1).type_as(xq)
-            attn_output = torch.matmul(
-                attn_weights, values
-            )  # (bs, heads, slen, head_dim)
+
+            attn_weights = ops.softmax(ops.to(attn_weights, dtype=torch.float32), dim=-1)
+            attn_weights = ops.to(attn_weights, dtype=xq.dtype)
+            attn_output = ops.matmul(attn_weights, values)  # (bs, heads, slen, head_dim)
         else:
             is_causal = attention_mask is None and batch_seq_len == 1
             attn_output = torch.nn.functional.scaled_dot_product_attention(
@@ -182,16 +195,14 @@ class PagedLlamaAttentionBlock(ThetaLayer):
                 is_causal=is_causal,  # assumes causal masking when true
                 scale=None,  # defaults to 1/sqrt(dim)
             )
+
         attn_output = attn_output.transpose(1, 2).reshape(bs, batch_seq_len, -1)
 
         # Project.
         attn_output = self.attn_output(attn_output)
-
-        if self.use_grok:
-            attn_output = self.attn_output_norm(attn_output)
+        attn_output = self.attn_output_norm(attn_output)
 
         h = h + attn_output
-
         return h
 
     def transact_cache_direct(

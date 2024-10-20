@@ -23,6 +23,8 @@ _LEGAL_OUTPUT_TYPES = {
     (torch.int16, torch.int16, "torch.int16"): torch.int16,
     (torch.int16, torch.int16, "torch.int32"): torch.int32,
     # Legal fp types.
+    (torch.float8_e4m3fnuz, torch.float8_e4m3fnuz, "torch.float16"): torch.float16,
+    (torch.float8_e4m3fnuz, torch.float8_e4m3fnuz, "torch.float32"): torch.float32,
     (torch.float16, torch.float16, "torch.float16"): torch.float16,
     (torch.float16, torch.float16, "torch.float32"): torch.float32,
     (torch.float32, torch.float32, "torch.float32"): torch.float32,
@@ -33,6 +35,7 @@ _OUTPUT_TYPE_TO_ASM = {
     torch.int8: "i8",
     torch.int16: "i16",
     torch.int32: "i32",
+    torch.float8_e4m3fnuz: "f8E4M3FNUZ",
     torch.float16: "f16",
     torch.float32: "f32",
 }
