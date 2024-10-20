@@ -13,9 +13,14 @@ import unittest
 import torch
 
 from iree.turbine import aot
-from sharktank.layers import PagedLlamaAttentionBlock, PagedKVCache, RotaryEmbeddingLayer
+from sharktank.layers import (
+    PagedLlamaAttentionBlock,
+    PagedKVCache,
+    RotaryEmbeddingLayer,
+)
 from sharktank.layers.testing import make_llama_attention_block_theta
 from sharktank.types.tensors import DefaultPrimitiveTensor
+
 
 class PagedLlamaAttentionBlockTest(unittest.TestCase):
     def setUp(self):
@@ -37,7 +42,6 @@ class PagedLlamaAttentionBlockTest(unittest.TestCase):
         self.rope_freq_base = None
         self.batch_size = 3
         self.start_index = 0
-
 
     def testExportDecomposed(self):
         dtype = torch.float32
@@ -74,22 +78,32 @@ class PagedLlamaAttentionBlockTest(unittest.TestCase):
         seq_block_ids = torch.arange(self.batch_size * self.block_seqlen).view(
             self.batch_size, -1
         )
-        
+
         embedding_module = RotaryEmbeddingLayer(
             rope_dimension_count=self.rope_dimension_count,
             max_seqlen=self.max_seqlen,
             rope_freq_base=self.rope_freq_base,
         )
-        
+
         class MyModule(torch.nn.Module):
             def forward(self, h, seq_block_ids, cache_state):
-                return attn.forward(h, seq_block_ids=seq_block_ids, embedding=embedding_module, start_index=0, cache_state=cache_state)
-        
+                return attn.forward(
+                    h,
+                    seq_block_ids=seq_block_ids,
+                    embedding=embedding_module,
+                    start_index=0,
+                    cache_state=cache_state,
+                )
+
         mod = MyModule()
-        h = torch.rand([self.batch_size, self.max_seqlen, self.attention_head_count * self.attention_head_dim])
-        mod.forward(h,
-                seq_block_ids,
-                cache_state)
+        h = torch.rand(
+            [
+                self.batch_size,
+                self.max_seqlen,
+                self.attention_head_count * self.attention_head_dim,
+            ]
+        )
+        mod.forward(h, seq_block_ids, cache_state)
         ep = torch.export.export(
             mod,
             args=(
@@ -104,8 +118,7 @@ class PagedLlamaAttentionBlockTest(unittest.TestCase):
         output.save_mlir("temp.mlir")
         self.assertNotIn("scaled_dot_product_attention", asm)
 
-
-    def testExportDecomposed(self):
+    def testExportNondecomposed(self):
         dtype = torch.float32
 
         cache = PagedKVCache(
@@ -140,22 +153,32 @@ class PagedLlamaAttentionBlockTest(unittest.TestCase):
         seq_block_ids = torch.arange(self.batch_size * self.block_seqlen).view(
             self.batch_size, -1
         )
-        
+
         embedding_module = RotaryEmbeddingLayer(
             rope_dimension_count=self.rope_dimension_count,
             max_seqlen=self.max_seqlen,
             rope_freq_base=self.rope_freq_base,
         )
-        
+
         class MyModule(torch.nn.Module):
             def forward(self, h, seq_block_ids, cache_state):
-                return attn.forward(h, seq_block_ids=seq_block_ids, embedding=embedding_module, start_index=0, cache_state=cache_state)
-        
+                return attn.forward(
+                    h,
+                    seq_block_ids=seq_block_ids,
+                    embedding=embedding_module,
+                    start_index=0,
+                    cache_state=cache_state,
+                )
+
         mod = MyModule()
-        h = torch.rand([self.batch_size, self.max_seqlen, self.attention_head_count * self.attention_head_dim])
-        mod.forward(h,
-                seq_block_ids,
-                cache_state)
+        h = torch.rand(
+            [
+                self.batch_size,
+                self.max_seqlen,
+                self.attention_head_count * self.attention_head_dim,
+            ]
+        )
+        mod.forward(h, seq_block_ids, cache_state)
         ep = torch.export.export(
             mod,
             args=(

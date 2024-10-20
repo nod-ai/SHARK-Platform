@@ -241,7 +241,7 @@ def main():
         head_dim=llama_config.hp.attn_head_dim,
         head_count_kv=llama_config.hp.attention_head_count_kv,
         rms_epsilon=llama_config.hp.attention_layer_norm_rms_epsilon,
-        attention_kernel=args.attention_kernel
+        attention_kernel=args.attention_kernel,
     )
 
     def generate_params_json(hp, prefill_bs: list[int], decode_bs: list[int]):
