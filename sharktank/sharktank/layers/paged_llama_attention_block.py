@@ -182,7 +182,7 @@ class PagedLlamaAttentionBlock(ThetaLayer):
                 is_causal=is_causal,  # assumes causal masking when true
                 scale=None,  # defaults to 1/sqrt(dim)
             )
-            attn_output = attn_output.transpose(1, 2).reshape(bs, batch_seq_len, -1)
+        attn_output = attn_output.transpose(1, 2).reshape(bs, batch_seq_len, -1)
 
         # Project.
         attn_output = self.attn_output(attn_output)
