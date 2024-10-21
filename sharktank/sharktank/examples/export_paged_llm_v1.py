@@ -16,6 +16,7 @@ from sharktank.types import *
 
 # TODO: Should be using a base class with the protocol supported.
 from ..models.llama.llama import LlamaModelConfig, PagedLlamaModelV1
+from ..models.llama.sharding import shard_theta
 from ..models.mixtral.mixtral import *
 from ..models.grok.grok import *
 
@@ -61,7 +62,11 @@ def main():
     llama_config = LlamaModelConfig(hp)
     llama_config.use_hf = False
     llama_config.static_tables = False  # Rely on the compiler for hoisting tables.
-    llama_config.kv_cache_type = "direct" if args.bs == [1] else "paged"
+    llama_config.kv_cache_type = "paged"
+
+    attn_q_weight = dataset.root_theta.tensor("blk")["0"]["attn_q"]["weight"]
+    if isinstance(attn_q_weight, SplitPrimitiveTensor):
+        llama_config.tensor_parallelism_size = attn_q_weight.shard_count
 
     if llama_config.hp.expert_count:
         if llama_config.hp.model_arch == "grok":
@@ -121,18 +126,24 @@ def main():
             "tokens": {1: sl_dim},
             "seq_lens": {},
             "seq_block_ids": {1: block_dim},
-            "cache_state": cache_state_dynamic_shapes,
+            "cs": cache_state_dynamic_shapes * llama_config.tensor_parallelism_size,
         }
 
         print(f"Exporting prefill_bs{bs}")
 
         @fxb.export_program(
             name=f"prefill_bs{bs}",
-            args=(tokens, seq_lens, seq_block_ids, cache_state),
+            args=(
+                tokens,
+                seq_lens,
+                seq_block_ids,
+                [shard._data for shard in cache_state[0].shards],
+            ),
             dynamic_shapes=dynamic_shapes,
             strict=args.strict,
         )
-        def _(model, tokens, seq_lens, seq_block_ids, cache_state):
+        def _(model, tokens, seq_lens, seq_block_ids, cs):
+            cs = [SplitPrimitiveTensor(ts=cs, shard_dim=cache_state[0].shard_dim)]
             sl = tokens.shape[1]
             input_mask = model.input_mask(seq_lens, sl)
             attention_mask = model.attention_mask(input_mask)
@@ -140,7 +151,7 @@ def main():
                 tokens,
                 attention_mask=attention_mask,
                 seq_block_ids=seq_block_ids,
-                cache_state=cache_state,
+                cache_state=cs,
             )
             return logits
 
