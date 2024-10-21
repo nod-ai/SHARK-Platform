@@ -54,6 +54,7 @@ __all__ = [
     "softmax",
     "to",
     "transfer_to_logical_device",
+    "transfer_to_logical_device_",
     "transpose",
     "unflatten",
     "unshard",
@@ -210,7 +211,7 @@ def elementwise(operator, *args, **kwargs) -> AnyTensor:
 def _elementwise_trampoline(d: SignatureDispatcher, operator, *args, **kwargs):
     tensors = []
     for a in args:
-        if isinstance(a, (Tensor, InferenceTensor)):
+        if isinstance(a, (Tensor, InferenceTensor, Number)):
             tensors.append(a)
         else:
             break
@@ -983,6 +984,27 @@ def transfer_to_logical_device(tensor: AnyTensor, ordinal: int) -> AnyTensor:
 
 @transfer_to_logical_device.trampoline
 def _transfer_to_logical_device_trampoline(
+    d: SignatureDispatcher, tensor: AnyTensor, ordinal: int
+):
+    tensors = (tensor,)
+    for override in d.find_overrides(tensors):
+        result = override(tensor, ordinal)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(tensors)
+
+
+@overridable
+def transfer_to_logical_device_(tensor: AnyTensor, ordinal: int) -> None:
+    """In-place variant of transfer_to_logical_device.
+    Used to annotate function arguments.
+    """
+    ...
+
+
+@transfer_to_logical_device_.trampoline
+def _transfer_to_logical_device__trampoline(
     d: SignatureDispatcher, tensor: AnyTensor, ordinal: int
 ):
     tensors = (tensor,)

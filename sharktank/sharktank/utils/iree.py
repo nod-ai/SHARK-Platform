@@ -98,7 +98,7 @@ def run_iree_module_function(
     if trace_path_prefix is not None:
         for i, arg in enumerate(args):
             np.save(
-                f"{trace_path_prefix}{function_name}_arg_post_call{i}.npy",
+                f"{trace_path_prefix}{function_name}_arg{i}_post_call.npy",
                 arg.to_host(),
             )
         for i, arg in enumerate(results):
@@ -187,3 +187,7 @@ def call_torch_module_function(
                 result.to("cpu").numpy(),
             )
     return res
+
+
+def iree_to_torch(*tensors: iree.runtime.DeviceArray) -> List[torch.Tensor]:
+    return [torch.tensor(tensor.to_host()) for tensor in tensors]

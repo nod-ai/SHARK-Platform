@@ -24,6 +24,7 @@ from sharktank.utils.iree import (
     run_iree_module_function,
     prepare_iree_module_function_args,
     call_torch_module_function,
+    iree_to_torch,
 )
 import tempfile
 import torch
@@ -32,10 +33,6 @@ from iree.turbine.aot import FxProgramsBuilder, export
 import iree.runtime
 import numpy as np
 import os
-
-
-def iree_to_torch(*tensors: iree.runtime.DeviceArray) -> List[torch.Tensor]:
-    return [torch.tensor(tensor.to_host()) for tensor in tensors]
 
 
 @pytest.mark.usefixtures("caching", "path_prefix")
@@ -219,12 +216,12 @@ class ShardedLlamaTest(unittest.TestCase):
             actual_decode_cache_state, expected_decode_cache_state, atol=1e-4, rtol=1e-4
         )
 
-    @unittest.skip(
-        (
-            "Before this does not crash at all we need "
-            "https://github.com/iree-org/iree/pull/18663 merged."
-        )
-    )
+    # @unittest.skip(
+    #     (
+    #         "Before this does not crash at all we need "
+    #         "https://github.com/iree-org/iree/pull/18663 merged."
+    #     )
+    # )
     def testExportAndRunToySizedModelWithIree(self):
         """Test exporting to MLIR and compiling with IREE the sharded Llama model.
         Test numerical accuracy of the IREE module against PyTorch."""
@@ -250,18 +247,48 @@ class ShardedLlamaTest(unittest.TestCase):
         sharded_dataset = Dataset.load(sharded_parameters_path, mmap=False)
         iree_driver = "local-task"
 
-        model = PagedLlamaModelV1(self.theta, self.config)
+        self.theta.rename_tensors_to_paths()
+        dataset = Dataset({}, self.theta)
+        parameters_path = f"{path_prefix}unsharded-parameters.irpa"
+        dataset.save(parameters_path)
+        dataset = Dataset.load(parameters_path, mmap=False)
+        model = PagedLlamaModelV1(dataset.root_theta, self.config)
         sharded_model = PagedLlamaModelV1(
             sharded_dataset.root_theta, self.sharded_config
         )
         (
-            _,
+            prefill_args,
             sharded_prefill_args,
         ) = self.make_equal_unsharded_and_sharded_prefill_args(model, sharded_model)
         (
-            _,
+            decode_args,
             sharded_decode_args,
         ) = self.make_equal_unsharded_and_sharded_decode_args(model, sharded_model)
+
+        ################################################################
+        fxb = FxProgramsBuilder(model)
+
+        @fxb.export_program(
+            name="prefill",
+            args=tuple(),
+            kwargs=prefill_args,
+            strict=False,
+        )
+        def _(model, *args, **kwargs) -> torch.Tensor:
+            return model.prefill(*args, **kwargs)
+
+        @fxb.export_program(
+            name="decode",
+            args=tuple(),
+            kwargs=decode_args,
+            strict=False,
+        )
+        def _(model, *args, **kwargs) -> torch.Tensor:
+            return model.decode(*args, **kwargs)
+
+        output = export(fxb)
+        output.save_mlir(f"{path_prefix}program-unsharded.mlir")
+        ################################################################
 
         iree_module_path = f"{path_prefix}program.vmfb"
         if not self.caching or not os.path.exists(iree_module_path):
