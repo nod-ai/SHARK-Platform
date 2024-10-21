@@ -7,11 +7,6 @@
 from shortfin.support.deps import ShortfinDepNotFoundError
 
 try:
-    import diffusers
-except ModuleNotFoundError as e:
-    raise ShortfinDepNotFoundError(__name__, "diffusers") from e
-
-try:
     import transformers
 except ModuleNotFoundError as e:
     raise ShortfinDepNotFoundError(__name__, "diffusers") from e
