@@ -167,6 +167,7 @@ def path_prefix(request: FixtureRequest) -> Optional[str]:
 def caching(request: FixtureRequest) -> Optional[bool]:
     return set_fixture_from_cli_option(request, "caching")
 
+
 @pytest.fixture(scope="class")
 def get_model_path(request: FixtureRequest):
     model_path = {}
