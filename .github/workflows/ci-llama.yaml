@@ -4,8 +4,8 @@ on:
   workflow_dispatch:
   pull_request:
   schedule:
-    # Weekdays at 12:00 AM UTC = 05:00 PST / 06:00 PDT.
-    - cron: "0 0 * * 1-5"
+    # Weekdays at 9:00 AM UTC = 2:00 AM PST.
+    - cron: "0 9 * * 1-5"
 
 concurrency:
   # A PR number if a pull request and otherwise the commit hash. This cancels
@@ -68,7 +68,7 @@ jobs:
             "numpy<2.0"
 
       - name: Run llama test
-        run: pytest sharktank/tests/models/llama/benchmark-tests.py -v -s --longrun
+        run: pytest sharktank/tests/models/llama/benchmark_tests.py -v -s --longrun
 
       - name: Upload llama executable files
         uses: actions/upload-artifact@v4
