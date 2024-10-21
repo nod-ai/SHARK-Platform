@@ -23,11 +23,6 @@ class PerplexityTest(unittest.TestCase):
         with open(self.baseline_perplexity_score_json, "r") as f:
             self.baseline_perplexity = json.load(f)
 
-    def save_perplexity(self, model_name: str, current_perplexity: dict):
-        self.current_perplexity_all = {model_name: current_perplexity}
-        with open(self.current_perplexity_scores_json, "w") as f:
-            json.dump(self.current_perplexity_all, f)
-
     @longrun
     def test_llama3_8B_f16_decomposed(self):
 
@@ -42,8 +37,6 @@ class PerplexityTest(unittest.TestCase):
                 f"--tokenizer-config-json={self.llama3_8b_tokenizer}",
             ]
         )
-
-        self.save_perplexity(model_name, current_perplexity)
 
         self.assertAlmostEqual(
             baseline_perplexity["mean_perplexity"],
@@ -71,8 +64,6 @@ class PerplexityTest(unittest.TestCase):
             ]
         )
 
-        self.save_perplexity(model_name, current_perplexity)
-
         self.assertAlmostEqual(
             baseline_perplexity["mean_perplexity"],
             current_perplexity["mean_perplexity"],
@@ -97,8 +88,6 @@ class PerplexityTest(unittest.TestCase):
                 f"--tokenizer-config-json={self.llama3_8b_tokenizer}",
             ]
         )
-
-        self.save_perplexity(model_name, current_perplexity)
 
         self.assertAlmostEqual(
             baseline_perplexity["mean_perplexity"],
@@ -126,8 +115,6 @@ class PerplexityTest(unittest.TestCase):
             ]
         )
 
-        self.save_perplexity(model_name, current_perplexity)
-
         self.assertAlmostEqual(
             baseline_perplexity["mean_perplexity"],
             current_perplexity["mean_perplexity"],
@@ -150,8 +137,6 @@ class PerplexityTest(unittest.TestCase):
                 f"--tensor-parallelism-size={self.tensor_parallelism_size}",
             ]
         )
-
-        self.save_perplexity(model_name, current_perplexity)
 
         self.assertAlmostEqual(
             baseline_perplexity["mean_perplexity"],
@@ -180,8 +165,6 @@ class PerplexityTest(unittest.TestCase):
             ]
         )
 
-        self.save_perplexity(model_name, current_perplexity)
-
         self.assertAlmostEqual(
             baseline_perplexity["mean_perplexity"],
             current_perplexity["mean_perplexity"],
@@ -207,8 +190,6 @@ class PerplexityTest(unittest.TestCase):
                 f"--tensor-parallelism-size={self.tensor_parallelism_size}",
             ]
         )
-
-        self.save_perplexity(model_name, current_perplexity)
 
         self.assertAlmostEqual(
             baseline_perplexity["mean_perplexity"],
@@ -236,8 +217,6 @@ class PerplexityTest(unittest.TestCase):
                 f"--attention-kernel=torch_sdpa",
             ]
         )
-
-        self.save_perplexity(model_name, current_perplexity)
 
         self.assertAlmostEqual(
             baseline_perplexity["mean_perplexity"],
