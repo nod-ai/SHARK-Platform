@@ -984,7 +984,7 @@ class SplitPrimitiveTensor(ShardedTensorBase):
             else:
                 # Any other collection is a indexing only dimension 0.
                 return self.shard_dim == 0
-        if len(key) < self.shard_dim:
+        if len(key) <= self.shard_dim:
             return False
         if not isinstance(key[self.shard_dim], slice):
             return True
