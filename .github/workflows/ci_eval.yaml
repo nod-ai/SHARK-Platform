@@ -1,7 +1,6 @@
 name: Evaluation Tests
 
 on:
-  pull_request:
   workflow_dispatch:
   schedule:
     # Weekdays nightly at 07:00 UTC = 23:00 PST / 00:00 PDT.
