@@ -89,10 +89,9 @@ def qconv2d_tensor_scaled(
 
     # Alias components (d=scale, qs=quantized samples, m=offset).
     if accum_dtype is None:
+        accum_dtype = torch.int32
         if weight_layout.qs.dtype.is_floating_point:
             accum_dtype = torch.float32
-        else:
-            accum_dtype = torch.int32
     input_d = input_layout.d
     input_dtype = input_layout.dtype
     input_qs = input_layout.qs
