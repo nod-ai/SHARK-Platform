@@ -21,9 +21,7 @@ class BaseBenchmarkTest(unittest.TestCase):
     directory_created = False
     current_date = datetime.now()
     dir_path_suffix = current_date.strftime("%Y-%m-%d")
-    repo_root = (
-        "/home/avsharma/SHARK-Platform/"  # os.getenv("SHARK_PLATFORM_REPO_ROOT")
-    )
+    repo_root = os.getenv("SHARK_PLATFORM_REPO_ROOT")
     dir_path = repo_root + dir_path_suffix
 
     @classmethod

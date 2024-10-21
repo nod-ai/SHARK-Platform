@@ -2,7 +2,6 @@ name: Llama Benchmarking Tests
 
 on:
   workflow_dispatch:
-  pull_request:
   schedule:
     # Weekdays at 9:00 AM UTC = 2:00 AM PST.
     - cron: "0 9 * * 1-5"
