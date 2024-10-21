@@ -225,7 +225,7 @@ def main():
     bsizes = []
     for bs in args.bs:
         generate_batch_prefill(bs)
-        # generate_batch_decode(bs)
+        generate_batch_decode(bs)
         bsizes.append(bs)
     config = generate_params_json(hp, bsizes, bsizes)
     print("GENERATED!")
