@@ -128,14 +128,6 @@ def pytest_addoption(parser):
         help="Llama3.1 8B & 405B model baseline perplexity scores json",
     )
 
-    parser.addoption(
-        "--current-perplexity-scores-json",
-        type=Path,
-        action="store",
-        default="sharktank/tests/evaluate/current_perplexity_scores.json",
-        help="Llama3.1 8B & 405B model current perplexity scores json",
-    )
-
 
 def set_fixture_from_cli_option(
     request: FixtureRequest,
@@ -199,8 +191,5 @@ def get_model_path(request: FixtureRequest):
     )
     model_path["baseline_perplexity_score_json"] = set_fixture_from_cli_option(
         request, "--baseline-perplexity-score-json", "baseline_perplexity_score_json"
-    )
-    model_path["current_perplexity_scores_json"] = set_fixture_from_cli_option(
-        request, "--current-perplexity-scores-json", "current_perplexity_scores_json"
     )
     return model_path
