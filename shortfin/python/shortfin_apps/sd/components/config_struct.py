@@ -43,8 +43,9 @@ class ModelParams:
 
     # Name of the IREE module for each submodel.
     clip_module_name: str = "compiled_clip"
-    unet_module_name: str = "compiled_punet"
+    unet_module_name: str = "compiled_unet"
     vae_module_name: str = "compiled_vae"
+    scheduler_module_name: str = "compiled_scheduler"
 
     # DTypes (basically defaults):
     clip_dtype: sfnp.DType = sfnp.float16

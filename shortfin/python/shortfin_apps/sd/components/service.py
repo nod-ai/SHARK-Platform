@@ -94,6 +94,38 @@ class GenerateService:
                 fiber=self.fibers[0],
                 trace_execution=False,
             )
+
+        # TODO: export vmfbs with multiple batch size entrypoints
+
+        self.inference_functions["encode"] = {}
+        for bs in self.model_params.clip_batch_sizes:
+            self.inference_functions["encode"][bs] = self.inference_programs["clip"][
+                f"{self.model_params.clip_module_name}.encode_prompts"
+            ]
+
+        self.inference_functions["denoise"] = {}
+        for bs in self.model_params.unet_batch_sizes:
+            self.inference_functions["denoise"][bs] = {
+                "unet": self.inference_programs["unet"][
+                    f"{self.model_params.unet_module_name}.run_forward"
+                ],
+                "init": self.inference_programs["scheduler"][
+                    f"{self.model_params.scheduler_module_name}.run_initialize"
+                ],
+                "scale": self.inference_programs["scheduler"][
+                    f"{self.model_params.scheduler_module_name}.run_scale"
+                ],
+                "step": self.inference_programs["scheduler"][
+                    f"{self.model_params.scheduler_module_name}.run_step"
+                ],
+            }
+
+        self.inference_functions["decode"] = {}
+        for bs in self.model_params.vae_batch_sizes:
+            self.inference_functions["decode"][bs] = self.inference_programs["vae"][
+                f"{self.model_params.vae_module_name}.decode"
+            ]
+
         self.batcher.launch()
 
     def shutdown(self):
@@ -277,9 +309,10 @@ class InferenceExecutorProcess(sf.Process):
                 request.prompt,
                 request.neg_prompt,
             ]
-            for tokenizer, prompt in zip(self.service.tokenizers, prompts):
-                input_ids = tokenizer.encode(prompt)
-                input_ids_list.append(input_ids)
+            for tokenizer in self.service.tokenizers:
+                for prompt in prompts:
+                    input_ids = tokenizer.encode(prompt)
+                    input_ids_list.append(input_ids)
 
             request.input_ids = input_ids_list
 
@@ -325,30 +358,67 @@ class InferenceExecutorProcess(sf.Process):
 
     async def _encode(self, device, requests):
         req_bs = len(requests)
-        # Encode inputs
-        entrypoints = self.service.encode_functions
+
+        entrypoints = self.service.inference_functions["encode"]
         for bs, fn in entrypoints.items():
             if bs >= req_bs:
                 break
+
+        # Prepare tokenized input ids for CLIP inference
+
+        clip_inputs = [
+            sfnp.device_array.for_device(
+                device, [req_bs, self.service.model_params.max_seq_len], sfnp.sint64
+            )
+        ] * 4
+        for idx, arr in enumerate(clip_inputs):
+            host_arr = arr.for_transfer()
+            for i in range(req_bs):
+                with host_arr.view(i).map(write=True, discard=True) as m:
+
+                    # TODO: fix this attr redundancy
+                    np_arr = requests[i].input_ids[idx].input_ids[0]
+
+                    m.fill(np_arr)
+            arr.copy_from(host_arr)
+
+        # Encode tokenized inputs.
+        logger.info(
+            "INVOKE %r: %s",
+            fn,
+            "".join([f"\n  {i}: {ary.shape}" for i, ary in enumerate(clip_inputs)]),
+        )
+        await device
+        pe, te = await fn(*clip_inputs)
+
+        await device
+        for i in range(req_bs):
+            requests[i].prompt_embeds = pe.view(i)
+            requests[i].add_text_embeds = te.view(i)
+
         return
 
     async def _denoise(self, device, requests):
         req_bs = len(requests)
         # Produce denoised latents
-        entrypoints = self.service.denoise_functions
-        for bs, fn in entrypoints.items():
+        entrypoints = self.service.inference_functions["denoise"]
+        for bs, fns in entrypoints.items():
             if bs >= req_bs:
                 break
+
+        # fns is a dict of denoising components
         return
 
     async def _decode(self, device, requests):
         req_bs = len(requests)
         # Decode latents to images
-        entrypoints = self.service.decode_functions
+        entrypoints = self.service.inference_functions["decode"]
         for bs, fn in entrypoints.items():
             if bs >= req_bs:
-                func = fn
                 break
+
+        # do something with vae
+
         return
 
     async def _postprocess(self, device, requests):

@@ -101,7 +101,7 @@ class ClientGenerateBatchProcess(sf.Process):
         gen_req: GenerateReqInput,
         responder: FastAPIResponder,
     ):
-        super().__init__(fiber=service.main_fiber)
+        super().__init__(fiber=service.fibers[0])
         self.gen_req = gen_req
         self.responder = responder
         self.batcher = service.batcher

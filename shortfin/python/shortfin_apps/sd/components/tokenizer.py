@@ -68,7 +68,7 @@ class Tokenizer:
         """
         ary = sfnp.device_array.for_host(device, [len(encs), batch_seq_len], dtype)
         for i, enc in enumerate(encs):
-            ary.view(i).items = enc.input_ids
+            ary.view(i).items = np.expand_dims(enc.input_ids, axis=0)
         return ary
 
     def attention_masks_to_array(
