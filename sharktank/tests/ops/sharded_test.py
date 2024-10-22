@@ -401,14 +401,6 @@ class ElementwiseTest(unittest.TestCase):
         actual_result = iree_to_torch(*iree_args)[0]
         torch.testing.assert_close(actual_result, expected_result)
 
-    @pytest.mark.xfail(
-        reason=(
-            "We are inserting device transfers that introduce a copy a screw up the"
-            " in-place semantics."
-        ),
-        strict=True,
-        raises=AssertionError,
-    )
     def testInPlaceAddWithIreeOfShardedSplitTensor(self):
         if self.path_prefix is not None:
             self.runTestInPlaceAddWithIreeOfShardedSplitTensor(
@@ -972,9 +964,9 @@ class ReplicateTest(unittest.TestCase):
         expected_result = ReplicatedTensor(ts=tensor, shard_count=shard_count)
         assert expected_result.is_deep_equal(actual_result)
 
-        # Test not a copy.
+        # Test that is a copy.
         tensor[...] = torch.rand_like(tensor)
-        assert all(ops.equal(tensor, shard) for shard in actual_result.shards)
+        assert all(not ops.equal(tensor, shard) for shard in actual_result.shards)
 
 
 class ReshapeTest(unittest.TestCase):
@@ -1091,10 +1083,10 @@ class ReshardSplitTest(unittest.TestCase):
         )
         assert expected_result.is_deep_equal(actual_result)
 
-        # Test not a copy.
+        # Test that is a copy.
         tensor[...] = torch.rand_like(tensor)
         result_split2 = ops.reshard_split(tensor, dim=shard_dim, count=shard_count)
-        assert ops.equal(actual_result, result_split2)
+        assert not ops.equal(actual_result, result_split2)
 
     def testReshardSharded(self):
         tensor = torch.rand(4, 5, 6, dtype=torch.float32)

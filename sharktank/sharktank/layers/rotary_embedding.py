@@ -89,8 +89,12 @@ class RotaryEmbeddingLayer(BaseLayer):
             ]
             xq_shards = [xqk[0] for xqk in xqk_shards]
             xk_shards = [xqk[1] for xqk in xqk_shards]
-            xq = SplitPrimitiveTensor(ts=xq_shards, shard_dim=xq.shard_dim)
-            xk = SplitPrimitiveTensor(ts=xk_shards, shard_dim=xk.shard_dim)
+            xq = SplitPrimitiveTensor(
+                ts=xq_shards, shard_dim=xq.shard_dim, insert_device_assignment=False
+            )
+            xk = SplitPrimitiveTensor(
+                ts=xk_shards, shard_dim=xk.shard_dim, insert_device_assignment=False
+            )
             return xq, xk
         else:
             return self.forward_unsharded(
@@ -263,8 +267,12 @@ class RotaryEmbeddingLayer(BaseLayer):
             ]
             xq_shards = [xqk[0] for xqk in xqk_shards]
             xk_shards = [xqk[1] for xqk in xqk_shards]
-            xq = SplitPrimitiveTensor(ts=xq_shards, shard_dim=xq.shard_dim)
-            xk = SplitPrimitiveTensor(ts=xk_shards, shard_dim=xk.shard_dim)
+            xq = SplitPrimitiveTensor(
+                ts=xq_shards, shard_dim=xq.shard_dim, insert_device_assignment=False
+            )
+            xk = SplitPrimitiveTensor(
+                ts=xk_shards, shard_dim=xk.shard_dim, insert_device_assignment=False
+            )
             return xq, xk
         else:
             return self.apply_batched_mask_unsharded(xq=xq, xk=xk, mask=mask)

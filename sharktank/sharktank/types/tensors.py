@@ -405,6 +405,9 @@ class InferenceTensor(ABC):
 
         return elementwise(torch.remainder, self, rhs)
 
+    def __imod__(self, rhs):
+        raise NotImplementedError()
+
     def __mul__(self, rhs):
         from ..ops import elementwise
 
@@ -415,15 +418,24 @@ class InferenceTensor(ABC):
         # numbers on the lhs.
         return self.__mul__(lhs)
 
+    def __imul__(self, rhs):
+        raise NotImplementedError()
+
     def __truediv__(self, rhs):
         from ..ops import elementwise
 
         return elementwise(torch.true_divide, self, rhs)
 
+    def __itruediv__(self, rhs):
+        raise NotImplementedError()
+
     def __floordiv__(self, rhs):
         from ..ops import elementwise
 
         return elementwise(torch.floor_divide, self, rhs)
+
+    def __ifloordiv__(self, rhs):
+        raise NotImplementedError()
 
     def __getitem__(self, key):
         from ..ops import get_index
@@ -763,6 +775,7 @@ class ShardedTensorBase(ShardedTensor):
         ts: list[torch.Tensor],
         name: str = UnnamedTensorName,
         shape: Optional[list[int]],
+        insert_device_assignment: bool = True,
     ):
         from ..ops import transfer_to_logical_device
 
@@ -772,7 +785,9 @@ class ShardedTensorBase(ShardedTensor):
         self._shards: tuple[DefaultPrimitiveTensor] = tuple(
             DefaultPrimitiveTensor(
                 name=f"{name}.shard.{i}",
-                data=transfer_to_logical_device(t, i),
+                data=transfer_to_logical_device(t, i)
+                if insert_device_assignment
+                else unbox_tensor(t),
             )
             for i, t in enumerate(ts)
         )
@@ -935,6 +950,7 @@ class SplitPrimitiveTensor(ShardedTensorBase):
         shard_count: None | int = None,
         name: str = UnnamedTensorName,
         shape: Optional[list[int]] = None,
+        insert_device_assignment: bool = True,
     ):
         """
         If `ts` is a list of tensors, it is interpreted as the shards.
@@ -971,7 +987,13 @@ class SplitPrimitiveTensor(ShardedTensorBase):
                 s == t for i, (s, t) in enumerate(zip(shape, t_shape)) if i != shard_dim
             ), f"Shape mismatch for non-split dimension for tensor shard {i} with shape {t.shape}"
 
-        super().__init__(name=name, ts=ts, shape=shape, shard_dim=shard_dim)
+        super().__init__(
+            name=name,
+            ts=ts,
+            shape=shape,
+            shard_dim=shard_dim,
+            insert_device_assignment=insert_device_assignment,
+        )
 
     def _is_slicing_split_dim(self, key):
         if isinstance(
@@ -1031,7 +1053,9 @@ class SplitPrimitiveTensor(ShardedTensorBase):
                 # Rank reduction dimension before the split dim.
                 shard_dim -= 1
 
-        return SplitPrimitiveTensor(ts=shards, shard_dim=shard_dim)
+        return SplitPrimitiveTensor(
+            ts=shards, shard_dim=shard_dim, insert_device_assignment=False
+        )
 
     def __setitem__(self, key, value):
         assert isinstance(value, SplitPrimitiveTensor)
@@ -1057,6 +1081,7 @@ class ReplicatedTensor(ShardedTensor):
         ts: list[torch.Tensor] | torch.Tensor,
         shard_count: None | int = None,
         name: str = UnnamedTensorName,
+        insert_device_assignment: bool = True,
     ):
         """
         If `ts` is a list of tensors, it is interpreted as the shards.
@@ -1084,7 +1109,9 @@ class ReplicatedTensor(ShardedTensor):
         self._shards: tuple[DefaultPrimitiveTensor] = tuple(
             DefaultPrimitiveTensor(
                 name=f"{name}.shard.{i}",
-                data=transfer_to_logical_device(t, i),
+                data=transfer_to_logical_device(t, i)
+                if insert_device_assignment
+                else unbox_tensor(t),
             )
             for i, t in enumerate(ts)
         )
@@ -1184,11 +1211,18 @@ class UnreducedTensor(ShardedTensorBase):
         ts: list[torch.Tensor],
         name: str = UnnamedTensorName,
         shape: Optional[list[int]] = None,
+        insert_device_assignment: bool = True,
     ):
         assert len(ts) > 0
         shape = list(ts[0].shape if shape is None else shape)
         assert all(shape == list(t.shape) for t in ts)
-        super().__init__(name=name, ts=ts, shape=shape, shard_dim=None)
+        super().__init__(
+            name=name,
+            ts=ts,
+            shape=shape,
+            shard_dim=None,
+            insert_device_assignment=insert_device_assignment,
+        )
 
 
 def flatten_tensor_tree(
@@ -1327,7 +1361,10 @@ def unflatten_split_primitive_tensor(
     values: Iterable[Any], ctx: torch.utils._pytree.Context
 ) -> SplitPrimitiveTensor:
     return SplitPrimitiveTensor(
-        shard_dim=ctx["shard_dim"], ts=list(values), name=ctx["name"]
+        shard_dim=ctx["shard_dim"],
+        ts=list(values),
+        name=ctx["name"],
+        insert_device_assignment=False,
     )
 
 
@@ -1353,7 +1390,9 @@ def flatten_replicated_tensor(
 def unflatten_replicated_tensor(
     values: Iterable[Any], ctx: torch.utils._pytree.Context
 ) -> ReplicatedTensor:
-    return ReplicatedTensor(ts=list(values), name=ctx["name"])
+    return ReplicatedTensor(
+        ts=list(values), name=ctx["name"], insert_device_assignment=False
+    )
 
 
 def flatten_with_keys_replicated_tensor(t: ReplicatedTensor):

@@ -269,21 +269,36 @@ def split_elementwise_unary(operator, x: SplitPrimitiveTensor, *args, **kwargs):
 
 @elementwise.override(ReplicatedTensor, ReplicatedTensor)
 def replicated_elementwise_binary(
-    operator, x: ReplicatedTensor, y: ReplicatedTensor, *args, **kwargs
+    operator,
+    x: ReplicatedTensor,
+    y: ReplicatedTensor,
+    out: ReplicatedTensor = None,
+    *args,
+    **kwargs,
 ):
-    assert x.shard_count == y.shard_count
+    out_shards = (
+        [None] * len(x.shards)
+        if out is None
+        else [unbox_tensor(shard) for shard in out.shards]
+    )
     shards = [
-        operator(unbox_tensor(shard_x), unbox_tensor(shard_y), *args, **kwargs)
-        for shard_x, shard_y in zip(x.shards, y.shards)
+        operator(
+            unbox_tensor(shard_x), unbox_tensor(shard_y), out=out_shard, *args, **kwargs
+        )
+        for shard_x, shard_y, out_shard in zip(
+            x.shards, y.shards, out_shards, strict=True
+        )
     ]
-    return ReplicatedTensor(ts=shards)
+    return ReplicatedTensor(
+        ts=shards,
+        insert_device_assignment=out is None,
+    )
 
 
 @elementwise.override(SplitPrimitiveTensor, SplitPrimitiveTensor)
 def split_elementwise_binary(
     operator, x: SplitPrimitiveTensor, y: SplitPrimitiveTensor, *args, **kwargs
 ):
-    assert x.shard_count == y.shard_count
     x_shard_dim, y_shard_dim = broadcast_dims([x.shard_dim, y.shard_dim], [x, y])
     assert x_shard_dim == y_shard_dim
     pt_xs = [unbox_tensor(pt) for pt in x.shards]
@@ -321,6 +336,7 @@ def elementwise_binary_split_lhs_scalar_rhs(
         shard_dim=x.shard_dim,
         shape=x.shape,
         ts=partials,
+        insert_device_assignment=out is None,
     )
 
 
@@ -465,7 +481,9 @@ def expand_split(
         )
         for shard in tensor.shards
     ]
-    return SplitPrimitiveTensor(ts=shards, shard_dim=tensor.shard_dim)
+    return SplitPrimitiveTensor(
+        ts=shards, shard_dim=tensor.shard_dim, insert_device_assignment=False
+    )
 
 
 @flatten.override(ReplicatedTensor)
@@ -473,7 +491,7 @@ def flatten_replicated(
     input: ReplicatedTensor, start_dim: int, end_dim: int
 ) -> ReplicatedTensor:
     shards = [shard.flatten(start_dim, end_dim) for shard in input.shards]
-    return ReplicatedTensor(ts=shards)
+    return ReplicatedTensor(ts=shards, insert_device_assignment=False)
 
 
 @flatten.override(SplitPrimitiveTensor)
@@ -496,7 +514,9 @@ def flatten_split(
         if input.shard_dim <= start_dim
         else input.shard_dim - (end_dim_resolved - start_dim)
     )
-    return SplitPrimitiveTensor(ts=shards, shard_dim=shard_dim)
+    return SplitPrimitiveTensor(
+        ts=shards, shard_dim=shard_dim, insert_device_assignment=False
+    )
 
 
 @gather.override(ReplicatedTensor, ReplicatedTensor)
@@ -583,7 +603,7 @@ def index_select_replicated(
         index_select(tensor_shard, dim, index_shard)
         for tensor_shard, index_shard in zip(tensor.shards, index.shards)
     ]
-    return ReplicatedTensor(ts=shards)
+    return ReplicatedTensor(ts=shards, insert_device_assignment=False)
 
 
 @index_select.override(SplitPrimitiveTensor, ReplicatedTensor)
@@ -600,7 +620,9 @@ def index_select_split_replicated(
         index_select(tensor_shard, dim, index_shard)
         for tensor_shard, index_shard in zip(tensor.shards, index.shards)
     ]
-    return SplitPrimitiveTensor(ts=shards, shard_dim=tensor.shard_dim)
+    return SplitPrimitiveTensor(
+        ts=shards, shard_dim=tensor.shard_dim, insert_device_assignment=False
+    )
 
 
 @interpolate.override(ReplicatedTensor)
@@ -848,13 +870,15 @@ def module_register_buffer_sharded(
 def permute_split(tensor: SplitPrimitiveTensor, dims: List[int]):
     permuted_shards = [permute(shard, dims) for shard in tensor.shards]
     permuted_shard_dim = dims[tensor.shard_dim]
-    return SplitPrimitiveTensor(ts=permuted_shards, shard_dim=permuted_shard_dim)
+    return SplitPrimitiveTensor(
+        ts=permuted_shards, shard_dim=permuted_shard_dim, insert_device_assignment=False
+    )
 
 
 @permute.override(ReplicatedTensor)
 def permute_replicated(tensor: ReplicatedTensor, dims: List[int]):
     permuted_shards = [permute(shard, dims) for shard in tensor.shards]
-    return ReplicatedTensor(ts=permuted_shards)
+    return ReplicatedTensor(ts=permuted_shards, insert_device_assignment=False)
 
 
 @repeat.override(ReplicatedTensor)
@@ -992,7 +1016,9 @@ def reshard_split_replicated(
         ]
         for shard_idx, shard in enumerate(input.shards)
     ]
-    return SplitPrimitiveTensor(ts=shards, shard_dim=dim)
+    return SplitPrimitiveTensor(
+        ts=shards, shard_dim=dim, insert_device_assignment=False
+    )
 
 
 @reshard_like.override(Tensor, SplitPrimitiveTensor)
@@ -1119,7 +1145,9 @@ def transpose_split(
         shard_dim = dim1
     elif shard_dim == dim1:
         shard_dim = dim0
-    return SplitPrimitiveTensor(ts=shards, shard_dim=shard_dim)
+    return SplitPrimitiveTensor(
+        ts=shards, shard_dim=shard_dim, insert_device_assignment=False
+    )
 
 
 @unflatten.override(SplitPrimitiveTensor)
@@ -1131,7 +1159,9 @@ def unflatten_split(
     shard_dim = input.shard_dim
     if dim < shard_dim:
         shard_dim += len(sizes) - 1
-    return SplitPrimitiveTensor(ts=shards, shard_dim=shard_dim)
+    return SplitPrimitiveTensor(
+        ts=shards, shard_dim=shard_dim, insert_device_assignment=False
+    )
 
 
 @unshard.override(ReplicatedTensor)
@@ -1234,13 +1264,15 @@ def unsqueeze_split(tensor: SplitPrimitiveTensor, dim: int) -> SplitPrimitiveTen
     dim_resolved = dim if dim >= 0 else dim + len(tensor.shape) + 1
     if shard_dim >= dim_resolved:
         shard_dim += 1
-    return SplitPrimitiveTensor(ts=shards, shard_dim=shard_dim)
+    return SplitPrimitiveTensor(
+        ts=shards, shard_dim=shard_dim, insert_device_assignment=False
+    )
 
 
 @unsqueeze.override(ReplicatedTensor)
 def unsqueeze_replicated(tensor: ReplicatedTensor, dim: int) -> SplitPrimitiveTensor:
     shards = [torch.unsqueeze(unbox_tensor(shard), dim) for shard in tensor.shards]
-    return ReplicatedTensor(ts=shards)
+    return ReplicatedTensor(ts=shards, insert_device_assignment=False)
 
 
 @view.override(SplitPrimitiveTensor)
@@ -1269,6 +1301,8 @@ def view_split(tensor: SplitPrimitiveTensor, shape: List[int]) -> SplitPrimitive
     new_shard_shape = list(shape)
     new_shard_shape[shard_dim] //= tensor.shard_count
     shards = [view(shard, new_shard_shape) for shard in tensor.shards]
-    res = SplitPrimitiveTensor(shard_dim=shard_dim, ts=shards)
+    res = SplitPrimitiveTensor(
+        shard_dim=shard_dim, ts=shards, insert_device_assignment=False
+    )
     assert math.prod(res.shape) == math.prod(tensor.shape)
     return res

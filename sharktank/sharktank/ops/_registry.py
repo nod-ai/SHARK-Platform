@@ -188,12 +188,21 @@ class SignatureDispatcher:
         "_trampoline",
     ]
 
+    AtentryHook = Callable[..., None]
+    # (args, kwargs, result) -> None
+    AtexitHook = Callable[[list, dict, tuple | Any], None]
+    atentry_hooks: list[AtentryHook] = []
+    atexit_hooks: list[AtexitHook] = []
+
     def __init__(self, sigf: Callable):
         self._target_cache = dict()
         self._trampoline: Optional[Callable] = None
         self._overrides: list[_TargetOverride] = []
 
     def __call__(self, *args, **kwargs):
+        for hook in type(self).atentry_hooks:
+            hook(*args, **kwargs)
+
         trampoline = self._trampoline
         assert trampoline is not None
         selected_override, *results = trampoline(self, *args, **kwargs)
@@ -202,11 +211,16 @@ class SignatureDispatcher:
             _TEST_LAST_OP_DISPATCH = selected_override
         arity = len(results)
         if arity == 1:
-            return results[0]
+            result = results[0]
         elif arity == 0:
-            return None
+            result = None
         else:
-            return results
+            result = results
+
+        for hook in type(self).atexit_hooks:
+            hook(args, kwargs, result)
+
+        return result
 
     def override(
         self,
@@ -254,6 +268,14 @@ class SignatureDispatcher:
     def trampoline(self, trampoline: Callable):
         assert self._trampoline is None
         self._trampoline = trampoline
+
+    @classmethod
+    def register_atentry_hook(cls, hook: AtentryHook):
+        cls.atentry_hooks.append(hook)
+
+    @classmethod
+    def register_atexit_hook(cls, hook: AtexitHook):
+        cls.atexit_hooks.append(hook)
 
     def _is_type_expr_target(
         self, override_type_spec: Tuple[type, ...], type_spec: Tuple[type, ...]

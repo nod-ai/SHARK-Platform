@@ -11,6 +11,7 @@ import shutil
 import tempfile
 import unittest
 import torch
+from torch.utils._pytree import tree_flatten
 
 from ..types import *
 
@@ -49,6 +50,14 @@ class MainRunnerTestBase(TempDirTestBase):
     def assertFileWritten(self, p: Path):
         self.assertTrue(p.exists(), msg=f"Expected file {p} was not created")
         self.assertGreater(p.stat().st_size, 0, msg=f"Expected file {p} had zero size")
+
+
+def assert_if_nan(*args, **kwargs):
+    """Assert if any torch tensors in the flattened tree have NaNs."""
+    flat_list = tree_flatten([args, kwargs])[0]
+    tensor_list = [v for v in flat_list if isinstance(v, torch.Tensor)]
+    for tensor in tensor_list:
+        assert not tensor.isnan().any(), "Encountered NaN(s) in tensor"
 
 
 @contextlib.contextmanager
