@@ -32,6 +32,10 @@ jobs:
       VENV_DIR: ${{ github.workspace }}/.venv
       SHARK_PLATFORM_REPO_ROOT: ${{ github.workspace }}
     steps:
+      - name: Get Current Date
+        id: date
+        run: echo "::set-output name=date::$(date +'%Y-%m-%d')"
+
       - name: "Setting up Python"
         id: setup_python
         uses: actions/setup-python@v3
@@ -74,4 +78,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: llama-files
-          path: ${{ github.workspace }}/files/
+          path: ${{ github.workspace }}/${{ steps.date.outputs.date }}
