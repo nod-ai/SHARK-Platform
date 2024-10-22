@@ -1,5 +1,5 @@
-import array
 import logging
+
 import numpy as np
 
 from shortfin import array as sfnp

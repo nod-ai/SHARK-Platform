@@ -4,16 +4,29 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-import array
 import logging
 import math
-import numpy as np
+import os
 import pytest
+
+
+# Debug module requires SHORTFIN_CMAKE_BUILD_TYPE to be set to Debug
+@pytest.fixture(autouse=True, scope="module")
+def set_debug_mode():
+    old_value = os.environ.get("SHORTFIN_CMAKE_BUILD_TYPE")
+    os.environ["SHORTFIN_CMAKE_BUILD_TYPE"] = "Debug"
+    yield
+    if old_value is None:
+        del os.environ["SHORTFIN_CMAKE_BUILD_TYPE"]
+    else:
+        os.environ["SHORTFIN_CMAKE_BUILD_TYPE"] = old_value
+
 
 import shortfin as sf
 import shortfin.array as sfnp
-import shortfin.debug.array as debug_array
 import shortfin.host
+
+np = pytest.importorskip("numpy", reason="numpy is not installed")
 
 
 @pytest.fixture
@@ -42,6 +55,8 @@ def caplog(caplog):
 
 
 def test_to_np_from_device_array(device, lsys):
+    import shortfin.debug.array as debug_array
+
     async def main():
         shape = [4, 16, 128]
         src = sfnp.device_array(device, shape, dtype=sfnp.float32)
@@ -70,6 +85,8 @@ def test_to_np_from_device_array(device, lsys):
 
 
 def test_to_np_from_device_f16(device, lsys):
+    import shortfin.debug.array as debug_array
+
     def int_to_f16_uint(n):
         """Converts an integer to a float16 uint, for convenient testing."""
         if n == 0:
@@ -116,6 +133,8 @@ def test_to_np_from_device_f16(device, lsys):
 
 
 def test_dump_array(device, lsys, caplog):
+    import shortfin.debug.array as debug_array
+
     async def main():
         shape = [4, 16, 128]
         src = sfnp.device_array(device, shape, dtype=sfnp.float32)
@@ -133,6 +152,8 @@ def test_dump_array(device, lsys, caplog):
 
 
 def test_fill_array(device, lsys):
+    import shortfin.debug.array as debug_array
+
     async def main():
         shape = [4, 16, 128]
         src = sfnp.device_array(device, shape, dtype=sfnp.float32)
@@ -154,6 +175,8 @@ def test_fill_array(device, lsys):
 
 
 def test_find_mode_basic():
+    import shortfin.debug.array as debug_array
+
     arr = np.array([1, 2, 3, 3, 4, 5, 5, 5, 5, 5])
     mode, count = debug_array.find_mode(arr)
     assert mode == 5
@@ -161,6 +184,8 @@ def test_find_mode_basic():
 
 
 def test_find_mode_empty():
+    import shortfin.debug.array as debug_array
+
     arr = np.array([])
     mode, count = debug_array.find_mode(arr)
     assert math.isnan(mode)
@@ -168,6 +193,8 @@ def test_find_mode_empty():
 
 
 def test_find_mode_multi_dim():
+    import shortfin.debug.array as debug_array
+
     arr = np.array([[1, 2, 3], [3, 4, 5], [5, 5, 5]])
     mode, count = debug_array.find_mode(arr, axis=1)
     assert mode.tolist() == [1, 3, 5]
@@ -175,6 +202,8 @@ def test_find_mode_multi_dim():
 
 
 def test_find_mode_keep_dim():
+    import shortfin.debug.array as debug_array
+
     arr = np.array([[1, 2, 3], [3, 4, 5], [5, 5, 5]])
     mode, count = debug_array.find_mode(arr, axis=1, keepdims=True)
     assert mode.tolist() == [[1], [3], [5]]
@@ -182,6 +211,8 @@ def test_find_mode_keep_dim():
 
 
 def test_log_tensor_stats_basic(device, lsys, caplog):
+    import shortfin.debug.array as debug_array
+
     async def main():
         shape = [1, 6]
         src = sfnp.device_array(device, shape, dtype=sfnp.float32)
@@ -203,6 +234,8 @@ def test_log_tensor_stats_basic(device, lsys, caplog):
 
 
 def test_log_tensor_stats_with_nan(device, lsys, caplog):
+    import shortfin.debug.array as debug_array
+
     async def main():
         shape = [1, 8]
         src = sfnp.device_array(device, shape, dtype=sfnp.float32)
@@ -224,6 +257,8 @@ def test_log_tensor_stats_with_nan(device, lsys, caplog):
 
 
 def test_log_tensor_stats_empty(device, lsys, caplog):
+    import shortfin.debug.array as debug_array
+
     async def main():
         shape = [1, 0]
         src = sfnp.device_array(device, shape, dtype=sfnp.float32)
@@ -237,6 +272,8 @@ def test_log_tensor_stats_empty(device, lsys, caplog):
 
 
 def test_log_tensor_stats_multi_dim(device, lsys, caplog):
+    import shortfin.debug.array as debug_array
+
     async def main():
         shape = [3, 3]
         src = sfnp.device_array(device, shape, dtype=sfnp.float32)
