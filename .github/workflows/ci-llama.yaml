@@ -23,14 +23,13 @@ jobs:
         version: [3.11]
         os: [llama-mi300]
       fail-fast: false
-    runs-on: ${{matrix.os}}
+    runs-on: ${{matrix.runs-on}}
     defaults:
       run:
         shell: bash
     env:
       PIP_CACHE_DIR: "${{ github.workspace }}/.pip-cache"
       VENV_DIR: ${{ github.workspace }}/.venv
-      SHARK_PLATFORM_REPO_ROOT: ${{ github.workspace }}
     steps:
       - name: Get Current Date
         id: date
