@@ -6,7 +6,7 @@
 
 import unittest
 import pytest
-import json
+import numpy as np
 
 from sharktank.evaluate import perplexity
 
@@ -19,9 +19,9 @@ class PerplexityTest(unittest.TestCase):
         self.current_perplexity_all = {}
         self.delta = 5e-1
         self.tensor_parallelism_size = 8
-
-        with open(self.baseline_perplexity_score_json, "r") as f:
-            self.baseline_perplexity = json.load(f)
+        self.baseline_perplexity = np.load(
+            self.baseline_perplexity_scores, allow_pickle=True
+        ).item()
 
     @longrun
     def test_llama3_8B_f16_decomposed(self):
@@ -38,11 +38,16 @@ class PerplexityTest(unittest.TestCase):
             ]
         )
 
+        perplexity_difference = (
+            current_perplexity["mean_perplexity"]
+            - baseline_perplexity["mean_perplexity"]
+        )
+
         self.assertAlmostEqual(
             baseline_perplexity["mean_perplexity"],
             current_perplexity["mean_perplexity"],
             delta=self.delta,
-            msg=f"Perplexity is deviating more than {self.delta}",
+            msg=f"Current perplexity deviates baseline by {perplexity_difference}",
         )
 
     @pytest.mark.xfail(
@@ -64,11 +69,16 @@ class PerplexityTest(unittest.TestCase):
             ]
         )
 
+        perplexity_difference = (
+            current_perplexity["mean_perplexity"]
+            - baseline_perplexity["mean_perplexity"]
+        )
+
         self.assertAlmostEqual(
             baseline_perplexity["mean_perplexity"],
             current_perplexity["mean_perplexity"],
             delta=self.delta,
-            msg=f"Perplexity is deviating more than {self.delta}",
+            msg=f"Current perplexity deviates baseline by {perplexity_difference}",
         )
 
     @pytest.mark.xfail(
@@ -89,11 +99,16 @@ class PerplexityTest(unittest.TestCase):
             ]
         )
 
+        perplexity_difference = (
+            current_perplexity["mean_perplexity"]
+            - baseline_perplexity["mean_perplexity"]
+        )
+
         self.assertAlmostEqual(
             baseline_perplexity["mean_perplexity"],
             current_perplexity["mean_perplexity"],
             delta=self.delta,
-            msg=f"Perplexity is deviating more than {self.delta}",
+            msg=f"Current perplexity deviates baseline by {perplexity_difference}",
         )
 
     @pytest.mark.xfail(
@@ -115,11 +130,16 @@ class PerplexityTest(unittest.TestCase):
             ]
         )
 
+        perplexity_difference = (
+            current_perplexity["mean_perplexity"]
+            - baseline_perplexity["mean_perplexity"]
+        )
+
         self.assertAlmostEqual(
             baseline_perplexity["mean_perplexity"],
             current_perplexity["mean_perplexity"],
             delta=self.delta,
-            msg=f"Perplexity is deviating more than {self.delta}",
+            msg=f"Current perplexity deviates baseline by {perplexity_difference}",
         )
 
     @longrun
@@ -138,11 +158,16 @@ class PerplexityTest(unittest.TestCase):
             ]
         )
 
+        perplexity_difference = (
+            current_perplexity["mean_perplexity"]
+            - baseline_perplexity["mean_perplexity"]
+        )
+
         self.assertAlmostEqual(
             baseline_perplexity["mean_perplexity"],
             current_perplexity["mean_perplexity"],
             delta=self.delta,
-            msg=f"Perplexity is deviating more than {self.delta}",
+            msg=f"Current perplexity deviates baseline by {perplexity_difference}",
         )
 
     @pytest.mark.xfail(
@@ -165,11 +190,16 @@ class PerplexityTest(unittest.TestCase):
             ]
         )
 
+        perplexity_difference = (
+            current_perplexity["mean_perplexity"]
+            - baseline_perplexity["mean_perplexity"]
+        )
+
         self.assertAlmostEqual(
             baseline_perplexity["mean_perplexity"],
             current_perplexity["mean_perplexity"],
             delta=self.delta,
-            msg=f"Perplexity is deviating more than {self.delta}",
+            msg=f"Current perplexity deviates baseline by {perplexity_difference}",
         )
 
     @pytest.mark.xfail(
@@ -191,11 +221,16 @@ class PerplexityTest(unittest.TestCase):
             ]
         )
 
+        perplexity_difference = (
+            current_perplexity["mean_perplexity"]
+            - baseline_perplexity["mean_perplexity"]
+        )
+
         self.assertAlmostEqual(
             baseline_perplexity["mean_perplexity"],
             current_perplexity["mean_perplexity"],
             delta=self.delta,
-            msg=f"Perplexity is deviating more than {self.delta}",
+            msg=f"Current perplexity deviates baseline by {perplexity_difference}",
         )
 
     @pytest.mark.xfail(
@@ -218,11 +253,16 @@ class PerplexityTest(unittest.TestCase):
             ]
         )
 
+        perplexity_difference = (
+            current_perplexity["mean_perplexity"]
+            - baseline_perplexity["mean_perplexity"]
+        )
+
         self.assertAlmostEqual(
             baseline_perplexity["mean_perplexity"],
             current_perplexity["mean_perplexity"],
             delta=self.delta,
-            msg=f"Perplexity is deviating more than {self.delta}",
+            msg=f"Current perplexity deviates baseline by {perplexity_difference}",
         )
 
 

@@ -121,11 +121,11 @@ def pytest_addoption(parser):
     )
 
     parser.addoption(
-        "--baseline-perplexity-score-json",
+        "--baseline-perplexity-scores",
         type=Path,
         action="store",
-        default="sharktank/tests/evaluate/baseline_perplexity_scores.json",
-        help="Llama3.1 8B & 405B model baseline perplexity scores json",
+        default="https://sharkpublic.blob.core.windows.net/sharkpublic/halo-models/evaluation/baseline_perplexity_scores.npy",
+        help="Llama3.1 8B & 405B model baseline perplexity scores",
     )
 
 
@@ -189,7 +189,7 @@ def get_model_path(request: FixtureRequest):
     model_path["llama3_405b_fp8_model_path"] = set_fixture_from_cli_option(
         request, "--llama3-405b-fp8-model-path", "llama3_405b_fp8_model"
     )
-    model_path["baseline_perplexity_score_json"] = set_fixture_from_cli_option(
-        request, "--baseline-perplexity-score-json", "baseline_perplexity_score_json"
+    model_path["baseline_perplexity_scores"] = set_fixture_from_cli_option(
+        request, "--baseline-perplexity-scores", "baseline_perplexity_scores"
     )
     return model_path
