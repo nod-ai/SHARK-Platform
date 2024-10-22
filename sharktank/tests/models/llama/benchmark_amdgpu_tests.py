@@ -87,7 +87,11 @@ class BaseBenchmarkTest(unittest.TestCase):
     directory_created = False
     current_date = datetime.now()
     dir_path_suffix = current_date.strftime("%Y-%m-%d")
-    repo_root = os.getcwd()
+    cur_dir = os.path.dirname(os.path.abspath(__file__))
+    models_dir = os.path.dirname(cur_dir)
+    tests_dir = os.path.dirname(models_dir)
+    sharktank_dir = os.path.dirname(tests_dir)
+    repo_root = os.path.dirname(sharktank_dir)
     dir_path = Path(repo_root + "/" + dir_path_suffix)
 
     @classmethod
@@ -99,7 +103,7 @@ class BaseBenchmarkTest(unittest.TestCase):
             cls.directory_created = True
 
     def setUp(self):
-        os.environ["HIP_DEVICE_ID"] = "0"
+        self.hip_device_id = os.getenv("HIP_DEVICE_ID", default="0")
 
     def create_file(self, *, suffix, prefix):
         file_path = Path(prefix).with_suffix(suffix)
@@ -323,7 +327,7 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
         )
         # benchmark prefill
         self.iree_benchmark_module(
-            hip_device_id=os.getenv("HIP_DEVICE_ID"),
+            hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path,
             args=self.iree_run_prefill_args,
@@ -331,7 +335,7 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
         )
         # benchmark decode
         self.iree_benchmark_module(
-            hip_device_id=os.getenv("HIP_DEVICE_ID"),
+            hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path,
             args=self.iree_run_decode_args,
@@ -340,9 +344,9 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
 
     @longrun
     @is_mi300x
+    @pytest.mark.xfail(reason="torch_sdpa not yet plumbed through", strict=True)
     def testBenchmark8B_f16_Non_Decomposed(self):
         output_file_name = self.dir_path_8b / "f16_torch_sdpa"
-        pytest.xfail("torch_sdpa not yet plumbed through")
         output_mlir = self.create_file(suffix=".mlir", prefix=output_file_name)
         output_json = self.create_file(suffix=".json", prefix=output_file_name)
         output_vmfb = self.create_file(suffix=".vmfb", prefix=output_file_name)
@@ -365,7 +369,7 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
         )
         # benchmark prefill
         self.iree_benchmark_module(
-            hip_device_id=os.getenv("HIP_DEVICE_ID"),
+            hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path,
             args=self.iree_run_prefill_args,
@@ -373,7 +377,7 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
         )
         # benchmark decode
         self.iree_benchmark_module(
-            hip_device_id=os.getenv("HIP_DEVICE_ID"),
+            hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path,
             args=self.iree_run_decode_args,
@@ -382,9 +386,9 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
 
     @longrun
     @is_mi300x
+    @pytest.mark.xfail(reason="8B fp8 irpa path not stored yet", strict=True)
     def testBenchmark8B_fp8_Decomposed(self):
         output_file_name = self.dir_path_8b / "fp8_decomposed"
-        pytest.xfail("8B fp8 irpa path not stored yet")
         output_mlir = self.create_file(suffix=".mlir", prefix=output_file_name)
         output_json = self.create_file(suffix=".json", prefix=output_file_name)
         output_vmfb = self.create_file(suffix=".vmfb", prefix=output_file_name)
@@ -407,7 +411,7 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
         )
         # benchmark prefill
         self.iree_benchmark_module(
-            hip_device_id=os.getenv("HIP_DEVICE_ID"),
+            hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path_fp8,
             args=self.iree_run_prefill_args,
@@ -415,7 +419,7 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
         )
         # benchmark decode
         self.iree_benchmark_module(
-            hip_device_id=os.getenv("HIP_DEVICE_ID"),
+            hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path_fp8,
             args=self.iree_run_decode_args,
@@ -424,9 +428,9 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
 
     @longrun
     @is_mi300x
+    @pytest.mark.xfail(reason="torch_sdpa not yet plumbed through", strict=True)
     def testBenchmark8B_fp8_Non_Decomposed(self):
         output_file_name = self.dir_path_8b / "fp8_torch_sdpa"
-        pytest.xfail("torch_sdpa not yet plumbed through")
         output_mlir = self.create_file(suffix=".mlir", prefix=output_file_name)
         output_json = self.create_file(suffix=".json", prefix=output_file_name)
         output_vmfb = self.create_file(suffix=".vmfb", prefix=output_file_name)
@@ -449,7 +453,7 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
         )
         # benchmark prefill
         self.iree_benchmark_module(
-            hip_device_id=os.getenv("HIP_DEVICE_ID"),
+            hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path_fp8,
             args=self.iree_run_prefill_args_fp8,
@@ -457,7 +461,7 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
         )
         # benchmark decode
         self.iree_benchmark_module(
-            hip_device_id=os.getenv("HIP_DEVICE_ID"),
+            hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path_fp8,
             args=self.iree_run_decode_args_fp8,
@@ -521,9 +525,9 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
 
     @longrun
     @is_mi300x
+    @pytest.mark.xfail(reason="70b f16 irpa path not stored yet", strict=True)
     def testBenchmark70B_f16_Decomposed(self):
         output_file_name = self.dir_path_70b / "f16_decomposed"
-        pytest.xfail("70b f16 irpa path not stored yet")
         output_mlir = self.create_file(suffix=".mlir", prefix=output_file_name)
         output_json = self.create_file(suffix=".json", prefix=output_file_name)
         output_vmfb = self.create_file(suffix=".vmfb", prefix=output_file_name)
@@ -546,7 +550,7 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
         )
         # benchmark prefill
         self.iree_benchmark_module(
-            hip_device_id=os.getenv("HIP_DEVICE_ID"),
+            hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path,
             args=self.iree_run_prefill_args,
@@ -554,7 +558,7 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
         )
         # benchmark decode
         self.iree_benchmark_module(
-            hip_device_id=os.getenv("HIP_DEVICE_ID"),
+            hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path,
             args=self.iree_run_decode_args,
@@ -563,9 +567,9 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
 
     @longrun
     @is_mi300x
+    @pytest.mark.xfail(reason="torch_sdpa not yet plumbed through", strict=True)
     def testBenchmark70B_f16_Non_Decomposed(self):
         output_file_name = self.dir_path_70b / "f16_torch_sdpa"
-        pytest.xfail("torch_sdpa not yet plumbed through")
         output_mlir = self.create_file(suffix=".mlir", prefix=output_file_name)
         output_json = self.create_file(suffix=".json", prefix=output_file_name)
         output_vmfb = self.create_file(suffix=".vmfb", prefix=output_file_name)
@@ -588,7 +592,7 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
         )
         # benchmark prefill
         self.iree_benchmark_module(
-            hip_device_id=os.getenv("HIP_DEVICE_ID"),
+            hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path,
             args=self.iree_run_prefill_args,
@@ -596,7 +600,7 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
         )
         # benchmark decode
         self.iree_benchmark_module(
-            hip_device_id=os.getenv("HIP_DEVICE_ID"),
+            hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path,
             args=self.iree_run_decode_args,
@@ -605,9 +609,9 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
 
     @longrun
     @is_mi300x
+    @pytest.mark.xfail(reason="70B fp8 irpa path not stored yet", strict=True)
     def testBenchmark70B_fp8_Decomposed(self):
         output_file_name = self.dir_path_70b / "fp8_decomposed"
-        pytest.xfail("70B fp8 irpa path not stored yet")
         output_mlir = self.create_file(suffix=".mlir", prefix=output_file_name)
         output_json = self.create_file(suffix=".json", prefix=output_file_name)
         output_vmfb = self.create_file(suffix=".vmfb", prefix=output_file_name)
@@ -630,7 +634,7 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
         )
         # benchmark prefill
         self.iree_benchmark_module(
-            hip_device_id=os.getenv("HIP_DEVICE_ID"),
+            hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path_fp8,
             args=self.iree_run_prefill_args,
@@ -638,7 +642,7 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
         )
         # benchmark decode
         self.iree_benchmark_module(
-            hip_device_id=os.getenv("HIP_DEVICE_ID"),
+            hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path_fp8,
             args=self.iree_run_decode_args,
@@ -647,9 +651,9 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
 
     @longrun
     @is_mi300x
+    @pytest.mark.xfail(reason="torch_sdpa not yet plumbed through", strict=True)
     def testBenchmark70B_fp8_Non_Decomposed(self):
         output_file_name = self.dir_path_70b / "fp8_torch_sdpa"
-        pytest.xfail("torch_sdpa not yet plumbed through")
         output_mlir = self.create_file(suffix=".mlir", prefix=output_file_name)
         output_json = self.create_file(suffix=".json", prefix=output_file_name)
         output_vmfb = self.create_file(suffix=".vmfb", prefix=output_file_name)
@@ -672,7 +676,7 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
         )
         # benchmark prefill
         self.iree_benchmark_module(
-            hip_device_id=os.getenv("HIP_DEVICE_ID"),
+            hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path_fp8,
             args=self.iree_run_prefill_args_fp8,
@@ -680,7 +684,7 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
         )
         # benchmark decode
         self.iree_benchmark_module(
-            hip_device_id=os.getenv("HIP_DEVICE_ID"),
+            hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path_fp8,
             args=self.iree_run_decode_args_fp8,
@@ -744,9 +748,9 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
 
     @longrun
     @is_mi300x
+    @pytest.mark.xfail(reason="405B f16 irpa path not stored yet", strict=True)
     def testBenchmark405B_f16_Decomposed(self):
         output_file_name = self.dir_path_405b / "f16_decomposed"
-        pytest.xfail("405B f16 irpa path not stored yet")
         output_mlir = self.create_file(suffix=".mlir", prefix=output_file_name)
         output_json = self.create_file(suffix=".json", prefix=output_file_name)
         output_vmfb = self.create_file(suffix=".vmfb", prefix=output_file_name)
@@ -769,7 +773,7 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
         )
         # benchmark prefill
         self.iree_benchmark_module(
-            hip_device_id=os.getenv("HIP_DEVICE_ID"),
+            hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path,
             args=self.iree_run_prefill_args,
@@ -777,7 +781,7 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
         )
         # benchmark decode
         self.iree_benchmark_module(
-            hip_device_id=os.getenv("HIP_DEVICE_ID"),
+            hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path,
             args=self.iree_run_decode_args,
@@ -786,9 +790,9 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
 
     @longrun
     @is_mi300x
+    @pytest.mark.xfail(reason="torch_sdpa not yet plumbed through", strict=True)
     def testBenchmark405B_f16_Non_Decomposed(self):
         output_file_name = self.dir_path_405b / "f16_torch_sdpa"
-        pytest.xfail("torch_sdpa not yet plumbed through")
         output_mlir = self.create_file(suffix=".mlir", prefix=output_file_name)
         output_json = self.create_file(suffix=".json", prefix=output_file_name)
         output_vmfb = self.create_file(suffix=".vmfb", prefix=output_file_name)
@@ -811,7 +815,7 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
         )
         # benchmark prefill
         self.iree_benchmark_module(
-            hip_device_id=os.getenv("HIP_DEVICE_ID"),
+            hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path,
             args=self.iree_run_prefill_args,
@@ -819,7 +823,7 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
         )
         # benchmark decode
         self.iree_benchmark_module(
-            hip_device_id=os.getenv("HIP_DEVICE_ID"),
+            hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path,
             args=self.iree_run_decode_args,
@@ -828,9 +832,9 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
 
     @longrun
     @is_mi300x
+    @pytest.mark.xfail(reason="405B fp8 irpa path not stored yet", strict=True)
     def testBenchmark405B_fp8_Decomposed(self):
         output_file_name = self.dir_path_405b / "fp8_decomposed"
-        pytest.xfail("405B fp8 irpa path not stored yet")
         output_mlir = self.create_file(suffix=".mlir", prefix=output_file_name)
         output_json = self.create_file(suffix=".json", prefix=output_file_name)
         output_vmfb = self.create_file(suffix=".vmfb", prefix=output_file_name)
@@ -853,7 +857,7 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
         )
         # benchmark prefill
         self.iree_benchmark_module(
-            hip_device_id=os.getenv("HIP_DEVICE_ID"),
+            hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path,
             args=self.iree_run_prefill_args,
@@ -861,7 +865,7 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
         )
         # benchmark decode
         self.iree_benchmark_module(
-            hip_device_id=os.getenv("HIP_DEVICE_ID"),
+            hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path,
             args=self.iree_run_decode_args,
@@ -870,9 +874,9 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
 
     @longrun
     @is_mi300x
+    @pytest.mark.xfail(reason="torch_sdpa not yet plumbed through", strict=True)
     def testBenchmark405B_fp8_Non_Decomposed(self):
         output_file_name = self.dir_path_405b / "fp8_torch_sdpa"
-        pytest.xfail("torch_sdpa not yet plumbed through")
         output_mlir = self.create_file(suffix=".mlir", prefix=output_file_name)
         output_json = self.create_file(suffix=".json", prefix=output_file_name)
         output_vmfb = self.create_file(suffix=".vmfb", prefix=output_file_name)
@@ -895,7 +899,7 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
         )
         # benchmark prefill
         self.iree_benchmark_module(
-            hip_device_id=os.getenv("HIP_DEVICE_ID"),
+            hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path_fp8,
             args=self.iree_run_prefill_args_fp8,
@@ -903,7 +907,7 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
         )
         # benchmark decode
         self.iree_benchmark_module(
-            hip_device_id=os.getenv("HIP_DEVICE_ID"),
+            hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path_fp8,
             args=self.iree_run_decode_args_fp8,
