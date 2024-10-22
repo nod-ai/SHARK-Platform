@@ -401,6 +401,104 @@ class ElementwiseTest(unittest.TestCase):
         actual_result = iree_to_torch(*iree_args)[0]
         torch.testing.assert_close(actual_result, expected_result)
 
+    @pytest.mark.xfail(
+        reason=(
+            "We are inserting device transfers that introduce a copy a screw up the"
+            " in-place semantics."
+        ),
+        strict=True,
+        raises=AssertionError,
+    )
+    def testInPlaceAddWithIreeOfShardedSplitTensor(self):
+        if self.path_prefix is not None:
+            self.runTestInPlaceAddWithIreeOfShardedSplitTensor(
+                path_prefix=self.path_prefix, dump_enabled=True
+            )
+        else:
+            with tempfile.TemporaryDirectory() as temp_dir:
+                self.runTestInPlaceAddWithIreeOfShardedSplitTensor(
+                    path_prefix=f"{temp_dir}/", dump_enabled=False
+                )
+
+    def runTestInPlaceAddWithIreeOfShardedSplitTensor(
+        self, path_prefix: str, dump_enabled: bool
+    ):
+        shard_dim = 0
+        shard_count = 2
+        dtype = torch.float32
+
+        class Module(torch.nn.Module):
+            def main(self, tensor: AnyTensor):
+                tensor += 1
+                # TODO: figure out why when not returning anything the export fails.
+                return torch.empty([1], dtype=dtype)
+
+        tensor = torch.tensor([1, 2, 3, 4], dtype=dtype)
+        expected_result = torch.tensor([2, 3, 4, 5], dtype=dtype)
+        sharded_tensor = ops.reshard_split(tensor, dim=shard_dim, count=shard_count)
+
+        module = Module()
+
+        fxb = FxProgramsBuilder(module)
+
+        @fxb.export_program(
+            args=(sharded_tensor,),
+            name="main",
+            strict=False,
+        )
+        def _(model, *args, **kwargs) -> AnyTensor:
+            return model.main(*args, **kwargs)
+
+        if dump_enabled:
+            for program_name, ep in fxb.programs.items():
+                with open(
+                    f"{path_prefix}{program_name}.torch.fx.txt",
+                    "w",
+                ) as f:
+                    print(str(ep), file=f)
+
+        output = export(fxb)
+        if dump_enabled:
+            output.save_mlir(f"{path_prefix}program.mlir")
+
+        iree_module_path = f"{path_prefix}program.vmfb"
+        output.session.set_flags(
+            *[f"--iree-hal-target-device=llvm-cpu[{i}]" for i in range(shard_count)]
+        )
+        output.compile(
+            save_to=iree_module_path,
+            target_backends=None,
+        )
+
+        iree_driver = "local-task"
+        iree_devices = get_iree_devices(
+            driver=iree_driver,
+            device_count=shard_count,
+        )
+        iree_module, vm_context, vm_instance = load_iree_module(
+            module_path=iree_module_path,
+            devices=iree_devices,
+        )
+        iree_args = prepare_iree_module_function_args(
+            args=[sharded_tensor],
+            devices=iree_devices,
+        )
+        run_iree_module_function(
+            args=iree_args,
+            function_name="main",
+            module=iree_module,
+            vm_context=vm_context,
+            driver=iree_driver,
+            trace_path_prefix=path_prefix if dump_enabled else None,
+        )
+        iree_args_as_torch = iree_to_torch(*iree_args)
+        iree_args_sharded_tensor = SplitPrimitiveTensor(
+            ts=iree_args_as_torch,
+            shard_dim=shard_dim,
+        )
+        actual_result = ops.unshard(iree_args_sharded_tensor)
+        torch.testing.assert_close(actual_result, expected_result)
+
 
 class EqualTest(unittest.TestCase):
     def testNotEqualReplicated(self):
