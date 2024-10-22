@@ -90,16 +90,16 @@ async def log_tensor_stats(tensor: sfnp.device_array):
     # Remove NaN values
     np_array_no_nan = np_array[~np.isnan(np_array)]
 
-    logger.info(f"  NaN count: {nan_count} / {np_array.size}")
-    logger.info(f"  Shape: {np_array.shape}, dtype: {np_array.dtype}")
+    logger.debug(f"  NaN count: {nan_count} / {np_array.size}")
+    logger.debug(f"  Shape: {np_array.shape}, dtype: {np_array.dtype}")
 
     if len(np_array_no_nan) > 0:
         mode = find_mode(np_array_no_nan)[0]
-        logger.info(f"  Min (excluding NaN): {np_array_no_nan.min()}")
-        logger.info(f"  Max (excluding NaN): {np_array_no_nan.max()}")
-        logger.info(f"  Mean (excluding NaN): {np_array_no_nan.mean()}")
-        logger.info(f"  Mode (excluding NaN): {mode}")
-        logger.info(
+        logger.debug(f"  Min (excluding NaN): {np_array_no_nan.min()}")
+        logger.debug(f"  Max (excluding NaN): {np_array_no_nan.max()}")
+        logger.debug(f"  Mean (excluding NaN): {np_array_no_nan.mean()}")
+        logger.debug(f"  Mode (excluding NaN): {mode}")
+        logger.debug(
             f"  First 10 elements: {np_array_no_nan.flatten()[:10]}"
             f"  Last 10 elements: {np_array_no_nan.flatten()[-10:]}"
         )
