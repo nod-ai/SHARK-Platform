@@ -9,6 +9,7 @@ import logging
 from dataclasses import astuple, dataclass
 from enum import Enum
 from typing import Optional
+from abc import abstractmethod
 
 from iree.compiler import ir  # type: ignore
 
@@ -45,6 +46,7 @@ class DispatchKind(Enum):
     batch_mmt = 4
     batch_matmul = 5
     broadcast_rhs_mmt = 6
+    mmt4d = 7
 
 
 @dataclass
@@ -194,24 +196,161 @@ class GpuPipelineOptions:
 
 
 @dataclass
-class Configuration:
+class BaseConfiguration:
+    config_logger = logging.getLogger("tune")
+    tile_sizes: list[int]
+
+    @abstractmethod
+    def get_pipeline_config(self) -> str:
+        pass
+
+    @abstractmethod
+    def get_intrinsic_config(self) -> str:
+        pass
+
+    def get_base_mlir_config(self, tile_sizes: list[int]) -> str:
+        tile_sizes_str = ", ".join(map(str, tile_sizes))
+        return f"""
+    %config = transform.param.constant #iree_codegen.compilation_info<
+        lowering_config = #iree_codegen.lowering_config<tile_sizes = [[{tile_sizes_str}]]>,
+    """
+
+    @abstractmethod
+    def get_mlir_config(self, tile_sizes: list[int]) -> str:
+        base_config = self.get_base_mlir_config(tile_sizes)
+        full_config = f"""
+        translation_info = #iree_codegen.translation_info<NONE>
+        > -> !transform.any_param
+    """
+
+        return base_config + full_config
+
+    @abstractmethod
+    def apply_configuration(self, template: list[str], tile_sizes: list[int]) -> str:
+        pass
+
+
+@dataclass
+class LLVMGPUConfiguration(BaseConfiguration):
     subgroup_size: int
     workgroup_size: list[int]
     intrinsic: MfmaIntrinsic
-    tile_sizes: list[int]
     subgroup_m_count: int
     subgroup_n_count: int
     gpu_pipeline_options: GpuPipelineOptions
     waves_per_eu: int
 
+    def get_pipeline_config(self) -> str:
+        extra_config = ""
+        if not self.gpu_pipeline_options.all_default():
+            extra_config += f", gpu_pipeline_options = {self.gpu_pipeline_options}"
+        if self.waves_per_eu != 2:
+            extra_config += (
+                f', llvm_func_attrs = {{"amdgpu-waves-per-eu" = "{self.waves_per_eu}"}}'
+            )
 
-def get_pipeline_config(configuration: Configuration) -> str:
-    extra_config = ""
-    if not configuration.gpu_pipeline_options.all_default():
-        extra_config += f", gpu_pipeline_options = {configuration.gpu_pipeline_options}"
-    if configuration.waves_per_eu != 2:
-        extra_config += f', llvm_func_attrs = {{"amdgpu-waves-per-eu" = "{configuration.waves_per_eu}"}}'
-    return extra_config
+        return extra_config
+
+    def get_intrinsic_config(self) -> str:
+        return str(self.intrinsic)
+
+    def get_mlir_config(self, tile_sizes: list[int]) -> str:
+        base_config = self.get_base_mlir_config(tile_sizes)
+        wg_x, wg_y, wg_z = self.workgroup_size
+
+        backend_config = f"""
+        translation_info = #iree_codegen.translation_info<LLVMGPUVectorDistribute
+            workgroup_size = [{wg_x}, {wg_y}, {wg_z}] subgroup_size = {self.subgroup_size},
+            {{mma_schedule = #iree_gpu.mma_schedule<
+                intrinsic = #iree_gpu.mma_layout<{self.get_intrinsic_config()}>,
+                subgroup_m_count = {self.subgroup_m_count}, subgroup_n_count = {self.subgroup_n_count}>
+            {self.get_pipeline_config()}}}>
+        > -> !transform.any_param
+    """
+
+        return base_config + backend_config
+
+    def apply_configuration(self, template: list[str], tile_sizes: list[int]) -> str:
+        self.config_logger.info(f"Applying: {self}")
+
+        expr0 = re.compile(
+            r"<intrinsic = #iree_gpu\.mma_layout<(.+)>, subgroup_m_count = ([0-9]+), subgroup_n_count = ([0-9]+)>"
+        )
+        expr1 = re.compile(
+            r"LLVMGPUVectorDistribute workgroup_size = \[.+\] subgroup_size = ([0-9]+),"
+        )
+        expr2 = re.compile(r"tile_sizes = \[\[([0-9]+)(, ([0-9]+))+\]\]")
+        expr3 = re.compile(
+            r"gpu_pipeline_options = #iree_gpu\.pipeline_options<([^>]*)>"
+        )
+        expr4 = re.compile(r"\"amdgpu-waves-per-eu\" = \"([0-9])\"")
+
+        repl0 = f"<intrinsic = #iree_gpu.mma_layout<{self.intrinsic}>, subgroup_m_count = {self.subgroup_m_count}, subgroup_n_count = {self.subgroup_n_count}>"
+        repl1 = f'LLVMGPUVectorDistribute workgroup_size = [{", ".join(map(str, self.workgroup_size))}] subgroup_size = {self.subgroup_size},'
+        repl2 = f'tile_sizes = [[{", ".join(map(str, tile_sizes))}]]'
+        repl3 = f"gpu_pipeline_options = {self.gpu_pipeline_options}"
+        repl4 = f'"amdgpu-waves-per-eu" = "{self.waves_per_eu}"'
+
+        new_mlir = ""
+        for line in template:
+            if "intrinsic =" in line:
+                line = re.sub(expr0, repl0, line)
+            if "LLVMGPUVectorDistribute " in line:
+                line = re.sub(expr1, repl1, line)
+            if "tile_sizes" in line:
+                line = re.sub(expr2, repl2, line)
+            if "gpu_pipeline_options =" in line:
+                line = re.sub(expr3, repl3, line)
+            if "amdgpu-waves-per-eu" in line:
+                line = re.sub(expr4, repl4, line)
+            new_mlir += line
+
+        return new_mlir
+
+
+@dataclass
+class LLVMCPUConfiguration(BaseConfiguration):
+    def get_mlir_config(self, tile_sizes: list[int]) -> str:
+        base_config = self.get_base_mlir_config(tile_sizes)
+
+        backend_config = f"""
+        translation_info = #iree_codegen.translation_info<Mmt4dTilingExpert>
+        > -> !transform.any_param
+    """
+
+        return base_config + backend_config
+
+    def apply_configuration(self, template: list[str], tile_sizes: list[int]) -> str:
+        self.config_logger.info(f"Applying: {self}")
+
+        expr0 = re.compile(r"tile_sizes = \[\[([0-9]+)(, ([0-9]+))+\]")
+
+        repl0 = f'tile_sizes = [[{", ".join(map(str, tile_sizes))}]'
+
+        new_mlir = ""
+        for line in template:
+            if "linalg.mmt4d" in line and "tile_sizes" in line:
+                line = re.sub(expr0, repl0, line)
+            new_mlir += line
+
+        return new_mlir
+
+
+class MlirRegex(Enum):
+    ssa_value = r"%[a-zA-Z0-9-_]+"
+    tensor_type = r"tensor<(([0-9]+x)+((f|i)[0-9]+))>"
+    device_target = r'#hal\.device\.target<"(?P<target>[a-zA-Z0-9-_]+)"'
+
+    def __str__(self) -> str:
+        return self.value
+
+    @staticmethod
+    def dps_ins_two_args() -> str:
+        return rf"ins\({MlirRegex.ssa_value}, {MlirRegex.ssa_value} : (?P<LHS>{MlirRegex.tensor_type}), (?P<RHS>{MlirRegex.tensor_type})\)"
+
+    @staticmethod
+    def dps_outs_one_arg() -> str:
+        return rf"outs\({MlirRegex.ssa_value} : (?P<RES>{MlirRegex.tensor_type})\)"
 
 
 def read_input_mlir(filename: str) -> list[str]:
