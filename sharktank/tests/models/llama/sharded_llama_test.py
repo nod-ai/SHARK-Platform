@@ -24,6 +24,7 @@ from sharktank.utils.iree import (
     run_iree_module_function,
     prepare_iree_module_function_args,
     call_torch_module_function,
+    iree_to_torch,
 )
 import tempfile
 import torch
@@ -32,10 +33,6 @@ from iree.turbine.aot import FxProgramsBuilder, export
 import iree.runtime
 import numpy as np
 import os
-
-
-def iree_to_torch(*tensors: iree.runtime.DeviceArray) -> List[torch.Tensor]:
-    return [torch.tensor(tensor.to_host()) for tensor in tensors]
 
 
 @pytest.mark.usefixtures("caching", "path_prefix")
