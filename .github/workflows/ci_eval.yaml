@@ -16,6 +16,7 @@ concurrency:
 
 jobs:
   test_perplexity:
+    timeout-minutes: 600
     name: "Evaluation Tests - perplexity"
     strategy:
       matrix:
@@ -59,9 +60,3 @@ jobs:
 
       - name: Run perplexity test
         run:  pytest sharktank/tests/evaluate/perplexity_test.py  --longrun
-
-      - name: Update Perplexity baseline numbers
-        uses: actions/upload-artifact@v4
-        with:
-          name: current_perplexity_scores_json
-          path: ${{ env.SHARK_PLATFORM_REPO_ROOT }}/sharktank/sharktank/evaluate/
