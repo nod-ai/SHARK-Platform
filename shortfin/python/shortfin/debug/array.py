@@ -22,18 +22,17 @@ async def to_np(tensor: sfnp.device_array):
     tensor = tensor.items
 
     np_array = None
-    if isinstance(tensor, array.array):
-        dtype = tensor.typecode
 
-        # float16 is not supported by python array, so have to
-        # explicitly set dtype for numpy.
-        if is_float16:
-            dtype = np.float16
+    dtype = tensor.typecode
+    # float16 is not supported by python array, so have to
+    # explicitly set dtype for numpy.
+    if is_float16:
+        dtype = np.float16
 
-        np_array = np.frombuffer(tensor, dtype=dtype)
+    np_array = np.frombuffer(tensor, dtype=dtype)
 
-        # Ensure shape of array matches original tensor shape
-        np_array = np_array.reshape(*tensor_shape)
+    # Ensure shape of array matches original tensor shape
+    np_array = np_array.reshape(*tensor_shape)
 
     return np_array
 
