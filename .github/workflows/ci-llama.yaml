@@ -70,7 +70,7 @@ jobs:
             "numpy<2.0"
 
       - name: Run llama test
-        run: pytest sharktank/tests/models/llama/benchmark_tests.py -v -s --longrun
+        run: pytest sharktank/tests/models/llama/benchmark_amdgpu_tests.py -v -s --longrun
 
       - name: Upload llama executable files
         uses: actions/upload-artifact@v4
