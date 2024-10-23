@@ -12,8 +12,6 @@ from tqdm.auto import tqdm
 from pathlib import Path
 from PIL import Image
 
-import torch
-
 import shortfin as sf
 import shortfin.array as sfnp
 
@@ -298,12 +296,6 @@ class InferenceExecutorProcess(sf.Process):
                 req.done.set_success()
 
     async def _prepare(self, device, requests):
-        torch_dtypes = {
-            sfnp.float16: torch.float16,
-            sfnp.float32: torch.float32,
-            sfnp.int8: torch.int8,
-            sfnp.bfloat16: torch.bfloat16,
-        }
         for request in requests:
             # Tokenize prompts and negative prompts. We tokenize in bs1 for now and join later.
             input_ids_list = []
@@ -594,13 +586,7 @@ class InferenceExecutorProcess(sf.Process):
         # Process output images
         for req in requests:
             # TODO: reimpl with sfnp
-            permuted = (
-                torch.from_numpy(req.image_array)
-                .cpu()
-                .permute(0, 2, 3, 1)
-                .float()
-                .numpy()[0]
-            )
+            permuted = np.transpose(req.image_array, (0, 2, 3, 1))[0]
             cast_image = (permuted * 255).round().astype("uint8")
             req.result_image = Image.fromarray(cast_image).tobytes()
         return
