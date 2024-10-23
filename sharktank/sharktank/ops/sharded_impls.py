@@ -39,7 +39,13 @@ def all_gather_split(
     # If we don't move first, common sub-expression elimination is free to collapse all
     # concatenations into one and then copy to all devices, which is not what we want.
     shards = [
-        cat([transfer_to_logical_device(shard, i) for shard in input.shards], dim=dim)
+        cat(
+            [
+                transfer_to_logical_device(shard, i) if j != i else shard
+                for j, shard in enumerate(input.shards)
+            ],
+            dim=dim,
+        )
         for i in range(input.shard_count)
     ]
     return ReplicatedTensor(ts=shards)
@@ -54,7 +60,11 @@ def all_reduce_split_or_unreduced(
     # reductions into one and then copy to all devices, which is not what we want.
     shards = [
         elementwise(
-            torch.add, *[transfer_to_logical_device(shard, i) for shard in input.shards]
+            torch.add,
+            *[
+                transfer_to_logical_device(shard, i) if j != i else shard
+                for j, shard in enumerate(input.shards)
+            ],
         )
         for i in range(input.shard_count)
     ]
@@ -91,6 +101,7 @@ def cat_split(
         return SplitPrimitiveTensor(ts=shards, shard_dim=shard_dim)
     else:
         # TODO: implement efficient cat along split dim.
+        # This would probably result in doing the concatenation on one device.
         concatenated_unsharded = cat(
             [shard for t in tensors for shard in t.shards], dim
         )
@@ -781,6 +792,8 @@ def matmul_split(
     if lhs.shard_dim <= lhs_parallel_dim and rhs_parallel_dim == rhs.shard_dim:
         # We gather along the rhs shard dim.
         # It is more natural to preserve the sharding axis of the input.
+        # TODO: This assumes peered memory.
+        # We need to distinguish based on some config.
         shards = [sharded_cat(matmul(lhs_shard, rhs)) for lhs_shard in lhs.shards]
         return SplitPrimitiveTensor(ts=shards, shard_dim=lhs.shard_dim)
 
