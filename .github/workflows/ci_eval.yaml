@@ -59,4 +59,4 @@ jobs:
           pip install --no-compile -r requirements.txt -r sharktank/requirements-tests.txt -e sharktank/
 
       - name: Run perplexity test
-        run:  pytest sharktank/tests/evaluate/perplexity_test.py  --longrun
+        run:  pytest sharktank/tests/evaluate/perplexity_torch_test.py  --longrun
