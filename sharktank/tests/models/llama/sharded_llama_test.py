@@ -124,6 +124,15 @@ class ShardedLlamaTest(unittest.TestCase):
             sharded_prefill_args["cache_state"]
         )
         sharded_prefill_args["cache_state"] = sharded_cache_state
+
+        sharding = sharded_model.config.tensor_parallelism_size
+        for k in sharded_prefill_args:
+            if k == "cache_state":
+                continue
+            sharded_prefill_args[k] = ops.replicate(
+                sharded_prefill_args[k], count=sharding
+            )
+
         return prefill_args, sharded_prefill_args
 
     def make_decode_args(self, model: PagedLlamaModelV1) -> OrderedDict[str, Any]:
@@ -164,6 +173,15 @@ class ShardedLlamaTest(unittest.TestCase):
         sharded_decode_args["cache_state"] = sharded_model.cache.paged.shard_state(
             sharded_decode_args["cache_state"]
         )
+
+        sharding = sharded_model.config.tensor_parallelism_size
+        for k in sharded_decode_args:
+            if k == "cache_state":
+                continue
+            sharded_decode_args[k] = ops.replicate(
+                sharded_decode_args[k], count=sharding
+            )
+
         return decode_args, sharded_decode_args
 
     def testCompareToySizedModelToUnsharded(self):
@@ -181,6 +199,7 @@ class ShardedLlamaTest(unittest.TestCase):
 
         expected_prefill_result = model.prefill(**prefill_args)
         sharded_prefill_result = sharded_model.prefill(**sharded_prefill_args)
+        sharded_prefill_result = ops.unshard(sharded_prefill_result)
         # The errors are quite high, but for float64 both errors drop to < 1e-12.
         # The numerics are probably correct.
         torch.testing.assert_close(
@@ -203,6 +222,7 @@ class ShardedLlamaTest(unittest.TestCase):
         ) = self.make_equal_unsharded_and_sharded_decode_args(model, sharded_model)
         expected_decode_result = model.decode(**decode_args)
         sharded_decode_result = sharded_model.decode(**sharded_decode_args)
+        sharded_decode_result = ops.unshard(sharded_decode_result)
         torch.testing.assert_close(
             sharded_decode_result, expected_decode_result, atol=1e-4, rtol=1e-5
         )

@@ -142,11 +142,9 @@ class PagedLlamaAttentionBlock(ThetaLayer):
 
             def repeat_kv(x: torch.Tensor) -> torch.Tensor:
                 bs, slen, n_kv_heads, head_dim = x.shape
-                return (
-                    x.unsqueeze(-2)
-                    .expand(bs, slen, n_kv_heads, gqa_n_rep, head_dim)
-                    .reshape(bs, slen, n_kv_heads * gqa_n_rep, head_dim)
-                )
+                unsq = x.unsqueeze(-2)
+                exp = ops.expand(unsq, (bs, slen, n_kv_heads, gqa_n_rep, head_dim))
+                return exp.flatten(2, 3)
 
             xk = repeat_kv(xk)
             xv = repeat_kv(xv)
@@ -194,7 +192,8 @@ class PagedLlamaAttentionBlock(ThetaLayer):
                 scale=None,  # defaults to 1/sqrt(dim)
             )
 
-        attn_output = attn_output.transpose(1, 2).reshape(bs, batch_seq_len, -1)
+        attn_output = attn_output.transpose(1, 2)
+        attn_output = attn_output.flatten(2, 3)
 
         # Project.
         attn_output = self.attn_output(attn_output)
@@ -233,10 +232,10 @@ class PagedLlamaAttentionBlock(ThetaLayer):
                     b, dtype=torch.int64, device=xk_cache_update.device
                 )
                 row_start_pos = start_positions[row_index]
-                cache_k.index_put(
+                cache_k.index_put_(
                     (row_index, row_start_pos), xk_cache_update[row_index, 0]
                 )
-                cache_v.index_put(
+                cache_v.index_put_(
                     (row_index, row_start_pos), xv_cache_update[row_index, 0]
                 )
             return cache_k[:, :kv_seq_len], cache_v[:, :kv_seq_len]
