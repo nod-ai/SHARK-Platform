@@ -55,7 +55,7 @@ def main():
         "--attn-kernel",
         type=str,
         default="decomposed",
-        options=["decomposed", "torch_sdpa"],
+        help="decomposed/torch_sdpa",
     )
 
     args = cli.parse(parser)
@@ -68,6 +68,7 @@ def main():
     llama_config.use_hf = False
     llama_config.static_tables = False  # Rely on the compiler for hoisting tables.
     llama_config.kv_cache_type = "direct" if args.bs == [1] else "paged"
+    llama_config.attention_kernel = args.attn_kernel
 
     if llama_config.hp.expert_count:
         if llama_config.hp.model_arch == "grok":
