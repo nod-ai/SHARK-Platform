@@ -127,7 +127,7 @@ def main():
             # Direct cache dimensions:
             #   2 * transformer_block_count of...
             #   [bs, seq_length, attn_head_count, attn_head_dim]
-            cache_state_dynamic_shapes = (2 * hp.block_count) * [{}]
+            dynamic_shapes = (2 * hp.block_count) * [{}]
         else:
             raise NotImplementedError(f"Unsupported KV cache type: {type(model.cache)}")
 
