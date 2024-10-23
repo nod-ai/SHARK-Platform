@@ -134,25 +134,6 @@ class PagedLlamaModelV1(BaseCausalLMModel):
         self._assert_device(seq_block_ids)
         self._assert_device(*cache_state, dtype=self.activation_dtype)
 
-        if self.config.tensor_parallelism_size > 1:
-            if not isinstance(tokens, ReplicatedTensor):
-                tokens = ops.replicate(
-                    tokens, count=self.config.tensor_parallelism_size
-                )
-            if not isinstance(attention_mask, ReplicatedTensor):
-                attention_mask = ops.replicate(
-                    attention_mask, count=self.config.tensor_parallelism_size
-                )
-            if not isinstance(seq_block_ids, ReplicatedTensor):
-                seq_block_ids = ops.replicate(
-                    seq_block_ids, count=self.config.tensor_parallelism_size
-                )
-            # If the user provided unsharded arguments they probably want
-            # an unsharded result as well.
-            unshard_result = True
-        else:
-            unshard_result = False
-
         h = self.token_embedding(tokens)
         self.trace_tensor("llama.token_embedding", h)
 
@@ -172,8 +153,6 @@ class PagedLlamaModelV1(BaseCausalLMModel):
 
         h = self.output_norm(h)
         logits = self.output_lm_head(h)
-        if unshard_result:
-            logits = ops.unshard(logits)
         return logits
 
     def decode(

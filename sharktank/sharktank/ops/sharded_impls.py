@@ -860,7 +860,9 @@ def replicate_unreduced(input: UnreducedTensor, *, count: int) -> ReplicatedTens
 @replicate.override(Tensor)
 def replicate_unsharded(input, *, count: int) -> ReplicatedTensor:
     torch_input = unbox_tensor(input)
-    return ReplicatedTensor(ts=torch_input, shard_count=count)
+    # If we have a torch input replicating we can assume we need to transfer:
+    torch_inputs = [transfer_to_logical_device(torch_input, i) for i in range(count)]
+    return ReplicatedTensor(ts=torch_inputs)
 
 
 @reshape.override(SplitPrimitiveTensor)
