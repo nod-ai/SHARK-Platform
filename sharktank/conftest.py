@@ -128,6 +128,13 @@ def pytest_addoption(parser):
         help="Llama3.1 8B & 405B model baseline perplexity scores json",
     )
 
+    parser.addoption(
+        "--iree-hip-target",
+        action="store",
+        default="gfx942",
+        help="Specify the iree-hip target version (e.g., gfx942)",
+    )
+
 
 def set_fixture_from_cli_option(
     request: FixtureRequest,
@@ -166,6 +173,13 @@ def path_prefix(request: FixtureRequest) -> Optional[str]:
 @pytest.fixture(scope="class")
 def caching(request: FixtureRequest) -> Optional[bool]:
     return set_fixture_from_cli_option(request, "caching")
+
+
+@pytest.fixture(scope="class")
+def iree_hip_target_type(request: FixtureRequest) -> Optional[str]:
+    return set_fixture_from_cli_option(
+        request, "iree_hip_target", "iree_hip_target_type"
+    )
 
 
 @pytest.fixture(scope="class")

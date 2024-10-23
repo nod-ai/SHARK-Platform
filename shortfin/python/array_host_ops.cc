@@ -8,6 +8,7 @@
 #include "./utils.h"
 #include "shortfin/array/api.h"
 #include "shortfin/support/logging.h"
+#include "xtensor/xrandom.hpp"
 #include "xtensor/xsort.hpp"
 #include "xtl/xhalf_float.hpp"
 
@@ -37,13 +38,59 @@ Returns:
   A device_array of dtype=int64, allocated on the host and not visible to the device.
 )";
 
+static const char DOCSTRING_FILL_RANDN[] =
+    R"(Fills an array with numbers sampled from the standard ormal distribution.
+
+Values are samples with a mean of 0 and standard deviation of 1.
+
+This operates like torch.randn but only supports in place fills to an existing
+array, deriving shape and dtype from the output array.
+
+Args:
+  out: Output array to fill.
+  generator: Uses an explicit generator. If not specified, uses a global
+    default.
+)";
+
+static const char DOCSTRING_RANDOM_GENERATOR[] =
+    R"(Returns an object for generating random numbers.
+
+  Every instance is self contained and does not share state with others.
+
+  Args:
+    seed: Optional seed for the generator. Not setting a seed will cause an
+      implementation defined value to be used, which may in fact be a completely
+      fixed number.
+  )";
+
 }  // namespace
+
+struct PyRandomGenerator {
+ public:
+  using SeedType = xt::random::default_engine_type::result_type;
+  PyRandomGenerator(std::optional<SeedType> seed) {
+    if (seed) SetSeed(*seed);
+  }
+
+  static PyRandomGenerator &get_default() {
+    static PyRandomGenerator default_generator(std::nullopt);
+    return default_generator;
+  }
+
+  void SetSeed(SeedType seed) { engine().seed(seed); }
+
+  xt::random::default_engine_type &engine() { return engine_; }
+
+ private:
+  xt::random::default_engine_type engine_;
+};
 
 #define SF_UNARY_COMPUTE_CASE(dtype_name, cpp_type) \
   case DType::dtype_name():                         \
     return compute.template operator()<cpp_type>()
 
 void BindArrayHostOps(py::module_ &m) {
+  // Simple op definitions.
   m.def(
       "argmax",
       [](device_array &input, int axis, std::optional<device_array> out,
@@ -84,6 +131,32 @@ void BindArrayHostOps(py::module_ &m) {
       py::arg("input"), py::arg("axis") = -1, py::arg("out") = py::none(),
       py::kw_only(), py::arg("keepdims") = false,
       py::arg("device_visible") = false, DOCSTRING_ARGMAX);
+
+  // Random number generation.
+  py::class_<PyRandomGenerator>(m, "RandomGenerator")
+      .def(py::init<std::optional<PyRandomGenerator::SeedType>>(),
+           py::arg("seed") = py::none(), DOCSTRING_RANDOM_GENERATOR);
+  m.def(
+      "fill_randn",
+      [](device_array out, std::optional<PyRandomGenerator *> gen) {
+        if (!gen) gen = &PyRandomGenerator::get_default();
+        auto compute = [&]<typename EltTy>() {
+          auto result = xt::random::randn(out.shape_container(), /*mean=*/0.0,
+                                          /*std_dev=*/1.0, (*gen)->engine());
+          auto out_t = out.map_xtensor_w<EltTy>();
+          *out_t = result;
+        };
+
+        switch (out.dtype()) {
+          SF_UNARY_COMPUTE_CASE(float16, half_float::half);
+          SF_UNARY_COMPUTE_CASE(float32, float);
+          default:
+            throw std::invalid_argument(
+                fmt::format("Unsupported dtype({}) for operator randn",
+                            out.dtype().name()));
+        }
+      },
+      py::arg("out"), py::arg("generator") = py::none(), DOCSTRING_FILL_RANDN);
 }
 
 }  // namespace shortfin::python
