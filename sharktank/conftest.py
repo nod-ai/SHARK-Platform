@@ -129,11 +129,10 @@ def pytest_addoption(parser):
     )
 
     parser.addoption(
-        "--current-perplexity-scores-json",
-        type=Path,
+        "--iree-hip-target",
         action="store",
-        default="sharktank/tests/evaluate/current_perplexity_scores.json",
-        help="Llama3.1 8B & 405B model current perplexity scores json",
+        default="gfx942",
+        help="Specify the iree-hip target version (e.g., gfx942)",
     )
 
 
@@ -177,6 +176,13 @@ def caching(request: FixtureRequest) -> Optional[bool]:
 
 
 @pytest.fixture(scope="class")
+def iree_hip_target_type(request: FixtureRequest) -> Optional[str]:
+    return set_fixture_from_cli_option(
+        request, "iree_hip_target", "iree_hip_target_type"
+    )
+
+
+@pytest.fixture(scope="class")
 def get_model_path(request: FixtureRequest):
     model_path = {}
     model_path["llama3_8b_tokenizer_path"] = set_fixture_from_cli_option(
@@ -199,8 +205,5 @@ def get_model_path(request: FixtureRequest):
     )
     model_path["baseline_perplexity_score_json"] = set_fixture_from_cli_option(
         request, "--baseline-perplexity-score-json", "baseline_perplexity_score_json"
-    )
-    model_path["current_perplexity_scores_json"] = set_fixture_from_cli_option(
-        request, "--current-perplexity-scores-json", "current_perplexity_scores_json"
     )
     return model_path
