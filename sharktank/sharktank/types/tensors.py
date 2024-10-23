@@ -1064,7 +1064,9 @@ class ReplicatedTensor(ShardedTensor):
         """
         if isinstance(ts, torch.Tensor):
             assert shard_count is not None
-            ts = [ts] * shard_count
+            from ..ops import transfer_to_logical_device
+
+            ts = [transfer_to_logical_device(ts, i) for i in range(shard_count)]
             shard_count = None
 
         assert shard_count is None
