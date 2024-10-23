@@ -37,6 +37,7 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         head_dim: int,
         head_count_kv: int,
         rms_epsilon: float,
+        attention_kernel: str = "decomposed",
         attention_scale: Optional[float] = None,
         softcap: Optional[float] = None,
     ):
@@ -47,6 +48,7 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         self.head_count = head_count
         self.head_dim = head_dim
         self.head_count_kv = head_count_kv
+        self.attention_kernel = attention_kernel
         self.attention_scale = attention_scale
         self.softcap = softcap
 
@@ -154,27 +156,44 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         keys = xk.transpose(1, 2)
         values = xv.transpose(1, 2)
 
-        attn_weights = ops.matmul(xq, keys.transpose(2, 3))
-        if self.attention_scale is None:
-            attn_weights = attn_weights / math.sqrt(self.head_dim)
+        if self.attention_kernel == "decomposed":
+            attn_weights = ops.matmul(xq, keys.transpose(2, 3))
+            if self.attention_scale is None:
+                attn_weights = attn_weights / math.sqrt(self.head_dim)
+            else:
+                attn_weights = attn_weights * self.attention_scale
+
+            # Flash attention.
+            if self.softcap is not None:
+                attn_weights = self.softcap * torch.tanh(attn_weights / self.softcap)
+
+            self.assert_not_nan(attn_weights)
+
+            # Apply attention mask.
+            self.trace_tensor("attn_weights", attn_weights, values=False)
+            if attention_mask is not None:
+                # self.trace_tensor("attn_mask", attention_mask)
+                attn_weights = attn_weights + attention_mask
+
+            attn_weights = ops.softmax(
+                ops.to(attn_weights, dtype=torch.float32), dim=-1
+            )
+            attn_weights = ops.to(attn_weights, dtype=xq.dtype)
+            attn_output = ops.matmul(
+                attn_weights, values
+            )  # (bs, heads, slen, head_dim)
         else:
-            attn_weights = attn_weights * self.attention_scale
+            is_causal = attention_mask is None and batch_seq_len == 1
+            attn_output = torch.nn.functional.scaled_dot_product_attention(
+                query=xq,  # [bs, ..., sl, dim]
+                key=keys,  # [bs, ..., sl, dim]
+                value=values,  # [bs, ..., sl, dim]
+                attn_mask=attention_mask,  # [bs, ..., sl, sl]
+                dropout_p=0.0,
+                is_causal=is_causal,  # assumes causal masking when true
+                scale=None,  # defaults to 1/sqrt(dim)
+            )
 
-        # Flash attention.
-        if self.softcap is not None:
-            attn_weights = self.softcap * torch.tanh(attn_weights / self.softcap)
-
-        self.assert_not_nan(attn_weights)
-
-        # Apply attention mask.
-        self.trace_tensor("attn_weights", attn_weights, values=False)
-        if attention_mask is not None:
-            # self.trace_tensor("attn_mask", attention_mask)
-            attn_weights = attn_weights + attention_mask
-
-        attn_weights = ops.softmax(ops.to(attn_weights, dtype=torch.float32), dim=-1)
-        attn_weights = ops.to(attn_weights, dtype=xq.dtype)
-        attn_output = ops.matmul(attn_weights, values)  # (bs, heads, slen, head_dim)
         attn_output = attn_output.transpose(1, 2).reshape(bs, batch_seq_len, -1)
 
         # Project.
