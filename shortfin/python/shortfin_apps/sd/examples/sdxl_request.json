@@ -1,9 +1,9 @@
 {
   "prompt": [
-    "A cat reading comic books in a rustic cafe"
+    "a realistic shark with tiny fins"
   ],
   "neg_prompt": [
-    "disfigured, blurry, watermark"
+    "Watermark, blurry, oversaturated, low resolution, pollution"
   ],
   "height": [
     1024

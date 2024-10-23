@@ -73,7 +73,6 @@ class InferenceExecRequest(sf.Message):
         self.prompt_embeds = prompt_embeds
         self.add_text_embeds = add_text_embeds
         self.sample = sample
-        # guidance scale at denoise phase is a device array
         self.steps = steps
         self.timesteps = timesteps
         self.time_ids = time_ids

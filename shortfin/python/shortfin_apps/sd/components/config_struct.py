@@ -14,6 +14,11 @@ from dataclasses_json import dataclass_json, Undefined
 
 import shortfin.array as sfnp
 
+str_to_dtype = {
+    "int8": sfnp.int8,
+    "float16": sfnp.float16,
+}
+
 
 @dataclass_json(undefined=Undefined.RAISE)
 @dataclass
@@ -47,6 +52,12 @@ class ModelParams:
     vae_module_name: str = "compiled_vae"
     scheduler_module_name: str = "compiled_scheduler"
 
+    # some unet vmfbs have "main" as entrypoint.
+    unet_fn_name: str = "run_forward"
+
+    # Classifer free guidance mode. If set to false, only positive prompts will matter.
+    cfg_mode = True
+
     # DTypes (basically defaults):
     clip_dtype: sfnp.DType = sfnp.float16
     unet_dtype: sfnp.DType = sfnp.float16
@@ -76,4 +87,7 @@ class ModelParams:
     def load_json(path: Path | str):
         with open(path, "rt") as f:
             json_text = f.read()
-        return ModelParams.from_json(json_text)
+        raw_params = ModelParams.from_json(json_text)
+        if isinstance(raw_params.unet_dtype, str):
+            raw_params.unet_dtype = str_to_dtype[raw_params.unet_dtype]
+        return raw_params

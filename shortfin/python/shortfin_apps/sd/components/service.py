@@ -7,6 +7,8 @@
 import asyncio
 import logging
 import math
+import numpy as np
+from tqdm.auto import tqdm
 from pathlib import Path
 from PIL import Image
 
@@ -107,7 +109,7 @@ class GenerateService:
         for bs in self.model_params.unet_batch_sizes:
             self.inference_functions["denoise"][bs] = {
                 "unet": self.inference_programs["unet"][
-                    f"{self.model_params.unet_module_name}.run_forward"
+                    f"{self.model_params.unet_module_name}.{self.model_params.unet_fn_name}"
                 ],
                 "init": self.inference_programs["scheduler"][
                     f"{self.model_params.scheduler_module_name}.run_initialize"
@@ -305,16 +307,15 @@ class InferenceExecutorProcess(sf.Process):
         for request in requests:
             # Tokenize prompts and negative prompts. We tokenize in bs1 for now and join later.
             input_ids_list = []
-            prompts = [
-                request.prompt,
-                request.neg_prompt,
-            ]
+            neg_ids_list = []
             for tokenizer in self.service.tokenizers:
-                for prompt in prompts:
-                    input_ids = tokenizer.encode(prompt)
-                    input_ids_list.append(input_ids)
+                input_ids = tokenizer.encode(request.prompt)
+                input_ids_list.append(input_ids)
+                neg_ids = tokenizer.encode(request.neg_prompt)
+                neg_ids_list.append(neg_ids)
+            ids_list = [*input_ids_list, *neg_ids_list]
 
-            request.input_ids = input_ids_list
+            request.input_ids = ids_list
 
             # Generate random sample latents.
             # TODO: use our own RNG
@@ -340,20 +341,9 @@ class InferenceExecutorProcess(sf.Process):
             )
             sample_host = request.sample.for_transfer()
             with sample_host.map(discard=True) as m:
-                m.fill(rand_sample)
-
-            # Guidance scale.
-            guidance_scale = sfnp.device_array.for_device(device, [1], unet_dtype)
-            guidance_scale_float = sfnp.device_array.for_device(
-                device, [1], sfnp.float32
-            )
-            guidance_float_host = guidance_scale_float.for_transfer()
-            with guidance_float_host.map(discard=True) as m:
-                m.items = [request.guidance_scale]
-            guidance_host = guidance_scale.for_transfer()
-            with guidance_host.map(discard=True) as m:
-                guidance_scale_float.copy_to(guidance_host)
-            request.guidance_scale = guidance_scale
+                m.fill(rand_sample.tobytes())
+            request.sample.copy_from(sample_host)
+            await device
         return
 
     async def _encode(self, device, requests):
@@ -369,18 +359,28 @@ class InferenceExecutorProcess(sf.Process):
         clip_inputs = [
             sfnp.device_array.for_device(
                 device, [req_bs, self.service.model_params.max_seq_len], sfnp.sint64
-            )
-        ] * 4
+            ),
+            sfnp.device_array.for_device(
+                device, [req_bs, self.service.model_params.max_seq_len], sfnp.sint64
+            ),
+            sfnp.device_array.for_device(
+                device, [req_bs, self.service.model_params.max_seq_len], sfnp.sint64
+            ),
+            sfnp.device_array.for_device(
+                device, [req_bs, self.service.model_params.max_seq_len], sfnp.sint64
+            ),
+        ]
+        host_arrs = [None] * 4
         for idx, arr in enumerate(clip_inputs):
-            host_arr = arr.for_transfer()
+            host_arrs[idx] = arr.for_transfer()
             for i in range(req_bs):
-                with host_arr.view(i).map(write=True, discard=True) as m:
+                with host_arrs[idx].view(i).map(write=True, discard=True) as m:
 
                     # TODO: fix this attr redundancy
-                    np_arr = requests[i].input_ids[idx].input_ids[0]
+                    np_arr = requests[i].input_ids[idx].input_ids
 
                     m.fill(np_arr)
-            arr.copy_from(host_arr)
+            clip_inputs[idx].copy_from(host_arrs[idx])
 
         # Encode tokenized inputs.
         logger.info(
@@ -390,23 +390,158 @@ class InferenceExecutorProcess(sf.Process):
         )
         await device
         pe, te = await fn(*clip_inputs)
+        breakpoint()
 
         await device
         for i in range(req_bs):
-            requests[i].prompt_embeds = pe.view(i)
-            requests[i].add_text_embeds = te.view(i)
+            cfg_mult = 2
+            requests[i].prompt_embeds = pe.view(slice(i * cfg_mult, (i + 1) * cfg_mult))
+            requests[i].add_text_embeds = te.view(
+                slice(i * cfg_mult, (i + 1) * cfg_mult)
+            )
 
         return
 
     async def _denoise(self, device, requests):
         req_bs = len(requests)
+        cfg_mult = 2 if self.service.model_params.cfg_mode else 1
         # Produce denoised latents
         entrypoints = self.service.inference_functions["denoise"]
         for bs, fns in entrypoints.items():
             if bs >= req_bs:
                 break
 
-        # fns is a dict of denoising components
+        # Get shape of batched latents.
+        # This assumes all requests are dense at this point.
+        latents_shape = [
+            req_bs,
+            self.service.model_params.num_latents_channels,
+            requests[0].height // 8,
+            requests[0].width // 8,
+        ]
+        # Assume we are doing classifier-free guidance
+        hidden_states_shape = [
+            req_bs * cfg_mult,
+            self.service.model_params.max_seq_len,
+            2048,
+        ]
+        text_embeds_shape = [
+            req_bs * cfg_mult,
+            1280,
+        ]
+        denoise_inputs = {
+            "sample": sfnp.device_array.for_device(
+                device, latents_shape, self.service.model_params.unet_dtype
+            ),
+            "encoder_hidden_states": sfnp.device_array.for_device(
+                device, hidden_states_shape, self.service.model_params.unet_dtype
+            ),
+            "text_embeds": sfnp.device_array.for_device(
+                device, text_embeds_shape, self.service.model_params.unet_dtype
+            ),
+            "guidance_scale": sfnp.device_array.for_device(
+                device, [req_bs], self.service.model_params.unet_dtype
+            ),
+        }
+
+        # Send guidance scale to device.
+        gs_host = denoise_inputs["guidance_scale"].for_transfer()
+        for i in range(req_bs):
+            cfg_dim = i * cfg_mult
+            with gs_host.view(i).map(write=True, discard=True) as m:
+
+                np_arr = np.asarray(requests[i].guidance_scale, dtype="float16")
+
+                m.fill(np_arr)
+            # Batch sample latent inputs on device.
+            req_samp = requests[i].sample
+            denoise_inputs["sample"].view(i).copy_from(req_samp)
+
+            # Batch CLIP hidden states.
+            enc = requests[i].prompt_embeds
+            denoise_inputs["encoder_hidden_states"].view(
+                slice(cfg_dim, cfg_dim + cfg_mult)
+            ).copy_from(enc)
+
+            # Batch CLIP text embeds.
+            temb = requests[i].add_text_embeds
+            denoise_inputs["text_embeds"].view(
+                slice(cfg_dim, cfg_dim + cfg_mult)
+            ).copy_from(temb)
+
+        denoise_inputs["guidance_scale"].copy_from(gs_host)
+
+        await device
+        # Initialize scheduler.
+        logger.info(
+            "INVOKE %r: %s",
+            fns["init"],
+            "".join([f"\n  0: {latents_shape}"]),
+        )
+        (latents, time_ids, step_indexes, timesteps,) = await fns[
+            "init"
+        ](denoise_inputs["sample"])
+        await device
+        ts_host = timesteps.for_transfer()
+        ts_host.copy_from(timesteps)
+        for i, t in tqdm(
+            enumerate(ts_host.items),
+        ):
+            step = sfnp.device_array.for_device(device, [1], sfnp.sint64)
+            s_host = step.for_transfer()
+            with s_host.map(write=True) as m:
+                s_host.items = [i]
+            step.copy_from(s_host)
+            scale_inputs = [
+                latents,
+                step,
+                timesteps,
+            ]
+            logger.info(
+                "INVOKE %r: %s",
+                fns["scale"],
+                "".join(
+                    [f"\n  {i}: {ary.shape}" for i, ary in enumerate(scale_inputs)]
+                ),
+            )
+            await device
+            latent_model_input, t = await fns["scale"](*scale_inputs)
+            await device
+
+            unet_inputs = [
+                latent_model_input,
+                t,
+                denoise_inputs["encoder_hidden_states"],
+                denoise_inputs["text_embeds"],
+                time_ids,
+                denoise_inputs["guidance_scale"],
+            ]
+            logger.info(
+                "INVOKE %r: %s",
+                fns["unet"],
+                "".join([f"\n  {i}: {ary.shape}" for i, ary in enumerate(unet_inputs)]),
+            )
+            await device
+            (noise_pred,) = await fns["unet"](*unet_inputs)
+            await device
+
+            step_inputs = [noise_pred, t, latents]
+            logger.info(
+                "INVOKE %r: %s",
+                fns["step"],
+                "".join([f"\n  {i}: {ary.shape}" for i, ary in enumerate(step_inputs)]),
+            )
+            await device
+            (latent_model_output,) = await fns["step"](*step_inputs)
+            latents.copy_from(latent_model_output)
+            await device
+
+        for idx, req in enumerate(requests):
+            req.denoised_latents = sfnp.device_array.for_device(
+                device, latents_shape, self.service.model_params.vae_dtype
+            )
+            req.denoised_latents.copy_from(latents.view(idx))
+        await device
         return
 
     async def _decode(self, device, requests):
@@ -417,12 +552,58 @@ class InferenceExecutorProcess(sf.Process):
             if bs >= req_bs:
                 break
 
-        # do something with vae
+        latents_shape = [
+            req_bs,
+            self.service.model_params.num_latents_channels,
+            requests[0].height // 8,
+            requests[0].width // 8,
+        ]
+        latents = sfnp.device_array.for_device(
+            device, latents_shape, self.service.model_params.vae_dtype
+        )
+        for i in range(req_bs):
+            latents.view(i).copy_from(requests[i].denoised_latents)
 
+        await device
+        # Decode the denoised latents.
+        (image,) = await fn(latents)
+
+        await device
+        images_shape = [
+            req_bs,
+            3,
+            requests[0].height,
+            requests[0].width,
+        ]
+        image_shape = [
+            req_bs,
+            3,
+            requests[0].height,
+            requests[0].width,
+        ]
+        images_host = sfnp.device_array.for_host(device, images_shape, sfnp.float16)
+        images_host.copy_from(image)
+        for idx, req in enumerate(requests):
+            image_array = images_host.view(idx).items
+            dtype = image_array.typecode
+            if images_host.dtype == sfnp.float16:
+                dtype = np.float16
+            req.image_array = np.frombuffer(image_array, dtype=dtype).reshape(
+                *image_shape
+            )
         return
 
     async def _postprocess(self, device, requests):
         # Process output images
         for req in requests:
-            req.result_image = Image.open("sample.png", mode="r").tobytes()
+            # TODO: reimpl with sfnp
+            permuted = (
+                torch.from_numpy(req.image_array)
+                .cpu()
+                .permute(0, 2, 3, 1)
+                .float()
+                .numpy()[0]
+            )
+            cast_image = (permuted * 255).round().astype("uint8")
+            req.result_image = Image.fromarray(cast_image).tobytes()
         return
