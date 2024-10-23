@@ -184,7 +184,6 @@ class PagedLlamaAttentionBlock(ThetaLayer):
             )  # (bs, heads, slen, head_dim)
         else:
             is_causal = attention_mask is None and batch_seq_len == 1
-            print(xq.dtype)
             attn_output = torch.nn.functional.scaled_dot_product_attention(
                 query=xq,  # [bs, ..., sl, dim]
                 key=keys,  # [bs, ..., sl, dim]
