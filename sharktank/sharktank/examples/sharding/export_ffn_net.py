@@ -50,6 +50,7 @@ class ShardedFFN(ThetaLayer):
         ffn_gate_weight = self.theta.tensor("ffn_gate", "weight")
         ffn_up_weight = self.theta.tensor("ffn_up", "weight")
         ffn_down_weight = self.theta.tensor("ffn_down", "weight")
+        x = ops.replicate(x, count=ffn_gate_weight.shard_count)
         ffn_gate = ops.elementwise(
             torch.nn.functional.silu, ops.linear(x, ffn_gate_weight)
         )
@@ -79,7 +80,7 @@ def main(raw_args=None):
     sl = 32
     hidden_dim = 128
     primary_dim = 64
-    shard_count = 8
+    shard_count = 2
     theta = create_theta(hidden_dim, primary_dim, shard_count)
 
     # Roundtrip the dataset, which anchors the tensors as parameters to be loaded

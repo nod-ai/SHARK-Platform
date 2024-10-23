@@ -759,16 +759,16 @@ class ShardedTensorBase(ShardedTensor):
         name: str = UnnamedTensorName,
         shape: Optional[list[int]],
     ):
-        from ..ops import transfer_to_logical_device
-
         assert len(ts) > 0
         assert shard_dim is None or (shard_dim >= 0 and len(ts[0].shape) > shard_dim)
         super().__init__(name=name, shape=shape, shard_dim=shard_dim)
         self._shards: tuple[DefaultPrimitiveTensor] = tuple(
             DefaultPrimitiveTensor(
                 name=f"{name}.shard.{i}",
-                data=transfer_to_logical_device(t, i),
+                data=t,
             )
+            if isinstance(t, torch.Tensor)
+            else t
             for i, t in enumerate(ts)
         )
 
@@ -939,8 +939,11 @@ class SplitPrimitiveTensor(ShardedTensorBase):
         number of pieces.
         """
         if isinstance(ts, torch.Tensor):
+            from ..ops import transfer_to_logical_device
+
             assert shard_count is not None
             ts = ts.split(ceildiv(ts.shape[shard_dim], shard_count), dim=shard_dim)
+            ts = [transfer_to_logical_device(t, i) for i, t in enumerate(ts)]
             assert len(ts) == shard_count
             shard_count = None
 
@@ -1059,9 +1062,6 @@ class ReplicatedTensor(ShardedTensor):
         If `ts` is a tensor then `shard_count` must be provided and it,
         will be replicated that many times.
         """
-
-        from ..ops import transfer_to_logical_device
-
         if isinstance(ts, torch.Tensor):
             assert shard_count is not None
             ts = [ts] * shard_count
@@ -1079,8 +1079,10 @@ class ReplicatedTensor(ShardedTensor):
         self._shards: tuple[DefaultPrimitiveTensor] = tuple(
             DefaultPrimitiveTensor(
                 name=f"{name}.shard.{i}",
-                data=transfer_to_logical_device(t, i),
+                data=t,
             )
+            if isinstance(t, torch.Tensor)
+            else t
             for i, t in enumerate(ts)
         )
 
