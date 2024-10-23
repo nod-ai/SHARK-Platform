@@ -15,7 +15,7 @@ When in question, we draw from the vocabulary and normalization they have done
 """
 
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, Optional, Literal
 import torch
 
 __all__ = ["LlamaHParams", "LlamaModelConfig"]
@@ -124,7 +124,7 @@ class LlamaModelConfig:
     block_seq_stride: int = 16
 
     # Either "paged" or "direct".
-    kv_cache_type: str = "paged"
+    kv_cache_type: Literal["paged", "direct"] = "paged"
 
     # The device on which to place intermediate state.
     device: Optional[torch.device] = None
