@@ -42,10 +42,10 @@ logger.root.handlers[0].setFormatter(
     logging.Formatter(fmt="\n%(levelname)s:%(name)-8s %(message)s")
 )
 
-__all__ = ["Perplexity", "run_perplexity"]
+__all__ = ["Perplexity_torch", "run_perplexity_torch"]
 
 
-class Perplexity:
+class Perplexity_torch:
     """
     Perplexity (PPL) is one of the most common metrics for evaluating language models.
     It is defined as the exponentiated average negative log-likelihood of a sequence,
@@ -59,8 +59,6 @@ class Perplexity:
         device,
         kv_cache_type,
     ):
-        self.batch_size = 16
-
         self.device = device
         self.kv_cache_type = kv_cache_type
         self.activation_dtype = torch.float32
@@ -173,6 +171,8 @@ class Perplexity:
             (self.token_ids != 0).int().detach().clone().to(self.device)
         )
 
+        self.bs = len(self.test_prompts)
+
         is_first_token = True
         start = 0
         for i in tqdm(
@@ -262,8 +262,6 @@ class Perplexity:
     def get_perplexity(self, test_prompts):
 
         self.test_prompts = test_prompts
-        self.bs = len(self.test_prompts)
-
         self.get_logits()
 
         self.out_logits = self.out_logits[..., :-1, :].contiguous()
@@ -281,7 +279,7 @@ class Perplexity:
         return self.compute_perplexity()
 
 
-def run_perplexity(
+def run_perplexity_torch(
     dataset,
     tokenizer,
     device,
@@ -289,7 +287,7 @@ def run_perplexity(
     tensor_parallelism_size,
     attention_kernel,
 ):
-    perplexity = Perplexity(device=device, kv_cache_type=kv_cache_type)
+    perplexity = Perplexity_torch(device=device, kv_cache_type=kv_cache_type)
 
     perplexity.load_model(dataset, tokenizer, tensor_parallelism_size, attention_kernel)
     test_prompts = perplexity.get_prompts()
@@ -325,7 +323,7 @@ def main(argv):
     dataset = cli.get_input_dataset(args)
     tokenizer = cli.get_tokenizer(args)
 
-    ppl = run_perplexity(
+    ppl = run_perplexity_torch(
         dataset=dataset,
         tokenizer=tokenizer,
         device=device,
