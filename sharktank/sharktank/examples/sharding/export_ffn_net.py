@@ -80,7 +80,7 @@ def main(raw_args=None):
     sl = 32
     hidden_dim = 128
     primary_dim = 64
-    shard_count = 2
+    shard_count = 8
     theta = create_theta(hidden_dim, primary_dim, shard_count)
 
     # Roundtrip the dataset, which anchors the tensors as parameters to be loaded
