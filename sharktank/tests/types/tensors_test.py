@@ -9,9 +9,21 @@ import unittest
 import torch
 import tempfile
 import os
+import pytest
+from collections import OrderedDict
 
 from sharktank.types import *
+from sharktank.utils.iree import (
+    get_iree_devices,
+    load_iree_module,
+    run_iree_module_function,
+    prepare_iree_module_function_args,
+    call_torch_module_function,
+    iree_to_torch,
+)
 from sharktank import ops
+from copy import deepcopy
+from iree.turbine.aot import FxProgramsBuilder, export
 
 
 def _createTestLayout():
@@ -60,6 +72,7 @@ class PlanarQuantizedTensorTest(unittest.TestCase):
         self.assertEqual(new_planes["d"].dtype, torch.float16)
 
 
+@pytest.mark.usefixtures("path_prefix")
 class ShardedTensorTest(unittest.TestCase):
     def testReplicatedTensorSaveLoad(self):
         tensor = torch.rand([2, 3, 4], dtype=torch.float32)
@@ -167,6 +180,128 @@ class ShardedTensorTest(unittest.TestCase):
         sharded_dst[0, ..., 1:3] = sharded_src
         actual_result = ops.unshard(sharded_dst)
         assert ops.equal(actual_result, dst)
+
+    def testInPlaceUpdate(self):
+        if self.path_prefix is not None:
+            self.runTestInPlaceUpdate(path_prefix=self.path_prefix, dump_enabled=True)
+        else:
+            with tempfile.TemporaryDirectory() as temp_dir:
+                self.runTestInPlaceUpdate(
+                    path_prefix=f"{temp_dir}/", dump_enabled=False
+                )
+
+    def runTestInPlaceUpdate(self, path_prefix: str, dump_enabled: bool):
+        shard_dim = 2
+        shard_count = 2
+
+        class Module(torch.nn.Module):
+            def main(self, tensor: AnyTensor):
+                tensor += 1
+                # TODO: figure out why when not returning anything fails the export
+                # fails.
+                return torch.empty([1])
+
+        shape = [2, 3, 4]
+        tensor = torch.rand(shape)
+        sharded_tensor = SplitPrimitiveTensor(
+            ts=tensor,
+            shard_dim=shard_dim,
+            shard_count=shard_count,
+            insert_device_assignment=False,
+        )
+
+        # Avoid aliasing with tensor.
+        # Torch exporting complains about mutating an aliased input.
+        # Doing
+        # sharded_tensor = deepcopy(sharded_tensor)
+        # is not enough.
+        shards = [
+            torch.empty_like(unbox_tensor(shard)) for shard in sharded_tensor.shards
+        ]
+        for src_shard, dst_shard in zip(sharded_tensor.shards, shards):
+            dst_shard[...] = unbox_tensor(src_shard)
+        sharded_tensor = SplitPrimitiveTensor(
+            ts=shards, shard_dim=shard_dim, insert_device_assignment=False
+        )
+
+        sharded_tensor_snapshot = deepcopy(sharded_tensor)
+        module = Module()
+        module.main(sharded_tensor)
+        actual_result = ops.unshard(sharded_tensor)
+        expected_result = tensor + 1
+        assert ops.equal(expected_result, actual_result)
+
+        fxb = FxProgramsBuilder(module)
+
+        @fxb.export_program(
+            args=(deepcopy(sharded_tensor),),
+            name="main",
+            strict=False,
+        )
+        def _(model, *args, **kwargs) -> AnyTensor:
+            return model.main(*args, **kwargs)
+
+        if dump_enabled:
+            for program_name, ep in fxb.programs.items():
+                with open(
+                    f"{path_prefix}{program_name}.torch.fx.txt",
+                    "w",
+                ) as f:
+                    print(str(ep), file=f)
+
+        output = export(fxb)
+        if dump_enabled:
+            output.save_mlir(f"{path_prefix}program.mlir")
+
+        iree_module_path = f"{path_prefix}program.vmfb"
+        output.session.set_flags(
+            *[f"--iree-hal-target-device=llvm-cpu[{i}]" for i in range(shard_count)]
+        )
+        output.compile(
+            save_to=iree_module_path,
+            target_backends=None,
+        )
+
+        iree_driver = "local-task"
+        iree_devices = get_iree_devices(
+            driver=iree_driver,
+            device_count=shard_count,
+        )
+        iree_module, vm_context, vm_instance = load_iree_module(
+            module_path=iree_module_path,
+            devices=iree_devices,
+        )
+        iree_args = prepare_iree_module_function_args(
+            args=[deepcopy(sharded_tensor_snapshot)], devices=iree_devices
+        )
+        run_iree_module_function(
+            args=iree_args,
+            function_name="main",
+            module=iree_module,
+            vm_context=vm_context,
+            driver=iree_driver,
+            trace_path_prefix=path_prefix if dump_enabled else None,
+        )
+        iree_args_as_torch = iree_to_torch(*iree_args)
+        iree_args_sharded_tensor = SplitPrimitiveTensor(
+            ts=iree_args_as_torch, shard_dim=shard_dim, insert_device_assignment=False
+        )
+        actual_iree_result = ops.unshard(iree_args_sharded_tensor)
+        if dump_enabled:
+            call_torch_module_function(
+                module=module,
+                function_name="main",
+                kwargs=OrderedDict(
+                    [
+                        (
+                            "tensor",
+                            deepcopy(sharded_tensor_snapshot),
+                        )
+                    ]
+                ),
+                trace_path_prefix=f"{path_prefix}expected_",
+            )
+        torch.testing.assert_close(actual_iree_result, expected_result)
 
 
 if __name__ == "__main__":

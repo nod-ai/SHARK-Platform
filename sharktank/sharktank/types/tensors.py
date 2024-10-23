@@ -395,6 +395,11 @@ class InferenceTensor(ABC):
         # numbers on the lhs.
         return self.__add__(lhs)
 
+    def __iadd__(self, rhs):
+        from ..ops import elementwise
+
+        return elementwise(torch.add, self, rhs, out=self)
+
     def __mod__(self, rhs):
         from ..ops import elementwise
 
@@ -758,6 +763,7 @@ class ShardedTensorBase(ShardedTensor):
         ts: list[torch.Tensor],
         name: str = UnnamedTensorName,
         shape: Optional[list[int]],
+        insert_device_assignment: bool = True,
     ):
         from ..ops import transfer_to_logical_device
 
@@ -767,7 +773,9 @@ class ShardedTensorBase(ShardedTensor):
         self._shards: tuple[DefaultPrimitiveTensor] = tuple(
             DefaultPrimitiveTensor(
                 name=f"{name}.shard.{i}",
-                data=transfer_to_logical_device(t, i),
+                data=transfer_to_logical_device(t, i)
+                if insert_device_assignment
+                else unbox_tensor(t),
             )
             for i, t in enumerate(ts)
         )
@@ -930,6 +938,7 @@ class SplitPrimitiveTensor(ShardedTensorBase):
         shard_count: None | int = None,
         name: str = UnnamedTensorName,
         shape: Optional[list[int]] = None,
+        insert_device_assignment: bool = True,
     ):
         """
         If `ts` is a list of tensors, it is interpreted as the shards.
@@ -966,7 +975,13 @@ class SplitPrimitiveTensor(ShardedTensorBase):
                 s == t for i, (s, t) in enumerate(zip(shape, t_shape)) if i != shard_dim
             ), f"Shape mismatch for non-split dimension for tensor shard {i} with shape {t.shape}"
 
-        super().__init__(name=name, ts=ts, shape=shape, shard_dim=shard_dim)
+        super().__init__(
+            name=name,
+            ts=ts,
+            shape=shape,
+            shard_dim=shard_dim,
+            insert_device_assignment=insert_device_assignment,
+        )
 
     def _is_slicing_split_dim(self, key):
         if isinstance(
@@ -1309,6 +1324,7 @@ register_pytree_node(
     flatten_fn=flatten_default_primitive_tensor,
     unflatten_fn=unflatten_defult_primitive_tensor,
     flatten_with_keys_fn=flatten_with_keys_default_primitive_tensor,
+    serialized_type_name=f"{DefaultPrimitiveTensor.__module__}.{DefaultPrimitiveTensor.__name__}",
 )
 
 
@@ -1321,8 +1337,16 @@ def flatten_split_primitive_tensor(
 def unflatten_split_primitive_tensor(
     values: Iterable[Any], ctx: torch.utils._pytree.Context
 ) -> SplitPrimitiveTensor:
+    from ..ops import transfer_to_logical_device_
+
+    shards = list(values)
+    for i, tensor in enumerate(shards):
+        transfer_to_logical_device_(tensor, i)
     return SplitPrimitiveTensor(
-        shard_dim=ctx["shard_dim"], ts=list(values), name=ctx["name"]
+        shard_dim=ctx["shard_dim"],
+        ts=shards,
+        name=ctx["name"],
+        insert_device_assignment=False,
     )
 
 
@@ -1336,6 +1360,7 @@ register_pytree_node(
     flatten_fn=flatten_split_primitive_tensor,
     unflatten_fn=unflatten_split_primitive_tensor,
     flatten_with_keys_fn=flatten_with_keys_split_primitive_tensor,
+    serialized_type_name=f"{SplitPrimitiveTensor.__module__}.{SplitPrimitiveTensor.__name__}",
 )
 
 
