@@ -289,7 +289,7 @@ class ShardedLlamaTest(unittest.TestCase):
             sharded_fxb = FxProgramsBuilder(sharded_model)
 
             @sharded_fxb.export_program(
-                name="prefill", args=tuple(), kwargs=sharded_prefill_args
+                name="prefill", args=tuple(), kwargs=sharded_prefill_args, strict=False
             )
             def _(model, *args, **kwargs) -> torch.Tensor:
                 return model.prefill(*args, **kwargs)
