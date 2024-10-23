@@ -169,12 +169,10 @@ def main():
         "--output-mlir",
         help="Output file path for exported MLIR file",
         default="/tmp/sharktank/artifacts/paged_llama.mlir",
-        default="/tmp/sharktank/artifacts/paged_llama.mlir",
     )
     parser.add_argument(
         "--output-config",
         help="Output file path for exported config file",
-        default="/tmp/sharktank/artifacts/paged_llama.json",
         default="/tmp/sharktank/artifacts/paged_llama.json",
     )
     parser.add_argument(
