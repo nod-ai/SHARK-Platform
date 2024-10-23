@@ -60,6 +60,8 @@ def add_output_dataset_options(parser: argparse.ArgumentParser):
         help="IRPA file to save dataset to",
     )
 
+def add_quantization_options(parser: argparse.ArgumentParser):
+    parser.add_argument("--fake-quant", action=argparse.BooleanOptionalAction, help="whether or not to run/export the model in fake quant mode. Note, running eagerly without fake quant is dependent on torch types supporting operations. YMMV")
 
 def add_tokenizer_options(parser: argparse.ArgumentParser):
     """Adds options for specifying a tokenizer.

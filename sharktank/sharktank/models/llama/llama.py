@@ -71,6 +71,7 @@ class PagedLlamaModelV1(BaseCausalLMModel):
             device=config.device,
             activation_dtype=config.activation_dtype,
             attention_dtype=config.attention_dtype,
+            fake_quant=config.fake_quant,
         )
         self.config = config
         self.hp = hp
@@ -113,6 +114,7 @@ class PagedLlamaModelV1(BaseCausalLMModel):
                     head_count_kv=hp.attention_head_count_kv,
                     rms_epsilon=hp.attention_layer_norm_rms_epsilon,
                     attention_kernel=self.attention_kernel,
+                    fake_quant=self.fake_quant,
                 )
                 for n in range(hp.block_count)
             ]
@@ -307,6 +309,7 @@ class AttentionFFNBlock(ThetaLayer):
         head_count_kv: int,
         rms_epsilon: float,
         attention_kernel: str = "decomposed",
+        fake_quant: bool,
     ):
         super().__init__(theta)
         self.add_module(
@@ -320,6 +323,7 @@ class AttentionFFNBlock(ThetaLayer):
                 head_count_kv=head_count_kv,
                 rms_epsilon=rms_epsilon,
                 attention_kernel=attention_kernel,
+                fake_quant=fake_quant,
             ),
         )
         self.add_module(

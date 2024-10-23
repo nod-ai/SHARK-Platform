@@ -33,12 +33,14 @@ class BaseCausalLMModel(ThetaLayer):
         device: Optional[torch.device] = None,
         activation_dtype: torch.dtype = torch.float32,
         attention_dtype: torch.dtype = torch.float32,
+        fake_quant:bool = True,
     ):
         super().__init__(theta)
         self.device = device
         self.activation_dtype = activation_dtype
         self.attention_dtype = attention_dtype
         self.context_length = context_length
+        self.fake_quant = fake_quant
 
         if static_tables:
             self.register_buffer(
