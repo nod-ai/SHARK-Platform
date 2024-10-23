@@ -318,7 +318,6 @@ class InferenceExecutorProcess(sf.Process):
             request.input_ids = ids_list
 
             # Generate random sample latents.
-            # TODO: use our own RNG
             seed = request.seed
             channels = self.service.model_params.num_latents_channels
             unet_dtype = self.service.model_params.unet_dtype
@@ -328,12 +327,6 @@ class InferenceExecutorProcess(sf.Process):
                 request.height // 8,
                 request.width // 8,
             )
-            generator = torch.manual_seed(seed)
-            rand_sample = torch.randn(
-                latents_shape,
-                generator=generator,
-                dtype=torch_dtypes[unet_dtype],
-            ).numpy()
 
             # Create and populate sample device array.
             generator = sfnp.RandomGenerator(seed)
