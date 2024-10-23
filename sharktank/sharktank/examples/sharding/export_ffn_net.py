@@ -50,6 +50,7 @@ class ShardedFFN(ThetaLayer):
         ffn_gate_weight = self.theta.tensor("ffn_gate", "weight")
         ffn_up_weight = self.theta.tensor("ffn_up", "weight")
         ffn_down_weight = self.theta.tensor("ffn_down", "weight")
+        x = ops.replicate(x, count=ffn_gate_weight.shard_count)
         ffn_gate = ops.elementwise(
             torch.nn.functional.silu, ops.linear(x, ffn_gate_weight)
         )
