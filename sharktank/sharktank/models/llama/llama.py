@@ -284,8 +284,6 @@ class PagedLlamaModelV1(BaseCausalLMModel):
 
         h = self.output_norm(h)
         logits = self.output_lm_head(h)
-        if unshard_result:
-            logits = ops.unshard(logits)
         return logits
 
 

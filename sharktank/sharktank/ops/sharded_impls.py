@@ -809,7 +809,7 @@ def mean_replicated(
     dtype: torch.dtype,
 ) -> None:
     shards = [
-        torch.mean(unbox_tensor(shard), dim=dim, keepdim=keepdim, dtype=dtype)
+        mean(shard, dim=dim, keepdim=keepdim, dtype=dtype)
         for shard in x.shards
     ]
     return ReplicatedTensor(ts=shards)
@@ -1128,7 +1128,9 @@ def unshard_split(input: SplitPrimitiveTensor) -> Tensor:
 
 @unshard.override(UnreducedTensor)
 def unshard_unreduced(input: UnreducedTensor) -> Tensor:
-    return elementwise(torch.add, *input.shards)
+    shards = input.shards
+    shards = [transfer_to_logical_device(shard, 0) if i != 0 else shard for i, shard in enumerate(shards)]
+    return elementwise(torch.add, *shards)
 
 
 @unshard.override(Tensor)
