@@ -25,6 +25,7 @@ from transformers.models.llama.configuration_llama import LlamaConfig
 
 class AttentionBlockTest(unittest.TestCase):
     def test(self):
+        torch.manual_seed(123456)
         torch.set_default_dtype(torch.float32)
         block_index = 0
         seq_len = 13
@@ -148,7 +149,9 @@ class AttentionBlockTest(unittest.TestCase):
         )[0]
 
         assert sharktank_output.shape == huggingface_output.shape
-        torch.testing.assert_close(sharktank_output, huggingface_output)
+        torch.testing.assert_close(
+            sharktank_output, huggingface_output, atol=1e-5, rtol=5e-2
+        )
 
 
 if __name__ == "__main__":

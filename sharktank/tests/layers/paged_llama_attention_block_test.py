@@ -115,7 +115,6 @@ class PagedLlamaAttentionBlockTest(unittest.TestCase):
         output = aot.export(ep)
         output.verify()
         asm = str(output.mlir_module)
-        output.save_mlir("temp.mlir")
         self.assertNotIn("scaled_dot_product_attention", asm)
 
     def testExportNondecomposed(self):
@@ -190,7 +189,6 @@ class PagedLlamaAttentionBlockTest(unittest.TestCase):
         output = aot.export(ep)
         output.verify()
         asm = str(output.mlir_module)
-        output.save_mlir("temp.mlir")
         self.assertIn("torch.aten._scaled_dot_product_flash_attention_for_cpu", asm)
 
 
