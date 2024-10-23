@@ -192,7 +192,7 @@ def main():
         help="Enable Causal attention",
         action="store_true",
     )
-
+    # TODO: move this to CLI to enable re-use with eager
     parser.add_argument(
         "--attention_kernel",
         help="decomposed/torch",
