@@ -113,23 +113,23 @@ def export(
     /,
     fx_builder: FxProgramsBuilder | None = None,
     args: tuple[PyTree] | None = None,
-    argument_device_affinities: dict[int, DeviceAffinity] | None = None,
+    arg_device: dict[int, DeviceAffinity] | None = None,
     *transitive_args,
     **transitive_kwargs,
 ) -> torch.export.ExportedProgram:
     """Wrapper around FxProgramsBuilder.export_program that handles
     the sharktank custom tensor types.
 
-    If `argument_device_affinities` is not specified it will extract the affinities
+    If `arg_device` is not specified it will extract the affinities
     from the passed `args`.
-    `argument_device_affinities` must pass the affinities for the flattened arguments.
+    `arg_device` must pass the affinities for the flattened arguments.
     These are those that correspond to torch.Tensor.
     For example a sharded tensor with 2 shards would result in 2 arguments in the MLIR
     signature."""
     if args is None:
         args = []
-    if argument_device_affinities is None:
-        argument_device_affinities = get_argument_flat_device_affinities(*args)
+    if arg_device is None:
+        arg_device = get_argument_flat_device_affinities(*args)
     flat_args = tree_flatten(args)[0]
     if fx_builder is not None:
         # Flatten the signature of the function.
@@ -149,7 +149,7 @@ def export(
             module_fn_with_flat_signature,
             *transitive_args,
             args=flat_args,
-            argument_device_affinities=argument_device_affinities,
+            arg_device=arg_device,
             **amended_kwargs,
         )
 
