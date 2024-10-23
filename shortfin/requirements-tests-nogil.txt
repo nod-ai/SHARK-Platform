@@ -2,4 +2,3 @@ pytest
 requests
 fastapi
 uvicorn
-tokenizers
