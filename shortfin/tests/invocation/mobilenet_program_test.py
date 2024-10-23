@@ -36,7 +36,7 @@ def test_invoke_mobilenet(lsys, fiber, mobilenet_compiled_cpu_path):
         "f", ([0.2] * (224 * 224)) + ([0.4] * (224 * 224)) + ([-0.2] * (224 * 224))
     )
     program_module = lsys.load_module(mobilenet_compiled_cpu_path)
-    program = sf.Program([program_module], fiber=fiber)
+    program = sf.Program([program_module], devices=fiber.raw_devices)
     main_function = program["module.torch-jit-export"]
 
     async def main():
@@ -45,7 +45,8 @@ def test_invoke_mobilenet(lsys, fiber, mobilenet_compiled_cpu_path):
         with staging_input.map(discard=True) as m:
             m.fill(dummy_data)
         device_input.copy_from(staging_input)
-        (device_output,) = await main_function(device_input)
+        for _ in range(15):
+            (device_output,) = await main_function(device_input, fiber=fiber)
         host_output = device_output.for_transfer()
         host_output.copy_from(device_output)
         await device
