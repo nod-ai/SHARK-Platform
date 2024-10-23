@@ -8,7 +8,7 @@ import unittest
 import pytest
 import numpy as np
 
-from sharktank.evaluate import perplexity
+from sharktank.evaluate import perplexity_torch
 
 longrun = pytest.mark.skipif("not config.getoption('longrun')")
 
@@ -31,7 +31,7 @@ class PerplexityTest(unittest.TestCase):
         model_name = "llama3_8B_f16_decomposed"
         baseline_perplexity = self.baseline_perplexity[model_name]
 
-        current_perplexity = perplexity.main(
+        current_perplexity = perplexity_torch.main(
             [
                 f"--gguf-file={self.llama3_8b_f16_model}",
                 f"--tokenizer-config-json={self.llama3_8b_tokenizer}",
@@ -61,7 +61,7 @@ class PerplexityTest(unittest.TestCase):
         model_name = "llama3_8B_f16_non_decomposed"
         baseline_perplexity = self.baseline_perplexity[model_name]
 
-        current_perplexity = perplexity.main(
+        current_perplexity = perplexity_torch.main(
             [
                 f"--gguf-file={self.llama3_8b_f16_model}",
                 f"--tokenizer-config-json={self.llama3_8b_tokenizer}",
@@ -92,7 +92,7 @@ class PerplexityTest(unittest.TestCase):
         model_name = "llama3_8B_fp8_decomposed"
         baseline_perplexity = self.baseline_perplexity[model_name]
 
-        current_perplexity = perplexity.main(
+        current_perplexity = perplexity_torch.main(
             [
                 f"--gguf-file={self.llama3_8b_fp8_model}",
                 f"--tokenizer-config-json={self.llama3_8b_tokenizer}",
@@ -122,7 +122,7 @@ class PerplexityTest(unittest.TestCase):
         model_name = "llama3_8B_fp8_non_decomposed"
         baseline_perplexity = self.baseline_perplexity[model_name]
 
-        current_perplexity = perplexity.main(
+        current_perplexity = perplexity_torch.main(
             [
                 f"--gguf-file={self.llama3_8b_fp8_model}",
                 f"--tokenizer-config-json={self.llama3_8b_tokenizer}",
@@ -150,7 +150,7 @@ class PerplexityTest(unittest.TestCase):
         model_name = "llama3_405B_f16_decomposed"
         baseline_perplexity = self.baseline_perplexity[model_name]
 
-        current_perplexity = perplexity.main(
+        current_perplexity = perplexity_torch.main(
             [
                 f"--gguf-file={self.llama3_405b_f16_model}",
                 f"--tokenizer-config-json={self.llama3_405b_tokenizer}",
@@ -181,7 +181,7 @@ class PerplexityTest(unittest.TestCase):
         model_name = "llama3_405B_f16_non_decomposed"
         baseline_perplexity = self.baseline_perplexity[model_name]
 
-        current_perplexity = perplexity.main(
+        current_perplexity = perplexity_torch.main(
             [
                 f"--gguf-file={self.llama3_405b_f16_model}",
                 f"--tokenizer-config-json={self.llama3_405b_tokenizer}",
@@ -213,7 +213,7 @@ class PerplexityTest(unittest.TestCase):
         model_name = "llama3_405B_fp8_decomposed"
         baseline_perplexity = self.baseline_perplexity[model_name]
 
-        current_perplexity = perplexity.main(
+        current_perplexity = perplexity_torch.main(
             [
                 f"--gguf-file={self.llama3_405b_fp8_model}",
                 f"--tokenizer-config-json={self.llama3_405b_tokenizer}",
@@ -244,7 +244,7 @@ class PerplexityTest(unittest.TestCase):
         model_name = "llama3_405B_fp8_non_decomposed"
         baseline_perplexity = self.baseline_perplexity[model_name]
 
-        current_perplexity = perplexity.main(
+        current_perplexity = perplexity_torch.main(
             [
                 f"--gguf-file={self.llama3_405b_fp8_model}",
                 f"--tokenizer-config-json={self.llama3_405b_tokenizer}",
