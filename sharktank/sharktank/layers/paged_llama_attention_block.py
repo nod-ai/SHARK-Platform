@@ -156,14 +156,14 @@ class PagedLlamaAttentionBlock(ThetaLayer):
             xk = repeat_kv(xk)
             xv = repeat_kv(xv)
 
+        if self.cache_quantizer and not self.fake_quant:
+            xk = self.cache_quantizer.dequantize_raw_tensor(xk, torch.float16, name="xk_deq")
+            xv = self.cache_quantizer.dequantize_raw_tensor(xv, torch.float16, name="xv_deq")
         # Transpose into [bs, heads, sl, dim]
         xq = xq.transpose(1, 2)
         keys = xk.transpose(1, 2)
         values = xv.transpose(1, 2)
 
-        if self.cache_quantizer and not self.fake_quant:
-            xk = self.cache_quantizer.dequantize_raw_tensor(xk, torch.float16, name="xk_deq")
-            xv = self.cache_quantizer.dequantize_raw_tensor(xv, torch.float16, name="xv_deq")
         if self.attention_kernel == "decomposed":
             attn_weights = ops.matmul(xq, keys.transpose(2, 3))
             if self.attention_scale is None:
@@ -191,12 +191,12 @@ class PagedLlamaAttentionBlock(ThetaLayer):
                 attn_weights, values
             )  # (bs, heads, slen, head_dim)
         else:
-            is_causal = attention_mask is None and batch_seq_len == 1
+            is_causal = True# attention_mask is None and batch_seq_len == 1
             attn_output = torch.nn.functional.scaled_dot_product_attention(
                 query=xq,  # [bs, ..., sl, dim]
                 key=keys,  # [bs, ..., sl, dim]
                 value=values,  # [bs, ..., sl, dim]
-                attn_mask=attention_mask,  # [bs, ..., sl, sl]
+                attn_mask=None,#attention_mask,  # [bs, ..., sl, sl]
                 dropout_p=0.0,
                 is_causal=is_causal,  # assumes causal masking when true
                 scale=None,  # defaults to 1/sqrt(dim)
