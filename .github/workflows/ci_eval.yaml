@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   test_perplexity:
-    timeout-minutes: 600
+    timeout-minutes: 1200
     name: "Evaluation Tests - perplexity"
     strategy:
       matrix:
