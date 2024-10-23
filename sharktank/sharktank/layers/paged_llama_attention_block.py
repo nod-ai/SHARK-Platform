@@ -113,13 +113,6 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         # Full sequence length.
         kv_seq_len = seq_block_ids.shape[1] * self.cache.block_seq_stride
 
-        print(
-            "all",
-            start_positions,
-            cache_state,
-            xk_temp,
-            xv_temp,
-        )
         if self.cache.is_paged:
             xk, xv = self.transact_cache_paged(
                 xk_cache_update=xk,
