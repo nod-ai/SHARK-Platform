@@ -262,6 +262,11 @@ iree-run-module \
 Run perplexity test:
 
 ```bash
+pytest sharktank/tests/evaluate/perplexity_test.py  --longrun
+```
+
+Run perplexity for a new model:
+```bash
 python -m  sharktank.evaluate.perplexity \
   --gguf-file=llama8b_f16.gguf \
   --tokenizer-config-json=tokenizer_config.json

@@ -7,6 +7,7 @@
 import sys
 import logging
 import time
+import random
 from datetime import timedelta
 import json
 import numpy as np
@@ -55,14 +56,11 @@ class Perplexity:
 
     def __init__(
         self,
-        prompts: list,
         device,
         kv_cache_type,
     ):
-        self.prompts = prompts
-        self.add_start_token = False
         self.batch_size = 16
-        self.bs = len(prompts)
+
         self.device = device
         self.kv_cache_type = kv_cache_type
         self.activation_dtype = torch.float32
@@ -113,9 +111,10 @@ class Perplexity:
             device=self.device,
             activation_dtype=self.activation_dtype,
             attention_dtype=self.attention_dtype,
+            tensor_parallelism_size=tensor_parallelism_size,
         )
 
-        if tensor_parallelism_size > 1:
+        if config.tensor_parallelism_size > 1:
             dataset.root_theta = shard_theta(dataset.root_theta, config)
 
         theta = dataset.root_theta
@@ -131,16 +130,38 @@ class Perplexity:
         self.generator = TorchGenerator(model, tokenizer)
 
     @timeit
+    def get_prompts(self):
+
+        test_prompts = load_dataset("wikitext", "wikitext-2-raw-v1", split="test")[
+            "text"
+        ]
+
+        num_test_prompts = 219
+
+        random.seed(0)
+        test_prompts = random.sample(test_prompts, num_test_prompts)
+
+        # Ignore prompts that are: empty, less than 20 tokens or a title.
+        test_prompts = [
+            s.replace("\n", "").rstrip()
+            for s in test_prompts
+            if s != "" and len(s.split()) >= 20 and s.count("=") < 2
+        ]
+
+        logger.info(f" num_test_prompts: {len(test_prompts)}")
+
+        return test_prompts
+
+    @timeit
     def get_logits(self):
 
         token_ids, seq_lens = self.generator.tokenizer.encode(
-            self.prompts,
+            self.test_prompts,
             pad_to_multiple_of=self.generator.model.cache.pad_sequence_stride,
-            add_start_token=self.add_start_token,
         )
 
         logger.info(f" Prompts for Evaluation:")
-        for idx, prompt in enumerate(self.prompts):
+        for idx, prompt in enumerate(self.test_prompts):
             logger.info(
                 f" Prompt {idx}: \nTokens: {prompt.encode()}\nToken ids: {token_ids[idx]}\n"
             )
@@ -230,13 +251,18 @@ class Perplexity:
             crossentropy_loss / self.attention_mask.sum(1)
         ).tolist()
 
+        perplexity_batch = [round(ppl, 6) for ppl in perplexity_batch]
+
         return {
             "perplexities": perplexity_batch,
-            "mean_perplexity": np.mean(perplexity_batch),
+            "mean_perplexity": round(np.mean(perplexity_batch), 6),
         }
 
     @timeit
-    def get_perplexity(self):
+    def get_perplexity(self, test_prompts):
+
+        self.test_prompts = test_prompts
+        self.bs = len(self.test_prompts)
 
         self.get_logits()
 
@@ -256,7 +282,6 @@ class Perplexity:
 
 
 def run_perplexity(
-    prompts: list[str],
     dataset,
     tokenizer,
     device,
@@ -264,10 +289,11 @@ def run_perplexity(
     tensor_parallelism_size,
     attention_kernel,
 ):
-    perplexity = Perplexity(prompts=prompts, device=device, kv_cache_type=kv_cache_type)
+    perplexity = Perplexity(device=device, kv_cache_type=kv_cache_type)
 
     perplexity.load_model(dataset, tokenizer, tensor_parallelism_size, attention_kernel)
-    ppl = perplexity.get_perplexity()
+    test_prompts = perplexity.get_prompts()
+    ppl = perplexity.get_perplexity(test_prompts=test_prompts)
 
     return ppl
 
@@ -299,17 +325,7 @@ def main(argv):
     dataset = cli.get_input_dataset(args)
     tokenizer = cli.get_tokenizer(args)
 
-    input_texts = load_dataset("wikitext", "wikitext-2-raw-v1", split="test")["text"][
-        :20
-    ]
-
-    # Ignore prompts that are: empty, less than 5 words or a title.
-    input_texts = [
-        s for s in input_texts if s != "" and len(s.split()) > 5 and s.count("=") < 2
-    ]
-
     ppl = run_perplexity(
-        prompts=input_texts,
         dataset=dataset,
         tokenizer=tokenizer,
         device=device,

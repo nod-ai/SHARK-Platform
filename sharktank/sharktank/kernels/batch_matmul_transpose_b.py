@@ -8,6 +8,8 @@ from sharktank.kernels.base import *
 
 import torch
 
+from iree.compiler.ir import IntegerType
+
 __all__ = [
     "batch_matmul_transpose_b",
 ]
@@ -80,7 +82,7 @@ class batch_matmul_transpose_b(CustomOp):
         spec_sig = f"L{a_ident}_R{b_ident}"
         template_file = "batch_matmul_transpose_b.mlir"
         target_function_name = f"sharktank_batch_matmul_transpose_b_{spec_sig}"
-
+        cst_zero = "0" if IntegerType.isinstance(accum_type) else "0."
         # Template params.
         c_asm_type = f"tensor<{'x'.join('?' if d is None else str(d) for d in result_desc.spec_dims)}x{accum_type}>"
 
@@ -93,5 +95,6 @@ class batch_matmul_transpose_b(CustomOp):
             b_asm_type=b_asm_type,
             c_asm_type=c_asm_type,
             dtype=str(accum_type),
+            cst_zero=cst_zero,
         )
         kb.yield_results(*call_function(target_function, *kb.arg_bindings))

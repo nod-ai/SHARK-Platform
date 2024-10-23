@@ -1,11 +1,10 @@
-name: CI
+name: Evaluation Tests
 
 on:
   workflow_dispatch:
-  pull_request:
-  push:
-    branches:
-      - main
+  schedule:
+    # Weekdays nightly at 07:00 UTC = 23:00 PST / 00:00 PDT.
+    - cron: "0 7 * * 1-5"
 
 concurrency:
   # A PR number if a pull request and otherwise the commit hash. This cancels
@@ -16,19 +15,21 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
-    name: "Unit Tests and Type Checking"
+  test_perplexity:
+    timeout-minutes: 600
+    name: "Evaluation Tests - perplexity"
     strategy:
       matrix:
         version: [3.11]
-        os: [ubuntu-latest, windows-latest]
+        runs-on: [llama-mi300]
       fail-fast: false
-    runs-on: ${{matrix.os}}
+    runs-on: ${{matrix.runs-on}}
     defaults:
       run:
         shell: bash
     env:
       PIP_CACHE_DIR: "${{ github.workspace }}/.pip-cache"
+      SHARK_PLATFORM_REPO_ROOT: ${{ github.workspace }}
     steps:
       - name: "Setting up Python"
         id: setup_python
@@ -46,7 +47,7 @@ jobs:
           path: ${{ env.PIP_CACHE_DIR }}
           key: pip-${{ steps.setup_python.outputs.python-version }}-${{ hashFiles('*requirements.txt') }}
 
-      - name: Install pip deps
+      - name: Install sharktank deps
         run: |
           python -m pip install --no-compile --upgrade pip
           # Note: We install in three steps in order to satisfy requirements
@@ -57,7 +58,5 @@ jobs:
             -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
           pip install --no-compile -r requirements.txt -r sharktank/requirements-tests.txt -e sharktank/
 
-      - name: Run sharktank tests
-        if: ${{ !cancelled() }}
-        run: |
-          pytest -n 4 sharktank/
+      - name: Run perplexity test
+        run:  pytest sharktank/tests/evaluate/perplexity_test.py  --longrun

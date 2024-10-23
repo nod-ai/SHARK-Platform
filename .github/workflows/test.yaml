@@ -86,7 +86,7 @@ jobs:
           pip install --no-compile -r pytorch-rocm-requirements.txt
           pip install --no-compile -f https://iree.dev/pip-release-links.html --src deps \
             -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
-          pip install --no-compile -r requirements.txt -e sharktank/ shortfin/
+          pip install --no-compile -r requirements.txt -r sharktank/requirements-tests.txt -e sharktank/ shortfin/
 
       - name: Run punet tests
         run: |

@@ -64,6 +64,77 @@ def pytest_addoption(parser):
         help="Load cached results if present instead of recomputing.",
     )
 
+    parser.addoption(
+        "--longrun",
+        action="store_true",
+        dest="longrun",
+        default=False,
+        help="Enable long and slow tests",
+    )
+
+    parser.addoption(
+        "--llama3-8b-tokenizer-path",
+        type=Path,
+        action="store",
+        default="/data/extra/models/llama3.1_8B/tokenizer_config.json",
+        help="Llama3.1 8b tokenizer path, defaults to 30F CI system path",
+    )
+
+    parser.addoption(
+        "--llama3-8b-f16-gguf-path",
+        type=Path,
+        action="store",
+        default="/data/extra/models/llama3.1_8B/llama8b_f16.gguf",
+        help="Llama3.1 8b gguf model path, defaults to 30F CI system path",
+    )
+
+    parser.addoption(
+        "--llama3-8b-fp8-model-path",
+        type=Path,
+        action="store",
+        default=None,
+        help="Llama3.1 8b fp8 model path",
+    )
+
+    parser.addoption(
+        "--llama3-405b-tokenizer-path",
+        type=Path,
+        action="store",
+        default="/data/extra/models/llama3.1_405B/tokenizer_config.json",
+        help="Llama3.1 405b tokenizer path, defaults to 30F CI system path",
+    )
+
+    parser.addoption(
+        "--llama3-405b-f16-gguf-path",
+        type=Path,
+        action="store",
+        default="/data/extra/models/llama3.1_405B/llama405b_fp16.gguf",
+        help="Llama3.1 405b gguf model path, defaults to 30F CI system path",
+    )
+
+    parser.addoption(
+        "--llama3-405b-fp8-model-path",
+        type=Path,
+        action="store",
+        default=None,
+        help="Llama3.1 405b fp8 model path",
+    )
+
+    parser.addoption(
+        "--baseline-perplexity-score-json",
+        type=Path,
+        action="store",
+        default="sharktank/tests/evaluate/baseline_perplexity_scores.json",
+        help="Llama3.1 8B & 405B model baseline perplexity scores json",
+    )
+
+    parser.addoption(
+        "--iree-hip-target",
+        action="store",
+        default="gfx942",
+        help="Specify the iree-hip target version (e.g., gfx942)",
+    )
+
 
 def set_fixture_from_cli_option(
     request: FixtureRequest,
@@ -102,3 +173,37 @@ def path_prefix(request: FixtureRequest) -> Optional[str]:
 @pytest.fixture(scope="class")
 def caching(request: FixtureRequest) -> Optional[bool]:
     return set_fixture_from_cli_option(request, "caching")
+
+
+@pytest.fixture(scope="class")
+def iree_hip_target_type(request: FixtureRequest) -> Optional[str]:
+    return set_fixture_from_cli_option(
+        request, "iree_hip_target", "iree_hip_target_type"
+    )
+
+
+@pytest.fixture(scope="class")
+def get_model_path(request: FixtureRequest):
+    model_path = {}
+    model_path["llama3_8b_tokenizer_path"] = set_fixture_from_cli_option(
+        request, "--llama3-8b-tokenizer-path", "llama3_8b_tokenizer"
+    )
+    model_path["llama3_8b_f16_gguf_path"] = set_fixture_from_cli_option(
+        request, "--llama3-8b-f16-gguf-path", "llama3_8b_f16_model"
+    )
+    model_path["llama3_8b_fp8_model_path"] = set_fixture_from_cli_option(
+        request, "--llama3-8b-fp8-model-path", "llama3_8b_fp8_model"
+    )
+    model_path["llama3_405b_tokenizer_path"] = set_fixture_from_cli_option(
+        request, "--llama3-405b-tokenizer-path", "llama3_405b_tokenizer"
+    )
+    model_path["llama3_405b_f16_gguf_path"] = set_fixture_from_cli_option(
+        request, "--llama3-405b-f16-gguf-path", "llama3_405b_f16_model"
+    )
+    model_path["llama3_405b_fp8_model_path"] = set_fixture_from_cli_option(
+        request, "--llama3-405b-fp8-model-path", "llama3_405b_fp8_model"
+    )
+    model_path["baseline_perplexity_score_json"] = set_fixture_from_cli_option(
+        request, "--baseline-perplexity-score-json", "baseline_perplexity_score_json"
+    )
+    return model_path

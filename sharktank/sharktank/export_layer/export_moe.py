@@ -5,9 +5,12 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 import torch
+import torch.nn.functional as F
+
 from iree.turbine.aot import *
+
 from sharktank.models.llama.testing import make_moe_block_theta, make_rand_torch
-from sharktank.layers.mixture_of_experts_block import PreGatherMoeBlock
+from sharktank.layers.mixture_of_experts_block import MoeBlock
 from ..utils import cli
 
 
@@ -37,8 +40,8 @@ def main():
         action="store_true",
     )
     parser.add_argument(
-        "--use-grok",
-        help="Enable to export Grok model's version of MOE block",
+        "--use-gelu",
+        help="Enable to use gelu for moe activation",
         action="store_true",
     )
 
@@ -46,12 +49,12 @@ def main():
 
     bs = args.batch_size
 
-    model = PreGatherMoeBlock(
+    model = MoeBlock(
         theta=make_moe_block_theta()("blk.0"),
         expert_count=8,
         expert_used_count=2,
         rms_epsilon=1e-5,
-        use_grok=args.use_grok,
+        moe_activation=F.gelu if args.use_gelu else F.silu,
     )
     fxb = FxProgramsBuilder(model)
     input = make_rand_torch((bs, 32, 6144))

@@ -13,8 +13,11 @@ logger = logging.getLogger(__name__)
 
 
 class SystemManager:
-    def __init__(self):
-        self.ls = sf.host.CPUSystemBuilder().create_system()
+    def __init__(self, device="local-task"):
+        if device == "local-task":
+            self.ls = sf.host.CPUSystemBuilder().create_system()
+        elif device == "hip":
+            self.ls = sf.amdgpu.SystemBuilder().create_system()
         logger.info(f"Created local system with {self.ls.device_names} devices")
         # TODO: Come up with an easier bootstrap thing than manually
         # running a thread.
