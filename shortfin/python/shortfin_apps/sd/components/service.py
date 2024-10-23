@@ -336,12 +336,17 @@ class InferenceExecutorProcess(sf.Process):
             ).numpy()
 
             # Create and populate sample device array.
+            generator = sfnp.RandomGenerator(seed)
             request.sample = sfnp.device_array.for_device(
                 device, latents_shape, unet_dtype
             )
+
             sample_host = request.sample.for_transfer()
             with sample_host.map(discard=True) as m:
-                m.fill(rand_sample.tobytes())
+                m.fill(bytes(1))
+
+            sfnp.fill_randn(sample_host, generator=generator)
+
             request.sample.copy_from(sample_host)
             await device
         return
@@ -390,7 +395,6 @@ class InferenceExecutorProcess(sf.Process):
         )
         await device
         pe, te = await fn(*clip_inputs)
-        breakpoint()
 
         await device
         for i in range(req_bs):
