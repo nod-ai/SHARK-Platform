@@ -37,6 +37,7 @@ def main(raw_args=None):
     sharded_theta = shard_theta(dataset.root_theta, llama_config)
     sharded_theta.rename_tensors_to_paths()
     dataset.root_theta = sharded_theta
+    dataset.properties["tensor_parallelism_size"] = args.tensor_parallelism_size
     dataset.save(args.output_irpa_file, io_report_callback=print)
 
 

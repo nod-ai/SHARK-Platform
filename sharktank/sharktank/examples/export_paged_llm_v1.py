@@ -59,12 +59,6 @@ def main():
         default="decomposed",
         choices=["decomposed", "torch_sdpa"],
     )
-    parser.add_argument(
-        "--tensor-parallelism-size",
-        type=int,
-        default=1,
-        help="How many devices are involved for tensor parallel sharding.",
-    )
 
     args = cli.parse(parser)
     dataset_type = cli.get_input_data_files(args)
@@ -74,7 +68,7 @@ def main():
     hp = configs.LlamaHParams.from_gguf_props(dataset.properties)
     llama_config = LlamaModelConfig(
         hp,
-        tensor_parallelism_size=args.tensor_parallelism_size,
+        tensor_parallelism_size=dataset.properties["tensor_parallelism_size"],
         use_hf=False,
         static_tables=False,  # Rely on the compiler for hoisting tables.
         kv_cache_type="direct" if args.bs == [1] else "paged",
