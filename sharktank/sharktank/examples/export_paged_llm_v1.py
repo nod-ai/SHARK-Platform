@@ -72,18 +72,14 @@ def main():
     dataset = cli.get_input_dataset(args)
 
     hp = configs.LlamaHParams.from_gguf_props(dataset.properties)
-    llama_config = LlamaModelConfig(hp)
-    if args.tensor_parallelism_size > 1:
-        dataset.root_theta = shard_theta(dataset.root_theta, llama_config)
-    llama_config.use_hf = False
-    llama_config.static_tables = False  # Rely on the compiler for hoisting tables.
-    llama_config.kv_cache_type = "direct" if args.bs == [1] else "paged"
-    llama_config.attention_kernel = args.attention_kernel
-
-    # This is a bit gross and should be changed in the future. Best Idea I had so far.
-    attn_q_weight = dataset.root_theta.tensor("blk")["0"]["attn_q"]["weight"]
-    if isinstance(attn_q_weight, SplitPrimitiveTensor):
-        llama_config.tensor_parallelism_size = attn_q_weight.shard_count
+    llama_config = LlamaModelConfig(
+        hp,
+        tensor_parallelism_size=args.tensor_parallelism_size,
+        use_hf=False,
+        static_tables=False,  # Rely on the compiler for hoisting tables.
+        kv_cache_type="direct" if args.bs == [1] else "paged",
+        attention_kernel=args.attention_kernel,
+    )
 
     if llama_config.hp.expert_count:
         if llama_config.hp.model_arch == "grok":
