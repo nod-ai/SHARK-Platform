@@ -183,7 +183,7 @@ def main():
             args=(tokens, seq_lens, seq_block_ids, cache),
             dynamic_shapes=dynamic_shapes,
             strict=args.strict,
-            argument_device_affinities=arg_affinities,
+            arg_device=arg_affinities,
         )
         def _(model, tokens, seq_lens, seq_block_ids, cs):
             cache_tensors = cs
@@ -253,7 +253,7 @@ def main():
             ),
             dynamic_shapes=dynamic_shapes,
             strict=args.strict,
-            argument_device_affinities=arg_affinities,
+            arg_device=arg_affinities,
         )
         def _(
             model,
