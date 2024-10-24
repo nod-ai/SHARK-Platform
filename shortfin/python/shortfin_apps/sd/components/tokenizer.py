@@ -40,18 +40,12 @@ class Tokenizer:
             max_length=self.max_length,
             truncation=True,
             return_tensors="np",
-            return_attention_mask=False,
+            return_attention_mask=self.return_attention_mask,
         )
 
     def encoding_length(self, enc: BatchEncoding) -> int:
         """Gets the length of an encoding."""
-        return len(enc.ids)
-
-    def post_process_encodings(self, encs: list[BatchEncoding], batch_seq_len: int):
-        """Truncates and pads to a requested size."""
-        for enc in encs:
-            enc.truncate(batch_seq_len)
-            enc.pad(batch_seq_len)
+        return len(enc.input_ids)
 
     def encodings_to_array(
         self,
@@ -66,9 +60,11 @@ class Tokenizer:
         It is expected that the user has called post_process_encodings with
         the same batch_seq_len in order to properly truncate/pad.
         """
-        ary = sfnp.device_array.for_host(device, [len(encs), batch_seq_len], dtype)
-        for i, enc in enumerate(encs):
-            ary.view(i).items = np.expand_dims(enc.input_ids, axis=0)
+        ary = sfnp.device_array.for_host(
+            device, [len(encs.input_ids), batch_seq_len], dtype
+        )
+        for i, ids in enumerate(encs.input_ids):
+            ary.view(i).items = ids
         return ary
 
     def attention_masks_to_array(
@@ -79,7 +75,9 @@ class Tokenizer:
         *,
         dtype: sfnp.DType = sfnp.int32,
     ):
-        ary = sfnp.device_array.for_host(device, [len(encs), batch_seq_len], dtype)
-        for i, enc in enumerate(encs):
-            ary.view(i).items = enc.attention_mask
+        ary = sfnp.device_array.for_host(
+            device, [len(encs.attention_mask), batch_seq_len], dtype
+        )
+        for i, enc in enumerate(encs.attention_mask):
+            ary.view(i).items = enc
         return ary
