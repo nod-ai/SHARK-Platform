@@ -6,7 +6,7 @@
 
 import unittest
 import pytest
-import numpy as np
+import json
 
 from sharktank.evaluate import perplexity_torch
 
@@ -19,9 +19,8 @@ class PerplexityTest(unittest.TestCase):
         self.current_perplexity_all = {}
         self.delta = 5e-1
         self.tensor_parallelism_size = 8
-        self.baseline_perplexity = np.load(
-            self.baseline_perplexity_scores, allow_pickle=True
-        ).item()
+        with open(self.baseline_perplexity_scores, "r") as f:
+            self.baseline_perplexity = json.load(f)
 
     @longrun
     def test_llama3_8B_f16_decomposed(self):
