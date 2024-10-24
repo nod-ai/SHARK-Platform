@@ -353,7 +353,7 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
     @longrun
     @is_mi300x
     @pytest.mark.xfail(
-        reason="Export (File Not Found)", strict=True, raises=ExportMlirException
+        reason="IREE Invocation (OOM)", strict=True, raises=IreeBenchmarkException
     )
     def testBenchmark70B_f16_Decomposed(self):
         output_file_name = self.dir_path_70b / "f16_decomposed"
