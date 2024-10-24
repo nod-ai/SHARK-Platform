@@ -408,9 +408,6 @@ def test_kvcache_noreturn(lsys, fiber, kvcache_compiled_cpu_path, await_before_i
                 host_result = read_result.for_transfer()
                 host_result.copy_from(read_result)
                 await device
-                import time
-
-                time.sleep(5)
 
                 # Convert result to numpy array for comparison
                 result_array = np.frombuffer(
