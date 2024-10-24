@@ -207,3 +207,22 @@ def get_model_path(request: FixtureRequest):
         request, "--baseline-perplexity-score-json", "baseline_perplexity_score_json"
     )
     return model_path
+
+# Hook to add extra columns or modify the table row in the pytest-html report
+def pytest_html_results_table_header(cells):
+    cells.insert(2, 'XFail Reason')
+
+
+def pytest_html_results_table_row(report, cells):
+    if hasattr(report, 'wasxfail'):
+        cells.insert(2, report.wasxfail)
+    else:
+        cells.insert(2, '')
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    outcome = yield
+    report = outcome.get_result()
+
+    if report.when == "call" and hasattr(report, 'wasxfail'):
+        report.wasxfail = report.wasxfail
