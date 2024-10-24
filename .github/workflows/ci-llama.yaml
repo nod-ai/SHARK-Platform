@@ -83,7 +83,7 @@ jobs:
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.SHARK_PLATFORM_GH_TOKEN }}
-          publish_dir: ./report.html
+          publish_dir: ./llama-report.html
 
       - name: Upload llama executable files
         uses: actions/upload-artifact@v4
