@@ -4,9 +4,9 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-from typing import Any, List
+from typing import Any, Callable, List
 from collections.abc import Iterable
-from itertools import zip_longest
+from operator import eq
 
 
 def longest_equal_range(l1: List[Any], l2: List[Any]) -> int:
@@ -18,5 +18,13 @@ def longest_equal_range(l1: List[Any], l2: List[Any]) -> int:
     return min(len(l1), len(l2))
 
 
-def iterables_equal(iterable1: Iterable, iterable2: Iterable) -> bool:
-    return all(v1 == v2 for v1, v2 in zip_longest(iterable1, iterable2))
+def iterables_equal(
+    iterable1: Iterable,
+    iterable2: Iterable,
+    *,
+    elements_equal: Callable[[Any, Any], bool] | None = None
+) -> bool:
+    elements_equal = elements_equal or eq
+    return all(
+        elements_equal(v1, v2) for v1, v2 in zip(iterable1, iterable2, strict=True)
+    )
