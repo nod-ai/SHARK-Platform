@@ -106,3 +106,61 @@ def test_argmax_dtypes(device, dtype):
     # some of these.
     src = sfnp.device_array(device, [4, 16, 128], dtype=dtype)
     sfnp.argmax(src)
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        sfnp.float16,
+        sfnp.float32,
+    ],
+)
+def test_fill_randn_default_generator(device, dtype):
+    out1 = sfnp.device_array(device, [4, 16, 128], dtype=dtype)
+    with out1.map(write=True) as m:
+        m.fill(bytes(1))
+    sfnp.fill_randn(out1)
+    out2 = sfnp.device_array(device, [4, 16, 128], dtype=dtype)
+    with out2.map(write=True) as m:
+        m.fill(bytes(1))
+    sfnp.fill_randn(out2)
+
+    with out1.map(read=True) as m1, out2.map(read=True) as m2:
+        # The default generator should populate two different arrays.
+        contents1 = bytes(m1)
+        contents2 = bytes(m2)
+        assert contents1 != contents2
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        sfnp.float16,
+        sfnp.float32,
+    ],
+)
+def test_fill_randn_explicit_generator(device, dtype):
+    gen1 = sfnp.RandomGenerator(42)
+    gen2 = sfnp.RandomGenerator(42)
+    out1 = sfnp.device_array(device, [4, 16, 128], dtype=dtype)
+    with out1.map(write=True) as m:
+        m.fill(bytes(1))
+    sfnp.fill_randn(out1, generator=gen1)
+    out2 = sfnp.device_array(device, [4, 16, 128], dtype=dtype)
+    with out2.map(write=True) as m:
+        m.fill(bytes(1))
+    sfnp.fill_randn(out2, generator=gen2)
+    zero = sfnp.device_array(device, [4, 16, 128], dtype=dtype)
+    with zero.map(write=True) as m:
+        m.fill(bytes(1))
+
+    with out1.map(read=True) as m1, out2.map(read=True) as m2, zero.map(
+        read=True
+    ) as mz:
+        # Using explicit generators with the same seed should produce the
+        # same distributions.
+        contents1 = bytes(m1)
+        contents2 = bytes(m2)
+        assert contents1 == contents2
+        # And not be zero.
+        assert contents1 != bytes(mz)

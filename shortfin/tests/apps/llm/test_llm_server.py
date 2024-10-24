@@ -4,6 +4,9 @@ import time
 import requests
 import os
 import json
+import uuid
+
+BATCH_SIZES = [1, 4]
 
 
 @pytest.fixture(scope="module")
@@ -34,6 +37,7 @@ tokenizer.save_pretrained("/tmp/sharktank/llama")
     mlir_path = "/tmp/sharktank/llama/model.mlir"
     config_path = "/tmp/sharktank/llama/config.json"
     if not os.path.exists(mlir_path) or not os.path.exists(config_path):
+        bs_string = ",".join(map(str, BATCH_SIZES))
         subprocess.run(
             [
                 "python",
@@ -42,6 +46,7 @@ tokenizer.save_pretrained("/tmp/sharktank/llama")
                 f"--gguf-file={model_path}",
                 f"--output-mlir={mlir_path}",
                 f"--output-config={config_path}",
+                f"--bs={bs_string}",
             ],
             check=True,
         )
@@ -70,8 +75,8 @@ tokenizer.save_pretrained("/tmp/sharktank/llama")
             "max_seq_len": 2048,
             "attn_head_count": 32,
             "attn_head_dim": 100,
-            "prefill_batch_sizes": [4],
-            "decode_batch_sizes": [4],
+            "prefill_batch_sizes": BATCH_SIZES,
+            "decode_batch_sizes": BATCH_SIZES,
             "transformer_block_count": 26,
             "paged_kv_cache": {"block_seq_stride": 16, "device_block_count": 256},
         }
@@ -96,7 +101,7 @@ def llm_server(setup_environment):
     )
 
     # Wait for server to start
-    time.sleep(5)
+    time.sleep(2)
 
     yield server_process
 
@@ -105,6 +110,43 @@ def llm_server(setup_environment):
     server_process.wait()
 
 
+def do_generate(prompt):
+
+    headers = {"Content-Type": "application/json"}
+    # Create a GenerateReqInput-like structure
+    data = {
+        "text": prompt,
+        "sampling_params": {"max_tokens": 50, "temperature": 0.7},
+        "rid": uuid.uuid4().hex,
+        "return_logprob": False,
+        "logprob_start_len": -1,
+        "top_logprobs_num": 0,
+        "return_text_in_logprobs": False,
+        "stream": False,
+    }
+
+    print("Prompt text:")
+    print(data["text"])
+
+    BASE_URL = "http://localhost:8000"
+
+    response = requests.post(f"{BASE_URL}/generate", headers=headers, json=data)
+    print(f"Generate endpoint status code: {response.status_code}")
+
+    if response.status_code == 200:
+        print("Generated text:")
+        data = response.text
+        assert data.startswith("data: ")
+        data = data[6:]
+        assert data.endswith("\n\n")
+        data = data[:-2]
+
+        return data
+    else:
+        response.raise_for_status()
+
+
+@pytest.mark.system("amdgpu")
 def test_llm_server(llm_server):
     # Here you would typically make requests to your server
     # and assert on the responses
@@ -115,3 +157,6 @@ def test_llm_server(llm_server):
 
     # For now, we'll just check if the server process is running
     assert llm_server.poll() is None
+    output = do_generate("1 2 3 4 5 ")
+    print(output)
+    assert output.startswith("6 7 8")

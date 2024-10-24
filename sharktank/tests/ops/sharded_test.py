@@ -786,9 +786,9 @@ class ReplicateTest(unittest.TestCase):
         expected_result = ReplicatedTensor(ts=tensor, shard_count=shard_count)
         assert expected_result.is_deep_equal(actual_result)
 
-        # Test not a copy.
+        # Test that is a copy.
         tensor[...] = torch.rand_like(tensor)
-        assert all(ops.equal(tensor, shard) for shard in actual_result.shards)
+        assert all(not ops.equal(tensor, shard) for shard in actual_result.shards)
 
 
 class ReshapeTest(unittest.TestCase):
@@ -905,10 +905,10 @@ class ReshardSplitTest(unittest.TestCase):
         )
         assert expected_result.is_deep_equal(actual_result)
 
-        # Test not a copy.
+        # Test that is a copy.
         tensor[...] = torch.rand_like(tensor)
         result_split2 = ops.reshard_split(tensor, dim=shard_dim, count=shard_count)
-        assert ops.equal(actual_result, result_split2)
+        assert not ops.equal(actual_result, result_split2)
 
     def testReshardSharded(self):
         tensor = torch.rand(4, 5, 6, dtype=torch.float32)
