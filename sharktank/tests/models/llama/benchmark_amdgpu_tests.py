@@ -254,7 +254,7 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
         artifacts_dir = Path("/data/llama-3.1/8b")
         self.irpa_path = artifacts_dir / "llama8b_f16.irpa"
         self.irpa_path_fp8 = artifacts_dir / "llama8b_fp8.irpa"
-        self.tensor_parallelism_size = None
+        self.tensor_parallelism_size = 1
         self.dir_path_8b = self.dir_path / "llama-8b"
         self.temp_dir_8b = Path(self.dir_path_8b)
         self.temp_dir_8b.mkdir(parents=True, exist_ok=True)
