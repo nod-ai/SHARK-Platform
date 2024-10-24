@@ -41,7 +41,7 @@ def all_gather_split(
     shards = [
         cat(
             [
-                transfer_to_logical_device(shard, i) if j != i else shard
+                transfer_to_logical_device(shard, i)
                 for j, shard in enumerate(input.shards)
             ],
             dim=dim,
@@ -62,7 +62,7 @@ def all_reduce_split_or_unreduced(
         elementwise(
             torch.add,
             *[
-                transfer_to_logical_device(shard, i) if j != i else shard
+                transfer_to_logical_device(shard, i)
                 for j, shard in enumerate(input.shards)
             ],
         )
@@ -765,7 +765,7 @@ def matmul_split(
     # The reduction dimension is split on both tensors.
     if lhs_reduction_dim == lhs.shard_dim and rhs_reduction_dim == rhs.shard_dim:
         partials = [
-            matmul(partial_lhs, partial_rhs, transpose_rhs=transpose_rhs)
+            matmul(partial_lhs, partial_rhs)
             for partial_lhs, partial_rhs in zip(lhs.shards, rhs.shards)
         ]
         return UnreducedTensor(ts=partials)
@@ -1137,10 +1137,7 @@ def unshard_split(input: SplitPrimitiveTensor) -> Tensor:
 @unshard.override(UnreducedTensor)
 def unshard_unreduced(input: UnreducedTensor) -> Tensor:
     shards = input.shards
-    shards = [
-        transfer_to_logical_device(shard, 0) if i != 0 else shard
-        for i, shard in enumerate(shards)
-    ]
+    shards = [transfer_to_logical_device(shard, 0) for i, shard in enumerate(shards)]
     return elementwise(torch.add, *shards)
 
 
