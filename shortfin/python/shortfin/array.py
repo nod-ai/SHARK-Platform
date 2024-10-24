@@ -42,6 +42,8 @@ DType = _sfl.array.DType
 
 # Ops.
 argmax = _sfl.array.argmax
+fill_randn = _sfl.array.fill_randn
+RandomGenerator = _sfl.array.RandomGenerator
 
 __all__ = [
     # DType aliases.
@@ -78,4 +80,6 @@ __all__ = [
     "DType",
     # Ops.
     "argmax",
+    "fill_randn",
+    "RandomGenerator",
 ]

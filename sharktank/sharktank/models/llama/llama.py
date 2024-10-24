@@ -77,6 +77,7 @@ class PagedLlamaModelV1(BaseCausalLMModel):
         self.cache = create_kv_cache(self.config)
         self.activation_dtype = config.activation_dtype
         self.use_hf = config.use_hf
+        self.attention_kernel = config.attention_kernel
 
         self.add_module(
             "token_embedding",
@@ -111,6 +112,7 @@ class PagedLlamaModelV1(BaseCausalLMModel):
                     head_dim=hp.attn_head_dim,
                     head_count_kv=hp.attention_head_count_kv,
                     rms_epsilon=hp.attention_layer_norm_rms_epsilon,
+                    attention_kernel=self.attention_kernel,
                 )
                 for n in range(hp.block_count)
             ]
@@ -132,25 +134,6 @@ class PagedLlamaModelV1(BaseCausalLMModel):
         self._assert_device(seq_block_ids)
         self._assert_device(*cache_state, dtype=self.activation_dtype)
 
-        if self.config.tensor_parallelism_size > 1:
-            if not isinstance(tokens, ReplicatedTensor):
-                tokens = ops.replicate(
-                    tokens, count=self.config.tensor_parallelism_size
-                )
-            if not isinstance(attention_mask, ReplicatedTensor):
-                attention_mask = ops.replicate(
-                    attention_mask, count=self.config.tensor_parallelism_size
-                )
-            if not isinstance(seq_block_ids, ReplicatedTensor):
-                seq_block_ids = ops.replicate(
-                    seq_block_ids, count=self.config.tensor_parallelism_size
-                )
-            # If the user provided unsharded arguments they probably want
-            # an unsharded result as well.
-            unshard_result = True
-        else:
-            unshard_result = False
-
         h = self.token_embedding(tokens)
         self.trace_tensor("llama.token_embedding", h)
 
@@ -170,8 +153,6 @@ class PagedLlamaModelV1(BaseCausalLMModel):
 
         h = self.output_norm(h)
         logits = self.output_lm_head(h)
-        if unshard_result:
-            logits = ops.unshard(logits)
         return logits
 
     def decode(
@@ -303,8 +284,6 @@ class PagedLlamaModelV1(BaseCausalLMModel):
 
         h = self.output_norm(h)
         logits = self.output_lm_head(h)
-        if unshard_result:
-            logits = ops.unshard(logits)
         return logits
 
 
@@ -327,6 +306,7 @@ class AttentionFFNBlock(ThetaLayer):
         head_dim: int,
         head_count_kv: int,
         rms_epsilon: float,
+        attention_kernel: str = "decomposed",
     ):
         super().__init__(theta)
         self.add_module(
@@ -339,6 +319,7 @@ class AttentionFFNBlock(ThetaLayer):
                 head_dim=head_dim,
                 head_count_kv=head_count_kv,
                 rms_epsilon=rms_epsilon,
+                attention_kernel=attention_kernel,
             ),
         )
         self.add_module(
