@@ -58,5 +58,7 @@ jobs:
             -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
           pip install --no-compile -r requirements.txt -r sharktank/requirements-tests.txt -e sharktank/
 
-      - name: Run perplexity test
-        run:  pytest sharktank/tests/evaluate/perplexity_torch_test.py  --longrun
+      - name: Run perplexity test in eager mode
+        run:  pytest -n 4 -v sharktank/tests/evaluate/perplexity_torch_test.py  --longrun
+      - name: Run perplexity test with vmfb
+        run:  pytest -n 4 -v sharktank/tests/evaluate/perplexity_vmfb_test.py  --longrun

@@ -81,11 +81,11 @@ def pytest_addoption(parser):
     )
 
     parser.addoption(
-        "--llama3-8b-f16-gguf-path",
+        "--llama3-8b-f16-model-path",
         type=Path,
         action="store",
-        default="/data/extra/models/llama3.1_8B/llama8b_f16.gguf",
-        help="Llama3.1 8b gguf model path, defaults to 30F CI system path",
+        default="/data/extra/models/llama3.1_8B/llama8b_f16.irpa",
+        help="Llama3.1 8b model path, defaults to 30F CI system path",
     )
 
     parser.addoption(
@@ -105,11 +105,11 @@ def pytest_addoption(parser):
     )
 
     parser.addoption(
-        "--llama3-405b-f16-gguf-path",
+        "--llama3-405b-f16-model-path",
         type=Path,
         action="store",
-        default="/data/extra/models/llama3.1_405B/llama405b_fp16.gguf",
-        help="Llama3.1 405b gguf model path, defaults to 30F CI system path",
+        default="/data/extra/models/llama3.1_405B/llama405b_fp16.irpa",
+        help="Llama3.1 405b model path, defaults to 30F CI system path",
     )
 
     parser.addoption(
@@ -124,8 +124,31 @@ def pytest_addoption(parser):
         "--baseline-perplexity-scores",
         type=Path,
         action="store",
-        default="https://sharkpublic.blob.core.windows.net/sharkpublic/halo-models/evaluation/baseline_perplexity_scores.npy",
+        default="/home/aramalin/SHARK-Platform/sharktank/tests/evaluate/baseline_perplexity_scores.json",
         help="Llama3.1 8B & 405B model baseline perplexity scores",
+    )
+
+    parser.addoption(
+        "--llama3-8b-f16-vmfb-path",
+        type=Path,
+        action="store",
+        default="/data/extra/models/llama3.1_8B/llama8b_f16.vmfb",
+        help="Llama3.1 8b fp16 vmfb path, defaults to 30F CI system path",
+    )
+
+    parser.addoption(
+        "--llama3-405b-f16-vmfb-path",
+        type=Path,
+        action="store",
+        default="/data/extra/models/llama3.1_405B/llama405b_fp16.vmfb",
+        help="Llama3.1 405b fp16 vmfb path, defaults to 30F CI system path",
+    )
+
+    parser.addoption(
+        "--iree-device",
+        type=str,
+        action="store",
+        help="List an IREE device from iree-run-module --list_devices",
     )
 
 
@@ -174,8 +197,8 @@ def get_model_path(request: FixtureRequest):
     model_path["llama3_8b_tokenizer_path"] = set_fixture_from_cli_option(
         request, "--llama3-8b-tokenizer-path", "llama3_8b_tokenizer"
     )
-    model_path["llama3_8b_f16_gguf_path"] = set_fixture_from_cli_option(
-        request, "--llama3-8b-f16-gguf-path", "llama3_8b_f16_model"
+    model_path["llama3_8b_f16_model_path"] = set_fixture_from_cli_option(
+        request, "--llama3-8b-f16-model-path", "llama3_8b_f16_model"
     )
     model_path["llama3_8b_fp8_model_path"] = set_fixture_from_cli_option(
         request, "--llama3-8b-fp8-model-path", "llama3_8b_fp8_model"
@@ -183,13 +206,22 @@ def get_model_path(request: FixtureRequest):
     model_path["llama3_405b_tokenizer_path"] = set_fixture_from_cli_option(
         request, "--llama3-405b-tokenizer-path", "llama3_405b_tokenizer"
     )
-    model_path["llama3_405b_f16_gguf_path"] = set_fixture_from_cli_option(
-        request, "--llama3-405b-f16-gguf-path", "llama3_405b_f16_model"
+    model_path["llama3_405b_f16_model_path"] = set_fixture_from_cli_option(
+        request, "--llama3-405b-f16-model-path", "llama3_405b_f16_model"
     )
     model_path["llama3_405b_fp8_model_path"] = set_fixture_from_cli_option(
         request, "--llama3-405b-fp8-model-path", "llama3_405b_fp8_model"
     )
     model_path["baseline_perplexity_scores"] = set_fixture_from_cli_option(
         request, "--baseline-perplexity-scores", "baseline_perplexity_scores"
+    )
+    model_path["llama3_8b_f16_vmfb"] = set_fixture_from_cli_option(
+        request, "--llama3-8b-f16-vmfb-path", "llama3_8b_f16_vmfb"
+    )
+    model_path["llama3_405b_f16_vmfb"] = set_fixture_from_cli_option(
+        request, "--llama3-405b-f16-vmfb-path", "llama3_405b_f16_vmfb"
+    )
+    model_path["iree_device"] = set_fixture_from_cli_option(
+        request, "--iree-device", "iree_device"
     )
     return model_path
