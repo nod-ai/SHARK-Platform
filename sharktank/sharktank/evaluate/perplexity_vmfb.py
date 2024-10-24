@@ -39,7 +39,7 @@ log_levels = {
 }
 logger = logging.getLogger("eval")
 
-logger.setLevel(log_levels["debug"])
+logger.setLevel(log_levels["info"])
 
 logger.root.handlers[0].setFormatter(
     logging.Formatter(fmt="\n%(levelname)s:%(name)-8s %(message)s")
@@ -188,7 +188,7 @@ class Perplexity:
             self.batch.cache_state[0].to(torch.float16),
         )
 
-        prefill_logits = torch.tensor(prefill_logits[:, 0:1, :])
+        prefill_logits = torch.tensor(prefill_logits[:, :, :])
 
         tokens = torch.tensor(
             self.generator.model.extract_tokens_from_logits(
@@ -268,7 +268,7 @@ class Perplexity:
                 token_batch = self.token_ids[:, : i + 1]
 
                 prefill_logits = self.prefill_vmfb(token_batch, i)
-                self.out_logits = prefill_logits
+                self.out_logits = prefill_logits[:, 0:1, :]
 
                 is_first_token = False
 
@@ -347,7 +347,6 @@ def run_perplexity(
         tensor_parallelism_size=tensor_parallelism_size,
     )
 
-    # perplexity.load_model(tokenizer, vmfb_path, weight_path)
     perplexity.load_model(weight_path, tokenizer, vmfb_path, weight_path_str)
     test_prompts = perplexity.get_prompts()
     ppl = perplexity.get_perplexity(test_prompts=test_prompts)

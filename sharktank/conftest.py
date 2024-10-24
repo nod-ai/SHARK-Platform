@@ -124,7 +124,7 @@ def pytest_addoption(parser):
         "--baseline-perplexity-scores",
         type=Path,
         action="store",
-        default="/home/aramalin/SHARK-Platform/sharktank/tests/evaluate/baseline_perplexity_scores.json",
+        default="sharktank/tests/evaluate/baseline_perplexity_scores.json",
         help="Llama3.1 8B & 405B model baseline perplexity scores",
     )
 
