@@ -251,7 +251,7 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
     def setUp(self):
         super().setUp()
         # TODO: add numpy files to Azure and download from it
-        artifacts_dir = Path("/data/extra/models/llama3.1_8B")
+        artifacts_dir = Path("/data/llama-3.1/8b")
         self.irpa_path = artifacts_dir / "llama8b_f16.irpa"
         self.irpa_path_fp8 = artifacts_dir / "llama8b_fp8.irpa"
         self.tensor_parallelism_size = None
@@ -473,7 +473,7 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
     def setUp(self):
         super().setUp()
         # TODO: add numpy files to Azure and download from it
-        artifacts_dir = Path("/data/extra/models/llama3.1_70B")
+        artifacts_dir = Path("/data/llama-3.1/70b")
         self.irpa_path = artifacts_dir / "llama70b_f16.irpa"
         self.irpa_path_fp8 = artifacts_dir / "llama70b_fp8.irpa"
         self.tensor_parallelism_size = 1
@@ -696,7 +696,7 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
     def setUp(self):
         super().setUp()
         # TODO: add numpy files to Azure and download from it
-        artifacts_dir = Path("/data/extra/models/llama3.1_405B")
+        artifacts_dir = Path("/data/llama-3.1/405b")
         self.irpa_path = artifacts_dir / "llama405b_f16.irpa"
         self.irpa_path_fp8 = artifacts_dir / "llama405b_fp8.irpa"
         self.tensor_parallelism_size = 8
