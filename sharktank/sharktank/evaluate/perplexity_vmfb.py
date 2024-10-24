@@ -19,14 +19,19 @@ from datasets import load_dataset
 import torch
 from torch.nn import CrossEntropyLoss
 
+from sharktank.models.llama.llama import *
+from sharktank.models.mixtral.mixtral import *
+from sharktank.models.grok.grok import *
+
+from ..models.llama.sharding import shard_theta
+
 from sharktank.layers import *
 from sharktank.types import *
 
-from sharktank.utils.vmfb_runner import *
 from sharktank.utils import cli
+from sharktank.utils.vmfb_runner import *
 from sharktank.utils.load_llm import *
-
-import iree.runtime as ireert
+from sharktank.utils.create_cache import *
 
 log_levels = {
     "info": logging.INFO,
@@ -34,7 +39,7 @@ log_levels = {
 }
 logger = logging.getLogger("eval")
 
-logger.setLevel(log_levels["info"])
+logger.setLevel(log_levels["debug"])
 
 logger.root.handlers[0].setFormatter(
     logging.Formatter(fmt="\n%(levelname)s:%(name)-8s %(message)s")
@@ -53,17 +58,14 @@ class Perplexity:
     """
 
     def __init__(
-        self,
-        device,
-        tokenizer,
+        self, torch_device, iree_device, kv_cache_type, tensor_parallelism_size
     ):
-        self.device = device
-        self.tokenizer = tokenizer
-        self.pad_sequence_stride = 16
-        self.block_seq_stride = 16
-        self.free_pages = list(range(1, 8192))
-        # TODO: investigate cache
-        self.cache_state = model.cache.paged.allocate(page_cache_size)
+        self.torch_device = torch_device
+        self.iree_device = iree_device
+        self.kv_cache_type = kv_cache_type
+        self.activation_dtype = torch.float32
+        self.attention_dtype = torch.float32
+        self.tensor_parallelism_size = tensor_parallelism_size
 
     def timeit(func):
         def wrapper(*args, **kwargs):
@@ -87,55 +89,58 @@ class Perplexity:
     def print_token_comparison(self, i):
         if i <= self.max_prompt_length:
             batch_predicted_token_id = [[i[-1]] for i in self.batch.results]
-            batch_predicted_token = self.tokenizer.decode(batch_predicted_token_id)
+            batch_predicted_token = self.generator.tokenizer.decode(
+                batch_predicted_token_id
+            )
             logger.debug(f"Predicted:")
             logger.debug(f"{batch_predicted_token}")
             logger.debug(f"{batch_predicted_token_id}")
 
             expected_token_id = self.token_ids[:, i + 1 : i + 2].tolist()
-            expected_token = self.tokenizer.decode(expected_token_id)
+            expected_token = self.generator.tokenizer.decode(expected_token_id)
             logger.debug(f"Expected:")
             logger.debug(f"{expected_token}")
             logger.debug(f"{expected_token_id}")
 
-    def alloc_page(self) -> int:
-        # Only applies for paged attention
-        return self.free_pages.pop()
-
-    def pad_block_ids(self, seq_block_ids) -> torch.Tensor:
-        max_length = max(len(r) for r in seq_block_ids)
-        rows = [r + (max_length - len(r)) * [0] for r in seq_block_ids]
-        return torch.tensor(rows)
-
     @timeit
-    def load_model(self, vmfb_path, gguf_weight_path):
-        return vmfbRunner(
-            device=self.device,
-            vmfb_path=vmfb_path,
-            external_weight_path=gguf_weight_path,
+    def load_model(self, weight_path, tokenizer, vmfb_path, weight_path_str):
+
+        config = LlamaModelConfig(
+            hp=configs.LlamaHParams.from_gguf_props(weight_path.properties),
+            block_seq_stride=16,
+            kv_cache_type=self.kv_cache_type,
+            device=self.torch_device,
+            activation_dtype=self.activation_dtype,
+            attention_dtype=self.attention_dtype,
+            tensor_parallelism_size=self.tensor_parallelism_size,
         )
 
-    def get_args(self, seq_lens_batch):
-        # Assemble the batch.
-        seq_stride = self.block_seq_stride
-        seq_block_ids: list[list[int]] = []
-        for seq_len in seq_lens_batch:
-            blocks_needed = (
-                int(math.ceil(seq_len / seq_stride)) if seq_stride > 0 else 0
-            )
-            row = []
-            for _ in range(blocks_needed):
-                row.append(self.alloc_page())
-            seq_block_ids.append(row)
+        if config.tensor_parallelism_size > 1:
+            weight_path.root_theta = shard_theta(weight_path.root_theta, config)
 
-        return seq_block_ids
+        theta = weight_path.root_theta
+
+        if config.hp.expert_count:
+            if config.hp.model_arch == "grok":
+                model = PagedGrokModelV1(theta, config)
+            else:
+                model = PagedMixtralModelV1(theta, config)
+        else:
+            model = PagedLlamaModelV1(theta, config)
+
+        self.generator = TorchGenerator(model, tokenizer)
+
+        self.runner = vmfbRunner(
+            device=self.iree_device,
+            vmfb_path=vmfb_path,
+            external_weight_path=weight_path_str,
+        )
 
     @timeit
     def get_prompts(self):
         test_prompts = load_dataset("wikitext", "wikitext-2-raw-v1", split="test")[
             "text"
         ]
-
         num_test_prompts = 219
 
         random.seed(0)
@@ -152,14 +157,87 @@ class Perplexity:
 
         return test_prompts
 
-    @timeit
-    def get_logits(
-        self,
-    ):
+    def prefill_vmfb(self, token_batch, i):
 
-        token_ids, seq_lens = self.tokenizer.encode(
+        logger.debug(f"Prefill:")
+
+        logger.debug("Input:")
+        logger.debug(f"{self.generator.tokenizer.decode(token_batch)}")
+
+        token_batch, seq_lens_batch = self.generator.tokenizer.pad_tokens(
+            token_ids=token_batch.tolist(),
+            pad_to_multiple_of=self.generator.model.cache.pad_sequence_stride,
+        )
+
+        logger.debug(f"{token_batch}")
+
+        token_batch = torch.tensor(token_batch, device=self.torch_device)
+        self.seq_lens_batch = torch.tensor(seq_lens_batch, device=self.torch_device)
+
+        self.batch = self.generator.begin_eval_batch(
+            token_batch=token_batch,
+            seq_lens_batch=self.seq_lens_batch,
+            bs=self.bs,
+        )
+
+        seq_block_ids = self.batch.pad_block_ids()
+        prefill_logits = self.runner.ctx.modules.module.prefill_bs4(
+            token_batch,
+            self.seq_lens_batch,
+            seq_block_ids,
+            self.batch.cache_state[0].to(torch.float16),
+        )
+
+        prefill_logits = torch.tensor(prefill_logits[:, 0:1, :])
+
+        tokens = torch.tensor(
+            self.generator.model.extract_tokens_from_logits(
+                prefill_logits, seq_lens_batch
+            )
+        ).unsqueeze(1)
+        self.batch.add_result_token(tokens)
+
+        self.print_token_comparison(i)
+        return prefill_logits
+
+    def decode_vmfb(self, token_batch, i):
+        logger.debug("Decode:")
+
+        logger.debug("Input:")
+        logger.debug(f"{self.generator.tokenizer.decode(token_batch)}")
+        logger.debug(f"{token_batch.tolist()}")
+
+        start_positions = self.seq_lens_batch.clone()
+        self.seq_lens_batch.add_(1)
+        self.batch.allocate_seq_block_ids()
+        seq_block_ids = self.batch.pad_block_ids()
+
+        decode_logits = self.runner.ctx.modules.module.decode_bs4(
+            token_batch,
+            self.seq_lens_batch,
+            start_positions,
+            seq_block_ids,
+            self.batch.cache_state[0].to(torch.float16),
+        )
+
+        decode_logits = torch.tensor(decode_logits[:, :, :])
+
+        tokens = torch.tensor(
+            self.generator.model.extract_tokens_from_logits(
+                decode_logits, [1] * self.bs
+            ),
+            device=self.generator.model.device,
+        ).unsqueeze(1)
+        self.batch.add_result_token(tokens)
+        self.print_token_comparison(i)
+        return decode_logits
+
+    @timeit
+    def get_logits(self):
+
+        token_ids, seq_lens = self.generator.tokenizer.encode(
             self.test_prompts,
-            pad_to_multiple_of=self.pad_sequence_stride,
+            pad_to_multiple_of=self.generator.model.cache.pad_sequence_stride,
         )
 
         logger.info(f" Prompts for Evaluation:")
@@ -169,8 +247,11 @@ class Perplexity:
             )
 
         self.max_prompt_length = max(seq_lens)
-        self.token_ids = torch.tensor(token_ids)
-        self.attention_mask = (self.token_ids != 0).int().detach().clone()
+
+        self.token_ids = torch.tensor(token_ids, device=self.torch_device)
+        self.attention_mask = (
+            (self.token_ids != 0).int().detach().clone().to(self.torch_device)
+        )
 
         self.bs = len(self.test_prompts)
 
@@ -185,53 +266,17 @@ class Perplexity:
             if is_first_token:
 
                 token_batch = self.token_ids[:, : i + 1]
-                logger.debug(f"Prefill:")
 
-                logger.debug("Input:")
-                logger.debug(f"{self.tokenizer.decode(token_batch)}")
+                prefill_logits = self.prefill_vmfb(token_batch, i)
+                self.out_logits = prefill_logits
 
-                token_batch, seq_lens_batch = self.tokenizer.pad_tokens(
-                    token_ids=token_batch.tolist(),
-                    pad_to_multiple_of=self.pad_sequence_stride,
-                )
-
-                logger.debug(f"{token_batch}")
-
-                token_batch = torch.tensor(token_batch, device=self.device)
-                seq_lens_batch = torch.tensor(seq_lens_batch, device=self.device)
-
-                seq_block_ids = self.get_args(seq_lens_batch)
-                seq_block_ids = self.pad_block_ids(seq_block_ids)
-                prefill_logits = self.runner.ctx.modules.module.prefill_bs4(
-                    token_batch, seq_lens_batch, seq_block_ids, self.cache_state
-                )
-
-                self.out_logits = prefill_logits[:, -1, :]
                 is_first_token = False
-
-                self.print_token_comparison(i)
 
             else:
                 token_batch = self.token_ids[:, i : i + 1]
 
-                logger.debug("Decode:")
-
-                logger.debug("Input:")
-                logger.debug(f"{self.tokenizer.decode(token_batch)}")
-                logger.debug(f"{token_batch.tolist()}")
-
-                start_positions = seq_lens_batch.clone()
-                seq_lens_batch.add_(1)
-
-                seq_block_ids = self.get_args(seq_lens_batch)
-                seq_block_ids = self.pad_block_ids(seq_block_ids)
-                decode_logits = self.runner.ctx.modules.module.decode_bs4(
-                    token_batch, start_positions, seq_block_ids, self.cache_state
-                )
-
+                decode_logits = self.decode_vmfb(token_batch, i)
                 self.out_logits = torch.cat((self.out_logits, decode_logits), 1)
-
-                self.print_token_comparison(i)
 
         pad_logits_shape = self.token_ids.shape[1] - self.out_logits.shape[1]
 
@@ -240,7 +285,7 @@ class Perplexity:
         )
 
         self.out_logits = torch.cat((self.out_logits, self.pad_logits), 1).to(
-            self.device
+            self.torch_device
         )
 
     @timeit
@@ -287,12 +332,23 @@ class Perplexity:
 
 def run_perplexity(
     vmfb_path,
-    gguf_weight_path,
+    weight_path,
+    weight_path_str,
     tokenizer,
-    device,
+    torch_device,
+    iree_device,
+    kv_cache_type,
+    tensor_parallelism_size,
 ):
-    perplexity = Perplexity(device=device, tokenizer=tokenizer)
-    perplexity.load_model(tokenizer, vmfb_path, gguf_weight_path)
+    perplexity = Perplexity(
+        torch_device=torch_device,
+        iree_device=iree_device,
+        kv_cache_type=kv_cache_type,
+        tensor_parallelism_size=tensor_parallelism_size,
+    )
+
+    # perplexity.load_model(tokenizer, vmfb_path, weight_path)
+    perplexity.load_model(weight_path, tokenizer, vmfb_path, weight_path_str)
     test_prompts = perplexity.get_prompts()
     ppl = perplexity.get_perplexity(test_prompts=test_prompts)
 
@@ -301,24 +357,41 @@ def run_perplexity(
 
 def main(argv):
     parser = cli.create_parser()
-    parser.add_argument("--device", help="Torch device (or default)")
+    parser.add_argument("--kv-cache-type", default="paged", help="KV cache type")
+    parser.add_argument("--torch-device", help="Torch device (or default)")
+    parser.add_argument(
+        "--iree-device", help="List an IREE device from iree-run-module --list_devices"
+    )
+    parser.add_argument("--vmfb-path", help="Path to vmfb file")
+    parser.add_argument(
+        "--tensor-parallelism-size",
+        type=int,
+        default=1,
+        help="Number of devices for tensor parallel sharding.",
+    )
 
     cli.add_tokenizer_options(parser)
+    cli.add_input_dataset_options(parser)
     args = cli.parse(parser, args=argv)
 
-    device = torch.device(args.device) if args.device else None
+    torch_device = torch.device(args.torch_device) if args.torch_device else None
+    iree_device = args.iree_device
+    kv_cache_type = args.kv_cache_type
+    weight_path = cli.get_input_dataset(args)
     tokenizer = cli.get_tokenizer(args)
 
-    # device could be local-sync:// local-task://
-    device = "hip://GPU-34346462-3466-6333-3231-353561336563"
-    vmfb_path = "/home/aramalin/SHARK-Platform/artifacts/llama70b_q4_1.vmfb"
-    gguf_weight_path = "/data/extra/models/llama70b_q4_1.gguf"
+    vmfb_path = args.vmfb_path
+    weight_path_str = str(args.irpa_file)
 
     ppl = run_perplexity(
         vmfb_path=vmfb_path,
-        gguf_weight_path=gguf_weight_path,
+        weight_path=weight_path,
+        weight_path_str=weight_path_str,
         tokenizer=tokenizer,
-        device=device,
+        torch_device=torch_device,
+        iree_device=iree_device,
+        kv_cache_type=kv_cache_type,
+        tensor_parallelism_size=args.tensor_parallelism_size,
     )
 
     logger.info(f"\n{json.dumps(ppl, indent=2)}")
