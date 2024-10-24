@@ -71,13 +71,13 @@ jobs:
             "numpy<2.0"
 
       - name: Run llama test
-        run: pytest sharktank/tests/models/llama/benchmark_amdgpu_tests.py -v -s --longrun --html=report.html
+        run: pytest sharktank/tests/models/llama/benchmark_amdgpu_tests.py -v -s --longrun --html=llama-report.html
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.SHARK_PLATFORM_GH_TOKEN }}
-          publish_dir: ./report.html
+          publish_dir: ./llama-report.html
 
       - name: Upload llama executable files
         uses: actions/upload-artifact@v4
