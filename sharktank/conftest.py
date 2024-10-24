@@ -256,3 +256,22 @@ def get_iree_flags(request: FixtureRequest):
     model_path["iree_hal_target_backends"] = set_fixture_from_cli_option(
         request, "--iree-hal-target-backends", "iree_hal_target_backends"
     )
+
+# Hook to add extra columns or modify the table row in the pytest-html report
+def pytest_html_results_table_header(cells):
+    cells.insert(2, 'XFail Reason')
+
+
+def pytest_html_results_table_row(report, cells):
+    if hasattr(report, 'wasxfail'):
+        cells.insert(2, report.wasxfail)
+    else:
+        cells.insert(2, '')
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    outcome = yield
+    report = outcome.get_result()
+
+    if report.when == "call" and hasattr(report, 'wasxfail'):
+        report.wasxfail = report.wasxfail
