@@ -75,6 +75,7 @@ class PagedLlamaAttentionBlockTest(unittest.TestCase):
             attention_kernel="decomposed",
         )
 
+
         seq_block_ids = torch.arange(self.batch_size * self.block_seqlen).view(
             self.batch_size, -1
         )
@@ -115,6 +116,7 @@ class PagedLlamaAttentionBlockTest(unittest.TestCase):
         output = aot.export(ep)
         output.verify()
         asm = str(output.mlir_module)
+        output.save_mlir("temp.mlir")
         self.assertNotIn("scaled_dot_product_attention", asm)
 
     def testExportNondecomposed(self):

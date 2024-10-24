@@ -256,6 +256,7 @@ def main():
     )
     cli.add_input_dataset_options(parser)
     cli.add_tokenizer_options(parser)
+    cli.add_quantization_options(parser)
     args = cli.parse(parser)
 
     device = torch.device(args.device) if args.device else None
@@ -275,6 +276,7 @@ def main():
         attention_dtype=activation_dtype,
         use_hf=args.use_hf,
         tensor_parallelism_size=args.tensor_parallelism_size,
+        fake_quant=args.fake_quant,
     )
     if config.tensor_parallelism_size > 1:
         dataset.root_theta = shard_theta(dataset.root_theta, config)

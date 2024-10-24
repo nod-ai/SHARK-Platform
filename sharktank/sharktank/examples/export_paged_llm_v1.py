@@ -66,6 +66,7 @@ def main():
         help="How many devices are involved for tensor parallel sharding.",
     )
 
+    cli.add_quantization_options(parser)
     args = cli.parse(parser)
     dataset_type = cli.get_input_data_files(args)
     dataset_type = "irpa" if "irpa" in dataset_type else "gguf"
@@ -79,6 +80,7 @@ def main():
     llama_config.static_tables = False  # Rely on the compiler for hoisting tables.
     llama_config.kv_cache_type = "direct" if args.bs == [1] else "paged"
     llama_config.attention_kernel = args.attention_kernel
+    llama_config.fake_quant = args.fake_quant
 
     # This is a bit gross and should be changed in the future. Best Idea I had so far.
     attn_q_weight = dataset.root_theta.tensor("blk")["0"]["attn_q"]["weight"]
@@ -304,7 +306,7 @@ def main():
             print(f"EXPORT {name}:\n{ep}")
 
     print("Exporting")
-    output = export(fxb)
+    output = export(fxb, import_symbolic_shape_expressions=True)
     print(f"Saving to '{args.output_mlir}'")
     output.save_mlir(args.output_mlir)
     json.dump(config, open(args.output_config, "w"))
