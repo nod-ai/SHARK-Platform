@@ -259,19 +259,20 @@ def get_iree_flags(request: FixtureRequest):
 
 # Hook to add extra columns or modify the table row in the pytest-html report
 def pytest_html_results_table_header(cells):
-    cells.insert(2, 'XFail Reason')
+    cells.insert(2, "XFail Reason")
 
 
 def pytest_html_results_table_row(report, cells):
-    if hasattr(report, 'wasxfail'):
+    if hasattr(report, "wasxfail"):
         cells.insert(2, report.wasxfail)
     else:
-        cells.insert(2, '')
+        cells.insert(2, "")
+
 
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_makereport(item, call):
     outcome = yield
     report = outcome.get_result()
 
-    if report.when == "call" and hasattr(report, 'wasxfail'):
+    if report.when == "call" and hasattr(report, "wasxfail"):
         report.wasxfail = report.wasxfail

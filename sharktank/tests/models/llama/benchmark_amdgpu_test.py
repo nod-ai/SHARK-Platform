@@ -156,7 +156,9 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
 
     @longrun
     @is_mi300x
-    @pytest.mark.xfail(reason="Export (torch_sdpa)", strict=True, raises=NotImplementedError)
+    @pytest.mark.xfail(
+        reason="Export (torch_sdpa)", strict=True, raises=NotImplementedError
+    )
     def testBenchmark8B_f16_Non_Decomposed(self):
         output_file_name = self.dir_path_8b / "f16_torch"
         output_mlir = self.llama8b_f16_artifacts.create_file(
@@ -207,7 +209,9 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
 
     @longrun
     @is_mi300x
-    @pytest.mark.xfail(reason="Export (File Not Found)", strict=True, raises=ExportMlirException)
+    @pytest.mark.xfail(
+        reason="Export (File Not Found)", strict=True, raises=ExportMlirException
+    )
     def testBenchmark8B_fp8_Decomposed(self):
         output_file_name = self.dir_path_8b / "fp8_decomposed"
         output_mlir = self.create_file(suffix=".mlir", prefix=output_file_name)
@@ -249,7 +253,9 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
 
     @longrun
     @is_mi300x
-    @pytest.mark.xfail(reason="Export (torch_sdpa)", strict=True, raises=NotImplementedError)
+    @pytest.mark.xfail(
+        reason="Export (torch_sdpa)", strict=True, raises=NotImplementedError
+    )
     def testBenchmark8B_fp8_Non_Decomposed(self):
         output_file_name = self.dir_path_8b / "fp8_torch_sdpa"
         output_mlir = self.create_file(suffix=".mlir", prefix=output_file_name)
@@ -346,7 +352,9 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
 
     @longrun
     @is_mi300x
-    @pytest.mark.xfail(reason="Export (File Not Found)", strict=True, raises=ExportMlirException)
+    @pytest.mark.xfail(
+        reason="Export (File Not Found)", strict=True, raises=ExportMlirException
+    )
     def testBenchmark70B_f16_Decomposed(self):
         output_file_name = self.dir_path_70b / "f16_decomposed"
         output_mlir = self.create_file(suffix=".mlir", prefix=output_file_name)
@@ -388,7 +396,9 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
 
     @longrun
     @is_mi300x
-    @pytest.mark.xfail(reason="Export (torch_sdpa)", strict=True, raises=NotImplementedError)
+    @pytest.mark.xfail(
+        reason="Export (torch_sdpa)", strict=True, raises=NotImplementedError
+    )
     def testBenchmark70B_f16_Non_Decomposed(self):
         output_file_name = self.dir_path_70b / "f16_torch_sdpa"
         output_mlir = self.create_file(suffix=".mlir", prefix=output_file_name)
@@ -430,7 +440,9 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
 
     @longrun
     @is_mi300x
-    @pytest.mark.xfail(reason="Export (File Not Found)", strict=True, raises=ExportMlirException)
+    @pytest.mark.xfail(
+        reason="Export (File Not Found)", strict=True, raises=ExportMlirException
+    )
     def testBenchmark70B_fp8_Decomposed(self):
         output_file_name = self.dir_path_70b / "fp8_decomposed"
         output_mlir = self.create_file(suffix=".mlir", prefix=output_file_name)
@@ -472,7 +484,9 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
 
     @longrun
     @is_mi300x
-    @pytest.mark.xfail(reason="Export (torch_sdpa)", strict=True, raises=NotImplementedError)
+    @pytest.mark.xfail(
+        reason="Export (torch_sdpa)", strict=True, raises=NotImplementedError
+    )
     def testBenchmark70B_fp8_Non_Decomposed(self):
         output_file_name = self.dir_path_70b / "fp8_torch_sdpa"
         output_mlir = self.create_file(suffix=".mlir", prefix=output_file_name)
@@ -611,7 +625,9 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
 
     @longrun
     @is_mi300x
-    @pytest.mark.xfail(reason="Export (torch_sdpa)", strict=True, raises=NotImplementedError)
+    @pytest.mark.xfail(
+        reason="Export (torch_sdpa)", strict=True, raises=NotImplementedError
+    )
     def testBenchmark405B_f16_Non_Decomposed(self):
         output_file_name = self.dir_path_405b / "f16_torch_sdpa"
         output_mlir = self.create_file(suffix=".mlir", prefix=output_file_name)
@@ -653,7 +669,9 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
 
     @longrun
     @is_mi300x
-    @pytest.mark.xfail(reason="Export (File Not Found)", strict=True, raises=ExportMlirException)
+    @pytest.mark.xfail(
+        reason="Export (File Not Found)", strict=True, raises=ExportMlirException
+    )
     def testBenchmark405B_fp8_Decomposed(self):
         output_file_name = self.dir_path_405b / "fp8_decomposed"
         output_mlir = self.create_file(suffix=".mlir", prefix=output_file_name)
@@ -695,7 +713,9 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
 
     @longrun
     @is_mi300x
-    @pytest.mark.xfail(reason="Export (torch_sdpa)", strict=True, raises=NotImplementedError)
+    @pytest.mark.xfail(
+        reason="Export (torch_sdpa)", strict=True, raises=NotImplementedError
+    )
     def testBenchmark405B_fp8_Non_Decomposed(self):
         output_file_name = self.dir_path_405b / "fp8_torch_sdpa"
         output_mlir = self.create_file(suffix=".mlir", prefix=output_file_name)
