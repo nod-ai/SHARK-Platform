@@ -32,7 +32,7 @@ class PerplexityTest(unittest.TestCase):
 
         current_perplexity = perplexity_torch.main(
             [
-                f"--gguf-file={self.llama3_8b_f16_model}",
+                f"--irpa-file={self.llama3_8b_f16_model}",
                 f"--tokenizer-config-json={self.llama3_8b_tokenizer}",
             ]
         )
@@ -62,7 +62,7 @@ class PerplexityTest(unittest.TestCase):
 
         current_perplexity = perplexity_torch.main(
             [
-                f"--gguf-file={self.llama3_8b_f16_model}",
+                f"--irpa-file={self.llama3_8b_f16_model}",
                 f"--tokenizer-config-json={self.llama3_8b_tokenizer}",
                 f"--attention-kernel=torch_sdpa",
             ]
@@ -93,7 +93,7 @@ class PerplexityTest(unittest.TestCase):
 
         current_perplexity = perplexity_torch.main(
             [
-                f"--gguf-file={self.llama3_8b_fp8_model}",
+                f"--irpa-file={self.llama3_8b_fp8_model}",
                 f"--tokenizer-config-json={self.llama3_8b_tokenizer}",
             ]
         )
@@ -123,7 +123,7 @@ class PerplexityTest(unittest.TestCase):
 
         current_perplexity = perplexity_torch.main(
             [
-                f"--gguf-file={self.llama3_8b_fp8_model}",
+                f"--irpa-file={self.llama3_8b_fp8_model}",
                 f"--tokenizer-config-json={self.llama3_8b_tokenizer}",
                 f"--attention-kernel=torch_sdpa",
             ]
@@ -151,7 +151,7 @@ class PerplexityTest(unittest.TestCase):
 
         current_perplexity = perplexity_torch.main(
             [
-                f"--gguf-file={self.llama3_405b_f16_model}",
+                f"--irpa-file={self.llama3_405b_f16_model}",
                 f"--tokenizer-config-json={self.llama3_405b_tokenizer}",
                 f"--tensor-parallelism-size={self.tensor_parallelism_size}",
             ]
@@ -182,7 +182,7 @@ class PerplexityTest(unittest.TestCase):
 
         current_perplexity = perplexity_torch.main(
             [
-                f"--gguf-file={self.llama3_405b_f16_model}",
+                f"--irpa-file={self.llama3_405b_f16_model}",
                 f"--tokenizer-config-json={self.llama3_405b_tokenizer}",
                 f"--tensor-parallelism-size={self.tensor_parallelism_size}",
                 f"--attention-kernel=torch_sdpa",
@@ -214,7 +214,7 @@ class PerplexityTest(unittest.TestCase):
 
         current_perplexity = perplexity_torch.main(
             [
-                f"--gguf-file={self.llama3_405b_fp8_model}",
+                f"--irpa-file={self.llama3_405b_fp8_model}",
                 f"--tokenizer-config-json={self.llama3_405b_tokenizer}",
                 f"--tensor-parallelism-size={self.tensor_parallelism_size}",
             ]
@@ -245,7 +245,7 @@ class PerplexityTest(unittest.TestCase):
 
         current_perplexity = perplexity_torch.main(
             [
-                f"--gguf-file={self.llama3_405b_fp8_model}",
+                f"--irpa-file={self.llama3_405b_fp8_model}",
                 f"--tokenizer-config-json={self.llama3_405b_tokenizer}",
                 f"--tensor-parallelism-size={self.tensor_parallelism_size}",
                 f"--attention-kernel=torch_sdpa",
