@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
   pull_request:
   schedule:
-    # Weekdays at 5:00 AM UTC = 10:00 PM PST.
+    # Weekdays at 5:00 AM UTC = 10:00 PM PST. test
     - cron: "0 5 * * 1-5"
 
 concurrency:
