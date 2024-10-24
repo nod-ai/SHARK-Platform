@@ -173,3 +173,23 @@ def assert_iterables_equal(
         assert elements_equal(
             v1, v2
         ), f"Iterables not equal at index {i} for elements {v1} and {v2}"
+
+
+SHARKTANK_TEST_SKIP_ENV_VAR = "SHARKTANK_TEST_SKIP"
+
+
+def skip(*decorator_args, **decorator_kwargs):
+    """Decorator to skip a test when SHARKTANK_TEST_SKIP env var is not set or != 0"""
+
+    def decorator(test_item: Callable):
+        if SHARKTANK_TEST_SKIP_ENV_VAR not in os.environ:
+            should_skip = True
+        else:
+            should_skip = os.environ[SHARKTANK_TEST_SKIP_ENV_VAR] != "0"
+
+        if should_skip:
+            return unittest.skip(*decorator_args, **decorator_kwargs)(test_item)
+
+        return test_item
+
+    return decorator

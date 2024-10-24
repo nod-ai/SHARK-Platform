@@ -1193,6 +1193,7 @@ class UnreducedTensor(ShardedTensorBase):
 def flatten_tensor_tree(
     tree: tree_utils.Tree,
 ) -> Iterable[torch.Tensor | InferenceTensor]:
+    """Flatten up to our tensor types."""
     return tree_utils.flatten(
         tree,
         is_leaf=lambda x: isinstance(
@@ -1365,6 +1366,31 @@ register_pytree_node(
     flatten_fn=flatten_replicated_tensor,
     unflatten_fn=unflatten_replicated_tensor,
     flatten_with_keys_fn=flatten_with_keys_replicated_tensor,
+)
+
+
+def flatten_unreduced_tensor(
+    t: UnreducedTensor,
+) -> Tuple[List[Any], torch.utils._pytree.Context]:
+    return list(t.shards), {"name": t.name}
+
+
+def unflatten_unreduced_tensor(
+    values: Iterable[Any], ctx: torch.utils._pytree.Context
+) -> UnreducedTensor:
+    return UnreducedTensor(ts=list(values), name=ctx["name"])
+
+
+def flatten_with_keys_unreduced_tensor(t: UnreducedTensor):
+    values, context = flatten_unreduced_tensor(t)
+    return [(SequenceKey(i), v) for i, v in enumerate(values)], context
+
+
+register_pytree_node(
+    UnreducedTensor,
+    flatten_fn=flatten_unreduced_tensor,
+    unflatten_fn=unflatten_unreduced_tensor,
+    flatten_with_keys_fn=flatten_with_keys_unreduced_tensor,
 )
 
 
