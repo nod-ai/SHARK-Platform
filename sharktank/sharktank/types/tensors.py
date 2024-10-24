@@ -1141,7 +1141,6 @@ class ReplicatedTensor(ShardedTensor):
             # We have to do this to avoid exporting as part of the `mlir` blob:
             t = raw_tensors[""]
             ts = [raw_tensors[""]]
-            name = t.name
             for i in range(1, shard_count):
                 nt = deepcopy(t)
                 ts.append(nt)
