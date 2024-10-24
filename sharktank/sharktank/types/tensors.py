@@ -29,6 +29,7 @@ from torch.utils._pytree import register_pytree_node, SequenceKey
 import torch.utils._pytree
 from ..utils.math import ceildiv
 from iree.turbine.aot import (
+    DeviceTensorTrait,
     ExternalTensorTrait,
 )
 from ..utils import tree as tree_utils
@@ -838,6 +839,8 @@ class ShardedTensorBase(ShardedTensor):
             try:
                 t = raw_tensors[t_name]
                 ts.append(t)
+                # TODO: this should be changed to tracked device affinity
+                DeviceTensorTrait(i).set(t)
             except KeyError as e:
                 raise IOError(
                     f"Missing component tensor '{t_name}' in {raw_tensors.keys()}"
@@ -1135,10 +1138,20 @@ class ReplicatedTensor(ShardedTensor):
     ) -> "InferenceTensor":
         shard_count = int(extra_properties["shard_count"])
         try:
-            ts = raw_tensors[""]
+            # We have to do this to avoid exporting as part of the `mlir` blob:
+            t = raw_tensors[""]
+            ts = [raw_tensors[""]]
+            for i in range(1, shard_count):
+                nt = deepcopy(t)
+                ts.append(nt)
+
+            # TODO This should be changed to assigned affinities
+            for i in range(shard_count):
+                DeviceTensorTrait(i).set(ts[i])
+
         except KeyError as e:
             raise IOError(f"Missing component tensor '' in {raw_tensors.keys()}") from e
-        return cls(name=name, ts=ts, shard_count=shard_count)
+        return cls(name=name, ts=ts)
 
     def __getitem__(self, key):
         if isinstance(key, ReplicatedTensor):
