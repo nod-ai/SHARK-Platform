@@ -45,8 +45,7 @@ def test_invoke_mobilenet(lsys, fiber, mobilenet_compiled_cpu_path):
         with staging_input.map(discard=True) as m:
             m.fill(dummy_data)
         device_input.copy_from(staging_input)
-        for _ in range(15):
-            (device_output,) = await main_function(device_input, fiber=fiber)
+        (device_output,) = await main_function(device_input, fiber=fiber)
         host_output = device_output.for_transfer()
         host_output.copy_from(device_output)
         await device

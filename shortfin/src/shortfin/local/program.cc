@@ -678,7 +678,6 @@ detail::ProgramIsolate::AcquireIsolate(Fiber &fiber,
       // Fast path: there is an existing isolate and a context avaialable.
       auto isolated_context = std::move(isolate->fork_contexts.back());
       isolate->fork_contexts.pop_back();
-      logging::warn("ACQUIRE_ISOLATE: Return existing");
       return std::make_pair(std::move(isolated_context), isolate);
     } else if (!isolate) {
       // Initialize a new isolate accounting struct while in the lock.
@@ -693,7 +692,6 @@ detail::ProgramIsolate::AcquireIsolate(Fiber &fiber,
               root_context.get(),
               std::make_unique<detail::ProgramIsolate>(root_context)));
       isolate = inserted_it->second.get();
-      logging::warn("ACQUIRE_ISOLATE: Initialize New");
     } else if (isolation == ProgramIsolation::PER_FIBER) {
       throw std::logic_error(
           "Cannot make concurrent invocations of a PER_FIBER program from "
@@ -710,7 +708,6 @@ detail::ProgramIsolate::AcquireIsolate(Fiber &fiber,
   iree::vm_context_ptr new_context;
   SHORTFIN_THROW_IF_ERROR(iree_vm_context_fork(
       root_context.get(), fiber.host_allocator(), new_context.for_output()));
-  logging::warn("ACQUIRE_ISOLATE: Fork");
   return std::make_pair(std::move(new_context), isolate);
 }
 
@@ -721,7 +718,6 @@ void detail::ProgramIsolate::ReleaseIsolate(Fiber &fiber,
   {
     iree::slim_mutex_lock_guard lock(fiber.program_isolate_mu_);
     isolate->fork_contexts.push_back(std::move(context));
-    logging::warn("RELEASE_ISOLATE");
   }
 }
 
