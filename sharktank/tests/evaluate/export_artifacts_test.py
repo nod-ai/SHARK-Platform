@@ -23,7 +23,7 @@ logger.root.handlers[0].setFormatter(
 )
 
 pytestmark = pytest.mark.usefixtures(
-    "get_model_artifacts", "get_iree_flags", "tensor_parallelism_size"
+    "get_model_artifacts", "get_iree_flags", "tensor_parallelism_size", "batch_size"
 )
 
 
@@ -41,6 +41,7 @@ class ExportArtifacts(unittest.TestCase):
         irpa_path: str,
         mlir_path: str,
         json_path: str,
+        batch_size: int,
     ):
         export_args = [
             "python3",
@@ -52,6 +53,8 @@ class ExportArtifacts(unittest.TestCase):
             mlir_path,
             "--output-config",
             json_path,
+            "--bs",
+            str(batch_size),
         ]
         if attention_kernel == "decomposed":
             export_args.append("--attention-kernel")
@@ -137,6 +140,7 @@ class ExportArtifacts(unittest.TestCase):
                     irpa_path=model_path,
                     mlir_path=mlir_path,
                     json_path=json_path,
+                    batch_size=self.batch_size,
                 )
 
                 self.compile_to_vmfb(

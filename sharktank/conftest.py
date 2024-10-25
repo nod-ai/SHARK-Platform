@@ -221,6 +221,14 @@ def pytest_addoption(parser):
         help="Number of devices for tensor parallel sharding",
     )
 
+    parser.addoption(
+        "--bs",
+        action="store",
+        type=int,
+        default=4,
+        help="Batch size for mlir export",
+    )
+
 
 def set_fixture_from_cli_option(
     request: FixtureRequest,
@@ -280,6 +288,11 @@ def baseline_perplexity_scores(request: FixtureRequest) -> Optional[str]:
     return set_fixture_from_cli_option(
         request, "baseline_perplexity_scores", "baseline_perplexity_scores"
     )
+
+
+@pytest.fixture(scope="class")
+def batch_size(request: FixtureRequest) -> Optional[str]:
+    return set_fixture_from_cli_option(request, "bs", "batch_size")
 
 
 @pytest.fixture(scope="class")
