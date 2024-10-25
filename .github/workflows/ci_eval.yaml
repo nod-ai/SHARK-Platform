@@ -1,7 +1,6 @@
 name: Evaluation Tests
 
 on:
-  pull_request:
   workflow_dispatch:
   schedule:
     # Weekdays nightly at 07:00 UTC = 23:00 PST / 00:00 PDT.
@@ -17,7 +16,7 @@ concurrency:
 
 jobs:
   test_perplexity:
-    timeout-minutes: 1200
+    timeout-minutes: 1000
     name: "Evaluation Tests - perplexity"
     strategy:
       matrix:
@@ -60,4 +59,4 @@ jobs:
           pip install --no-compile -r requirements.txt -r sharktank/requirements-tests.txt -e sharktank/
 
       - name: Run perplexity test
-        run:  pytest sharktank/tests/evaluate/perplexity_test.py  --longrun
+        run:  pytest -n 4 -v -s sharktank/tests/evaluate/perplexity_test.py  --longrun
