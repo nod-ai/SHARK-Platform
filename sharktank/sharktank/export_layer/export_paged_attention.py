@@ -26,6 +26,12 @@ from sharktank.utils.create_cache import *
 # TODO: Should be using a base class with the protocol supported.
 from ..models.llama.llama import LlamaModelConfig, PagedLlamaAttentionBlock
 
+import logging
+
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+
 
 def paged_attention(
     attention_block: PagedLlamaAttentionBlock,
@@ -176,6 +182,13 @@ def main():
         default="/tmp/sharktank/artifacts/paged_llama.json",
     )
     parser.add_argument(
+        "--kv_cache_type",
+        help="Type of KV cache to use (direct or paged). Default is paged for performant serving. For local use, you may need to set this to direct.",
+        type=str,
+        choices=["direct", "paged"],
+        default="paged",
+    )
+    parser.add_argument(
         "--bs",
         help="Comma-separated batch size(s) to generate, e.g. `4` or `2,4`",
         type=lambda arg: [int(bs) for bs in arg.split(",")],
@@ -218,7 +231,12 @@ def main():
     )
 
     llama_config = LlamaModelConfig(hp)
-    llama_config.kv_cache_type = "direct" if args.bs == [1] else "paged"
+    llama_config.kv_cache_type = args.kv_cache_type
+    if args.kv_cache_type == "direct":
+        logging.warning(
+            "Setting batch size to 1 and exporting with direct cache. This will cause an argument mismatch if served with shortfin & you should be exporting with --kv_cache_type=paged."
+        )
+        args.bs = [1]
     llama_config.bs = args.bs
     llama_config.is_causal = args.is_causal
 

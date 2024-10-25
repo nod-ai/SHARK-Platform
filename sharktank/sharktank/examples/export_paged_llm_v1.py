@@ -21,6 +21,12 @@ from ..models.mixtral.mixtral import *
 from ..models.grok.grok import *
 from .. import ops
 
+import logging
+
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+
 
 def main():
     from ..utils import cli
@@ -36,6 +42,20 @@ def main():
         "--output-config",
         help="Output file path for exported config file",
         default="/tmp/batch_llama_v1.json",
+    )
+    parser.add_argument(
+        "--kv_cache_type",
+        help="Type of KV cache to use (direct or paged). Default is paged for performant serving. For local use, you may need to set this to direct.",
+        type=str,
+        choices=["direct", "paged"],
+        default="paged",
+    )
+    parser.add_argument(
+        "--kv_cache_type",
+        help="Type of KV cache to use (direct or paged). Default is paged for performant serving. For local use, you may need to set this to direct.",
+        type=str,
+        choices=["direct", "paged"],
+        default="paged",
     )
     parser.add_argument(
         "--bs",
@@ -77,14 +97,18 @@ def main():
         dataset.root_theta = shard_theta(dataset.root_theta, llama_config)
     llama_config.use_hf = False
     llama_config.static_tables = False  # Rely on the compiler for hoisting tables.
-    llama_config.kv_cache_type = "direct" if args.bs == [1] else "paged"
+    llama_config.kv_cache_type = args.kv_cache_type
+    if args.kv_cache_type == "direct":
+        logging.warning(
+            "Setting batch size to 1 and exporting with direct cache. This will cause an argument mismatch if served with shortfin & you should be exporting with --kv_cache_type=paged."
+        )
+        args.bs = [1]
     llama_config.attention_kernel = args.attention_kernel
 
     # This is a bit gross and should be changed in the future. Best Idea I had so far.
     attn_q_weight = dataset.root_theta.tensor("blk")["0"]["attn_q"]["weight"]
     if isinstance(attn_q_weight, SplitPrimitiveTensor):
         llama_config.tensor_parallelism_size = attn_q_weight.shard_count
-
     if llama_config.hp.expert_count:
         if llama_config.hp.model_arch == "grok":
             model = PagedGrokModelV1(dataset.root_theta, llama_config)
