@@ -175,7 +175,7 @@ class BatcherProcess(sf.Process):
         while not self.batcher_infeed.closed:
             await asyncio.sleep(
                 BatcherProcess.STROBE_SHORT_DELAY
-                if len(self.pending_preps) > 0
+                if len(self.pending_requests) > 0
                 else BatcherProcess.STROBE_LONG_DELAY
             )
             if self.strobe_enabled:
