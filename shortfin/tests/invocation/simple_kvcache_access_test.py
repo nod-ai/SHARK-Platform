@@ -13,11 +13,14 @@ It's a simple test to verify that shortfin can:
 - Properly retain changes made by the VMFB to device arrays provided as arguments
 """
 
-import pytest
 import urllib.request
 import tempfile
 from pathlib import Path
+import functools
 import pytest
+import shortfin as sf
+import shortfin.array as sfnp
+import array
 
 
 @pytest.fixture(scope="session")
@@ -166,15 +169,6 @@ def kvcache_compiled_cpu_path():
         yield final_vmfb
 
 
-import array
-import functools
-import pytest
-import numpy as np
-
-import shortfin as sf
-import shortfin.array as sfnp
-
-
 @pytest.fixture
 def lsys():
     sc = sf.host.CPUSystemBuilder()
@@ -191,13 +185,6 @@ def fiber(lsys):
 @pytest.fixture
 def device(fiber):
     return fiber.device(0)
-
-
-import pytest
-import numpy as np
-import shortfin as sf
-import shortfin.array as sfnp
-import array
 
 
 def create_scalar_device_array(device, value, dtype=sfnp.int64):
@@ -225,6 +212,11 @@ def create_scalar_device_array(device, value, dtype=sfnp.int64):
 def test_kvcache_return_contents(
     lsys, fiber, kvcache_compiled_cpu_path, await_before_invoke
 ):
+    try:
+        import numpy as np
+    except ImportError:
+        raise pytest.skip("numpy not available")
+
     device = fiber.device(0)
     program_module = lsys.load_module(kvcache_compiled_cpu_path)
     program = sf.Program([program_module], fiber=fiber)
@@ -338,6 +330,11 @@ def test_kvcache_return_contents(
     ],
 )
 def test_kvcache_noreturn(lsys, fiber, kvcache_compiled_cpu_path, await_before_invoke):
+    try:
+        import numpy as np
+    except ImportError:
+        raise pytest.skip("numpy not available")
+    return np
     device = fiber.device(0)
     program_module = lsys.load_module(kvcache_compiled_cpu_path)
     program = sf.Program([program_module], fiber=fiber)
