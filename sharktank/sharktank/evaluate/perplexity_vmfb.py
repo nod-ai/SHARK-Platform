@@ -176,7 +176,7 @@ class Perplexity:
             s.replace("\n", "").rstrip()
             for s in test_prompts
             if s != "" and len(s.split()) >= 20 and s.count("=") < 2
-        ][0:4]
+        ]
 
         logger.info(f" num_test_prompts: {len(test_prompts)}")
 
@@ -208,7 +208,7 @@ class Perplexity:
         )
 
         seq_block_ids = self.batch.pad_block_ids()
-        prefill_logits = self.runner.ctx.modules.module.prefill_bs4(
+        prefill_logits = self.runner.ctx.modules.module[f"prefill_bs{self.bs}"](
             token_batch,
             self.seq_lens_batch,
             seq_block_ids,
@@ -239,7 +239,7 @@ class Perplexity:
         self.batch.allocate_seq_block_ids()
         seq_block_ids = self.batch.pad_block_ids()
 
-        decode_logits = self.runner.ctx.modules.module.decode_bs4(
+        decode_logits = self.runner.ctx.modules.module[f"decode_bs{self.bs}"](
             token_batch,
             self.seq_lens_batch,
             start_positions,
