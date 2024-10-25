@@ -44,33 +44,7 @@ class GenerateImageProcess(sf.Process):
         self.result_image = None
 
     async def run(self):
-        # TODO: make sure gen_req is being indexed for the singular image generation sequence's inputs.
-        exec = InferenceExecRequest(
-            InferencePhase.PREPARE,
-            self.gen_req.prompt[self.index],
-            self.gen_req.neg_prompt[self.index],
-            self.gen_req.height[self.index],
-            self.gen_req.width[self.index],
-            self.gen_req.steps[self.index],
-            self.gen_req.guidance_scale[self.index],
-            self.gen_req.seed[self.index],
-        )
-        self.client.batcher.submit(exec)
-        await exec.done
-
-        exec.reset(InferencePhase.ENCODE)
-        self.client.batcher.submit(exec)
-        await exec.done
-
-        exec.reset(InferencePhase.DENOISE)
-        self.client.batcher.submit(exec)
-        await exec.done
-
-        exec.reset(InferencePhase.DECODE)
-        self.client.batcher.submit(exec)
-        await exec.done
-
-        exec.reset(InferencePhase.POSTPROCESS)
+        exec = InferenceExecRequest.from_batch(self.gen_req, self.index)
         self.client.batcher.submit(exec)
         await exec.done
         self.result_image = exec.result_image
