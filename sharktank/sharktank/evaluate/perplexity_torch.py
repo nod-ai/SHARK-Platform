@@ -177,7 +177,7 @@ class Perplexity_torch:
         start = 0
         for i in tqdm(
             range(start, self.max_prompt_length - 1),
-            miniters=50,
+            mininterval=300,
             desc="eval: Calculating logits",
         ):
             logger.debug(f"Iteration: {i}")

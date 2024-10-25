@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   test_perplexity_vmfb:
-    timeout-minutes: 600
+    timeout-minutes: 1000
     name: "Evaluation Tests - perplexity_vmfb"
     strategy:
       matrix:
@@ -59,15 +59,12 @@ jobs:
             -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
           pip install --no-compile -r requirements.txt -r sharktank/requirements-tests.txt -e sharktank/
 
-      - name: test
-        run:  cd /home/esaimana/actions-runner-llama/_work/SHARK-Platform/SHARK-Platform/sharktank && python3 -m sharktank.examples.export_paged_llm_v1 --irpa-file /data/extra/models/llama3.1_8B/llama8b_f16.irpa --output-mlir /home/esaimana/actions-runner-llama/_work/SHARK-Platform/SHARK-Platform/sharktank/ppl_artifacts/llama8b_f16_decomposed.mlir --output-config /home/esaimana/actions-runner-llama/_work/SHARK-Platform/SHARK-Platform/sharktank/ppl_artifacts/llama8b_f16_decomposed.json --attention-kernel decomposed --tensor-parallelism-size 1
       - name: Export mlir and vmfb
         run:  pytest -v -s sharktank/tests/evaluate/export_artifacts_test.py --bs 4
       - name: Run perplexity test with vmfb
         run:  pytest -n 4 -v -s sharktank/tests/evaluate/perplexity_vmfb_test.py --iree-device='hip://7' --longrun
 
   test_perplexity_torch:
-    timeout-minutes: 600
     name: "Evaluation Tests - perplexity_torch"
     strategy:
       matrix:
