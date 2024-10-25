@@ -15,7 +15,7 @@ When in question, we draw from the vocabulary and normalization they have done
 """
 
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, Optional, ClassVar
 import torch
 
 __all__ = ["LlamaHParams", "LlamaModelConfig"]
@@ -80,6 +80,22 @@ class LlamaHParams:
             ),
         )
 
+    def to_gguf_props(self) -> dict[str, Any]:
+        return {
+            "general.architecture": self.model_arch,
+            f"{self.model_arch}.context_length": self.context_length,
+            f"{self.model_arch}.embedding_length": self.embedding_length,
+            f"{self.model_arch}.block_count": self.block_count,
+            f"{self.model_arch}.feed_forward_length": self.feed_forward_length,
+            f"{self.model_arch}.attention.head_count": self.attention_head_count,
+            f"{self.model_arch}.attention.layer_norm_rms_epsilon": self.attention_layer_norm_rms_epsilon,
+            f"{self.model_arch}.attention.head_count_kv": self.attention_head_count_kv,
+            f"{self.model_arch}.rope.dimension_count": self.rope_dimension_count,
+            f"{self.model_arch}.rope.freq_base": self.rope_freq_base,
+            f"{self.model_arch}.expert_count": self.expert_count,
+            f"{self.model_arch}.expert_used_count": self.expert_used_count,
+        }
+
 
 def _float_prop(p: dict[str, Any], name: str) -> float:
     try:
@@ -121,7 +137,8 @@ class LlamaModelConfig:
 
     # Block sequence stride for a paged KV cache. This must divide evenly
     # into the context length.
-    block_seq_stride: int = 16
+    default_block_seq_stride: ClassVar[int] = 16
+    block_seq_stride: int = default_block_seq_stride
 
     # Either "paged" or "direct".
     kv_cache_type: str = "paged"
@@ -130,10 +147,12 @@ class LlamaModelConfig:
     device: Optional[torch.device] = None
 
     # Dtype to use for general FP activations not otherwise configured.
-    activation_dtype: torch.dtype = torch.float16
+    default_activation_dtype: ClassVar[torch.dtype] = torch.float16
+    activation_dtype: torch.dtype = default_activation_dtype
 
     # Dtype to use for attention.
-    attention_dtype: torch.dtype = torch.float16
+    default_attention_dtype: ClassVar[torch.dtype] = torch.float16
+    attention_dtype: torch.dtype = default_attention_dtype
 
     # How many devices are involved for tensor parallel sharding.
     # If greater than 1, the model will expect sharded model parameters and function

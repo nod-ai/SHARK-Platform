@@ -7,7 +7,7 @@
 from typing import Optional
 
 from dataclasses import dataclass
-from typing import Union
+from typing import Any, Union
 
 import torch
 import torch.nn as nn
@@ -27,7 +27,7 @@ __all__ = [
 ################################################################################
 
 
-class PagedLlamaModelV1(BaseCausalLMModel):
+class PagedLlamaModelV1(BaseCausalLMModel, CausalLMModel):
     """LlamaModel with a paged KV cache and supporting variable sequence
     length batched inference.
 
@@ -64,8 +64,8 @@ class PagedLlamaModelV1(BaseCausalLMModel):
 
     def __init__(self, theta: Theta, config: LlamaModelConfig):
         hp = config.hp
-        super().__init__(
-            theta,
+        BaseCausalLMModel.__init__(
+            self,
             context_length=config.hp.context_length,
             static_tables=config.static_tables,
             device=config.device,
@@ -185,29 +185,6 @@ class PagedLlamaModelV1(BaseCausalLMModel):
         self._assert_device(attention_mask, dtype=self.activation_dtype)
         self._assert_device(start_positions)
         self._assert_device(*cache_state, dtype=self.activation_dtype)
-
-        if self.config.tensor_parallelism_size > 1:
-            if not isinstance(tokens, ReplicatedTensor):
-                tokens = ops.replicate(
-                    tokens, count=self.config.tensor_parallelism_size
-                )
-            if not isinstance(attention_mask, ReplicatedTensor):
-                attention_mask = ops.replicate(
-                    attention_mask, count=self.config.tensor_parallelism_size
-                )
-            if not isinstance(start_positions, ReplicatedTensor):
-                start_positions = ops.replicate(
-                    start_positions, count=self.config.tensor_parallelism_size
-                )
-            if not isinstance(seq_block_ids, ReplicatedTensor):
-                seq_block_ids = ops.replicate(
-                    seq_block_ids, count=self.config.tensor_parallelism_size
-                )
-            # If the user provided unsharded arguments they probably want
-            # an unsharded result as well.
-            unshard_result = True
-        else:
-            unshard_result = False
 
         bs, _ = tokens.shape
         # Precompute a position based mask for computing rope embeddings

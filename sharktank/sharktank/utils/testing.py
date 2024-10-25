@@ -14,8 +14,12 @@ import torch
 from typing import Any, Callable
 from operator import eq
 from collections.abc import Iterable
+import pytest
+from sharktank.utils.tokenizer import InferenceTokenizer
 
 from ..types import *
+
+longrun = pytest.mark.skipif("not config.getoption('longrun')")
 
 # Range of torch.rand() is [0,1)
 # Range of torch.rand() * 2 - 1 is [-1, 1), includes negative values
@@ -29,6 +33,20 @@ class TempDirTestBase(unittest.TestCase):
 
     def tearDown(self):
         shutil.rmtree(self._temp_dir, ignore_errors=True)
+
+
+@pytest.mark.usefixtures("path_prefix")
+class PathPrefixTestBase(unittest.TestCase):
+    """Creates a temporary directory and uses it if a path prefix is not given."""
+
+    def setUp(self):
+        if self.path_prefix is None:
+            self.temp_dir = tempfile.mkdtemp(type(self).__qualname__)
+            self.path_prefix = f"{self.temp_dir}/"
+
+    def tearDown(self):
+        if hasattr(self, "temp_dir"):
+            shutil.rmtree(self.temp_dir)
 
 
 class MainRunnerTestBase(TempDirTestBase):
@@ -52,6 +70,25 @@ class MainRunnerTestBase(TempDirTestBase):
     def assertFileWritten(self, p: Path):
         self.assertTrue(p.exists(), msg=f"Expected file {p} was not created")
         self.assertGreater(p.stat().st_size, 0, msg=f"Expected file {p} had zero size")
+
+
+class ModuloTokenizer(InferenceTokenizer):
+    """A tokenizer used for testing where we take a modulo of each character.
+    Guarantees that we are producing tokens of up to the max token ID."""
+
+    def __init__(self, vocabulary_size: int):
+        self.vocabulary_size = vocabulary_size
+
+    def _encode(self, texts: list[str], add_start_token: bool) -> list[list[int]]:
+        return [
+            [ord(character) % self.vocabulary_size for character in text]
+            for text in texts
+        ]
+
+    def _decode(self, tokens: list[list[int]]) -> list[str]:
+        return [
+            "".join([chr(token) for token in prompt_tokens]) for prompt_tokens in tokens
+        ]
 
 
 @contextlib.contextmanager
