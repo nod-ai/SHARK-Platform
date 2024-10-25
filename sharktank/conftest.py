@@ -76,7 +76,7 @@ def pytest_addoption(parser):
         "--llama3-8b-tokenizer-path",
         type=Path,
         action="store",
-        default="/data/extra/models/llama3.1_8B/tokenizer_config.json",
+        default="/data/llama-3.1/8b/tokenizer_config.json",
         help="Llama3.1 8b tokenizer path, defaults to 30F CI system path",
     )
 
@@ -92,7 +92,7 @@ def pytest_addoption(parser):
         "--llama3-8b-f16-model-path",
         type=Path,
         action="store",
-        default="/data/extra/models/llama3.1_8B/llama8b_f16.irpa",
+        default="/data/llama-3.1/8b/llama8b_f16.irpa",
         help="Llama3.1 8b model path, defaults to 30F CI system path",
     )
 
@@ -132,7 +132,7 @@ def pytest_addoption(parser):
         "--llama3-405b-tokenizer-path",
         type=Path,
         action="store",
-        default="/data/extra/models/llama3.1_405B/tokenizer_config.json",
+        default="/data/llama-3.1/405b/tokenizer_config.json",
         help="Llama3.1 405b tokenizer path, defaults to 30F CI system path",
     )
 
@@ -148,7 +148,7 @@ def pytest_addoption(parser):
         "--llama3-405b-f16-model-path",
         type=Path,
         action="store",
-        default="/data/extra/models/llama3.1_405B/llama405b_fp16.irpa",
+        default="/data/llama-3.1/405b/llama405b_fp16.irpa",
         help="Llama3.1 405b model path, defaults to 30F CI system path",
     )
 
