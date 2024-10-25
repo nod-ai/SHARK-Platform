@@ -8,7 +8,7 @@ import unittest
 import pytest
 import json
 
-from sharktank.evaluate import perplexity
+from sharktank.evaluate import perplexity_torch
 
 longrun = pytest.mark.skipif("not config.getoption('longrun')")
 
@@ -19,8 +19,7 @@ class PerplexityTest(unittest.TestCase):
         self.current_perplexity_all = {}
         self.delta = 5e-1
         self.tensor_parallelism_size = 8
-
-        with open(self.baseline_perplexity_score_json, "r") as f:
+        with open(self.baseline_perplexity_scores, "r") as f:
             self.baseline_perplexity = json.load(f)
 
     @longrun
@@ -31,18 +30,23 @@ class PerplexityTest(unittest.TestCase):
         model_name = "llama3_8B_f16_decomposed"
         baseline_perplexity = self.baseline_perplexity[model_name]
 
-        current_perplexity = perplexity.main(
+        current_perplexity = perplexity_torch.main(
             [
-                f"--gguf-file={self.llama3_8b_f16_model}",
+                f"--irpa-file={self.llama3_8b_f16_model}",
                 f"--tokenizer-config-json={self.llama3_8b_tokenizer}",
             ]
+        )
+
+        perplexity_difference = (
+            current_perplexity["mean_perplexity"]
+            - baseline_perplexity["mean_perplexity"]
         )
 
         self.assertAlmostEqual(
             baseline_perplexity["mean_perplexity"],
             current_perplexity["mean_perplexity"],
             delta=self.delta,
-            msg=f"Perplexity is deviating more than {self.delta}",
+            msg=f"Current perplexity deviates baseline by {perplexity_difference}",
         )
 
     @pytest.mark.xfail(
@@ -56,19 +60,24 @@ class PerplexityTest(unittest.TestCase):
         model_name = "llama3_8B_f16_non_decomposed"
         baseline_perplexity = self.baseline_perplexity[model_name]
 
-        current_perplexity = perplexity.main(
+        current_perplexity = perplexity_torch.main(
             [
-                f"--gguf-file={self.llama3_8b_f16_model}",
+                f"--irpa-file={self.llama3_8b_f16_model}",
                 f"--tokenizer-config-json={self.llama3_8b_tokenizer}",
                 f"--attention-kernel=torch_sdpa",
             ]
+        )
+
+        perplexity_difference = (
+            current_perplexity["mean_perplexity"]
+            - baseline_perplexity["mean_perplexity"]
         )
 
         self.assertAlmostEqual(
             baseline_perplexity["mean_perplexity"],
             current_perplexity["mean_perplexity"],
             delta=self.delta,
-            msg=f"Perplexity is deviating more than {self.delta}",
+            msg=f"Current perplexity deviates baseline by {perplexity_difference}",
         )
 
     @pytest.mark.xfail(
@@ -82,18 +91,23 @@ class PerplexityTest(unittest.TestCase):
         model_name = "llama3_8B_fp8_decomposed"
         baseline_perplexity = self.baseline_perplexity[model_name]
 
-        current_perplexity = perplexity.main(
+        current_perplexity = perplexity_torch.main(
             [
-                f"--gguf-file={self.llama3_8b_fp8_model}",
+                f"--irpa-file={self.llama3_8b_fp8_model}",
                 f"--tokenizer-config-json={self.llama3_8b_tokenizer}",
             ]
+        )
+
+        perplexity_difference = (
+            current_perplexity["mean_perplexity"]
+            - baseline_perplexity["mean_perplexity"]
         )
 
         self.assertAlmostEqual(
             baseline_perplexity["mean_perplexity"],
             current_perplexity["mean_perplexity"],
             delta=self.delta,
-            msg=f"Perplexity is deviating more than {self.delta}",
+            msg=f"Current perplexity deviates baseline by {perplexity_difference}",
         )
 
     @pytest.mark.xfail(
@@ -107,19 +121,24 @@ class PerplexityTest(unittest.TestCase):
         model_name = "llama3_8B_fp8_non_decomposed"
         baseline_perplexity = self.baseline_perplexity[model_name]
 
-        current_perplexity = perplexity.main(
+        current_perplexity = perplexity_torch.main(
             [
-                f"--gguf-file={self.llama3_8b_fp8_model}",
+                f"--irpa-file={self.llama3_8b_fp8_model}",
                 f"--tokenizer-config-json={self.llama3_8b_tokenizer}",
                 f"--attention-kernel=torch_sdpa",
             ]
+        )
+
+        perplexity_difference = (
+            current_perplexity["mean_perplexity"]
+            - baseline_perplexity["mean_perplexity"]
         )
 
         self.assertAlmostEqual(
             baseline_perplexity["mean_perplexity"],
             current_perplexity["mean_perplexity"],
             delta=self.delta,
-            msg=f"Perplexity is deviating more than {self.delta}",
+            msg=f"Current perplexity deviates baseline by {perplexity_difference}",
         )
 
     @longrun
@@ -130,19 +149,24 @@ class PerplexityTest(unittest.TestCase):
         model_name = "llama3_405B_f16_decomposed"
         baseline_perplexity = self.baseline_perplexity[model_name]
 
-        current_perplexity = perplexity.main(
+        current_perplexity = perplexity_torch.main(
             [
-                f"--gguf-file={self.llama3_405b_f16_model}",
+                f"--irpa-file={self.llama3_405b_f16_model}",
                 f"--tokenizer-config-json={self.llama3_405b_tokenizer}",
                 f"--tensor-parallelism-size={self.tensor_parallelism_size}",
             ]
+        )
+
+        perplexity_difference = (
+            current_perplexity["mean_perplexity"]
+            - baseline_perplexity["mean_perplexity"]
         )
 
         self.assertAlmostEqual(
             baseline_perplexity["mean_perplexity"],
             current_perplexity["mean_perplexity"],
             delta=self.delta,
-            msg=f"Perplexity is deviating more than {self.delta}",
+            msg=f"Current perplexity deviates baseline by {perplexity_difference}",
         )
 
     @pytest.mark.xfail(
@@ -156,20 +180,25 @@ class PerplexityTest(unittest.TestCase):
         model_name = "llama3_405B_f16_non_decomposed"
         baseline_perplexity = self.baseline_perplexity[model_name]
 
-        current_perplexity = perplexity.main(
+        current_perplexity = perplexity_torch.main(
             [
-                f"--gguf-file={self.llama3_405b_f16_model}",
+                f"--irpa-file={self.llama3_405b_f16_model}",
                 f"--tokenizer-config-json={self.llama3_405b_tokenizer}",
                 f"--tensor-parallelism-size={self.tensor_parallelism_size}",
                 f"--attention-kernel=torch_sdpa",
             ]
         )
 
+        perplexity_difference = (
+            current_perplexity["mean_perplexity"]
+            - baseline_perplexity["mean_perplexity"]
+        )
+
         self.assertAlmostEqual(
             baseline_perplexity["mean_perplexity"],
             current_perplexity["mean_perplexity"],
             delta=self.delta,
-            msg=f"Perplexity is deviating more than {self.delta}",
+            msg=f"Current perplexity deviates baseline by {perplexity_difference}",
         )
 
     @pytest.mark.xfail(
@@ -183,19 +212,24 @@ class PerplexityTest(unittest.TestCase):
         model_name = "llama3_405B_fp8_decomposed"
         baseline_perplexity = self.baseline_perplexity[model_name]
 
-        current_perplexity = perplexity.main(
+        current_perplexity = perplexity_torch.main(
             [
-                f"--gguf-file={self.llama3_405b_fp8_model}",
+                f"--irpa-file={self.llama3_405b_fp8_model}",
                 f"--tokenizer-config-json={self.llama3_405b_tokenizer}",
                 f"--tensor-parallelism-size={self.tensor_parallelism_size}",
             ]
+        )
+
+        perplexity_difference = (
+            current_perplexity["mean_perplexity"]
+            - baseline_perplexity["mean_perplexity"]
         )
 
         self.assertAlmostEqual(
             baseline_perplexity["mean_perplexity"],
             current_perplexity["mean_perplexity"],
             delta=self.delta,
-            msg=f"Perplexity is deviating more than {self.delta}",
+            msg=f"Current perplexity deviates baseline by {perplexity_difference}",
         )
 
     @pytest.mark.xfail(
@@ -209,20 +243,25 @@ class PerplexityTest(unittest.TestCase):
         model_name = "llama3_405B_fp8_non_decomposed"
         baseline_perplexity = self.baseline_perplexity[model_name]
 
-        current_perplexity = perplexity.main(
+        current_perplexity = perplexity_torch.main(
             [
-                f"--gguf-file={self.llama3_405b_fp8_model}",
+                f"--irpa-file={self.llama3_405b_fp8_model}",
                 f"--tokenizer-config-json={self.llama3_405b_tokenizer}",
                 f"--tensor-parallelism-size={self.tensor_parallelism_size}",
                 f"--attention-kernel=torch_sdpa",
             ]
         )
 
+        perplexity_difference = (
+            current_perplexity["mean_perplexity"]
+            - baseline_perplexity["mean_perplexity"]
+        )
+
         self.assertAlmostEqual(
             baseline_perplexity["mean_perplexity"],
             current_perplexity["mean_perplexity"],
             delta=self.delta,
-            msg=f"Perplexity is deviating more than {self.delta}",
+            msg=f"Current perplexity deviates baseline by {perplexity_difference}",
         )
 
 
