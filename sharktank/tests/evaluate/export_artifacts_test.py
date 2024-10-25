@@ -30,9 +30,8 @@ pytestmark = pytest.mark.usefixtures(
 class ExportArtifacts(unittest.TestCase):
     def setUp(self):
         self.sharktank_dir = str(
-            Path(os.path.dirname(os.path.abspath(__file__))).parent.parent
+            Path(os.path.dirname(os.path.abspath(__file__))).parent.parent.parent
         )
-        self.artifacts_dir = "/data/extra/models/"
 
     def export_to_mlir(
         self,
@@ -48,7 +47,7 @@ class ExportArtifacts(unittest.TestCase):
             "-m",
             "sharktank.examples.export_paged_llm_v1",
             "--irpa-file",
-            irpa_path,
+            str(irpa_path),
             "--output-mlir",
             mlir_path,
             "--output-config",
@@ -71,10 +70,10 @@ class ExportArtifacts(unittest.TestCase):
             f"export_args: {export_args}\n self.sharktank_dir: {self.sharktank_dir}"
         )
 
-        logger.info(f"Exporting mlir:\n" f"cd {self.sharktank_dir} && {cmd}")
-        proc = subprocess.run(
-            cmd, shell=True, capture_output=True, cwd=self.sharktank_dir
-        )
+        cwd = self.sharktank_dir + "/sharktank"
+
+        logger.info(f"Exporting mlir:\n" f"cd {cwd} && {cmd}")
+        proc = subprocess.run(cmd, shell=True, capture_output=True, cwd=cwd)
         return_code = proc.returncode
         if return_code != 0:
             logger.error("Error exporting mlir: ", return_code)
@@ -113,7 +112,7 @@ class ExportArtifacts(unittest.TestCase):
         ]
         attention_kernels = ["decomposed", "torch_sdpa"]
 
-        self.dir_path = self.artifacts_dir + "/" + "tmp_perplexity_ci_artifacts/"
+        self.dir_path = self.sharktank_dir + "/" + "tmp_perplexity_ci_artifacts/"
         temp_dir = Path(self.dir_path)
         temp_dir.mkdir(parents=True, exist_ok=True)
 
