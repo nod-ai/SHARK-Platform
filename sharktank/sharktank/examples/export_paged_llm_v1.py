@@ -122,7 +122,7 @@ def main():
             # Direct cache dimensions:
             #   2 * transformer_block_count of...
             #   [bs, seq_length, attn_head_count, attn_head_dim]
-            dynamic_shapes = [None]
+            dynamic_shapes = (2 * hp.block_count) * [{}]
         else:
             raise NotImplementedError(f"Unsupported KV cache type: {type(model.cache)}")
 
@@ -143,7 +143,7 @@ def main():
             for i in range(llama_config.tensor_parallelism_size):
                 arg_affinities[i] = DeviceAffinity(str(i))
 
-        return torch.stack(unpacked), shard_dim, dynamic_shapes, arg_affinities
+        return unpacked, shard_dim, dynamic_shapes, arg_affinities
 
     def repack_cache(cache, shard_dim):
         return [SplitPrimitiveTensor(ts=c, shard_dim=shard_dim) for c in cache]
@@ -184,7 +184,7 @@ def main():
             arg_device=arg_affinities,
         )
         def _(model, tokens, seq_lens, seq_block_ids, cs):
-            cache_tensors = torch.unbind(cs)
+            cache_tensors = cs
 
             sl = tokens.shape[1]
             input_mask = model.input_mask(seq_lens, sl)
