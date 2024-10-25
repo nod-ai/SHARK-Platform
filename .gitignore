@@ -30,3 +30,6 @@ wheelhouse
 *.safetensors
 *.gguf
 *.vmfb
+
+# Known inference result blobs
+*output*.png
