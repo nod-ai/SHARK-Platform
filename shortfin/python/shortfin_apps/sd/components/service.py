@@ -48,13 +48,15 @@ class GenerateService:
         self.inference_modules: dict[str, sf.ProgramModule] = {}
         self.inference_functions: dict[str, dict[str, sf.ProgramFunction]] = {}
         self.inference_programs: dict[str, sf.Program] = {}
+        self.procs_per_device = 2
         self.workers = []
         self.fibers = []
         for idx, device in enumerate(self.sysman.ls.devices):
-            worker = sysman.ls.create_worker(f"{name}-inference-{device.name}")
-            fiber = sysman.ls.create_fiber(worker, devices=[device])
-            self.workers.append(worker)
-            self.fibers.append(fiber)
+            for i in range(self.procs_per_device):
+                worker = sysman.ls.create_worker(f"{name}-inference-{device.name}-{i}")
+                fiber = sysman.ls.create_fiber(worker, devices=[device])
+                self.workers.append(worker)
+                self.fibers.append(fiber)
 
         # Scope dependent objects.
         self.batcher = BatcherProcess(self)
@@ -158,18 +160,7 @@ class BatcherProcess(sf.Process):
         super().__init__(fiber=service.fibers[0])
         self.service = service
         self.batcher_infeed = self.system.create_queue()
-        self.pending_preps: set[InferenceExecRequest] = set()
-        self.pending_encodes: set[InferenceExecRequest] = set()
-        self.pending_denoises: set[InferenceExecRequest] = set()
-        self.pending_decodes: set[InferenceExecRequest] = set()
-        self.pending_postprocesses: set[InferenceExecRequest] = set()
-        self.phase_map = {
-            InferencePhase.PREPARE: self.pending_preps,
-            InferencePhase.ENCODE: self.pending_encodes,
-            InferencePhase.DENOISE: self.pending_denoises,
-            InferencePhase.DECODE: self.pending_decodes,
-            InferencePhase.POSTPROCESS: self.pending_postprocesses,
-        }
+        self.pending_requests: set[InferenceExecRequest] = set()
         self.strobe_enabled = True
         self.strobes: int = 0
         self.ideal_batch_size: int = max(service.model_params.max_batch_size)
@@ -196,11 +187,7 @@ class BatcherProcess(sf.Process):
         while item := await reader():
             self.strobe_enabled = False
             if isinstance(item, InferenceExecRequest):
-                phase = item.phase
-                if phase in self.phase_map.keys():
-                    self.phase_map[phase].add(item)
-                else:
-                    logger.error("Illegal InferenceExecRequest phase: %r", phase)
+                self.pending_requests.add(item)
             elif isinstance(item, StrobeMessage):
                 self.strobes += 1
             else:
@@ -210,7 +197,7 @@ class BatcherProcess(sf.Process):
         await strober_task
 
     def board_flights(self):
-        waiting_count = sum([len(val) for val in self.phase_map.values()])
+        waiting_count = len(self.pending_requests)
         if waiting_count == 0:
             return
         if waiting_count < self.ideal_batch_size and self.strobes < 2:
@@ -218,28 +205,47 @@ class BatcherProcess(sf.Process):
             return
         self.strobes = 0
 
-        for phase in self.phase_map.keys():
-            self.board(phase)
+        batches = self.sort_pending()
+        for idx in batches.keys():
+            self.board(batches[idx]["reqs"])
 
-        # For now, kill anything that is left.
-        for i in self.phase_map.values():
-            for request in i:
-                request.done.set_success()
-            i.clear()
+    def sort_pending(self):
+        """Returns pending requests as sorted batches suitable for program invocations."""
+        batches = {}
+        for req in self.pending_requests:
+            is_sorted = False
+            req_metas = [req.phases[phase]["metadata"] for phase in req.phases.keys()]
+            next_key = 0
+            for idx_key, data in batches.items():
+                if not isinstance(data, dict):
+                    logger.error(
+                        "Expected to find a dictionary containing a list of requests and their shared metadatas."
+                    )
+                if data["meta"] == req_metas:
+                    batches[idx_key]["reqs"].append(req)
+                    is_sorted = True
+                    break
+                next_key = idx_key + 1
+            if not is_sorted:
+                batches[next_key] = {
+                    "reqs": [req],
+                    "meta": req_metas,
+                }
+        return batches
 
-    def board(self, phase: InferencePhase):
-        pending = self.phase_map[phase]
+    def board(self, request_bundle):
+        pending = request_bundle
         if len(pending) == 0:
             return
-        exec_process = InferenceExecutorProcess(self.service)
+        exec_process = InferenceExecutorProcess(self.service, 0)
         for req in pending:
-            assert req.phase == phase
             if len(exec_process.exec_requests) >= self.ideal_batch_size:
                 break
             exec_process.exec_requests.append(req)
         if exec_process.exec_requests:
             for flighted_request in exec_process.exec_requests:
-                self.phase_map[phase].remove(flighted_request)
+                self.pending_requests.remove(flighted_request)
+            print(f"launching exec process for {exec_process.exec_requests}")
             exec_process.launch()
 
 
@@ -254,8 +260,9 @@ class InferenceExecutorProcess(sf.Process):
     def __init__(
         self,
         service: GenerateService,
+        index: int,
     ):
-        super().__init__(fiber=service.fibers[0])
+        super().__init__(fiber=service.fibers[index])
         self.service = service
         self.exec_requests: list[InferenceExecRequest] = []
 
@@ -264,25 +271,23 @@ class InferenceExecutorProcess(sf.Process):
             phase = None
             for req in self.exec_requests:
                 if phase:
-                    assert phase == req.phase
-                phase = req.phase
-            is_prep = phase == InferencePhase.PREPARE
-            is_encode = phase == InferencePhase.ENCODE
-            is_denoise = phase == InferencePhase.DENOISE
-            is_decode = phase == InferencePhase.DECODE
-            is_postprocess = phase == InferencePhase.POSTPROCESS
+                    if phase != req.phase:
+                        logger.error("Executor process recieved disjoint batch.")
+            phases = self.exec_requests[0].phases
+
             req_count = len(self.exec_requests)
             device0 = self.fiber.device(0)
+            await device0
 
-            if is_prep:
+            if phases[InferencePhase.PREPARE]["required"]:
                 await self._prepare(device=device0, requests=self.exec_requests)
-            elif is_encode:
+            if phases[InferencePhase.ENCODE]["required"]:
                 await self._encode(device=device0, requests=self.exec_requests)
-            elif is_denoise:
+            if phases[InferencePhase.DENOISE]["required"]:
                 await self._denoise(device=device0, requests=self.exec_requests)
-            elif is_decode:
+            if phases[InferencePhase.DECODE]["required"]:
                 await self._decode(device=device0, requests=self.exec_requests)
-            elif is_postprocess:
+            if phases[InferencePhase.POSTPROCESS]["required"]:
                 await self._postprocess(device=device0, requests=self.exec_requests)
 
             for i in range(req_count):
@@ -385,9 +390,7 @@ class InferenceExecutorProcess(sf.Process):
         for i in range(req_bs):
             cfg_mult = 2
             requests[i].prompt_embeds = pe.view(slice(i * cfg_mult, (i + 1) * cfg_mult))
-            requests[i].add_text_embeds = te.view(
-                slice(i * cfg_mult, (i + 1) * cfg_mult)
-            )
+            requests[i].text_embeds = te.view(slice(i * cfg_mult, (i + 1) * cfg_mult))
 
         return
 
@@ -438,7 +441,7 @@ class InferenceExecutorProcess(sf.Process):
         for i in range(req_bs):
             cfg_dim = i * cfg_mult
             with gs_host.view(i).map(write=True, discard=True) as m:
-
+                # TODO: do this without numpy
                 np_arr = np.asarray(requests[i].guidance_scale, dtype="float16")
 
                 m.fill(np_arr)
@@ -453,7 +456,7 @@ class InferenceExecutorProcess(sf.Process):
             ).copy_from(enc)
 
             # Batch CLIP text embeds.
-            temb = requests[i].add_text_embeds
+            temb = requests[i].text_embeds
             denoise_inputs["text_embeds"].view(
                 slice(cfg_dim, cfg_dim + cfg_mult)
             ).copy_from(temb)
