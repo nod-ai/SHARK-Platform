@@ -358,15 +358,13 @@ def main(argv):
     parser = cli.create_parser()
     parser.add_argument("--kv-cache-type", default="paged", help="KV cache type")
     parser.add_argument("--torch-device", help="Torch device (or default)")
-    parser.add_argument(
-        "--iree-device", help="List an IREE device from iree-run-module --list_devices"
-    )
+    parser.add_argument("--iree-device", help="List an IREE device, eg: 'hip://0'")
     parser.add_argument("--vmfb-path", help="Path to vmfb file")
     parser.add_argument(
         "--tensor-parallelism-size",
         type=int,
         default=1,
-        help="Number of devices for tensor parallel sharding.",
+        help="Number of devices for tensor parallel sharding",
     )
 
     cli.add_tokenizer_options(parser)

@@ -81,6 +81,14 @@ def pytest_addoption(parser):
     )
 
     parser.addoption(
+        "--llama3-8b-json-path",
+        type=Path,
+        action="store",
+        default="/data/extra/models/llama3.1_8B/llama8b_test.json",
+        help="Llama3.1 8b fp8 parameters json path",
+    )
+
+    parser.addoption(
         "--llama3-8b-f16-model-path",
         type=Path,
         action="store",
@@ -97,11 +105,43 @@ def pytest_addoption(parser):
     )
 
     parser.addoption(
+        "--llama3-8b-f16-mlir-path",
+        type=Path,
+        action="store",
+        default="/data/extra/models/llama3.1_8B/llama8b_f16_test.mlir",
+        help="Llama3.1 8b mlir path, defaults to 30F CI system path",
+    )
+
+    parser.addoption(
+        "--llama3-8b-fp8-mlir-path",
+        type=Path,
+        action="store",
+        default=None,
+        help="Llama3.1 8b fp8 mlir path",
+    )
+
+    parser.addoption(
+        "--llama3-8b-f16-vmfb-path",
+        type=Path,
+        action="store",
+        default="/data/extra/models/llama3.1_8B/llama8b_f16.vmfb",
+        help="Llama3.1 8b fp16 vmfb path, defaults to 30F CI system path",
+    )
+
+    parser.addoption(
         "--llama3-405b-tokenizer-path",
         type=Path,
         action="store",
         default="/data/extra/models/llama3.1_405B/tokenizer_config.json",
         help="Llama3.1 405b tokenizer path, defaults to 30F CI system path",
+    )
+
+    parser.addoption(
+        "--llama3-405b-json-path",
+        type=Path,
+        action="store",
+        default="/data/extra/models/llama3.1_405B/llama405b_test.json",
+        help="Llama3.1 405b fp8 parameters json path",
     )
 
     parser.addoption(
@@ -121,19 +161,19 @@ def pytest_addoption(parser):
     )
 
     parser.addoption(
-        "--baseline-perplexity-scores",
+        "--llama3-405b-f16-mlir-path",
         type=Path,
         action="store",
-        default="sharktank/tests/evaluate/baseline_perplexity_scores.json",
-        help="Llama3.1 8B & 405B model baseline perplexity scores",
+        default="/data/extra/models/llama3.1_405B/llama405b_fp16_test.mlir",
+        help="Llama3.1 405b mlir path, defaults to 30F CI system path",
     )
 
     parser.addoption(
-        "--llama3-8b-f16-vmfb-path",
+        "--llama3-405b-fp8-mlir-path",
         type=Path,
         action="store",
-        default="/data/extra/models/llama3.1_8B/llama8b_f16.vmfb",
-        help="Llama3.1 8b fp16 vmfb path, defaults to 30F CI system path",
+        default=None,
+        help="Llama3.1 405b fp8 mlir path",
     )
 
     parser.addoption(
@@ -142,6 +182,14 @@ def pytest_addoption(parser):
         action="store",
         default="/data/extra/models/llama3.1_405B/llama405b_fp16.vmfb",
         help="Llama3.1 405b fp16 vmfb path, defaults to 30F CI system path",
+    )
+
+    parser.addoption(
+        "--baseline-perplexity-scores",
+        type=Path,
+        action="store",
+        default="sharktank/tests/evaluate/baseline_perplexity_scores.json",
+        help="Llama3.1 8B & 405B model baseline perplexity scores",
     )
 
     parser.addoption(
@@ -156,6 +204,21 @@ def pytest_addoption(parser):
         action="store",
         default="gfx942",
         help="Specify the iree-hip target version (e.g., gfx942)",
+    )
+
+    parser.addoption(
+        "--iree-hal-target-backends",
+        action="store",
+        default="rocm",
+        help="Specify the iree-hal target backend (e.g., rocm)",
+    )
+
+    parser.addoption(
+        "--tensor-parallelism-size",
+        action="store",
+        type=int,
+        default=1,
+        help="Number of devices for tensor parallel sharding",
     )
 
 
@@ -206,7 +269,21 @@ def iree_hip_target_type(request: FixtureRequest) -> Optional[str]:
 
 
 @pytest.fixture(scope="class")
-def get_model_path(request: FixtureRequest):
+def tensor_parallelism_size(request: FixtureRequest) -> Optional[str]:
+    return set_fixture_from_cli_option(
+        request, "tensor_parallelism_size", "tensor_parallelism_size"
+    )
+
+
+@pytest.fixture(scope="class")
+def baseline_perplexity_scores(request: FixtureRequest) -> Optional[str]:
+    return set_fixture_from_cli_option(
+        request, "baseline_perplexity_scores", "baseline_perplexity_scores"
+    )
+
+
+@pytest.fixture(scope="class")
+def get_model_artifacts(request: FixtureRequest):
     model_path = {}
     model_path["llama3_8b_tokenizer_path"] = set_fixture_from_cli_option(
         request, "--llama3-8b-tokenizer-path", "llama3_8b_tokenizer"
@@ -226,16 +303,18 @@ def get_model_path(request: FixtureRequest):
     model_path["llama3_405b_fp8_model_path"] = set_fixture_from_cli_option(
         request, "--llama3-405b-fp8-model-path", "llama3_405b_fp8_model"
     )
-    model_path["baseline_perplexity_scores"] = set_fixture_from_cli_option(
-        request, "--baseline-perplexity-scores", "baseline_perplexity_scores"
-    )
-    model_path["llama3_8b_f16_vmfb"] = set_fixture_from_cli_option(
-        request, "--llama3-8b-f16-vmfb-path", "llama3_8b_f16_vmfb"
-    )
-    model_path["llama3_405b_f16_vmfb"] = set_fixture_from_cli_option(
-        request, "--llama3-405b-f16-vmfb-path", "llama3_405b_f16_vmfb"
-    )
+    return model_path
+
+
+@pytest.fixture(scope="class")
+def get_iree_flags(request: FixtureRequest):
+    model_path = {}
     model_path["iree_device"] = set_fixture_from_cli_option(
         request, "--iree-device", "iree_device"
     )
-    return model_path
+    model_path["iree_hip_target"] = set_fixture_from_cli_option(
+        request, "--iree-hip-target", "iree_hip_target"
+    )
+    model_path["iree_hal_target_backends"] = set_fixture_from_cli_option(
+        request, "--iree-hal-target-backends", "iree_hal_target_backends"
+    )

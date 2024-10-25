@@ -13,7 +13,9 @@ from sharktank.evaluate import perplexity_torch
 longrun = pytest.mark.skipif("not config.getoption('longrun')")
 
 
-@pytest.mark.usefixtures("get_model_path")
+@pytest.mark.usefixtures(
+    "get_model_artifacts", "tensor_parallelism_size", "baseline_perplexity_scores"
+)
 class PerplexityTest(unittest.TestCase):
     def setUp(self):
         self.current_perplexity_all = {}
