@@ -14,7 +14,10 @@ longrun = pytest.mark.skipif("not config.getoption('longrun')")
 
 
 @pytest.mark.usefixtures(
-    "get_model_artifacts", "tensor_parallelism_size", "baseline_perplexity_scores"
+    "get_model_artifacts",
+    "get_iree_flags",
+    "tensor_parallelism_size",
+    "baseline_perplexity_scores",
 )
 class PerplexityTest(unittest.TestCase):
     def setUp(self):
@@ -34,10 +37,13 @@ class PerplexityTest(unittest.TestCase):
 
         current_perplexity = perplexity_vmfb.main(
             [
-                f"--vmfb-path={self.llama3_8b_f16_vmfb}",
                 f"--irpa-file={self.llama3_8b_f16_model}",
                 f"--tokenizer-config-json={self.llama3_8b_tokenizer}",
                 f"--iree-device={self.iree_device}",
+                f"--iree-hal-target-backends={self.iree_hal_target_backends}",
+                f"--iree-hip-target={self.iree_hip_target}",
+                f"--tensor-parallelism-size=1",
+                f"--attention-kernel=decomposed",
             ]
         )
 
@@ -66,10 +72,13 @@ class PerplexityTest(unittest.TestCase):
 
         current_perplexity = perplexity_vmfb.main(
             [
-                f"--vmfb-path={self.llama3_8b_f16_vmfb}",
                 f"--irpa-file={self.llama3_8b_f16_model}",
                 f"--tokenizer-config-json={self.llama3_8b_tokenizer}",
                 f"--iree-device={self.iree_device}",
+                f"--iree-hal-target-backends={self.iree_hal_target_backends}",
+                f"--iree-hip-target={self.iree_hip_target}",
+                f"--tensor-parallelism-size=1",
+                f"--attention-kernel=torch_sdpa",
             ]
         )
 
@@ -98,10 +107,13 @@ class PerplexityTest(unittest.TestCase):
 
         current_perplexity = perplexity_vmfb.main(
             [
-                f"--vmfb-path={self.llama3_8b_fp8_vmfb}",
                 f"--irpa-file={self.llama3_8b_fp8_model}",
                 f"--tokenizer-config-json={self.llama3_8b_tokenizer}",
                 f"--iree-device={self.iree_device}",
+                f"--iree-hal-target-backends={self.iree_hal_target_backends}",
+                f"--iree-hip-target={self.iree_hip_target}",
+                f"--tensor-parallelism-size=1",
+                f"--attention-kernel=decomposed",
             ]
         )
 
@@ -130,10 +142,13 @@ class PerplexityTest(unittest.TestCase):
 
         current_perplexity = perplexity_vmfb.main(
             [
-                f"--vmfb-path={self.llama3_8b_fp8_vmfb}",
                 f"--irpa-file={self.llama3_8b_fp8_model}",
                 f"--tokenizer-config-json={self.llama3_8b_tokenizer}",
                 f"--iree-device={self.iree_device}",
+                f"--iree-hal-target-backends={self.iree_hal_target_backends}",
+                f"--iree-hip-target={self.iree_hip_target}",
+                f"--tensor-parallelism-size=1",
+                f"--attention-kernel=torch_sdpa",
             ]
         )
 
@@ -159,11 +174,13 @@ class PerplexityTest(unittest.TestCase):
 
         current_perplexity = perplexity_vmfb.main(
             [
-                f"--vmfb-path={self.llama3_405b_f16_vmfb}",
                 f"--irpa-file={self.llama3_405b_f16_model}",
                 f"--tokenizer-config-json={self.llama3_405b_tokenizer}",
                 f"--iree-device={self.iree_device}",
+                f"--iree-hal-target-backends={self.iree_hal_target_backends}",
+                f"--iree-hip-target={self.iree_hip_target}",
                 f"--tensor-parallelism-size={self.tensor_parallelism_size}",
+                f"--attention-kernel=decomposed",
             ]
         )
 
@@ -192,11 +209,13 @@ class PerplexityTest(unittest.TestCase):
 
         current_perplexity = perplexity_vmfb.main(
             [
-                f"--vmfb-path={self.llama3_405b_f16_vmfb}",
                 f"--irpa-file={self.llama3_405b_f16_model}",
                 f"--tokenizer-config-json={self.llama3_405b_tokenizer}",
                 f"--iree-device={self.iree_device}",
+                f"--iree-hal-target-backends={self.iree_hal_target_backends}",
+                f"--iree-hip-target={self.iree_hip_target}",
                 f"--tensor-parallelism-size={self.tensor_parallelism_size}",
+                f"--attention-kernel=torch_sdpa",
             ]
         )
 
@@ -225,11 +244,13 @@ class PerplexityTest(unittest.TestCase):
 
         current_perplexity = perplexity_vmfb.main(
             [
-                f"--vmfb-path={self.llama3_405b_fp8_vmfb}",
                 f"--irpa-file={self.llama3_405b_fp8_model}",
                 f"--tokenizer-config-json={self.llama3_405b_tokenizer}",
                 f"--iree-device={self.iree_device}",
+                f"--iree-hal-target-backends={self.iree_hal_target_backends}",
+                f"--iree-hip-target={self.iree_hip_target}",
                 f"--tensor-parallelism-size={self.tensor_parallelism_size}",
+                f"--attention-kernel=decomposed",
             ]
         )
 
@@ -258,11 +279,13 @@ class PerplexityTest(unittest.TestCase):
 
         current_perplexity = perplexity_vmfb.main(
             [
-                f"--vmfb-path={self.llama3_405b_fp8_vmfb}",
                 f"--irpa-file={self.llama3_405b_fp8_model}",
                 f"--tokenizer-config-json={self.llama3_405b_tokenizer}",
                 f"--iree-device={self.iree_device}",
-                "--tensor-parallelism-size={self.tensor_parallelism_size}",
+                f"--iree-hal-target-backends={self.iree_hal_target_backends}",
+                f"--iree-hip-target={self.iree_hip_target}",
+                f"--tensor-parallelism-size={self.tensor_parallelism_size}",
+                f"--attention-kernel=torch_sdpa",
             ]
         )
 

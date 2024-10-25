@@ -32,6 +32,7 @@ from sharktank.utils import cli
 from sharktank.utils.vmfb_runner import *
 from sharktank.utils.load_llm import *
 from sharktank.utils.create_cache import *
+from sharktank.utils.export_artifacts import *
 
 log_levels = {
     "info": logging.INFO,
@@ -58,14 +59,24 @@ class Perplexity:
     """
 
     def __init__(
-        self, torch_device, iree_device, kv_cache_type, tensor_parallelism_size
+        self,
+        torch_device,
+        iree_device,
+        iree_hip_target,
+        iree_hal_target_backends,
+        kv_cache_type,
+        tensor_parallelism_size,
+        attention_kernel,
     ):
         self.torch_device = torch_device
         self.iree_device = iree_device
+        self.iree_hip_target = iree_hip_target
+        self.iree_hal_target_backends = iree_hal_target_backends
         self.kv_cache_type = kv_cache_type
         self.activation_dtype = torch.float32
         self.attention_dtype = torch.float32
         self.tensor_parallelism_size = tensor_parallelism_size
+        self.attention_kernel = attention_kernel
 
     def timeit(func):
         def wrapper(*args, **kwargs):
@@ -103,6 +114,19 @@ class Perplexity:
             logger.debug(f"{expected_token_id}")
 
     @timeit
+    def compile_model(self, weight_path_str):
+        export_artifacts = ExportArtifacts(
+            irpa_path=weight_path_str,
+            batch_size=self.bs,
+            iree_hip_target=self.iree_hip_target,
+            iree_hal_target_backends=self.iree_hal_target_backends,
+            attention_kernel=self.attention_kernel,
+            tensor_parallelism_size=self.tensor_parallelism_size,
+        )
+        vmfb_path = export_artifacts.get_artifacts()
+        return vmfb_path
+
+    @timeit
     def load_model(self, weight_path, tokenizer, vmfb_path, weight_path_str):
 
         config = LlamaModelConfig(
@@ -130,6 +154,7 @@ class Perplexity:
 
         self.generator = TorchGenerator(model, tokenizer)
 
+        self.weight_path_str = weight_path_str
         self.runner = vmfbRunner(
             device=self.iree_device,
             vmfb_path=vmfb_path,
@@ -151,9 +176,11 @@ class Perplexity:
             s.replace("\n", "").rstrip()
             for s in test_prompts
             if s != "" and len(s.split()) >= 20 and s.count("=") < 2
-        ]
+        ][0:4]
 
         logger.info(f" num_test_prompts: {len(test_prompts)}")
+
+        self.bs = len(test_prompts)
 
         return test_prompts
 
@@ -253,8 +280,6 @@ class Perplexity:
             (self.token_ids != 0).int().detach().clone().to(self.torch_device)
         )
 
-        self.bs = len(self.test_prompts)
-
         is_first_token = True
         start = 0
         for i in tqdm(
@@ -313,6 +338,7 @@ class Perplexity:
     def get_perplexity(self, test_prompts):
 
         self.test_prompts = test_prompts
+
         self.get_logits()
 
         self.out_logits = self.out_logits[..., :-1, :].contiguous()
@@ -331,25 +357,32 @@ class Perplexity:
 
 
 def run_perplexity(
-    vmfb_path,
     weight_path,
     weight_path_str,
     tokenizer,
     torch_device,
     iree_device,
+    iree_hip_target,
+    iree_hal_target_backends,
     kv_cache_type,
     tensor_parallelism_size,
+    attention_kernel,
 ):
     perplexity = Perplexity(
         torch_device=torch_device,
         iree_device=iree_device,
+        iree_hip_target=iree_hip_target,
+        iree_hal_target_backends=iree_hal_target_backends,
         kv_cache_type=kv_cache_type,
         tensor_parallelism_size=tensor_parallelism_size,
+        attention_kernel=attention_kernel,
     )
 
-    perplexity.load_model(weight_path, tokenizer, vmfb_path, weight_path_str)
     test_prompts = perplexity.get_prompts()
-    ppl = perplexity.get_perplexity(test_prompts=test_prompts)
+
+    vmfb_path = perplexity.compile_model(weight_path_str)
+    perplexity.load_model(weight_path, tokenizer, vmfb_path, weight_path_str)
+    ppl = perplexity.get_perplexity(test_prompts)
 
     return ppl
 
@@ -359,7 +392,24 @@ def main(argv):
     parser.add_argument("--kv-cache-type", default="paged", help="KV cache type")
     parser.add_argument("--torch-device", help="Torch device (or default)")
     parser.add_argument("--iree-device", help="List an IREE device, eg: 'hip://0'")
-    parser.add_argument("--vmfb-path", help="Path to vmfb file")
+    parser.add_argument(
+        "--iree-hip-target",
+        action="store",
+        default="gfx942",
+        help="Specify the iree-hip target version (e.g., gfx942)",
+    )
+    parser.add_argument(
+        "--iree-hal-target-backends",
+        action="store",
+        default="rocm",
+        help="Specify the iree-hal target backends (e.g., rocm)",
+    )
+    parser.add_argument(
+        "--attention-kernel",
+        type=str,
+        default="decomposed",
+        choices=["decomposed", "torch_sdpa"],
+    )
     parser.add_argument(
         "--tensor-parallelism-size",
         type=int,
@@ -376,19 +426,19 @@ def main(argv):
     kv_cache_type = args.kv_cache_type
     weight_path = cli.get_input_dataset(args)
     tokenizer = cli.get_tokenizer(args)
-
-    vmfb_path = args.vmfb_path
     weight_path_str = str(args.irpa_file)
 
     ppl = run_perplexity(
-        vmfb_path=vmfb_path,
         weight_path=weight_path,
         weight_path_str=weight_path_str,
         tokenizer=tokenizer,
         torch_device=torch_device,
         iree_device=iree_device,
+        iree_hip_target=args.iree_hip_target,
+        iree_hal_target_backends=args.iree_hal_target_backends,
         kv_cache_type=kv_cache_type,
         tensor_parallelism_size=args.tensor_parallelism_size,
+        attention_kernel=args.attention_kernel,
     )
 
     logger.info(f"\n{json.dumps(ppl, indent=2)}")
