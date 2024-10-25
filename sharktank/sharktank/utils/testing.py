@@ -11,6 +11,9 @@ import shutil
 import tempfile
 import unittest
 import torch
+from typing import Any, Callable
+from operator import eq
+from collections.abc import Iterable
 
 from ..types import *
 
@@ -99,6 +102,30 @@ def get_best_torch_device() -> str:
     return "cpu"
 
 
+def assert_dicts_equal(
+    dict1: dict, dict2: dict, *, values_equal: Callable[[Any, Any], bool] | None = None
+) -> None:
+    values_equal = values_equal or eq
+    assert len(dict1) == len(
+        dict2
+    ), f"Dictionaries not equal. {dict1} and {dict2} have different number of elements {len(dict1)} != {len(dict2)}"
+    for k, v1 in dict1.items():
+        assert (
+            k in dict2
+        ), f"Dictionaries {dict1} and {dict2} not equal. Key {k} not found in {dict2}"
+        v2 = dict2[k]
+        assert values_equal(
+            v1, dict2[k]
+        ), f"Dictionaries {dict1} and {dict2} not equal for key {k}. Values {v1} and {v2} not equal"
+
+
+def assert_equal(
+    a: Any, b: Any, *, equal: Callable[[Any, Any], bool] | None = None
+) -> None:
+    equal = equal or eq
+    assert equal(a, b), f"{a} and {b} are not equal"
+
+
 def assert_golden_safetensors(actual_path, ref_path):
     """Asserts that actual and reference safetensors files are within tolerances."""
     from safetensors import safe_open
@@ -133,3 +160,36 @@ def assert_golden_safetensors(actual_path, ref_path):
             actual = actual_f.get_tensor(name)
             ref = ref_f.get_tensor(name)
             torch.testing.assert_close(actual, ref, msg=name)
+
+
+def assert_iterables_equal(
+    iterable1: Iterable,
+    iterable2: Iterable,
+    *,
+    elements_equal: Callable[[Any, Any], bool] | None = None,
+) -> None:
+    elements_equal = elements_equal or eq
+    for i, (v1, v2) in enumerate(zip(iterable1, iterable2, strict=True)):
+        assert elements_equal(
+            v1, v2
+        ), f"Iterables not equal at index {i} for elements {v1} and {v2}"
+
+
+SHARKTANK_TEST_SKIP_ENV_VAR = "SHARKTANK_TEST_SKIP"
+
+
+def skip(*decorator_args, **decorator_kwargs):
+    """Decorator to skip a test when SHARKTANK_TEST_SKIP env var is not set or != 0"""
+
+    def decorator(test_item: Callable):
+        if SHARKTANK_TEST_SKIP_ENV_VAR not in os.environ:
+            should_skip = True
+        else:
+            should_skip = os.environ[SHARKTANK_TEST_SKIP_ENV_VAR] != "0"
+
+        if should_skip:
+            return unittest.skip(*decorator_args, **decorator_kwargs)(test_item)
+
+        return test_item
+
+    return decorator

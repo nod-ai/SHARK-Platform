@@ -62,10 +62,8 @@ class PlanarQuantizedTensorTest(unittest.TestCase):
 
 class ShardedTensorTest(unittest.TestCase):
     def testReplicatedTensorSaveLoad(self):
-        tensor = torch.rand([2, 3, 4], dtype=torch.float32)
-        replicated_tensor = ReplicatedTensor(
-            ts=tensor, shard_count=3, name="the_tensor"
-        )
+        tensor = [torch.rand([2, 3, 4], dtype=torch.float32)] * 3
+        replicated_tensor = ReplicatedTensor(ts=tensor, name="the_tensor")
         theta = Theta([replicated_tensor])
         dataset = Dataset({}, theta)
         with tempfile.TemporaryDirectory() as tmp_dir:

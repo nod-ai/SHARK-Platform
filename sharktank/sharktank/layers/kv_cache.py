@@ -190,22 +190,11 @@ class PagedKVCache(BaseKVCache):
         page_slab = state[0]
         if self.shard_count == 1:
             assert not isinstance(page_slab, SplitPrimitiveTensor)
-            return page_slab.reshape(
-                [
-                    -1,
-                ]
-                + self.sub_page_dims
-            )
+            return page_slab.unflatten(1, self.sub_page_dims)
         else:
             assert self.shard_count == page_slab.shard_count
             shards = [
-                shard.reshape(
-                    [
-                        -1,
-                    ]
-                    + self.sub_page_dims
-                )
-                for shard in page_slab.shards
+                shard.unflatten(1, self.sub_page_dims) for shard in page_slab.shards
             ]
             return SplitPrimitiveTensor(ts=shards, shard_dim=4)
 
