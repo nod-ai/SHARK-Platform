@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   test_perplexity:
-    timeout-minutes: 600
+    timeout-minutes: 1000
     name: "Evaluation Tests - perplexity"
     strategy:
       matrix:
@@ -59,4 +59,4 @@ jobs:
           pip install --no-compile -r requirements.txt -r sharktank/requirements-tests.txt -e sharktank/
 
       - name: Run perplexity test
-        run:  pytest sharktank/tests/evaluate/perplexity_test.py  --longrun
+        run:  pytest -n 4 -v -s sharktank/tests/evaluate/perplexity_test.py  --longrun

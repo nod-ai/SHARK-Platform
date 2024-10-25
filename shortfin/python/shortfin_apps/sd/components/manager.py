@@ -13,11 +13,29 @@ logger = logging.getLogger(__name__)
 
 
 class SystemManager:
-    def __init__(self, device="local-task"):
+    def __init__(self, device="local-task", device_ids=None):
         if any(x in device for x in ["local-task", "cpu"]):
             self.ls = sf.host.CPUSystemBuilder().create_system()
         elif any(x in device for x in ["hip", "amdgpu"]):
-            self.ls = sf.amdgpu.SystemBuilder().create_system()
+            sc_query = sf.amdgpu.SystemBuilder()
+            available = sc_query.available_devices
+            selected = []
+            if device_ids is not None:
+                if len(device_ids) >= len(available):
+                    raise ValueError(
+                        f"Requested more device ids ({device_ids}) than available ({available})."
+                    )
+                for did in device_ids:
+                    if did in available:
+                        selected.append(did)
+                    elif isinstance(did, int):
+                        selected.append(available[did])
+                    else:
+                        raise ValueError(f"Device id {did} could not be parsed.")
+            else:
+                selected = available
+            sb = sf.amdgpu.SystemBuilder(amdgpu_visible_devices=";".join(selected))
+            self.ls = sb.create_system()
         logger.info(f"Created local system with {self.ls.device_names} devices")
         # TODO: Come up with an easier bootstrap thing than manually
         # running a thread.
