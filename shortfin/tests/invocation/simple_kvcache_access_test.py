@@ -334,7 +334,6 @@ def test_kvcache_noreturn(lsys, fiber, kvcache_compiled_cpu_path, await_before_i
         import numpy as np
     except ImportError:
         raise pytest.skip("numpy not available")
-    return np
     device = fiber.device(0)
     program_module = lsys.load_module(kvcache_compiled_cpu_path)
     program = sf.Program([program_module], fiber=fiber)
