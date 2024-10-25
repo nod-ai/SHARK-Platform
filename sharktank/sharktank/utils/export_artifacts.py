@@ -75,11 +75,13 @@ class ExportArtifacts:
 
         cwd = self.sharktank_dir + "/sharktank"
 
-        logger.info(f"Exporting mlir:\n" f"cd {cwd} && {cmd}")
+        logger.debug(f"Exporting mlir:\n" f"cd {cwd} && {cmd}")
         proc = subprocess.run(cmd, shell=True, capture_output=True, cwd=cwd)
         return_code = proc.returncode
         if return_code != 0:
             logger.error("Error exporting mlir: ", return_code)
+        else:
+            logger.info(f"Exported to mlir successfully: {mlir_path}!")
 
     def compile_to_vmfb(
         self,
@@ -88,12 +90,17 @@ class ExportArtifacts:
     ):
         compile_flags = ["--iree-hip-target=" + self.iree_hip_target]
 
-        ireec.compile_file(
-            input_file=mlir_path,
-            target_backends=[self.iree_hal_target_backends],
-            extra_args=compile_flags,
-            output_file=vmfb_path,
-        )
+        try:
+            ireec.compile_file(
+                input_file=mlir_path,
+                target_backends=[self.iree_hal_target_backends],
+                extra_args=compile_flags,
+                output_file=vmfb_path,
+            )
+        except Exception as error:
+            logger.error("Error running iree-compile: ", error)
+
+        logger.info(f"Compiled to vmfb successfully: {vmfb_path}")
 
     def create_file(self, suffix, prefix):
         file_path = Path(prefix).with_suffix(suffix)
