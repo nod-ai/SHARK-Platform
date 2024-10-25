@@ -18,9 +18,9 @@ logger = logging.getLogger("eval")
 
 logger.setLevel(logging.INFO)
 
-# logger.root.handlers[0].setFormatter(
-#     logging.Formatter(fmt="\n%(levelname)s:%(name)-8s %(message)s")
-# )
+logger.root.handlers[0].setFormatter(
+    logging.Formatter(fmt="\n%(levelname)s:%(name)-8s %(message)s")
+)
 
 pytestmark = pytest.mark.usefixtures(
     "get_model_artifacts", "get_iree_flags", "tensor_parallelism_size"
@@ -123,9 +123,6 @@ class ExportArtifacts(unittest.TestCase):
             )
             vmfb_path = str(
                 self.create_file(suffix=".vmfb", prefix=self.dir_path + model_name)
-            )
-            logger.info(
-                f"*************************iree-compile: *************************\n {model_path}, {attention_kernel}, {self.dir_path}, {mlir_path}, {vmfb_path}, {self.iree_hal_target_backends}, {self.iree_hip_target}"
             )
 
             if attention_kernel == "decomposed":
