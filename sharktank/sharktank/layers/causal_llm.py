@@ -89,7 +89,7 @@ class BaseCausalLMModel(ThetaLayer):
         masked.
         """
         range_vector = torch.arange(0, batch_seqlen, 1, device=self.device)
-        matrix = torch.unsqueeze(seq_lens, dim=-1)
+        matrix = seq_lens.unsqueeze(dim=-1)
         mask = range_vector >= matrix
         return mask
 

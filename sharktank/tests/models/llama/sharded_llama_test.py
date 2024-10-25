@@ -9,11 +9,9 @@ import pytest
 from typing import Any, List, Tuple, OrderedDict
 from sharktank.models.llama.llama import LlamaModelConfig, PagedLlamaModelV1
 import sharktank.ops as ops
-from sharktank.types import (
-    unbox_tensor,
-    Dataset,
-)
+from sharktank.types import unbox_tensor, Dataset, UnreducedTensor, SplitPrimitiveTensor
 from sharktank.models.llama.testing import make_random_llama_theta
+from sharktank.utils.testing import skip
 from sharktank.models.llama.sharding import shard_theta
 from sharktank.layers.configs import LlamaHParams
 from sharktank.utils.math import round_up_to_multiple_of
@@ -24,7 +22,9 @@ from sharktank.utils.iree import (
     run_iree_module_function,
     prepare_iree_module_function_args,
     call_torch_module_function,
+    iree_to_torch,
 )
+from sharktank.export import export as sharktank_export
 import tempfile
 import torch
 from copy import deepcopy
@@ -32,10 +32,6 @@ from iree.turbine.aot import FxProgramsBuilder, export
 import iree.runtime
 import numpy as np
 import os
-
-
-def iree_to_torch(*tensors: iree.runtime.DeviceArray) -> List[torch.Tensor]:
-    return [torch.tensor(tensor.to_host()) for tensor in tensors]
 
 
 @pytest.mark.usefixtures("caching", "path_prefix")
@@ -112,19 +108,28 @@ class ShardedLlamaTest(unittest.TestCase):
     def make_equal_unsharded_and_sharded_prefill_args(
         self, model: PagedLlamaModelV1, sharded_model: PagedLlamaModelV1
     ) -> Tuple[OrderedDict[str, Any], OrderedDict[str, Any]]:
-        prefill_args = self.make_prefill_args(model)
+        prefill_kwargs = self.make_prefill_args(model)
         sharded_cache_state = sharded_model.cache.paged.allocate(
             page_count=self.cache_page_count
         )
         assert iterables_equal(
-            prefill_args["cache_state"][0].shape, sharded_cache_state[0].shape
+            prefill_kwargs["cache_state"][0].shape, sharded_cache_state[0].shape
         )
-        sharded_prefill_args = deepcopy(prefill_args)
+        sharded_prefill_kwargs = deepcopy(prefill_kwargs)
         sharded_cache_state = sharded_model.cache.paged.shard_state(
-            sharded_prefill_args["cache_state"]
+            sharded_prefill_kwargs["cache_state"]
         )
-        sharded_prefill_args["cache_state"] = sharded_cache_state
-        return prefill_args, sharded_prefill_args
+        sharded_prefill_kwargs["cache_state"] = sharded_cache_state
+
+        sharding = sharded_model.config.tensor_parallelism_size
+        for k in sharded_prefill_kwargs:
+            if k == "cache_state":
+                continue
+            sharded_prefill_kwargs[k] = ops.replicate(
+                sharded_prefill_kwargs[k], count=sharding
+            )
+
+        return prefill_kwargs, sharded_prefill_kwargs
 
     def make_decode_args(self, model: PagedLlamaModelV1) -> OrderedDict[str, Any]:
         start_positions = self.prefill_seq_lens.clone()
@@ -159,12 +164,21 @@ class ShardedLlamaTest(unittest.TestCase):
     def make_equal_unsharded_and_sharded_decode_args(
         self, model: PagedLlamaModelV1, sharded_model: PagedLlamaModelV1
     ) -> Tuple[OrderedDict[str, Any], OrderedDict[str, Any]]:
-        decode_args = self.make_decode_args(model)
-        sharded_decode_args = deepcopy(decode_args)
-        sharded_decode_args["cache_state"] = sharded_model.cache.paged.shard_state(
-            sharded_decode_args["cache_state"]
+        decode_kwargs = self.make_decode_args(model)
+        sharded_decode_kwargs = deepcopy(decode_kwargs)
+        sharded_decode_kwargs["cache_state"] = sharded_model.cache.paged.shard_state(
+            sharded_decode_kwargs["cache_state"]
         )
-        return decode_args, sharded_decode_args
+
+        sharding = sharded_model.config.tensor_parallelism_size
+        for k in sharded_decode_kwargs:
+            if k == "cache_state":
+                continue
+            sharded_decode_kwargs[k] = ops.replicate(
+                sharded_decode_kwargs[k], count=sharding
+            )
+
+        return decode_kwargs, sharded_decode_kwargs
 
     def testCompareToySizedModelToUnsharded(self):
         """Run a sharded variant of a toy model size and compare it against the
@@ -175,21 +189,22 @@ class ShardedLlamaTest(unittest.TestCase):
 
         # Verify prefill step.
         (
-            prefill_args,
-            sharded_prefill_args,
+            prefill_kwargs,
+            sharded_prefill_kwargs,
         ) = self.make_equal_unsharded_and_sharded_prefill_args(model, sharded_model)
 
-        expected_prefill_result = model.prefill(**prefill_args)
-        sharded_prefill_result = sharded_model.prefill(**sharded_prefill_args)
+        expected_prefill_result = model.prefill(**prefill_kwargs)
+        sharded_prefill_result = sharded_model.prefill(**sharded_prefill_kwargs)
+        sharded_prefill_result = ops.unshard(sharded_prefill_result)
         # The errors are quite high, but for float64 both errors drop to < 1e-12.
         # The numerics are probably correct.
         torch.testing.assert_close(
             sharded_prefill_result, expected_prefill_result, atol=1e-3, rtol=1e-2
         )
-        expected_cache_state = prefill_args["cache_state"][0]
+        expected_cache_state = prefill_kwargs["cache_state"][0]
         actual_cache_state = ops.unshard(
             sharded_model.cache.paged.unflatten_page_table(
-                sharded_prefill_args["cache_state"]
+                sharded_prefill_kwargs["cache_state"]
             )
         ).flatten(start_dim=1)
         torch.testing.assert_close(
@@ -198,18 +213,19 @@ class ShardedLlamaTest(unittest.TestCase):
 
         # Verify decode step.
         (
-            decode_args,
-            sharded_decode_args,
+            decode_kwargs,
+            sharded_decode_kwargs,
         ) = self.make_equal_unsharded_and_sharded_decode_args(model, sharded_model)
-        expected_decode_result = model.decode(**decode_args)
-        sharded_decode_result = sharded_model.decode(**sharded_decode_args)
+        expected_decode_result = model.decode(**decode_kwargs)
+        sharded_decode_result = sharded_model.decode(**sharded_decode_kwargs)
+        sharded_decode_result = ops.unshard(sharded_decode_result)
         torch.testing.assert_close(
             sharded_decode_result, expected_decode_result, atol=1e-4, rtol=1e-5
         )
-        expected_decode_cache_state = decode_args["cache_state"][0]
+        expected_decode_cache_state = decode_kwargs["cache_state"][0]
         actual_decode_cache_state = ops.unshard(
             sharded_model.cache.paged.unflatten_page_table(
-                sharded_decode_args["cache_state"]
+                sharded_decode_kwargs["cache_state"]
             )
         ).flatten(start_dim=1)
         # TODO: investigate why the Windows machine CI is producing a larger numerical
@@ -219,7 +235,7 @@ class ShardedLlamaTest(unittest.TestCase):
             actual_decode_cache_state, expected_decode_cache_state, atol=1e-4, rtol=1e-4
         )
 
-    @unittest.skip(
+    @skip(
         (
             "Before this does not crash at all we need "
             "https://github.com/iree-org/iree/pull/18663 merged."
@@ -256,11 +272,11 @@ class ShardedLlamaTest(unittest.TestCase):
         )
         (
             _,
-            sharded_prefill_args,
+            sharded_prefill_kwargs,
         ) = self.make_equal_unsharded_and_sharded_prefill_args(model, sharded_model)
         (
             _,
-            sharded_decode_args,
+            sharded_decode_kwargs,
         ) = self.make_equal_unsharded_and_sharded_decode_args(model, sharded_model)
 
         iree_module_path = f"{path_prefix}program.vmfb"
@@ -268,8 +284,11 @@ class ShardedLlamaTest(unittest.TestCase):
             # Export and compile the IREE module.
             sharded_fxb = FxProgramsBuilder(sharded_model)
 
-            @sharded_fxb.export_program(
-                name="prefill", args=tuple(), kwargs=sharded_prefill_args
+            @sharktank_export(
+                fx_builder=sharded_fxb,
+                name="prefill",
+                kwargs=sharded_prefill_kwargs,
+                strict=False,
             )
             def _(model, *args, **kwargs) -> torch.Tensor:
                 return model.prefill(*args, **kwargs)
@@ -277,10 +296,10 @@ class ShardedLlamaTest(unittest.TestCase):
             # TODO: remove strict=False when
             # https://github.com/pytorch/pytorch/issues/136757
             # is resolved.
-            @sharded_fxb.export_program(
+            @sharktank_export(
+                fx_builder=sharded_fxb,
                 name="decode",
-                args=tuple(),
-                kwargs=sharded_decode_args,
+                kwargs=sharded_decode_kwargs,
                 strict=False,
             )
             def _(model, *args, **kwargs) -> torch.Tensor:
@@ -312,7 +331,7 @@ class ShardedLlamaTest(unittest.TestCase):
 
         # Run prefill step.
         prefill_iree_args = prepare_iree_module_function_args(
-            args=deepcopy(sharded_prefill_args).values(), devices=iree_devices
+            args=deepcopy(sharded_prefill_kwargs).values(), devices=iree_devices
         )
         for i, arg in enumerate(prefill_iree_args):
             np.save(f"{path_prefix}prefill_arg{i}.npy", arg.to_host())
@@ -324,24 +343,24 @@ class ShardedLlamaTest(unittest.TestCase):
             driver=iree_driver,
             trace_path_prefix=path_prefix if dump_enabled else None,
         )
-        prefill_iree_result = iree_to_torch(*prefill_iree_result)
-        assert len(prefill_iree_result) == 1
+        prefill_iree_result = UnreducedTensor(ts=iree_to_torch(*prefill_iree_result))
         expected_prefill_result = call_torch_module_function(
             module=sharded_model,
             function_name="prefill",
-            kwargs=sharded_prefill_args,
+            kwargs=sharded_prefill_kwargs,
             trace_path_prefix=f"{path_prefix}expected_" if dump_enabled else None,
         )
         prefill_iree_cache_state_shards = prefill_iree_args[
             -self.config.tensor_parallelism_size - 1 :
         ]
-        prefill_iree_cache_state_shards = iree_to_torch(
-            *prefill_iree_cache_state_shards
+        prefill_iree_cache_state = SplitPrimitiveTensor(
+            ts=iree_to_torch(*prefill_iree_cache_state_shards),
+            shard_dim=sharded_prefill_kwargs["cache_state"][0].shard_dim,
         )
 
         # Run decode step.
         decode_iree_args = prepare_iree_module_function_args(
-            args=deepcopy(sharded_decode_args).values(), devices=iree_devices
+            args=deepcopy(sharded_decode_kwargs).values(), devices=iree_devices
         )
         decode_iree_result = run_iree_module_function(
             args=decode_iree_args,
@@ -351,40 +370,37 @@ class ShardedLlamaTest(unittest.TestCase):
             driver=iree_driver,
             trace_path_prefix=path_prefix if dump_enabled else None,
         )
-        decode_iree_result = iree_to_torch(*decode_iree_result)
+        decode_iree_result = UnreducedTensor(ts=iree_to_torch(*decode_iree_result))
         expected_decode_result = call_torch_module_function(
             module=sharded_model,
             function_name="decode",
-            kwargs=sharded_decode_args,
+            kwargs=sharded_decode_kwargs,
             trace_path_prefix=f"{path_prefix}expected_" if dump_enabled else None,
         )
         decode_iree_cache_state_shards = decode_iree_args[
             -self.config.tensor_parallelism_size - 1 :
         ]
-        decode_iree_cache_state_shards = iree_to_torch(*decode_iree_cache_state_shards)
+        decode_iree_cache_state = SplitPrimitiveTensor(
+            ts=iree_to_torch(*decode_iree_cache_state_shards),
+            shard_dim=sharded_decode_kwargs["cache_state"][0].shard_dim,
+        )
 
         # Check IREE's numerical correctness against PyTorch.
         # TODO: Although, not entirely wrong, investigate why this accuracy is that
         # low for fp32 (atol=0.0011, rtol=0.013).
         torch.testing.assert_close(
-            prefill_iree_result[0],
-            expected_prefill_result,
+            ops.unshard(prefill_iree_result),
+            ops.unshard(expected_prefill_result),
         )
-        for actual_cache_state_shard, expected_cache_state_shard in zip(
-            prefill_iree_cache_state_shards,
-            sharded_prefill_args["cache_state"][0].shards,
-        ):
-            # TODO: debug inaccuracy.
-            torch.testing.assert_close(
-                actual_cache_state_shard, unbox_tensor(expected_cache_state_shard)
-            )
-        # TODO: debug inaccuracy.
-        torch.testing.assert_close(decode_iree_result[0], expected_decode_result)
-        for actual_cache_state_shard, expected_cache_state_shard in zip(
-            decode_iree_cache_state_shards,
-            sharded_decode_args["cache_state"][0].shards,
-        ):
-            # TODO: debug inaccuracy.
-            torch.testing.assert_close(
-                actual_cache_state_shard, unbox_tensor(expected_cache_state_shard)
-            )
+        torch.testing.assert_close(
+            ops.unshard(prefill_iree_cache_state),
+            ops.unshard(sharded_prefill_kwargs["cache_state"][0]),
+        )
+        torch.testing.assert_close(
+            ops.unshard(decode_iree_result),
+            ops.unshard(expected_decode_result),
+        )
+        torch.testing.assert_close(
+            ops.unshard(decode_iree_cache_state),
+            ops.unshard(sharded_decode_kwargs["cache_state"][0]),
+        )

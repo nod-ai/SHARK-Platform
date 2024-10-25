@@ -405,7 +405,7 @@ def rms_norm_default(x, weight, *, epsilon: float) -> Tensor:
     variance = x.pow(2).mean(-1, keepdim=True)
     output = x * elementwise(torch.rsqrt, variance + epsilon)
     # The cast here is to match the hf implementation, affects numerics
-    output = weight * to(output, weight.dtype)
+    output = elementwise(torch.mul, weight, to(output, weight.dtype))
     return output
 
 

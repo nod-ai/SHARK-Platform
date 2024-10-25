@@ -29,6 +29,7 @@ from torch.utils._pytree import register_pytree_node, SequenceKey
 import torch.utils._pytree
 from ..utils.math import ceildiv
 from iree.turbine.aot import (
+    DeviceTensorTrait,
     ExternalTensorTrait,
 )
 from ..utils import tree as tree_utils
@@ -759,16 +760,16 @@ class ShardedTensorBase(ShardedTensor):
         name: str = UnnamedTensorName,
         shape: Optional[list[int]],
     ):
-        from ..ops import transfer_to_logical_device
-
         assert len(ts) > 0
         assert shard_dim is None or (shard_dim >= 0 and len(ts[0].shape) > shard_dim)
         super().__init__(name=name, shape=shape, shard_dim=shard_dim)
         self._shards: tuple[DefaultPrimitiveTensor] = tuple(
             DefaultPrimitiveTensor(
                 name=f"{name}.shard.{i}",
-                data=transfer_to_logical_device(t, i),
+                data=t,
             )
+            if isinstance(t, torch.Tensor)
+            else t
             for i, t in enumerate(ts)
         )
 
@@ -838,6 +839,8 @@ class ShardedTensorBase(ShardedTensor):
             try:
                 t = raw_tensors[t_name]
                 ts.append(t)
+                # TODO: this should be changed to tracked device affinity
+                DeviceTensorTrait(i).set(t)
             except KeyError as e:
                 raise IOError(
                     f"Missing component tensor '{t_name}' in {raw_tensors.keys()}"
@@ -939,8 +942,11 @@ class SplitPrimitiveTensor(ShardedTensorBase):
         number of pieces.
         """
         if isinstance(ts, torch.Tensor):
+            from ..ops import transfer_to_logical_device
+
             assert shard_count is not None
             ts = ts.split(ceildiv(ts.shape[shard_dim], shard_count), dim=shard_dim)
+            ts = [transfer_to_logical_device(t, i) for i, t in enumerate(ts)]
             assert len(ts) == shard_count
             shard_count = None
 
@@ -1059,12 +1065,11 @@ class ReplicatedTensor(ShardedTensor):
         If `ts` is a tensor then `shard_count` must be provided and it,
         will be replicated that many times.
         """
-
-        from ..ops import transfer_to_logical_device
-
         if isinstance(ts, torch.Tensor):
             assert shard_count is not None
-            ts = [ts] * shard_count
+            from ..ops import transfer_to_logical_device
+
+            ts = [transfer_to_logical_device(ts, i) for i in range(shard_count)]
             shard_count = None
 
         assert shard_count is None
@@ -1079,8 +1084,10 @@ class ReplicatedTensor(ShardedTensor):
         self._shards: tuple[DefaultPrimitiveTensor] = tuple(
             DefaultPrimitiveTensor(
                 name=f"{name}.shard.{i}",
-                data=transfer_to_logical_device(t, i),
+                data=t,
             )
+            if isinstance(t, torch.Tensor)
+            else t
             for i, t in enumerate(ts)
         )
 
@@ -1131,10 +1138,20 @@ class ReplicatedTensor(ShardedTensor):
     ) -> "InferenceTensor":
         shard_count = int(extra_properties["shard_count"])
         try:
-            ts = raw_tensors[""]
+            # We have to do this to avoid exporting as part of the `mlir` blob:
+            t = raw_tensors[""]
+            ts = [raw_tensors[""]]
+            for i in range(1, shard_count):
+                nt = deepcopy(t)
+                ts.append(nt)
+
+            # TODO This should be changed to assigned affinities
+            for i in range(shard_count):
+                DeviceTensorTrait(i).set(ts[i])
+
         except KeyError as e:
             raise IOError(f"Missing component tensor '' in {raw_tensors.keys()}") from e
-        return cls(name=name, ts=ts, shard_count=shard_count)
+        return cls(name=name, ts=ts)
 
     def __getitem__(self, key):
         if isinstance(key, ReplicatedTensor):
@@ -1189,6 +1206,7 @@ class UnreducedTensor(ShardedTensorBase):
 def flatten_tensor_tree(
     tree: tree_utils.Tree,
 ) -> Iterable[torch.Tensor | InferenceTensor]:
+    """Flatten up to our tensor types."""
     return tree_utils.flatten(
         tree,
         is_leaf=lambda x: isinstance(
@@ -1361,6 +1379,31 @@ register_pytree_node(
     flatten_fn=flatten_replicated_tensor,
     unflatten_fn=unflatten_replicated_tensor,
     flatten_with_keys_fn=flatten_with_keys_replicated_tensor,
+)
+
+
+def flatten_unreduced_tensor(
+    t: UnreducedTensor,
+) -> Tuple[List[Any], torch.utils._pytree.Context]:
+    return list(t.shards), {"name": t.name}
+
+
+def unflatten_unreduced_tensor(
+    values: Iterable[Any], ctx: torch.utils._pytree.Context
+) -> UnreducedTensor:
+    return UnreducedTensor(ts=list(values), name=ctx["name"])
+
+
+def flatten_with_keys_unreduced_tensor(t: UnreducedTensor):
+    values, context = flatten_unreduced_tensor(t)
+    return [(SequenceKey(i), v) for i, v in enumerate(values)], context
+
+
+register_pytree_node(
+    UnreducedTensor,
+    flatten_fn=flatten_unreduced_tensor,
+    unflatten_fn=unflatten_unreduced_tensor,
+    flatten_with_keys_fn=flatten_with_keys_unreduced_tensor,
 )
 
 

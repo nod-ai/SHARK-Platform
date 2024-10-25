@@ -39,7 +39,13 @@ def all_gather_split(
     # If we don't move first, common sub-expression elimination is free to collapse all
     # concatenations into one and then copy to all devices, which is not what we want.
     shards = [
-        cat([transfer_to_logical_device(shard, i) for shard in input.shards], dim=dim)
+        cat(
+            [
+                transfer_to_logical_device(shard, i)
+                for j, shard in enumerate(input.shards)
+            ],
+            dim=dim,
+        )
         for i in range(input.shard_count)
     ]
     return ReplicatedTensor(ts=shards)
@@ -54,7 +60,11 @@ def all_reduce_split_or_unreduced(
     # reductions into one and then copy to all devices, which is not what we want.
     shards = [
         elementwise(
-            torch.add, *[transfer_to_logical_device(shard, i) for shard in input.shards]
+            torch.add,
+            *[
+                transfer_to_logical_device(shard, i)
+                for j, shard in enumerate(input.shards)
+            ],
         )
         for i in range(input.shard_count)
     ]
@@ -91,6 +101,7 @@ def cat_split(
         return SplitPrimitiveTensor(ts=shards, shard_dim=shard_dim)
     else:
         # TODO: implement efficient cat along split dim.
+        # This would probably result in doing the concatenation on one device.
         concatenated_unsharded = cat(
             [shard for t in tensors for shard in t.shards], dim
         )
@@ -754,7 +765,7 @@ def matmul_split(
     # The reduction dimension is split on both tensors.
     if lhs_reduction_dim == lhs.shard_dim and rhs_reduction_dim == rhs.shard_dim:
         partials = [
-            matmul(partial_lhs, partial_rhs, transpose_rhs=transpose_rhs)
+            matmul(partial_lhs, partial_rhs)
             for partial_lhs, partial_rhs in zip(lhs.shards, rhs.shards)
         ]
         return UnreducedTensor(ts=partials)
@@ -781,8 +792,11 @@ def matmul_split(
     if lhs.shard_dim <= lhs_parallel_dim and rhs_parallel_dim == rhs.shard_dim:
         # We gather along the rhs shard dim.
         # It is more natural to preserve the sharding axis of the input.
-        shards = [sharded_cat(matmul(lhs_shard, rhs)) for lhs_shard in lhs.shards]
-        return SplitPrimitiveTensor(ts=shards, shard_dim=lhs.shard_dim)
+        # TODO: This assumes non-peered memory. We prepare the operands to be
+        # available on the required devices.
+        # We need to distinguish based on some config.
+        replicated_rhs = replicate(rhs, count=lhs.shard_count)
+        return matmul(lhs, replicated_rhs)
 
     assert False, "Sharding configuration not supported"
 
@@ -795,10 +809,7 @@ def mean_replicated(
     *,
     dtype: torch.dtype,
 ) -> None:
-    shards = [
-        torch.mean(unbox_tensor(shard), dim=dim, keepdim=keepdim, dtype=dtype)
-        for shard in x.shards
-    ]
+    shards = [mean(shard, dim=dim, keepdim=keepdim, dtype=dtype) for shard in x.shards]
     return ReplicatedTensor(ts=shards)
 
 
@@ -837,6 +848,13 @@ def replicate_replicated(input: ReplicatedTensor, *, count: int) -> ReplicatedTe
     return input
 
 
+@replicate.override(SplitPrimitiveTensor)
+def replicate_split(input: SplitPrimitiveTensor, *, count: int) -> ReplicatedTensor:
+    if input.shard_count != count:
+        raise ValueError(f"Number of shards not equal ({input.shard_count} != {count})")
+    return all_gather(input)
+
+
 @replicate.override(UnreducedTensor)
 def replicate_unreduced(input: UnreducedTensor, *, count: int) -> ReplicatedTensor:
     if input.shard_count != count:
@@ -847,7 +865,9 @@ def replicate_unreduced(input: UnreducedTensor, *, count: int) -> ReplicatedTens
 @replicate.override(Tensor)
 def replicate_unsharded(input, *, count: int) -> ReplicatedTensor:
     torch_input = unbox_tensor(input)
-    return ReplicatedTensor(ts=torch_input, shard_count=count)
+    # If we have a torch input replicating we can assume we need to transfer:
+    torch_inputs = [transfer_to_logical_device(torch_input, i) for i in range(count)]
+    return ReplicatedTensor(ts=torch_inputs)
 
 
 @reshape.override(SplitPrimitiveTensor)
@@ -1024,9 +1044,12 @@ def reshard_like_unreduced_to_replicated(
 
 
 @sharded_cat.override(SplitPrimitiveTensor)
-def sharded_cat_unsharded(maybe_sharded: SplitPrimitiveTensor):
-    shard_ts = [t.as_torch() for t in maybe_sharded.shards]
-    return torch.cat(shard_ts, dim=maybe_sharded.shard_dim)
+def sharded_cat_unsharded(tensor: SplitPrimitiveTensor):
+    shard_ts = [
+        transfer_to_logical_device(shard.as_torch(), 0) if i != 0 else shard.as_torch()
+        for i, shard in enumerate(tensor.shards)
+    ]
+    return torch.cat(shard_ts, dim=tensor.shard_dim)
 
 
 # Sharded sum.
@@ -1113,7 +1136,9 @@ def unshard_split(input: SplitPrimitiveTensor) -> Tensor:
 
 @unshard.override(UnreducedTensor)
 def unshard_unreduced(input: UnreducedTensor) -> Tensor:
-    return elementwise(torch.add, *input.shards)
+    shards = input.shards
+    shards = [transfer_to_logical_device(shard, 0) for i, shard in enumerate(shards)]
+    return elementwise(torch.add, *shards)
 
 
 @unshard.override(Tensor)

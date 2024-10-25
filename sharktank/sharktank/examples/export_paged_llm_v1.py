@@ -19,6 +19,7 @@ from ..models.llama.llama import LlamaModelConfig, PagedLlamaModelV1
 from ..models.llama.sharding import shard_theta
 from ..models.mixtral.mixtral import *
 from ..models.grok.grok import *
+from .. import ops
 
 
 def main():
@@ -34,7 +35,7 @@ def main():
     parser.add_argument(
         "--output-config",
         help="Output file path for exported config file",
-        default="tmp/batch_llama_v1.json",
+        default="/tmp/batch_llama_v1.json",
     )
     parser.add_argument(
         "--bs",
@@ -77,6 +78,12 @@ def main():
     llama_config.use_hf = False
     llama_config.static_tables = False  # Rely on the compiler for hoisting tables.
     llama_config.kv_cache_type = "direct" if args.bs == [1] else "paged"
+    llama_config.attention_kernel = args.attention_kernel
+
+    # This is a bit gross and should be changed in the future. Best Idea I had so far.
+    attn_q_weight = dataset.root_theta.tensor("blk")["0"]["attn_q"]["weight"]
+    if isinstance(attn_q_weight, SplitPrimitiveTensor):
+        llama_config.tensor_parallelism_size = attn_q_weight.shard_count
 
     if llama_config.hp.expert_count:
         if llama_config.hp.model_arch == "grok":
@@ -108,6 +115,44 @@ def main():
 
     fxb = FxProgramsBuilder(model)
 
+    def setup_cache(model, shard_count):
+        if model.config.kv_cache_type == "paged":
+            cache_state = model.cache.allocate(
+                page_count=hp.context_length // llama_config.block_seq_stride
+            )
+            page_dim = torch.export.Dim("page")
+            dynamic_shapes = [{0: page_dim}]
+        elif model.config.kv_cache_type == "direct":
+            cache_state = model.cache.allocate(bs=1)
+            # Direct cache dimensions:
+            #   2 * transformer_block_count of...
+            #   [bs, seq_length, attn_head_count, attn_head_dim]
+            dynamic_shapes = (2 * hp.block_count) * [{}]
+        else:
+            raise NotImplementedError(f"Unsupported KV cache type: {type(model.cache)}")
+
+        unpacked = cache_state
+        dynamic_shapes = dynamic_shapes
+        arg_affinities = {}
+        shard_dim = None
+
+        # Need to unpacke that state when sharded
+        if llama_config.tensor_parallelism_size > 1:
+            shard_dim = cache_state[0].shard_dim
+
+            unpacked = [[shard._data for shard in cs.shards] for cs in cache_state]
+            dynamic_shapes = [
+                [ds] * llama_config.tensor_parallelism_size for ds in dynamic_shapes
+            ]
+
+            for i in range(llama_config.tensor_parallelism_size):
+                arg_affinities[i] = DeviceAffinity(str(i))
+
+        return unpacked, shard_dim, dynamic_shapes, arg_affinities
+
+    def repack_cache(cache, shard_dim):
+        return [SplitPrimitiveTensor(ts=c, shard_dim=shard_dim) for c in cache]
+
     def generate_batch_prefill(bs: int):
         tokens = torch.empty(bs, 64, dtype=torch.int64)
         seq_lens = torch.empty(bs, dtype=torch.int64)
@@ -117,46 +162,58 @@ def main():
         )
         sl_dim = llama_config.block_seq_stride * block_dim
 
-        if model.config.kv_cache_type == "paged":
-            cache_state = model.cache.allocate(
-                page_count=hp.context_length // llama_config.block_seq_stride
-            )
-            page_dim = torch.export.Dim("page")
-            cache_state_dynamic_shapes = [{0: page_dim}]
-        elif model.config.kv_cache_type == "direct":
-            cache_state = model.cache.allocate(bs=1)
-            # Direct cache dimensions:
-            #   2 * transformer_block_count of...
-            #   [bs, seq_length, attn_head_count, attn_head_dim]
-            cache_state_dynamic_shapes = (2 * hp.block_count) * [{}]
-        else:
-            raise NotImplementedError(f"Unsupported KV cache type: {type(model.cache)}")
+        cache, cache_shard_dim, cache_dynamic_shapes, arg_affinities = setup_cache(
+            model, llama_config.tensor_parallelism_size
+        )
+
+        # We need to offset the indices for the cache
+        arg_affinities = {key + 3: arg_affinities[key] for key in arg_affinities}
+
+        for i in range(3):
+            arg_affinities[i] = DeviceAffinity("0")
 
         dynamic_shapes = {
             "tokens": {1: sl_dim},
             "seq_lens": {},
             "seq_block_ids": {1: block_dim},
-            "cache_state": cache_state_dynamic_shapes,
+            "cs": cache_dynamic_shapes,
         }
 
         print(f"Exporting prefill_bs{bs}")
 
         @fxb.export_program(
             name=f"prefill_bs{bs}",
-            args=(tokens, seq_lens, seq_block_ids, cache_state),
+            args=(tokens, seq_lens, seq_block_ids, cache),
             dynamic_shapes=dynamic_shapes,
             strict=args.strict,
+            arg_device=arg_affinities,
         )
-        def _(model, tokens, seq_lens, seq_block_ids, cache_state):
+        def _(model, tokens, seq_lens, seq_block_ids, cs):
+            cache_tensors = cs
+
             sl = tokens.shape[1]
             input_mask = model.input_mask(seq_lens, sl)
             attention_mask = model.attention_mask(input_mask)
+
+            if llama_config.tensor_parallelism_size != 1:
+                shard_count = llama_config.tensor_parallelism_size
+
+                tokens = ops.replicate(tokens, count=shard_count)
+                attention_mask = ops.replicate(attention_mask, count=shard_count)
+                seq_block_ids = ops.replicate(seq_block_ids, count=shard_count)
+
+                cache_tensors = repack_cache(cs, cache_shard_dim)
+
             logits = model.prefill(
                 tokens,
                 attention_mask=attention_mask,
                 seq_block_ids=seq_block_ids,
-                cache_state=cache_state,
+                cache_state=cache_tensors,
             )
+
+            if llama_config.tensor_parallelism_size != 1:
+                logits = ops.unshard(logits)
+
             return logits
 
     def generate_batch_decode(bs: int):
@@ -168,27 +225,26 @@ def main():
             "block", max=(hp.context_length - 1) // llama_config.block_seq_stride
         )
 
-        if model.config.kv_cache_type == "paged":
-            cache_state = model.cache.allocate(
-                page_count=hp.context_length // llama_config.block_seq_stride
-            )
-            page_dim = torch.export.Dim("page")
-            cache_state_dynamic_shapes = [{0: page_dim}]
-        elif model.config.kv_cache_type == "direct":
-            cache_state = model.cache.allocate(bs=1)
-            # Direct cache dimensions:
-            #   2 * transformer_block_count of...
-            #   [bs, seq_length, attn_head_count, attn_head_dim]
-            cache_state_dynamic_shapes = (2 * hp.block_count) * [{}]
-        else:
-            raise NotImplementedError(f"Unsupported KV cache type: {type(model.cache)}")
+        (
+            cache_state,
+            cache_shard_dim,
+            cache_dynamic_shapes,
+            arg_affinities,
+        ) = setup_cache(model, llama_config.tensor_parallelism_size)
+
+        # We need to offset the indices for the cache
+        arg_affinities = {key + 4: arg_affinities[key] for key in arg_affinities}
+
+        # Inputs have default affinity 0
+        for i in range(4):
+            arg_affinities[i] = DeviceAffinity("0")
 
         dynamic_shapes = {
             "tokens": {},
             "seq_lens": {},
             "start_positions": {},
             "seq_block_ids": {1: block_dim},
-            "cache_state": cache_state_dynamic_shapes,
+            "cache_state": cache_dynamic_shapes,
         }
 
         print(f"Exporting decode_bs{bs}")
@@ -204,6 +260,7 @@ def main():
             ),
             dynamic_shapes=dynamic_shapes,
             strict=args.strict,
+            arg_device=arg_affinities,
         )
         def _(
             model,
@@ -217,6 +274,17 @@ def main():
                 seq_lens, seq_block_ids.shape[1] * model.cache.block_seq_stride
             )
             attention_mask = model.decode_attention_mask(input_mask)
+
+            if llama_config.tensor_parallelism_size != 1:
+                shard_count = llama_config.tensor_parallelism_size
+
+                tokens = ops.replicate(tokens, count=shard_count)
+                attention_mask = ops.replicate(attention_mask, count=shard_count)
+                start_positions = ops.replicate(start_positions, count=shard_count)
+                seq_block_ids = ops.replicate(seq_block_ids, count=shard_count)
+
+                cache_state = repack_cache(cache_state, cache_shard_dim)
+
             logits = model.decode(
                 tokens,
                 attention_mask=attention_mask,
@@ -224,6 +292,10 @@ def main():
                 seq_block_ids=seq_block_ids,
                 cache_state=cache_state,
             )
+
+            if llama_config.tensor_parallelism_size != 1:
+                logits = ops.unshard(logits)
+
             return logits
 
     bsizes = []
