@@ -106,6 +106,6 @@ jobs:
           pip install --no-compile -r requirements.txt -r sharktank/requirements-tests.txt -e sharktank/
 
       - name: Export mlir and vmfb
-        run:  pytest -n 4 -v -s sharktank/tests/evaluate/export_artifacts.py
+        run:  pytest -v -s sharktank/tests/evaluate/export_artifacts_test.py
       - name: Run perplexity test with vmfb
         run:  pytest -n 4 -v -s sharktank/tests/evaluate/perplexity_vmfb_test.py --iree-device='hip://7' --longrun
