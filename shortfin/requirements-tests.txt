@@ -11,7 +11,9 @@ wheel
 # Deps needed for shortfin_apps.llm
 dataclasses-json
 tokenizers
+numpy
 
 # Deps needed for shortfin_apps.sd
 pillow
 transformers
+
