@@ -10,10 +10,11 @@ from iree.turbine.aot import DeviceAffinity, FxProgramsBuilder
 from torch.utils._pytree import tree_structure, tree_unflatten, tree_flatten
 from .types.tensors import ShardedTensor
 from torch.utils._pytree import PyTree, _is_leaf
+import functools
 
 
 def flatten_signature(
-    *sample_args: list[PyTree],
+    *sample_args: list[PyTree], **sample_kwargs: dict[str, PyTree]
 ) -> Callable[[Callable], Any]:
     """Decorator that flattens the signature of a function using PyTorch's type
     registration.
@@ -46,12 +47,15 @@ def flatten_signature(
     )
     ```
     """
-    tree_spec = tree_structure(sample_args)
+    flat_sample_args, args_tree_spec = tree_flatten(sample_args)
+    n_args = len(flat_sample_args)
+    kwargs_tree_spec = tree_structure(sample_kwargs)
 
     def _decorator(f: Callable) -> Callable:
         def _wrapper(*flat_args: list[Any]) -> list[Any]:
-            unflattended_args = tree_unflatten(flat_args, tree_spec)
-            return tree_flatten(f(*unflattended_args))[0]
+            unflattended_args = tree_unflatten(flat_args[:n_args], args_tree_spec)
+            unflattended_kwargs = tree_unflatten(flat_args[n_args:], kwargs_tree_spec)
+            return tree_flatten(f(*unflattended_args, **unflattended_kwargs))[0]
 
         return _wrapper
 
@@ -59,7 +63,7 @@ def flatten_signature(
 
 
 def get_argument_flat_device_affinities(
-    *args: list[PyTree],
+    *args: list[PyTree], **kwargs: dict[str, PyTree]
 ) -> dict[int, DeviceAffinity]:
     """Return the flat device affinities for unflattened arguments.
     ShardedTensor types have their device affinities assigned.
@@ -89,7 +93,7 @@ def get_argument_flat_device_affinities(
         return _is_leaf(v)
 
     # flattened up to a sharded tensor.
-    flat_args_up_to_sharded_tensor = tree_flatten(args, is_leaf=is_leaf)[0]
+    flat_args_up_to_sharded_tensor = tree_flatten((args, kwargs), is_leaf=is_leaf)[0]
     nested_device_affinities: list[list[DeviceAffinity | None]] = [
         [DeviceAffinity(f"{shard_idx}") for shard_idx in range(len(arg.shards))]
         if isinstance(arg, ShardedTensor)
@@ -109,10 +113,10 @@ def get_argument_flat_device_affinities(
 
 
 def export(
-    f: Callable,
-    /,
+    f: Callable | None = None,
     fx_builder: FxProgramsBuilder | None = None,
     args: tuple[PyTree] | None = None,
+    kwargs: dict[PyTree] | None = None,
     arg_device: dict[int, DeviceAffinity] | None = None,
     *transitive_args,
     **transitive_kwargs,
@@ -126,19 +130,33 @@ def export(
     These are those that correspond to torch.Tensor.
     For example a sharded tensor with 2 shards would result in 2 arguments in the MLIR
     signature."""
+
+    if f is None:
+        return functools.partial(
+            export,
+            fx_builder=fx_builder,
+            args=args,
+            kwargs=kwargs,
+            arg_device=arg_device,
+            *transitive_args,
+            **transitive_kwargs,
+        )
+
     if args is None:
         args = []
+    if kwargs is None:
+        kwargs = {}
     if arg_device is None:
-        arg_device = get_argument_flat_device_affinities(*args)
-    flat_args = tree_flatten(args)[0]
+        arg_device = get_argument_flat_device_affinities(*args, **kwargs)
+    flat_args = tree_flatten((args, kwargs))[0]
     if fx_builder is not None:
         # Flatten the signature of the function.
         # Technically this is done during export, but we want the signature to match
         # the flat device affinities.
         def module_fn_with_flat_signature(module, *flat_args):
-            @flatten_signature(*args)
-            def flat_fn(*args):
-                return f(module, *args)
+            @flatten_signature(*args, **kwargs)
+            def flat_fn(*args, **kwargs):
+                return f(module, *args, **kwargs)
 
             return flat_fn(*flat_args)
 
