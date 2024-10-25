@@ -81,7 +81,7 @@ class ExportArtifacts:
         if return_code != 0:
             logger.error("Error exporting mlir: ", return_code)
         else:
-            logger.info(f"Exported to mlir successfully: {mlir_path}!")
+            logger.info(f"Exported to mlir successfully: {mlir_path}")
 
     def compile_to_vmfb(
         self,
