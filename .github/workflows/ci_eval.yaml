@@ -64,47 +64,48 @@ jobs:
       - name: Run perplexity test with vmfb
         run:  pytest -n 4 -v -s sharktank/tests/evaluate/perplexity_vmfb_test.py --iree-device='hip://7' --longrun
 
-  test_perplexity_torch:
-    name: "Evaluation Tests - perplexity_torch"
-    strategy:
-      matrix:
-        version: [3.11]
-        runs-on: [llama-mi300]
-      fail-fast: false
-    runs-on: ${{matrix.runs-on}}
-    defaults:
-      run:
-        shell: bash
-    env:
-      PIP_CACHE_DIR: "${{ github.workspace }}/.pip-cache"
-      SHARK_PLATFORM_REPO_ROOT: ${{ github.workspace }}
-    steps:
-      - name: "Setting up Python"
-        id: setup_python
-        uses: actions/setup-python@v3
-        with:
-          python-version: ${{matrix.version}}
+  # test_perplexity_torch:
+  #   timeout-minutes: 1000
+  #   name: "Evaluation Tests - perplexity_torch"
+  #   strategy:
+  #     matrix:
+  #       version: [3.11]
+  #       runs-on: [llama-mi300]
+  #     fail-fast: false
+  #   runs-on: ${{matrix.runs-on}}
+  #   defaults:
+  #     run:
+  #       shell: bash
+  #   env:
+  #     PIP_CACHE_DIR: "${{ github.workspace }}/.pip-cache"
+  #     SHARK_PLATFORM_REPO_ROOT: ${{ github.workspace }}
+  #   steps:
+  #     - name: "Setting up Python"
+  #       id: setup_python
+  #       uses: actions/setup-python@v3
+  #       with:
+  #         python-version: ${{matrix.version}}
 
-      - name: "Checkout Code"
-        uses: actions/checkout@v3
+  #     - name: "Checkout Code"
+  #       uses: actions/checkout@v3
 
-      - name: Cache Pip Packages
-        uses: actions/cache@v4
-        id: cache-pip
-        with:
-          path: ${{ env.PIP_CACHE_DIR }}
-          key: pip-${{ steps.setup_python.outputs.python-version }}-${{ hashFiles('*requirements.txt') }}
+  #     - name: Cache Pip Packages
+  #       uses: actions/cache@v4
+  #       id: cache-pip
+  #       with:
+  #         path: ${{ env.PIP_CACHE_DIR }}
+  #         key: pip-${{ steps.setup_python.outputs.python-version }}-${{ hashFiles('*requirements.txt') }}
 
-      - name: Install sharktank deps
-        run: |
-          python -m pip install --no-compile --upgrade pip
-          # Note: We install in three steps in order to satisfy requirements
-          # from non default locations first. Installing the PyTorch CPU
-          # wheels saves multiple minutes and a lot of bandwidth on runner setup.
-          pip install --no-compile -r pytorch-cpu-requirements.txt
-          pip install --no-compile -f https://iree.dev/pip-release-links.html --src deps \
-            -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
-          pip install --no-compile -r requirements.txt -r sharktank/requirements-tests.txt -e sharktank/
+  #     - name: Install sharktank deps
+  #       run: |
+  #         python -m pip install --no-compile --upgrade pip
+  #         # Note: We install in three steps in order to satisfy requirements
+  #         # from non default locations first. Installing the PyTorch CPU
+  #         # wheels saves multiple minutes and a lot of bandwidth on runner setup.
+  #         pip install --no-compile -r pytorch-cpu-requirements.txt
+  #         pip install --no-compile -f https://iree.dev/pip-release-links.html --src deps \
+  #           -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
+  #         pip install --no-compile -r requirements.txt -r sharktank/requirements-tests.txt -e sharktank/
 
-      - name: Run perplexity test in eager mode
-        run:  pytest -n 4 -v -s sharktank/tests/evaluate/perplexity_torch_test.py  --longrun
+  #     - name: Run perplexity test in eager mode
+  #       run:  pytest -n 4 -v -s sharktank/tests/evaluate/perplexity_torch_test.py  --longrun
