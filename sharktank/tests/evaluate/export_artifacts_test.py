@@ -63,6 +63,10 @@ class ExportArtifacts(unittest.TestCase):
 
         cmd = subprocess.list2cmdline(export_args)
 
+        logger.info(
+            f"export_args: {export_args}\n self.sharktank_dir: {self.sharktank_dir}"
+        )
+
         logger.info(f"Exporting mlir:\n" f"cd {self.sharktank_dir} && {cmd}")
         proc = subprocess.run(
             cmd, shell=True, capture_output=True, cwd=self.sharktank_dir

@@ -59,6 +59,8 @@ jobs:
             -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
           pip install --no-compile -r requirements.txt -r sharktank/requirements-tests.txt -e sharktank/
 
+      - name: test
+        run:  cd /home/esaimana/actions-runner-llama/_work/SHARK-Platform/SHARK-Platform/sharktank && python3 -m sharktank.examples.export_paged_llm_v1 --irpa-file /data/extra/models/llama3.1_8B/llama8b_f16.irpa --output-mlir /home/esaimana/actions-runner-llama/_work/SHARK-Platform/SHARK-Platform/sharktank/ppl_artifacts/llama8b_f16_decomposed.mlir --output-config /home/esaimana/actions-runner-llama/_work/SHARK-Platform/SHARK-Platform/sharktank/ppl_artifacts/llama8b_f16_decomposed.json --attention-kernel decomposed --tensor-parallelism-size 1
       - name: Export mlir and vmfb
         run:  pytest -v -s sharktank/tests/evaluate/export_artifacts_test.py
       - name: Run perplexity test with vmfb
