@@ -48,7 +48,7 @@ class GenerateService:
         self.inference_modules: dict[str, sf.ProgramModule] = {}
         self.inference_functions: dict[str, dict[str, sf.ProgramFunction]] = {}
         self.inference_programs: dict[str, sf.Program] = {}
-        self.procs_per_device = 2
+        self.procs_per_device = 1
         self.workers = []
         self.fibers = []
         for idx, device in enumerate(self.sysman.ls.devices):
