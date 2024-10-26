@@ -63,11 +63,11 @@ class PerplexityTest(unittest.TestCase):
         reason="Non-decomposed attention is not supported yet",
     )
     @longrun
-    def test_llama3_8B_f16_non_decomposed(self):
+    def test_llama3_8B_f16(self):
 
         # Llama 3.1 8B non-decomposed
 
-        model_name = "llama3_8B_f16_non_decomposed_vmfb"
+        model_name = "llama3_8B_f16_vmfb"
         baseline_perplexity = self.baseline_perplexity[model_name]
 
         current_perplexity = perplexity_vmfb.main(
@@ -133,11 +133,11 @@ class PerplexityTest(unittest.TestCase):
         reason="Non-decomposed attention is not supported yet",
     )
     @longrun
-    def test_llama3_8B_fp8_non_decomposed(self):
+    def test_llama3_8B_fp8(self):
 
         # Llama 3.1 8B non-decomposed
 
-        model_name = "llama3_8B_fp8_non_decomposed_vmfb"
+        model_name = "llama3_8B_fp8_vmfb"
         baseline_perplexity = self.baseline_perplexity[model_name]
 
         current_perplexity = perplexity_vmfb.main(
@@ -200,11 +200,11 @@ class PerplexityTest(unittest.TestCase):
         reason="Non-decomposed attention is not supported yet",
     )
     @longrun
-    def test_llama3_405B_f16_non_decomposed(self):
+    def test_llama3_405B_f16(self):
 
         # Llama 3.1 405B non-decomposed
 
-        model_name = "llama3_405B_f16_non_decomposed_vmfb"
+        model_name = "llama3_405B_f16_vmfb"
         baseline_perplexity = self.baseline_perplexity[model_name]
 
         current_perplexity = perplexity_vmfb.main(
@@ -270,11 +270,11 @@ class PerplexityTest(unittest.TestCase):
         reason="Non-decomposed attention is not supported yet",
     )
     @longrun
-    def test_llama3_405B_fp8_non_decomposed(self):
+    def test_llama3_405B_fp8(self):
 
         # Llama 3.1 405B non-decomposed
 
-        model_name = "llama3_405B_fp8_non_decomposed_vmfb"
+        model_name = "llama3_405B_fp8_vmfb"
         baseline_perplexity = self.baseline_perplexity[model_name]
 
         current_perplexity = perplexity_vmfb.main(
