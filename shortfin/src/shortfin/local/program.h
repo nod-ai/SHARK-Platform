@@ -303,7 +303,7 @@ class SHORTFIN_API Program {
     std::span<const Device *> devices;
 
     // The isolation level to apply to program invocation.
-    ProgramIsolation isolation = ProgramIsolation::PER_FIBER;
+    ProgramIsolation isolation = ProgramIsolation::PER_CALL;
 
     // Enables program-wide execution tracing (to stderr).
     bool trace_execution = false;

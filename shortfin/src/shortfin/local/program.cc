@@ -12,6 +12,7 @@
 #include "iree/modules/hal/module.h"
 #include "iree/modules/io/parameters/module.h"
 #include "iree/vm/bytecode/module.h"
+#include "iree/vm/context.h"
 #include "shortfin/local/fiber.h"
 #include "shortfin/local/system.h"
 #include "shortfin/support/logging.h"
