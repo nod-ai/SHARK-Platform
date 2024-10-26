@@ -63,9 +63,9 @@ class ExportArtifacts:
             export_args.append(self.attention_kernel)
         elif self.attention_kernel == "torch_sdpa":
             raise NotImplementedError("attention_kernel torch_sdpa not implemented yet")
-        if self.tensor_parallelism_size:
-            export_args.append("--tensor-parallelism-size")
-            export_args.append(str(self.tensor_parallelism_size))
+        # if self.tensor_parallelism_size:
+        #     export_args.append("--tensor-parallelism-size")
+        #     export_args.append(str(self.tensor_parallelism_size))
 
         cmd = subprocess.list2cmdline(export_args)
 
