@@ -127,9 +127,10 @@ class BaseCausalLMModel(ThetaLayer):
         dtype = self.attention_dtype
         _, batch_seq_len = input_mask.shape
         causal_mask = causal_context_mask[:, :, :batch_seq_len, :batch_seq_len]
-        boolean_mask = causal_mask + input_mask[:, None, None, :]
-        numeric_mask = torch.zeros_like(boolean_mask, dtype=dtype)
-        numeric_mask.masked_fill_(boolean_mask, self._maximally_negative_value(dtype))
+        boolean_mask = torch.logical_or(causal_mask, input_mask[:, None, None, :])
+        numeric_mask = torch.where(
+            boolean_mask, self._maximally_negative_value(dtype), 0
+        ).to(dtype)
         return numeric_mask.to(self.device)
 
     def extract_tokens_from_logits(
