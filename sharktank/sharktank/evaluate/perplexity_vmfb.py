@@ -91,7 +91,9 @@ class Perplexity:
 
             func_name = func.__name__
             if func_name == "get_perplexity":
-                func_name = "Total time"
+                func_name = f"Total time to calculate perplexity"
+            elif func_name == "compile_model":
+                func_name = f"Total time to export and compile"
             logger.info(f" {func_name}: {time_taken}")
             return result
 
@@ -115,8 +117,12 @@ class Perplexity:
 
     @timeit
     def compile_model(self, weight_path_str):
+        self.weight_path_str = weight_path_str
+
+        logger.info(f"Compiling: {self.weight_path_str}")
+
         export_artifacts = ExportArtifacts(
-            irpa_path=weight_path_str,
+            irpa_path=self.weight_path_str,
             batch_size=self.bs,
             iree_hip_target=self.iree_hip_target,
             iree_hal_target_backends=self.iree_hal_target_backends,
@@ -127,7 +133,7 @@ class Perplexity:
         return vmfb_path
 
     @timeit
-    def load_model(self, weight_path, tokenizer, vmfb_path, weight_path_str):
+    def load_model(self, weight_path, tokenizer, vmfb_path):
 
         config = LlamaModelConfig(
             hp=configs.LlamaHParams.from_gguf_props(weight_path.properties),
@@ -154,11 +160,10 @@ class Perplexity:
 
         self.generator = TorchGenerator(model, tokenizer)
 
-        self.weight_path_str = weight_path_str
         self.runner = vmfbRunner(
             device=self.iree_device,
             vmfb_path=vmfb_path,
-            external_weight_path=weight_path_str,
+            external_weight_path=self.weight_path_str,
         )
 
     @timeit
@@ -177,8 +182,6 @@ class Perplexity:
             for s in test_prompts
             if s != "" and len(s.split()) >= 20 and s.count("=") < 2
         ]
-
-        logger.info(f" num_test_prompts: {len(test_prompts)}")
 
         self.bs = len(test_prompts)
 
@@ -379,9 +382,10 @@ def run_perplexity(
     )
 
     test_prompts = perplexity.get_prompts()
+    logger.info(f" Total test prompts: {len(test_prompts)}")
 
     vmfb_path = perplexity.compile_model(weight_path_str)
-    perplexity.load_model(weight_path, tokenizer, vmfb_path, weight_path_str)
+    perplexity.load_model(weight_path, tokenizer, vmfb_path)
     ppl = perplexity.get_perplexity(test_prompts)
 
     return ppl
