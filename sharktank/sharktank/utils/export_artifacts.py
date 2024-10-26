@@ -75,7 +75,7 @@ class ExportArtifacts:
 
         cwd = self.sharktank_dir + "/sharktank"
 
-        logger.debug(f"Exporting mlir:\n" f"cd {cwd} && {cmd}")
+        logger.info(f"Exporting mlir:\n" f"cd {cwd} && {cmd}")
         proc = subprocess.run(cmd, shell=True, capture_output=True, cwd=cwd)
         return_code = proc.returncode
         if return_code != 0:
