@@ -12,10 +12,10 @@ import unittest
 from parameterized import parameterized
 
 import torch
+import torch.nn.functional as F
 
 from iree.turbine import aot
 from sharktank import kernels
-from sharktank.ops.qconv_impls import _pad_last_2d
 
 
 class conv_2d_nchw_fchw_test(unittest.TestCase):
@@ -36,7 +36,8 @@ class conv_2d_nchw_fchw_test(unittest.TestCase):
         inputs = (torch.rand([2, 4, 64, 64]) * 64).to(input_dtype)
         padding = [1, 1]
         extended_list = [item for item in padding for _ in range(2)]
-        inputs_pad = _pad_last_2d(inputs, extended_list)
+        inputs_pad = F.pad(inputs, pad=extended_list)
+
         weights = (torch.rand([8, 4, 3, 3]) * 64).to(input_dtype)
         bias = (torch.rand([8]) * 64).to(dtype=output_dtype)
         result = kernels.conv_2d_nchw_fchw(
@@ -68,7 +69,7 @@ class conv_2d_nchw_fchw_test(unittest.TestCase):
         inputs = torch.rand([2, 320, 64, 64]) * 64
         padding = [1, 1]
         extended_list = [item for item in padding for _ in range(2)]
-        inputs_pad = _pad_last_2d(inputs, extended_list)
+        inputs_pad = F.pad(inputs, pad=extended_list)
         ep = torch.export.export(
             mod,
             args=(

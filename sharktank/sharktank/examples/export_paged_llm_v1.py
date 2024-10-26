@@ -59,12 +59,6 @@ def main():
         default="decomposed",
         choices=["decomposed", "torch_sdpa"],
     )
-    parser.add_argument(
-        "--tensor-parallelism-size",
-        type=int,
-        default=1,
-        help="How many devices are involved for tensor parallel sharding.",
-    )
 
     args = cli.parse(parser)
     dataset_type = cli.get_input_data_files(args)
@@ -72,18 +66,19 @@ def main():
     dataset = cli.get_input_dataset(args)
 
     hp = configs.LlamaHParams.from_gguf_props(dataset.properties)
-    llama_config = LlamaModelConfig(hp)
-    if args.tensor_parallelism_size > 1:
-        dataset.root_theta = shard_theta(dataset.root_theta, llama_config)
-    llama_config.use_hf = False
-    llama_config.static_tables = False  # Rely on the compiler for hoisting tables.
-    llama_config.kv_cache_type = "direct" if args.bs == [1] else "paged"
-    llama_config.attention_kernel = args.attention_kernel
-
-    # This is a bit gross and should be changed in the future. Best Idea I had so far.
-    attn_q_weight = dataset.root_theta.tensor("blk")["0"]["attn_q"]["weight"]
-    if isinstance(attn_q_weight, SplitPrimitiveTensor):
-        llama_config.tensor_parallelism_size = attn_q_weight.shard_count
+    tensor_parallelism_size = (
+        dataset.properties["tensor_parallelism_size"]
+        if "tensor_parallelism_size" in dataset.properties
+        else 1
+    )
+    llama_config = LlamaModelConfig(
+        hp,
+        tensor_parallelism_size=tensor_parallelism_size,
+        use_hf=False,
+        static_tables=False,  # Rely on the compiler for hoisting tables.
+        kv_cache_type="direct" if args.bs == [1] else "paged",
+        attention_kernel=args.attention_kernel,
+    )
 
     if llama_config.hp.expert_count:
         if llama_config.hp.model_arch == "grok":
@@ -127,7 +122,7 @@ def main():
             # Direct cache dimensions:
             #   2 * transformer_block_count of...
             #   [bs, seq_length, attn_head_count, attn_head_dim]
-            dynamic_shapes = (2 * hp.block_count) * [{}]
+            dynamic_shapes = [None]
         else:
             raise NotImplementedError(f"Unsupported KV cache type: {type(model.cache)}")
 
@@ -148,7 +143,7 @@ def main():
             for i in range(llama_config.tensor_parallelism_size):
                 arg_affinities[i] = DeviceAffinity(str(i))
 
-        return unpacked, shard_dim, dynamic_shapes, arg_affinities
+        return torch.stack(unpacked), shard_dim, dynamic_shapes, arg_affinities
 
     def repack_cache(cache, shard_dim):
         return [SplitPrimitiveTensor(ts=c, shard_dim=shard_dim) for c in cache]
@@ -189,7 +184,7 @@ def main():
             arg_device=arg_affinities,
         )
         def _(model, tokens, seq_lens, seq_block_ids, cs):
-            cache_tensors = cs
+            cache_tensors = torch.unbind(cs)
 
             sl = tokens.shape[1]
             input_mask = model.input_mask(seq_lens, sl)

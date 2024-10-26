@@ -30,14 +30,10 @@ class GenerateReqInput:
     input_ids: Optional[Union[List[List[int]], List[int]]] = None
     # Negative token ids: only used in place of negative prompt.
     neg_input_ids: Optional[Union[List[List[int]], List[int]]] = None
-    # The sampling parameters.
-    sampling_params: Optional[Union[List[Dict], Dict]] = None
     # Output image format. Defaults to base64. One string ("PIL", "base64")
     output_type: Optional[List[str]] = None
     # The request id.
     rid: Optional[Union[List[str], str]] = None
-
-    is_single: bool = True
 
     def post_init(self):
         if (self.prompt is None and self.input_ids is None) or (
@@ -48,7 +44,6 @@ class GenerateReqInput:
         prev_input_len = None
         for i in [self.prompt, self.neg_prompt, self.input_ids, self.neg_input_ids]:
             if isinstance(i, str):
-                is_single = True
                 self.num_output_images = 1
                 continue
             elif not i:
@@ -63,15 +58,9 @@ class GenerateReqInput:
             self.num_output_images = (
                 len[self.prompt] if self.prompt is not None else len(self.input_ids)
             )
-        if self.num_output_images > 1:
-            is_single = False
-        if self.sampling_params is None:
-            self.sampling_params = [{}] * self.num_output_images
-        elif not isinstance(self.sampling_params, list):
-            self.sampling_params = [self.sampling_params] * self.num_output_images
 
         if self.rid is None:
-            self.rid = [uuid.uuid4().hex for _ in range(num)]
+            self.rid = [uuid.uuid4().hex for _ in range(self.num_output_images)]
         else:
             if not isinstance(self.rid, list):
                 raise ValueError("The rid should be a list.")

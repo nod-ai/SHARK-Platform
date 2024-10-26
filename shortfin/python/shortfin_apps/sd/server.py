@@ -64,7 +64,7 @@ async def health() -> Response:
 
 
 async def generate_request(gen_req: GenerateReqInput, request: Request):
-    service = services["default"]
+    service = services["sd"]
     gen_req.post_init()
     responder = FastAPIResponder(request)
     ClientGenerateBatchProcess(service, gen_req, responder).launch()
@@ -77,7 +77,7 @@ app.put("/generate")(generate_request)
 
 def configure(args) -> SystemManager:
     # Setup system (configure devices, etc).
-    sysman = SystemManager(args.device)
+    sysman = SystemManager(args.device, args.device_ids)
 
     # Setup each service we are hosting.
     tokenizers = []
@@ -87,7 +87,7 @@ def configure(args) -> SystemManager:
 
     model_params = ModelParams.load_json(args.model_config)
     sm = GenerateService(
-        name="default", sysman=sysman, tokenizers=tokenizers, model_params=model_params
+        name="sd", sysman=sysman, tokenizers=tokenizers, model_params=model_params
     )
     sm.load_inference_module(args.clip_vmfb, component="clip")
     sm.load_inference_module(args.unet_vmfb, component="unet")
@@ -127,6 +127,13 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
         required=True,
         choices=["local-task", "hip", "amdgpu"],
         help="Primary inferencing device",
+    )
+    parser.add_argument(
+        "--device_ids",
+        type=int,
+        nargs="*",
+        default=None,
+        help="Device IDs visible to the system builder. Defaults to None (full visibility). Can be an index or a sf device id like amdgpu:0:0@0",
     )
     parser.add_argument(
         "--tokenizers",
