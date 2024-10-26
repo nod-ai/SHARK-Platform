@@ -72,6 +72,7 @@ def pytest_addoption(parser):
         help="Enable long and slow tests",
     )
 
+    # TODO: Remove all hardcoded paths in CI tests
     parser.addoption(
         "--llama3-8b-tokenizer-path",
         type=Path,

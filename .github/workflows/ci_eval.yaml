@@ -60,7 +60,7 @@ jobs:
           pip install --no-compile -r requirements.txt -r sharktank/requirements-tests.txt -e sharktank/
 
       - name: Run perplexity test with vmfb
-        run:  pytest -n 4 -v -s sharktank/tests/evaluate/perplexity_vmfb_test.py --iree-device='hip://7' --longrun
+        run:  pytest -n 8 -v -s sharktank/tests/evaluate/perplexity_vmfb_test.py --iree-device='hip://7' --longrun
 
   # test_perplexity_torch:
   #   timeout-minutes: 1000
@@ -106,4 +106,4 @@ jobs:
   #         pip install --no-compile -r requirements.txt -r sharktank/requirements-tests.txt -e sharktank/
 
   #     - name: Run perplexity test in eager mode
-  #       run:  pytest -n 4 -v -s sharktank/tests/evaluate/perplexity_torch_test.py  --longrun
+  #       run:  pytest -n 8 -v -s sharktank/tests/evaluate/perplexity_torch_test.py  --longrun
