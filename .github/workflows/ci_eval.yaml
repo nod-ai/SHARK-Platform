@@ -58,6 +58,14 @@ jobs:
           pip install --no-compile -f https://iree.dev/pip-release-links.html --src deps \
             -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
           pip install --no-compile -r requirements.txt -r sharktank/requirements-tests.txt -e sharktank/
+
+          # Try with the latest nightly releases, not what iree-turbine pins.
+          # We could also pin to a known working or stable version.
+          # This should eventually stabilize. Do the best we can for now.
+          pip install -f https://iree.dev/pip-release-links.html --upgrade \
+            iree-compiler \
+            iree-runtime \
+            "numpy<2.0"
       - name: test1
         run: cd /home/nod/actions-runner-llama/_work/SHARK-Platform/SHARK-Platform/sharktank && python3 -m sharktank.examples.export_paged_llm_v1 --irpa-file /data/llama-3.1/8b/llama8b_f16.irpa --output-mlir /home/nod/actions-runner-llama/_work/SHARK-Platform/SHARK-Platform/tmp_perplexity_ci_artifacts/llama8b_f16_decomposed.mlir --output-config /home/nod/actions-runner-llama/_work/SHARK-Platform/SHARK-Platform/tmp_perplexity_ci_artifacts/llama8b_f16_decomposed.json --bs 100 --attention-kernel decomposed
       - name: Run perplexity test with vmfb
