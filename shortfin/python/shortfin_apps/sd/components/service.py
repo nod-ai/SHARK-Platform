@@ -84,18 +84,19 @@ class GenerateService:
         self.inference_parameters[component].append(p)
 
     def start(self):
-        for component in self.inference_modules:
-            component_modules = [
-                sf.ProgramModule.parameter_provider(
-                    self.sysman.ls, *self.inference_parameters.get(component, [])
-                ),
-                *self.inference_modules[component],
-            ]
-            self.inference_programs[component] = sf.Program(
-                modules=component_modules,
-                fiber=self.fibers[0],
-                trace_execution=False,
-            )
+        for fiber in self.fibers:
+            for component in self.inference_modules:
+                component_modules = [
+                    sf.ProgramModule.parameter_provider(
+                        self.sysman.ls, *self.inference_parameters.get(component, [])
+                    ),
+                    *self.inference_modules[component],
+                ]
+                self.inference_programs[component] = sf.Program(
+                    modules=component_modules,
+                    devices=fiber.raw_devices,
+                    trace_execution=False,
+                )
 
         # TODO: export vmfbs with multiple batch size entrypoints
 
@@ -384,7 +385,7 @@ class InferenceExecutorProcess(sf.Process):
             "".join([f"\n  {i}: {ary.shape}" for i, ary in enumerate(clip_inputs)]),
         )
         await device
-        pe, te = await fn(*clip_inputs)
+        pe, te = await fn(*clip_inputs, fiber=self.fiber)
 
         await device
         for i in range(req_bs):
@@ -472,7 +473,7 @@ class InferenceExecutorProcess(sf.Process):
         )
         (latents, time_ids, step_indexes, timesteps,) = await fns[
             "init"
-        ](denoise_inputs["sample"])
+        ](denoise_inputs["sample"], fiber=self.fiber)
         await device
         ts_host = timesteps.for_transfer()
         ts_host.copy_from(timesteps)
@@ -497,7 +498,7 @@ class InferenceExecutorProcess(sf.Process):
                 ),
             )
             await device
-            latent_model_input, t = await fns["scale"](*scale_inputs)
+            latent_model_input, t = await fns["scale"](*scale_inputs, fiber=self.fiber)
             await device
 
             unet_inputs = [
@@ -514,7 +515,7 @@ class InferenceExecutorProcess(sf.Process):
                 "".join([f"\n  {i}: {ary.shape}" for i, ary in enumerate(unet_inputs)]),
             )
             await device
-            (noise_pred,) = await fns["unet"](*unet_inputs)
+            (noise_pred,) = await fns["unet"](*unet_inputs, fiber=self.fiber)
             await device
 
             step_inputs = [noise_pred, t, latents]
@@ -524,7 +525,7 @@ class InferenceExecutorProcess(sf.Process):
                 "".join([f"\n  {i}: {ary.shape}" for i, ary in enumerate(step_inputs)]),
             )
             await device
-            (latent_model_output,) = await fns["step"](*step_inputs)
+            (latent_model_output,) = await fns["step"](*step_inputs, fiber=self.fiber)
             latents.copy_from(latent_model_output)
             await device
 
@@ -558,7 +559,7 @@ class InferenceExecutorProcess(sf.Process):
 
         await device
         # Decode the denoised latents.
-        (image,) = await fn(latents)
+        (image,) = await fn(latents, fiber=self.fiber)
 
         await device
         images_shape = [
