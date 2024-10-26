@@ -53,6 +53,7 @@ class GenerateItemProcess(sf.Process):
             # Prefill result.
             token = sfnp.argmax(exec.result_logits)
             token_int = token.items[0]
+            self.append_token(token_int)
 
             # Decode loop.
             # TODO: Use correct eot token from config.
