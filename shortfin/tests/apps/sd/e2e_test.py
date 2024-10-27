@@ -67,12 +67,12 @@ def sd_server():
         else:
             bucket = configs_bucket
         address = bucket + path
-        if not os.path.exists(f"{cache}/{path}"):
-            subprocess.run(
-                f"wget {address} -O {cache}/{path}",
-                shell=True,
-                check=True,
-            )
+        local_file = os.path.join(cache, path)
+        if not os.path.exists(local_file):
+            print("Downloading artifact from " + address)
+            r = requests.get(address, allow_redirects=True)
+            with open(local_file, "wb") as lf:
+                lf.write(r.content)
     # Start the server
     srv_args = [
         "python",
