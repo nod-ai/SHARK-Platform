@@ -48,6 +48,23 @@ class GenerateReqInput:
             len(self.prompt) if self.prompt is not None else len(self.input_ids)
         )
 
+        batchable_args = [
+            self.prompt,
+            self.neg_prompt,
+            self.height,
+            self.width,
+            self.steps,
+            self.guidance_scale,
+            self.seed,
+            self.input_ids,
+            self.neg_input_ids,
+        ]
+        for arg in batchable_args:
+            if isinstance(arg, list):
+                if len(arg) != self.num_output_images and len(arg) != 1:
+                    raise ValueError(
+                        f"Batchable arguments should either be singular or as many as the full batch ({self.num_output_images})."
+                    )
         if self.rid is None:
             self.rid = [uuid.uuid4().hex for _ in range(self.num_output_images)]
         else:

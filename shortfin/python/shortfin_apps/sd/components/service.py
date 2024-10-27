@@ -51,6 +51,7 @@ class GenerateService:
         self.inference_functions: dict[str, dict[str, sf.ProgramFunction]] = {}
         self.inference_programs: dict[str, sf.Program] = {}
         self.procs_per_device = 1
+        self.streaming = True
         self.workers = []
         self.fibers = []
         self.locks = []
