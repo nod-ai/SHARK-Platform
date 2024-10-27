@@ -71,4 +71,4 @@ class GenerateReqInput:
             if not isinstance(self.rid, list):
                 raise ValueError("The rid should be a list.")
         if self.output_type is None:
-            self.output_type = ["PIL"] * self.num_output_images
+            self.output_type = ["base64"] * self.num_output_images
