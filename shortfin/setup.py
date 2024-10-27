@@ -9,6 +9,7 @@ import os
 import shutil
 import subprocess
 import sys
+import traceback
 from distutils.command.build import build as _build
 from distutils.core import setup, Extension
 from pathlib import Path
@@ -38,8 +39,12 @@ def get_env_cmake_option(name: str, default_value: bool = False) -> str:
     return f"-D{name}={svalue}"
 
 
-def add_env_cmake_setting(args, env_name: str, cmake_name=None) -> str:
+def add_env_cmake_setting(
+    args, env_name: str, cmake_name=None, default_value=None
+) -> str:
     svalue = os.getenv(env_name)
+    if svalue is None and default_value is not None:
+        svalue = default_value
     if svalue is not None:
         if not cmake_name:
             cmake_name = env_name
@@ -62,6 +67,7 @@ CPP_PREBUILT_SOURCE_DIR = "@libshortfin_SOURCE_DIR@"
 CPP_PREBUILT_BINARY_DIR = "@libshortfin_BINARY_DIR@"
 
 SETUPPY_DIR = os.path.realpath(os.path.dirname(__file__))
+CMAKE_EXE = os.getenv("SHORTFIN_CMAKE", "cmake")
 
 
 def is_cpp_prebuilt():
@@ -223,13 +229,11 @@ def build_cmake_configuration(CMAKE_BUILD_DIR: Path, extra_cmake_args=[]):
     ] + extra_cmake_args
 
     if DEV_MODE:
-        cmake_args.extend(
-            [
-                "-DCMAKE_C_COMPILER=clang",
-                "-DCMAKE_CXX_COMPILER=clang++",
-                "-DCMAKE_LINKER_TYPE=LLD",
-            ]
-        )
+        if not os.getenv("CC"):
+            cmake_args.append("-DCMAKE_C_COMPILER=clang")
+        if not os.getenv("CXX"):
+            cmake_args.append("-DCMAKE_CXX_COMPILER=clang++")
+        add_env_cmake_setting(cmake_args, "CMAKE_LINKER_TYPE", default_value="LLD")
 
     add_env_cmake_setting(cmake_args, "SHORTFIN_IREE_SOURCE_DIR")
     add_env_cmake_setting(cmake_args, "SHORTFIN_ENABLE_ASAN")
@@ -238,12 +242,13 @@ def build_cmake_configuration(CMAKE_BUILD_DIR: Path, extra_cmake_args=[]):
     cmake_cache_file = os.path.join(CMAKE_BUILD_DIR, "CMakeCache.txt")
     if not os.path.exists(cmake_cache_file):
         print(f"Configuring with: {cmake_args}")
-        subprocess.check_call(["cmake", SOURCE_DIR] + cmake_args, cwd=CMAKE_BUILD_DIR)
+        subprocess.check_call([CMAKE_EXE, SOURCE_DIR] + cmake_args, cwd=CMAKE_BUILD_DIR)
+        print(f"CMake configure complete.")
     else:
         print(f"Not re-configing (already configured)")
 
     # Build.
-    subprocess.check_call(["cmake", "--build", "."], cwd=CMAKE_BUILD_DIR)
+    subprocess.check_call([CMAKE_EXE, "--build", "."], cwd=CMAKE_BUILD_DIR)
     print("Build complete.")
 
     # Optionally run CTests.
@@ -264,9 +269,17 @@ class CMakeBuildPy(_build_py):
         if is_cpp_prebuilt():
             return
 
-        self.build_default_configuration()
-        if ENABLE_TRACY:
-            self.build_tracy_configuration()
+        try:
+            self.build_default_configuration()
+            if ENABLE_TRACY:
+                self.build_tracy_configuration()
+        except subprocess.CalledProcessError as e:
+            print("Native build failed:")
+            traceback.print_exc()
+            # This is not great, but setuptools *swallows* exceptions from here
+            # and mis-reports them as deprecation warnings! This is fairly
+            # fatal, so just kill it.
+            sys.exit(1)
 
     def build_default_configuration(self):
         print("  *********************************")

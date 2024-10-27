@@ -12,6 +12,7 @@ from typing import Optional
 import warnings
 
 import torch
+import torch.nn.functional as F
 
 from sharktank import kernels
 
@@ -119,7 +120,7 @@ def qconv2d_tensor_scaled(
     padding = _expand_int_to_2_tuple(padding)
     dilation = _expand_int_to_2_tuple(dilation)
     extended_padding_list = [item for item in padding for _ in range(2)]
-    padded_input = _pad_last_2d(input_qs, extended_padding_list)
+    padded_input = F.pad(input_qs, pad=extended_padding_list)
     y_qs = _invoke_conv2d_kernel(
         padded_input,
         weight_qs,
@@ -256,27 +257,6 @@ def _invoke_pooling_sum_kernel(input, kernel_size, stride, dilation, *, accum_dt
             divisor_override=1,
         ).to(dtype=accum_dtype)
     return output
-
-
-def _pad_last_2d(input_tensor, pad_width):
-    # pad_width should be in the format [pad_left, pad_right, pad_top, pad_bottom]
-    pad_left, pad_right, pad_top, pad_bottom = pad_width
-    batch_size, channels, height, width = input_tensor.shape
-
-    # Create a new tensor with the desired padded size filled with zeros
-    padded_height = height + pad_top + pad_bottom
-    padded_width = width + pad_left + pad_right
-    padded_tensor = torch.zeros(
-        (batch_size, channels, padded_height, padded_width),
-        dtype=input_tensor.dtype,
-        device=input_tensor.device,
-    )
-
-    # Copy the values from the input tensor to the appropriate location in the padded tensor
-    padded_tensor[
-        :, :, pad_top : pad_top + height, pad_left : pad_left + width
-    ] = input_tensor
-    return padded_tensor
 
 
 def _flatten_input_scale_offset_channels(d, m):
