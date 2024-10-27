@@ -41,23 +41,12 @@ class GenerateReqInput:
         ):
             raise ValueError("Either text or input_ids should be provided.")
 
-        prev_input_len = None
-        for i in [self.prompt, self.neg_prompt, self.input_ids, self.neg_input_ids]:
-            if isinstance(i, str):
-                self.num_output_images = 1
-                continue
-            elif not i:
-                continue
-            if not isinstance(i, list):
-                raise ValueError("Text inputs should be strings or lists.")
-            if prev_input_len and not (prev_input_len == len(i)):
-                raise ValueError("Positive, Negative text inputs should be same length")
-            self.num_output_images = len(i)
-            prev_input_len = len(i)
-        if not self.num_output_images:
-            self.num_output_images = (
-                len[self.prompt] if self.prompt is not None else len(self.input_ids)
-            )
+        if isinstance(self.prompt, str):
+            self.prompt = [str]
+
+        self.num_output_images = (
+            len(self.prompt) if self.prompt is not None else len(self.input_ids)
+        )
 
         if self.rid is None:
             self.rid = [uuid.uuid4().hex for _ in range(self.num_output_images)]
@@ -65,4 +54,4 @@ class GenerateReqInput:
             if not isinstance(self.rid, list):
                 raise ValueError("The rid should be a list.")
         if self.output_type is None:
-            self.output_type = ["base64"] * self.num_output_images
+            self.output_type = ["PIL"] * self.num_output_images
