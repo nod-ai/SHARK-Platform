@@ -6,6 +6,20 @@ import base64
 from datetime import datetime as dt
 from PIL import Image
 
+sample_request = {
+    "prompt": [
+        " a cat under the snow with blue eyes, covered by snow, cinematic style, medium shot, professional photo, animal",
+    ],
+    "neg_prompt": ["Watermark, blurry, oversaturated, low resolution, pollution"],
+    "height": [1024],
+    "width": [1024],
+    "steps": [20],
+    "guidance_scale": [7.5],
+    "seed": [0],
+    "output_type": ["base64"],
+    "rid": ["string"],
+}
+
 
 def bytes_to_img(bytes, idx=0, width=1024, height=1024):
     timestamp = dt.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -19,8 +33,11 @@ def bytes_to_img(bytes, idx=0, width=1024, height=1024):
 def send_json_file(file_path):
     # Read the JSON file
     try:
-        with open(file_path, "r") as json_file:
-            data = json.load(json_file)
+        if file_path == "default":
+            data = sample_request
+        else:
+            with open(file_path, "r") as json_file:
+                data = json.load(json_file)
     except Exception as e:
         print(f"Error reading the JSON file: {e}")
         return
@@ -43,7 +60,7 @@ def send_json_file(file_path):
                 if isinstance(request["height"], list)
                 else request["height"]
             )
-            bytes_to_img(item.encode("ascii"), idx, width, height)
+            bytes_to_img(item.encode("utf-8"), idx, width, height)
 
     except requests.exceptions.RequestException as e:
         print(f"Error sending the request: {e}")
@@ -51,6 +68,6 @@ def send_json_file(file_path):
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
-    p.add_argument("file", type=str)
+    p.add_argument("--file", type=str, default="default")
     args = p.parse_args()
     send_json_file(args.file)
