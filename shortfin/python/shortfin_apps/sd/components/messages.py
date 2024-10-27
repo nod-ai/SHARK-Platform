@@ -6,10 +6,14 @@
 
 from enum import Enum
 
+import logging
+
 import shortfin as sf
 import shortfin.array as sfnp
 
 from .io_struct import GenerateReqInput
+
+logger = logging.getLogger(__name__)
 
 
 class InferencePhase(Enum):
@@ -54,6 +58,8 @@ class InferenceExecRequest(sf.Message):
         image_array: sfnp.device_array | None = None,
     ):
         super().__init__()
+        self.print_debug = False
+
         self.phases = {}
         self.phase = None
         self.height = height
@@ -87,6 +93,7 @@ class InferenceExecRequest(sf.Message):
         self.image_array = image_array
 
         self.result_image = None
+        self.img_metadata = None
 
         self.done = sf.VoidFuture()
 
@@ -96,8 +103,18 @@ class InferenceExecRequest(sf.Message):
         self.return_host_array: bool = True
 
         self.post_init()
-        print(self.phases)
-        print(self.phase)
+
+    def __setattr__(self, name, value):
+        self.__dict__[name] = value
+        if getattr(self, "print_debug"):
+            self.on_change(name, value)
+
+    def on_change(self, name, value):
+        if isinstance(value, sfnp.device_array):
+            val_host = value.for_transfer()
+            val_host.copy_from(value)
+            logger.info("NAME: ", name)
+            logger.info("VALUE: \n", val_host)
 
     @staticmethod
     def from_batch(gen_req: GenerateReqInput, index: int) -> "InferenceExecRequest":
@@ -114,8 +131,13 @@ class InferenceExecRequest(sf.Message):
         for item in gen_inputs:
             received = getattr(gen_req, item, None)
             if isinstance(received, list):
-                if index >= len(received):
-                    rec_input = None
+                if index > len(received):
+                    if len(received) == 1:
+                        rec_input = received[0]
+                    else:
+                        logging.error(
+                            "Inputs in request must be singular or as many as the list of prompts."
+                        )
                 else:
                     rec_input = received[index]
             else:

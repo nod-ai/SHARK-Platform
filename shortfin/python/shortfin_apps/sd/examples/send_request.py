@@ -1,6 +1,7 @@
 import json
 import requests
 import argparse
+import base64
 
 from datetime import datetime as dt
 from PIL import Image
@@ -8,7 +9,9 @@ from PIL import Image
 
 def bytes_to_img(bytes, idx=0, width=1024, height=1024):
     timestamp = dt.now().strftime("%Y-%m-%d_%H-%M-%S")
-    image = Image.frombytes(mode="RGB", size=(width, height), data=bytes)
+    image = Image.frombytes(
+        mode="RGB", size=(width, height), data=base64.b64decode(bytes)
+    )
     image.save(f"shortfin_sd_output_{timestamp}_{idx}.png")
     print(f"Saved to shortfin_sd_output_{timestamp}_{idx}.png")
 
@@ -28,25 +31,19 @@ def send_json_file(file_path):
         response.raise_for_status()  # Raise an error for bad responses
         print("Saving response as image...")
         timestamp = dt.now().strftime("%Y-%m-%d_%H-%M-%S")
-        breakpoint()
         request = json.loads(response.request.body.decode("utf-8"))
-        if isinstance(response.content, list):
-            for idx, item in enumerate(response.content):
-                width = (
-                    request["width"][idx]
-                    if isinstance(request["height"], list)
-                    else request["height"]
-                )
-                height = (
-                    request["height"][idx]
-                    if isinstance(request["height"], list)
-                    else request["height"]
-                )
-                bytes_to_img(item, idx, width, height)
-        elif isinstance(response.content, bytes):
-            width = request["width"]
-            height = request["height"]
-            bytes_to_img(response.content, width=width, height=height)
+        for idx, item in enumerate(response.json()["images"]):
+            width = (
+                request["width"][idx]
+                if isinstance(request["height"], list)
+                else request["height"]
+            )
+            height = (
+                request["height"][idx]
+                if isinstance(request["height"], list)
+                else request["height"]
+            )
+            bytes_to_img(item.encode("ascii"), idx, width, height)
 
     except requests.exceptions.RequestException as e:
         print(f"Error sending the request: {e}")
