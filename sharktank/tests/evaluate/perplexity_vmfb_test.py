@@ -164,6 +164,9 @@ class PerplexityTest(unittest.TestCase):
             msg=f"Current perplexity deviates baseline by {perplexity_difference}",
         )
 
+    @pytest.mark.xfail(
+        reason="Sharding is not supported yet",
+    )
     @longrun
     def test_llama3_405B_f16_decomposed(self):
 
@@ -267,7 +270,7 @@ class PerplexityTest(unittest.TestCase):
         )
 
     @pytest.mark.xfail(
-        reason="Non-decomposed attention is not supported yet",
+        reason="FP8 model is unsupported",
     )
     @longrun
     def test_llama3_405B_fp8(self):
