@@ -194,3 +194,8 @@ def find_free_port():
         s.bind(("localhost", 0))
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         return s.getsockname()[1]
+
+
+def test_placeholder():
+    # Here in case this pytest is invoked via CPU CI and no tests are run.
+    pass
