@@ -42,8 +42,8 @@ jobs:
     steps:
     - name: Install dependencies
       run: |
-        sudo apt update
-        sudo apt install clang lld cmake ninja-build
+        sudo apt update -y
+        sudo apt install clang lld cmake ninja-build -y
 
     - name: Checkout repository
       uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
