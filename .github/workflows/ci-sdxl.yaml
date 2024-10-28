@@ -31,7 +31,7 @@ jobs:
         shell: bash
     env:
       PIP_CACHE_DIR: "${{ github.workspace }}/.pip-cache"
-      LIBSHORTFIN_DIR: ${{ github.workspace }}/shortfin/
+      SHORTFIN_DIR: ${{ github.workspace }}/shortfin/
       VENV_DIR: ${{ github.workspace }}/.venv
     
     steps:
