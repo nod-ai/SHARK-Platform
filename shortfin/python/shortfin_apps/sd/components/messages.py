@@ -58,7 +58,7 @@ class InferenceExecRequest(sf.Message):
         image_array: sfnp.device_array | None = None,
     ):
         super().__init__()
-        self.print_debug = False
+        self.print_debug = True
 
         self.phases = {}
         self.phase = None
@@ -103,18 +103,6 @@ class InferenceExecRequest(sf.Message):
         self.return_host_array: bool = True
 
         self.post_init()
-
-    def __setattr__(self, name, value):
-        self.__dict__[name] = value
-        if getattr(self, "print_debug"):
-            self.on_change(name, value)
-
-    def on_change(self, name, value):
-        if isinstance(value, sfnp.device_array):
-            val_host = value.for_transfer()
-            val_host.copy_from(value)
-            logger.info("NAME: ", name)
-            logger.info("VALUE: \n", val_host)
 
     @staticmethod
     def from_batch(gen_req: GenerateReqInput, index: int) -> "InferenceExecRequest":

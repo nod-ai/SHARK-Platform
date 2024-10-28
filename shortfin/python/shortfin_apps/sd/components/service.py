@@ -402,6 +402,7 @@ class InferenceExecutorProcess(sf.Process):
 
     async def _denoise(self, device, requests):
         req_bs = len(requests)
+        step_count = requests[0].steps
         cfg_mult = 2 if self.service.model_params.cfg_mode else 1
         # Produce denoised latents
         entrypoints = self.service.inference_functions["denoise"]
@@ -469,6 +470,12 @@ class InferenceExecutorProcess(sf.Process):
 
         denoise_inputs["guidance_scale"].copy_from(gs_host)
 
+        num_steps = sfnp.device_array.for_device(device, [1], sfnp.sint64)
+        ns_host = num_steps.for_transfer()
+        with ns_host.map(write=True) as m:
+            ns_host.items = [step_count]
+        num_steps.copy_from(ns_host)
+
         await device
         # Initialize scheduler.
         logger.info(
@@ -476,14 +483,12 @@ class InferenceExecutorProcess(sf.Process):
             fns["init"],
             "".join([f"\n  0: {latents_shape}"]),
         )
-        (latents, time_ids, step_indexes, timesteps,) = await fns[
-            "init"
-        ](denoise_inputs["sample"])
+        (latents, time_ids) = await fns["init"](denoise_inputs["sample"])
+        lh = latents.for_transfer()
+
         await device
-        ts_host = timesteps.for_transfer()
-        ts_host.copy_from(timesteps)
         for i, t in tqdm(
-            enumerate(ts_host.items),
+            enumerate(range(step_count)),
         ):
             step = sfnp.device_array.for_device(device, [1], sfnp.sint64)
             s_host = step.for_transfer()
@@ -493,7 +498,7 @@ class InferenceExecutorProcess(sf.Process):
             scale_inputs = [
                 latents,
                 step,
-                timesteps,
+                num_steps,
             ]
             logger.info(
                 "INVOKE %r: %s",
@@ -505,6 +510,9 @@ class InferenceExecutorProcess(sf.Process):
             await device
             latent_model_input, t = await fns["scale"](*scale_inputs)
             await device
+            lh.copy_from(latent_model_input)
+            print("scale")
+            print(lh)
 
             unet_inputs = [
                 latent_model_input,
@@ -522,8 +530,11 @@ class InferenceExecutorProcess(sf.Process):
             await device
             (noise_pred,) = await fns["unet"](*unet_inputs)
             await device
+            lh.copy_from(noise_pred)
+            print("unet")
+            print(lh)
 
-            step_inputs = [noise_pred, t, latents]
+            step_inputs = [noise_pred, latents, step, num_steps]
             logger.info(
                 "INVOKE %r: %s",
                 fns["step"],
@@ -531,7 +542,9 @@ class InferenceExecutorProcess(sf.Process):
             )
             await device
             (latent_model_output,) = await fns["step"](*step_inputs)
-            latents.copy_from(latent_model_output)
+            lh.copy_from(noise_pred)
+            print("step")
+            print(lh)
             await device
 
         for idx, req in enumerate(requests):
