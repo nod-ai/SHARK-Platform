@@ -19,8 +19,8 @@ from sharktank.types import *
 from sharktank.utils.testing import MainRunnerTestBase
 
 
-class MmtRHSShardingTransformTest(MainRunnerTestBase):
-    def testPrimitive(self):
+class DatasetShardingTransformTest(MainRunnerTestBase):
+    def testShardLlmDataset(self):
         orig_pts = [
             DefaultPrimitiveTensor(
                 name="blk.1.attn_k.weight", data=torch.randn([32, 128])
@@ -28,9 +28,19 @@ class MmtRHSShardingTransformTest(MainRunnerTestBase):
             DefaultPrimitiveTensor(
                 name="blk.2.attn_q.weight", data=torch.randn([48, 64])
             ),
-            DefaultPrimitiveTensor(name="other", data=torch.randn([2, 2])),
         ]
-        ds_orig = Dataset({}, Theta(orig_pts))
+        ds_orig = Dataset(
+            {
+                "general.architecture": "llm",
+                "llm.attention.head_count": 1,
+                "llm.context_length": 2,
+                "llm.embedding_length": 3,
+                "llm.block_count": 4,
+                "llm.feed_forward_length": 5,
+                "llm.attention.layer_norm_rms_epsilon": 0.1,
+            },
+            Theta(orig_pts),
+        )
         input_path = self.save_dataset(ds_orig, "input")
         output_path = self.get_irpa_path("output")
         from sharktank.examples.sharding import shard_llm_dataset
@@ -41,38 +51,38 @@ class MmtRHSShardingTransformTest(MainRunnerTestBase):
             input_path,
             "--output-irpa-file",
             output_path,
-            "--num-shards",
+            "--tensor-parallelism-size",
             8,
         )
         ds_tran = Dataset.load(output_path, mmap=False)
 
+        ds_tran.properties["tensor_parallelism_size"] = 8
+
         # Verify.
         flat_sts = ds_tran.root_theta.flatten()
-        self.assertEqual(3, len(flat_sts))
+        self.assertEqual(2, len(flat_sts))
         st_1 = flat_sts["blk.1.attn_k.weight"]
         st_2 = flat_sts["blk.2.attn_q.weight"]
-        pt_3 = flat_sts["other"]
         self.assertIsInstance(st_1, SplitPrimitiveTensor)
         self.assertIsInstance(st_2, SplitPrimitiveTensor)
-        self.assertIsInstance(pt_3, DefaultPrimitiveTensor)
         self.assertListEqual(st_1.shape, [32, 128])
         self.assertListEqual(st_2.shape, [48, 64])
 
         # Verify component shapes for st_1.
         self.assertEqual(8, len(st_1.shards))
-        self.assertTrue(all(pt.shape == [32, 16] for pt in st_1.shards))
+        self.assertTrue(all(pt.shape == [4, 128] for pt in st_1.shards))
         self.assertTrue(
-            all(list(pt.as_torch().shape) == [32, 16] for pt in st_1.shards)
+            all(list(pt.as_torch().shape) == [4, 128] for pt in st_1.shards)
         )
 
         # Verify component shapes for st_2.
         self.assertEqual(8, len(st_2.shards))
-        self.assertTrue(all(pt.shape == [48, 8] for pt in st_2.shards))
-        self.assertTrue(all(list(pt.as_torch().shape) == [48, 8] for pt in st_2.shards))
+        self.assertTrue(all(pt.shape == [6, 64] for pt in st_2.shards))
+        self.assertTrue(all(list(pt.as_torch().shape) == [6, 64] for pt in st_2.shards))
 
         # Verify contents for one shard for sanity.
         new_t = st_1.shards[0].as_torch()
-        torch.testing.assert_close(new_t, orig_pts[0].as_torch().split(16, dim=1)[0])
+        torch.testing.assert_close(new_t, orig_pts[0].as_torch().split(4, dim=0)[0])
 
 
 if __name__ == "__main__":

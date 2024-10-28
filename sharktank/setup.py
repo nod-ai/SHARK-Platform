@@ -99,7 +99,6 @@ setup(
     extras_require={
         "testing": [
             f"pytest{get_version_spec('pytest')}",
-            f"pytest-xdist{get_version_spec('pytest-xdist')}",
         ],
     },
     cmdclass={"build": BuildCommand},
