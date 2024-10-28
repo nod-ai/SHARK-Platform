@@ -67,6 +67,8 @@ jobs:
             iree-runtime \
             "numpy<2.0"
 
+      - name: Fetch reqs
+        run: pip list
       - name: test benchmark
         run: pytest sharktank/tests/models/llama/benchmark_amdgpu_tests.py -v -s --longrun -k 'testBenchmark8B_f16_Decomposed'
       - name: test1
