@@ -483,8 +483,9 @@ class InferenceExecutorProcess(sf.Process):
             fns["init"],
             "".join([f"\n  0: {latents_shape}"]),
         )
-        (latents, time_ids) = await fns["init"](denoise_inputs["sample"])
-        lh = latents.for_transfer()
+        (latents, time_ids, timesteps, sigmas) = await fns["init"](
+            denoise_inputs["sample"], num_steps
+        )
 
         await device
         for i, t in tqdm(
@@ -495,11 +496,7 @@ class InferenceExecutorProcess(sf.Process):
             with s_host.map(write=True) as m:
                 s_host.items = [i]
             step.copy_from(s_host)
-            scale_inputs = [
-                latents,
-                step,
-                num_steps,
-            ]
+            scale_inputs = [latents, step, timesteps, sigmas]
             logger.info(
                 "INVOKE %r: %s",
                 fns["scale"],
@@ -508,11 +505,8 @@ class InferenceExecutorProcess(sf.Process):
                 ),
             )
             await device
-            latent_model_input, t = await fns["scale"](*scale_inputs)
+            latent_model_input, t, sigma, next_sigma = await fns["scale"](*scale_inputs)
             await device
-            lh.copy_from(latent_model_input)
-            print("scale")
-            print(lh)
 
             unet_inputs = [
                 latent_model_input,
@@ -530,11 +524,8 @@ class InferenceExecutorProcess(sf.Process):
             await device
             (noise_pred,) = await fns["unet"](*unet_inputs)
             await device
-            lh.copy_from(noise_pred)
-            print("unet")
-            print(lh)
 
-            step_inputs = [noise_pred, latents, step, num_steps]
+            step_inputs = [noise_pred, latents, sigma, next_sigma]
             logger.info(
                 "INVOKE %r: %s",
                 fns["step"],
@@ -542,9 +533,7 @@ class InferenceExecutorProcess(sf.Process):
             )
             await device
             (latent_model_output,) = await fns["step"](*step_inputs)
-            lh.copy_from(noise_pred)
-            print("step")
-            print(lh)
+            latents.copy_from(latent_model_output)
             await device
 
         for idx, req in enumerate(requests):
