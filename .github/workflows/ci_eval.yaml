@@ -67,7 +67,12 @@ jobs:
             iree-runtime \
             "numpy<2.0"
       - name: Run perplexity test with vmfb
-        run:  pytest -n 8 -v -s sharktank/tests/evaluate/perplexity_vmfb_test.py --iree-device='hip://7' --longrun
+        run:  pytest -n 8 -v -s sharktank/tests/evaluate/perplexity_vmfb_test.py \
+              --longrun \
+              --iree-device='hip://7' \
+              --iree-hip-target='gfx942' \
+              --llama3-8b-f16-model-path=/data/extra/models/llama3.1_8B/llama8b_f16.irpa \
+              --llama3-8b-tokenizer-path=/data/extra/models/llama3.1_8B/tokenizer_config.json
 
   # test_perplexity_torch:
   #   timeout-minutes: 1000
@@ -113,4 +118,7 @@ jobs:
   #         pip install --no-compile -r requirements.txt -r sharktank/requirements-tests.txt -e sharktank/
 
   #     - name: Run perplexity test in eager mode
-  #       run:  pytest -n 8 -v -s sharktank/tests/evaluate/perplexity_torch_test.py  --longrun
+  #       run:  pytest -n 8 -v -s sharktank/tests/evaluate/perplexity_vmfb_test.py \
+              # --longrun \
+              # --llama3-8b-f16-model-path=/data/extra/models/llama3.1_8B/llama8b_f16.irpa \
+              # --llama3-8b-tokenizer-path=/data/extra/models/llama3.1_8B/tokenizer_config.json

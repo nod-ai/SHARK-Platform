@@ -77,23 +77,13 @@ def pytest_addoption(parser):
         "--llama3-8b-tokenizer-path",
         type=Path,
         action="store",
-        default="/data/llama-3.1/8b/tokenizer_config.json",
         help="Llama3.1 8b tokenizer path, defaults to 30F CI system path",
-    )
-
-    parser.addoption(
-        "--llama3-8b-json-path",
-        type=Path,
-        action="store",
-        default="/data/extra/models/llama3.1_8B/llama8b_test.json",
-        help="Llama3.1 8b fp8 parameters json path",
     )
 
     parser.addoption(
         "--llama3-8b-f16-model-path",
         type=Path,
         action="store",
-        default="/data/llama-3.1/8b/llama8b_f16.irpa",
         help="Llama3.1 8b model path, defaults to 30F CI system path",
     )
 
@@ -106,50 +96,16 @@ def pytest_addoption(parser):
     )
 
     parser.addoption(
-        "--llama3-8b-f16-mlir-path",
-        type=Path,
-        action="store",
-        default="/data/extra/models/llama3.1_8B/llama8b_f16_test.mlir",
-        help="Llama3.1 8b mlir path, defaults to 30F CI system path",
-    )
-
-    parser.addoption(
-        "--llama3-8b-fp8-mlir-path",
-        type=Path,
-        action="store",
-        default=None,
-        help="Llama3.1 8b fp8 mlir path",
-    )
-
-    parser.addoption(
-        "--llama3-8b-f16-vmfb-path",
-        type=Path,
-        action="store",
-        default="/data/extra/models/llama3.1_8B/llama8b_f16.vmfb",
-        help="Llama3.1 8b fp16 vmfb path, defaults to 30F CI system path",
-    )
-
-    parser.addoption(
         "--llama3-405b-tokenizer-path",
         type=Path,
         action="store",
-        default="/data/llama-3.1/405b/tokenizer_config.json",
         help="Llama3.1 405b tokenizer path, defaults to 30F CI system path",
-    )
-
-    parser.addoption(
-        "--llama3-405b-json-path",
-        type=Path,
-        action="store",
-        default="/data/extra/models/llama3.1_405B/llama405b_test.json",
-        help="Llama3.1 405b fp8 parameters json path",
     )
 
     parser.addoption(
         "--llama3-405b-f16-model-path",
         type=Path,
         action="store",
-        default="/data/llama-3.1/405b/llama405b_fp16.irpa",
         help="Llama3.1 405b model path, defaults to 30F CI system path",
     )
 
@@ -159,30 +115,6 @@ def pytest_addoption(parser):
         action="store",
         default=None,
         help="Llama3.1 405b fp8 model path",
-    )
-
-    parser.addoption(
-        "--llama3-405b-f16-mlir-path",
-        type=Path,
-        action="store",
-        default="/data/extra/models/llama3.1_405B/llama405b_fp16_test.mlir",
-        help="Llama3.1 405b mlir path, defaults to 30F CI system path",
-    )
-
-    parser.addoption(
-        "--llama3-405b-fp8-mlir-path",
-        type=Path,
-        action="store",
-        default=None,
-        help="Llama3.1 405b fp8 mlir path",
-    )
-
-    parser.addoption(
-        "--llama3-405b-f16-vmfb-path",
-        type=Path,
-        action="store",
-        default="/data/extra/models/llama3.1_405B/llama405b_fp16.vmfb",
-        help="Llama3.1 405b fp16 vmfb path, defaults to 30F CI system path",
     )
 
     parser.addoption(
@@ -203,7 +135,6 @@ def pytest_addoption(parser):
     parser.addoption(
         "--iree-hip-target",
         action="store",
-        default="gfx942",
         help="Specify the iree-hip target version (e.g., gfx942)",
     )
 
