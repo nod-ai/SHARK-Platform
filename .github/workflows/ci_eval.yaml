@@ -66,6 +66,9 @@ jobs:
             iree-compiler \
             iree-runtime \
             "numpy<2.0"
+
+      - name: test benchmark
+        run: pytest sharktank/tests/models/llama/benchmark_amdgpu_tests.py -v -s --longrun -k 'testBenchmark8B_f16_Decomposed'
       - name: test1
         run: cd /home/nod/actions-runner-llama/_work/SHARK-Platform/SHARK-Platform/sharktank && python3 -m sharktank.examples.export_paged_llm_v1 --irpa-file /data/llama-3.1/8b/llama8b_f16.irpa --output-mlir /home/nod/actions-runner-llama/_work/SHARK-Platform/SHARK-Platform/tmp_perplexity_ci_artifacts/llama8b_f16_decomposed.mlir --output-config /home/nod/actions-runner-llama/_work/SHARK-Platform/SHARK-Platform/tmp_perplexity_ci_artifacts/llama8b_f16_decomposed.json --bs 100 --attention-kernel decomposed
       - name: Run perplexity test with vmfb
