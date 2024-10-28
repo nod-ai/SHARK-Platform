@@ -130,7 +130,7 @@ class PerplexityTest(unittest.TestCase):
         )
 
     @pytest.mark.xfail(
-        reason="Non-decomposed attention is not supported yet",
+        reason="FP8 model is unsupported",
     )
     @longrun
     def test_llama3_8B_fp8(self):
