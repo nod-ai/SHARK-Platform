@@ -137,9 +137,9 @@ class BaseBenchmarkTest(unittest.TestCase):
             raise NotImplementedError(
                 "attention_kernel torch_sdpa not yet plumbed through"
             )
-        # if tensor_parallelism_size:
-        #     export_args.append("--tensor-parallelism-size")
-        #     export_args.append(str(tensor_parallelism_size))
+        if tensor_parallelism_size:
+            export_args.append("--tensor-parallelism-size")
+            export_args.append(str(tensor_parallelism_size))
 
         cmd = subprocess.list2cmdline(export_args)
         return cmd
