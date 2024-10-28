@@ -98,6 +98,8 @@ class ExportArtifacts:
         else:
             logger.info(f"Exported to mlir successfully:\n" f"{proc.stdout}")
 
+        return proc.returncode
+
     @timeit
     def compile_to_vmfb(
         self,
@@ -146,14 +148,15 @@ class ExportArtifacts:
         )
 
         if self.attention_kernel == "decomposed":
-            self.export_to_mlir(
+            returncode = self.export_to_mlir(
                 mlir_path=mlir_path,
                 json_path=json_path,
             )
 
-            self.compile_to_vmfb(
-                mlir_path=mlir_path,
-                vmfb_path=vmfb_path,
-            )
+            if returncode == 0:
+                self.compile_to_vmfb(
+                    mlir_path=mlir_path,
+                    vmfb_path=vmfb_path,
+                )
 
         return vmfb_path
