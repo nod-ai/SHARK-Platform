@@ -23,7 +23,7 @@ jobs:
     name: "SDXL Tests"
     strategy:
       matrix:
-        version: [3.13-dev]
+        version: [3.12]
       fail-fast: false
     runs-on: llama-mi300x-1
     defaults:
