@@ -277,24 +277,20 @@ class SHORTFIN_API error : public std::exception {
  public:
   error(std::string message, iree_status_t failing_status);
   error(iree_status_t failing_status);
-  error(const error &) = delete;
+  error(const error &other)
+      : code_(other.code_),
+        message_(other.message_),
+        failing_status_(iree_status_clone(other.failing_status_)) {}
   error &operator=(const error &) = delete;
   ~error() { iree_status_ignore(failing_status_); }
-  const char *what() const noexcept override {
-    if (!status_appended_) {
-      AppendStatus();
-    }
-    return message_.c_str();
-  };
+  const char *what() const noexcept override { return message_.c_str(); };
 
   iree_status_code_t code() const { return code_; }
 
  private:
-  void AppendStatus() const noexcept;
   iree_status_code_t code_;
-  mutable std::string message_;
+  std::string message_;
   mutable iree_status_t failing_status_;
-  mutable bool status_appended_ = false;
 };
 
 #define SHORTFIN_IMPL_HANDLE_IF_API_ERROR(var, ...)                          \
