@@ -23,12 +23,10 @@ python -m shortfin_apps.sd.server --help
  - Download runtime artifacts (vmfbs, weights):
 
 ```
-wget https://sharkpublic.blob.core.windows.net/sharkpublic/sdxl/vmfbs/sfsd_vmfbs_gfx942_1023.zip
+wget https://sharkpublic.blob.core.windows.net/sharkpublic/sdxl/vmfbs/sfsd_vmfbs_gfx942_1028.zip
+
+# The sfsd_vmfbs_gfx942_1028.zip includes splat weights. You can download real weights with:
 wget https://sharkpublic.blob.core.windows.net/sharkpublic/sdxl/weights/sfsd_weights_1023.zip
-
-# Option to use splat weights instead
-wget https://sharkpublic.blob.core.windows.net/sharkpublic/sdxl/weights/sfsd_splat_1023.zip
-
 ```
  - Unzip the downloaded archives to ./vmfbs and /weights
  - Run CLI server interface (you can find `sdxl_config_i8.json` in shortfin_apps/sd/examples):
