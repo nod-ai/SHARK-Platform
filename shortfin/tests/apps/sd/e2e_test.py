@@ -149,9 +149,7 @@ def bytes_to_img(bytes, idx=0, width=1024, height=1024):
     image = Image.frombytes(
         mode="RGB", size=(width, height), data=base64.b64decode(bytes)
     )
-    img_fn = f"shortfin_sd_test_output_{timestamp}_{idx}.png"
-    image.save(img_fn)
-    return img_fn
+    return image
 
 
 def send_json_file(url="http://0.0.0.0:8000"):
@@ -175,8 +173,8 @@ def send_json_file(url="http://0.0.0.0:8000"):
                 if isinstance(request["height"], list)
                 else request["height"]
             )
-            img_fn = bytes_to_img(item.encode("utf-8"), idx, width, height)
-            imgs.append(img_fn)
+            img = bytes_to_img(item.encode("utf-8"), idx, width, height)
+            imgs.append(img)
 
     except requests.exceptions.RequestException as e:
         print(f"Error sending the request: {e}")
