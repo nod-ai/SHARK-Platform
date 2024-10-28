@@ -26,6 +26,10 @@ class BaseProgramParameters;
 class Fiber;
 class System;
 
+namespace detail {
+struct ProgramIsolate;
+}  // namespace detail
+
 enum class ProgramInvocationModel {
   // Uses the coarse-fences invocation model. In this model, the last two
   // arguments are a wait and signal fence, which are used for function-level
@@ -35,6 +39,24 @@ enum class ProgramInvocationModel {
   NONE,
   // The function is not annotated or is simple/synchronous.
   UNKNOWN,
+};
+
+// The level of isolation that a program has with respect to concurrent use.
+enum class ProgramIsolation {
+  // There is no isolation: Callers are completely on their own to only issue
+  // concurrent invocations if supported.
+  NONE = 0,
+
+  // Each fiber in the system that makes calls into the program will have its
+  // own shallow fork of the module. This is done on-demand and the root
+  // program is retained for the lifetime of any referencing fibers.
+  // Concurrent calls on the same fiber are considered programming errors and
+  // will be flagged as such at an appropriate debug level.
+  PER_FIBER = 1,
+
+  // Each call triggers a shallow fork of the module. This is the most expensive
+  // but safest way to ensure complete isolation of stateless invocations.
+  PER_CALL = 2,
 };
 
 // State related to making an invocation of a function on a program.
@@ -67,7 +89,8 @@ class SHORTFIN_API ProgramInvocation {
 
   static Ptr New(std::shared_ptr<Fiber> fiber, iree::vm_context_ptr vm_context,
                  iree_vm_function_t &vm_function,
-                 ProgramInvocationModel invocation_model);
+                 ProgramInvocationModel invocation_model,
+                 detail::ProgramIsolate *isolate);
   ProgramInvocation(const ProgramInvocation &) = delete;
   ProgramInvocation &operator=(const ProgramInvocation &) = delete;
   ProgramInvocation &operator=(ProgramInvocation &&) = delete;
@@ -133,6 +156,11 @@ class SHORTFIN_API ProgramInvocation {
  private:
   ProgramInvocation();
   void CheckNotScheduled();
+  // Eagerly releases context when it is known that no further use of it can
+  // be made (allowing it to be returned to a pool prior to the invocation
+  // actually being recycled). Object destruction also does this, but possibly
+  // extending the context lifetime.
+  void ReleaseContext();
 
   // Returns a pointer to the trailing arg list.
   iree_vm_list_t *arg_list();
@@ -156,8 +184,6 @@ class SHORTFIN_API ProgramInvocation {
   // This must not contain entities that require destruction or cannot be
   // trivially copied.
   struct Params {
-    // Context is retained upon construction and released when scheduled.
-    iree_vm_context_t *context;
     iree_vm_function_t function;
     ProgramInvocationModel invocation_model;
   };
@@ -169,6 +195,8 @@ class SHORTFIN_API ProgramInvocation {
   } state;
 
   std::shared_ptr<Fiber> fiber_;
+  iree::vm_context_ptr vm_context_;
+  detail::ProgramIsolate *isolate_;
   iree_vm_list_t *result_list_ = nullptr;
   std::optional<Future> future_;
   iree::hal_fence_ptr wait_fence_;
@@ -187,7 +215,7 @@ class SHORTFIN_API ProgramFunction {
   std::string_view calling_convention() const;
   ProgramInvocationModel invocation_model() const { return invocation_model_; }
 
-  ProgramInvocation::Ptr CreateInvocation();
+  ProgramInvocation::Ptr CreateInvocation(std::shared_ptr<Fiber> fiber);
 
   std::string to_s() const;
 
@@ -195,17 +223,16 @@ class SHORTFIN_API ProgramFunction {
   operator iree_vm_function_t &() { return vm_function_; }
 
  private:
-  ProgramFunction(std::shared_ptr<Fiber> fiber, iree::vm_context_ptr vm_context,
-                  iree_vm_function_t vm_function,
+  ProgramFunction(iree::vm_context_ptr vm_context,
+                  iree_vm_function_t vm_function, ProgramIsolation isolation,
                   std::optional<ProgramInvocationModel> invocation_model = {});
 
   static ProgramInvocationModel GetInvocationModelFromFunction(
       iree_vm_function_t &f);
 
-  // The context that this function was resolved against.
-  std::shared_ptr<Fiber> fiber_;
   iree::vm_context_ptr vm_context_;
   iree_vm_function_t vm_function_;
+  ProgramIsolation isolation_;
   ProgramInvocationModel invocation_model_;
   friend class Program;
 };
@@ -231,6 +258,7 @@ class SHORTFIN_API ProgramModule {
   std::string to_s() const;
   iree_vm_module_t *vm_module() const { return vm_module_; }
   std::string_view name() const;
+  System &system() const { return *system_; }
 
   // Loads a dynamic bytecode module (VMFB) from a path on the file system.
   static ProgramModule Load(System &system, const std::filesystem::path &path,
@@ -246,10 +274,12 @@ class SHORTFIN_API ProgramModule {
   std::vector<std::string> exports() const;
 
  protected:
-  explicit ProgramModule(iree::vm_module_ptr vm_module)
-      : vm_module_(std::move(vm_module)) {}
+  explicit ProgramModule(std::shared_ptr<System> system,
+                         iree::vm_module_ptr vm_module)
+      : system_(std::move(system)), vm_module_(std::move(vm_module)) {}
 
  private:
+  std::shared_ptr<System> system_;
   iree::vm_module_ptr vm_module_;
 };
 
@@ -269,15 +299,19 @@ class SHORTFIN_API Program {
   struct Options {
     Options() {}
 
+    // Ordered list of devices to bind this program to.
+    std::span<const Device *> devices;
+
+    // The isolation level to apply to program invocation.
+    ProgramIsolation isolation = ProgramIsolation::PER_FIBER;
+
     // Enables program-wide execution tracing (to stderr).
     bool trace_execution = false;
   };
 
-  // Loads a program attached to a fiber with a list of user provided modules
-  // and options.
-  static Program Load(std::shared_ptr<Fiber> fiber,
-                      std::span<const ProgramModule> modules,
-                      Options options = {});
+  // Load a program from a list of modules and options.
+  static Program Load(std::span<const ProgramModule> modules,
+                      Options &&options);
 
   // Looks up a public function by fully qualified name (i.e. module.function).
   // Returns nothing if not found.
@@ -290,12 +324,16 @@ class SHORTFIN_API Program {
   // Gets the name of all exported functions.
   std::vector<std::string> exports() const;
 
+  // Eagerly does any per-fiber isolation preparation for the program at a
+  // convenient point (usually init time) to avoid first-invocation overhead.
+  void PrepareIsolate(Fiber &fiber);
+
  private:
-  explicit Program(std::shared_ptr<Fiber> fiber,
-                   iree::vm_context_ptr vm_context)
-      : fiber_(std::move(fiber)), vm_context_(std::move(vm_context)) {}
-  std::shared_ptr<Fiber> fiber_;
+  explicit Program(iree::vm_context_ptr vm_context, ProgramIsolation isolation)
+      : vm_context_(std::move(vm_context)), isolation_(isolation) {}
+
   iree::vm_context_ptr vm_context_;
+  ProgramIsolation isolation_;
   friend class Fiber;
 };
 
@@ -353,6 +391,27 @@ class SHORTFIN_API StaticProgramParameters : public BaseProgramParameters {
   iree_allocator_t host_allocator_;
   iree::io_parameter_index_ptr index_;
 };
+
+namespace detail {
+// See Fiber::program_isolates_.
+struct ProgramIsolate {
+  ProgramIsolate(iree::vm_context_ptr parent_context)
+      : parent_context(std::move(parent_context)) {}
+  iree::vm_context_ptr parent_context;
+  std::vector<iree::vm_context_ptr> fork_contexts;
+
+  // Acquires an isolate for the given fiber. This will return a context which
+  // may be the original program context or may be a forked child that is
+  // available for use. It is only valid to call this when isolation != NONE.
+  static std::pair<iree::vm_context_ptr, detail::ProgramIsolate *>
+  AcquireIsolate(Fiber &fiber, iree::vm_context_ptr root_context,
+                 ProgramIsolation isolation);
+
+  // Releases an isolate obtained from a fiber in AcquireIsolate.
+  static void ReleaseIsolate(Fiber &fiber, iree::vm_context_ptr context,
+                             ProgramIsolate *isolate);
+};
+};  // namespace detail
 
 }  // namespace shortfin::local
 
