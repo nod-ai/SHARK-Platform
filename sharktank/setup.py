@@ -13,17 +13,21 @@ from setuptools import find_namespace_packages, setup  # type: ignore
 
 THIS_DIR = Path(__file__).resolve().parent
 REPO_DIR = THIS_DIR.parent
-VERSION_INFO_FILE = REPO_DIR / "version_info.json"
+SETUPPY_DIR = os.path.realpath(os.path.dirname(__file__))
 
 
 with open(
     os.path.join(
-        THIS_DIR,
+        SETUPPY_DIR,
         "README.md",
     ),
     "rt",
 ) as f:
     README = f.read()
+
+
+# Setup and get version information.
+VERSION_INFO_FILE = os.path.join(SETUPPY_DIR, "version_info.json")
 
 
 def load_version_info():
