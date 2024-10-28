@@ -42,7 +42,7 @@ jobs:
         uses: actions/setup-python@39cd14951b08e74b54015e9e001cdefcf80e669f # v5.1.1
         with:
           python-version: ${{matrix.version}}
-          cache: "pip"
+          cache: ${{ env.PIP_CACHE_DIR }}
 
       - name: "Checkout Code"
         uses: actions/checkout@v3
@@ -63,7 +63,8 @@ jobs:
           pip install --no-compile -r pytorch-cpu-requirements.txt
           pip install --no-compile -f https://iree.dev/pip-release-links.html --src deps \
             -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
-          pip install --no-compile -r requirements.txt -r sharktank/requirements-tests.txt -e sharktank/ shortfin/
+          pip install --no-compile onnx==1.15.0
+          pip install --no-compile -r requirements.txt -r shortfin/requirements-tests.txt -e sharktank/ shortfin/
 
           # Try with the latest nightly releases, not what iree-turbine pins.
           # We could also pin to a known working or stable version.
