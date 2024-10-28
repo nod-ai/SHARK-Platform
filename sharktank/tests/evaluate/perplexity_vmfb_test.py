@@ -165,7 +165,7 @@ class PerplexityTest(unittest.TestCase):
         )
 
     @pytest.mark.xfail(
-        reason="Sharding needs to be fixed",
+        reason="Sharding is unsupported",
     )
     @longrun
     def test_llama3_405B_f16_decomposed(self):

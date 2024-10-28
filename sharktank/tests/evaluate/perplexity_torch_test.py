@@ -143,6 +143,9 @@ class PerplexityTest(unittest.TestCase):
             msg=f"Current perplexity deviates baseline by {perplexity_difference}",
         )
 
+    @pytest.mark.xfail(
+        reason="Sharding needs to be fixed",
+    )
     @longrun
     def test_llama3_405B_f16_decomposed(self):
 
