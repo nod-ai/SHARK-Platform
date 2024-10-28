@@ -119,7 +119,7 @@ class InferenceExecRequest(sf.Message):
         for item in gen_inputs:
             received = getattr(gen_req, item, None)
             if isinstance(received, list):
-                if index > len(received):
+                if index >= (len(received)):
                     if len(received) == 1:
                         rec_input = received[0]
                     else:

@@ -33,7 +33,7 @@ def sd_artifacts(target: str = "gfx942"):
     return {
         "model_config": "sdxl_config_i8.json",
         "clip_vmfb": f"stable_diffusion_xl_base_1_0_bs1_64_fp16_text_encoder_{target}.vmfb",
-        "scheduler_vmfb": f"stable_diffusion_xl_base_1_0_EulerDiscreteScheduler_bs1_1024x1024_fp16_20_{target}.vmfb",
+        "scheduler_vmfb": f"stable_diffusion_xl_base_1_0_EulerDiscreteScheduler_bs1_1024x1024_fp16_{target}.vmfb",
         "unet_vmfb": f"stable_diffusion_xl_base_1_0_bs1_64_1024x1024_i8_punet_{target}.vmfb",
         "vae_vmfb": f"stable_diffusion_xl_base_1_0_bs1_1024x1024_fp16_vae_{target}.vmfb",
         "clip_params": "clip_splat_fp16.irpa",

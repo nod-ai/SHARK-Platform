@@ -50,20 +50,23 @@ def send_json_file(file_path):
         timestamp = dt.now().strftime("%Y-%m-%d_%H-%M-%S")
         request = json.loads(response.request.body.decode("utf-8"))
         for idx, item in enumerate(response.json()["images"]):
-            width = (
-                request["width"][idx]
-                if isinstance(request["height"], list)
-                else request["height"]
-            )
-            height = (
-                request["height"][idx]
-                if isinstance(request["height"], list)
-                else request["height"]
-            )
+            width = get_batched(request, "width", idx)
+            height = get_batched(request, "height", idx)
             bytes_to_img(item.encode("utf-8"), idx, width, height)
 
     except requests.exceptions.RequestException as e:
         print(f"Error sending the request: {e}")
+
+
+def get_batched(request, arg, idx):
+    if isinstance(request[arg], list):
+        if len(request[arg]) == 1:
+            indexed = request[arg][0]
+        else:
+            indexed = request[arg][idx]
+    else:
+        indexed = request[arg]
+    return indexed
 
 
 if __name__ == "__main__":
