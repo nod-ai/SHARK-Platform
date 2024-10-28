@@ -11,8 +11,6 @@ from pathlib import Path
 
 from setuptools import find_namespace_packages, setup  # type: ignore
 
-THIS_DIR = Path(__file__).resolve().parent
-REPO_DIR = THIS_DIR.parent
 SETUPPY_DIR = os.path.realpath(os.path.dirname(__file__))
 
 
@@ -58,7 +56,7 @@ def load_requirement_pins(requirements_file: Path):
     requirement_pins.update(dict(pin_pairs))
 
 
-load_requirement_pins(REPO_DIR / "requirements.txt")
+load_requirement_pins("requirements.txt")
 
 
 def get_version_spec(dep: str):
