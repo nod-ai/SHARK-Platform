@@ -22,15 +22,16 @@ def mobilenet_onnx_path(tmp_path_factory):
         import onnx
     except ModuleNotFoundError:
         raise pytest.skip("onnx python package not available")
-    print("Downloading mobilenet.onnx")
     parent_dir = tmp_path_factory.mktemp("mobilenet_onnx")
     orig_onnx_path = parent_dir / "mobilenet_orig.onnx"
-    urllib.request.urlretrieve(
-        "https://github.com/onnx/models/raw/main/validated/vision/classification/mobilenet/model/mobilenetv2-12.onnx",
-        orig_onnx_path,
-    )
     upgraded_onnx_path = parent_dir / "mobilenet.onnx"
-    upgrade_onnx(orig_onnx_path, upgraded_onnx_path)
+    if not upgraded_onnx_path.exists():
+        print("Downloading mobilenet.onnx")
+        urllib.request.urlretrieve(
+            "https://github.com/onnx/models/raw/main/validated/vision/classification/mobilenet/model/mobilenetv2-12.onnx",
+            orig_onnx_path,
+        )
+        upgrade_onnx(orig_onnx_path, upgraded_onnx_path)
     return upgraded_onnx_path
 
 
@@ -41,15 +42,18 @@ def mobilenet_compiled_cpu_path(mobilenet_onnx_path):
         import iree.compiler.tools.import_onnx.__main__ as import_onnx
     except ModuleNotFoundError:
         raise pytest.skip("iree.compiler packages not available")
-    print("Compiling mobilenet")
     mlir_path = mobilenet_onnx_path.parent / "mobilenet.mlir"
     vmfb_path = mobilenet_onnx_path.parent / "mobilenet_cpu.vmfb"
-    args = import_onnx.parse_arguments(["-o", str(mlir_path), str(mobilenet_onnx_path)])
-    import_onnx.main(args)
-    tools.compile_file(
-        str(mlir_path),
-        output_file=str(vmfb_path),
-        target_backends=["llvm-cpu"],
-        input_type="onnx",
-    )
+    if not vmfb_path.exists():
+        print("Compiling mobilenet")
+        args = import_onnx.parse_arguments(
+            ["-o", str(mlir_path), str(mobilenet_onnx_path)]
+        )
+        import_onnx.main(args)
+        tools.compile_file(
+            str(mlir_path),
+            output_file=str(vmfb_path),
+            target_backends=["llvm-cpu"],
+            input_type="onnx",
+        )
     return vmfb_path
