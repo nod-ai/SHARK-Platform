@@ -116,10 +116,9 @@ def main():
                 page_count=hp.context_length // llama_config.block_seq_stride
             )
             page_dim = torch.export.Dim("page")
-            dynamic_shapes = [{0: page_dim}]
 
+            dynamic_shapes = [{0: page_dim}]
             unpacked = cache_state
-            dynamic_shapes = dynamic_shapes
             arg_affinities = {}
             shard_dim = None
 
