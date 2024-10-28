@@ -100,4 +100,4 @@ jobs:
       working-directory: ${{ env.LIBSHORTFIN_DIR }}
       run: |
         ctest --timeout 30 --output-on-failure --test-dir build
-        pytest shortfin/tests/apps/sd/e2e_test.py -v -s --system=hostcpu
+        pytest tests/apps/sd/e2e_test.py -v -s --system=hostcpu
