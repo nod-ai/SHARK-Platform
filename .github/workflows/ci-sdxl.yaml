@@ -19,7 +19,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test_llama:
+  test_sd:
     name: "SDXL Tests"
     strategy:
       matrix:
@@ -31,7 +31,9 @@ jobs:
         shell: bash
     env:
       PIP_CACHE_DIR: "${{ github.workspace }}/.pip-cache"
+      LIBSHORTFIN_DIR: ${{ github.workspace }}/shortfin/
       VENV_DIR: ${{ github.workspace }}/.venv
+    
     steps:
       - name: Get Current Date
         id: date
@@ -47,6 +49,14 @@ jobs:
       - name: "Checkout Code"
         uses: actions/checkout@v3
 
+      - name: Install pip deps
+        working-directory: ${{ env.SHORTFIN_DIR }}
+        run: |
+          pip install -r requirements-tests.txt
+          pip install -r requirements-iree-compiler.txt
+          pip install -r .
+          pip freeze
+          
       - name: Cache Pip Packages
         uses: actions/cache@v4
         id: cache-pip
@@ -54,25 +64,6 @@ jobs:
           path: ${{ env.PIP_CACHE_DIR }}
           key: pip-${{ steps.setup_python.outputs.python-version }}-${{ hashFiles('*requirements.txt') }}
 
-      - name: Install pip deps
-        run: |
-          python -m pip install --no-compile --upgrade pip
-          # Note: We install in three steps in order to satisfy requirements
-          # from non default locations first. Installing the PyTorch CPU
-          # wheels saves multiple minutes and a lot of bandwidth on runner setup.
-          pip install --no-compile -r pytorch-cpu-requirements.txt
-          pip install --no-compile -f https://iree.dev/pip-release-links.html --src deps \
-            -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
-          pip install --no-compile onnx==1.15.0
-          pip install --no-compile -r requirements.txt -r shortfin/requirements-tests.txt -e sharktank/ shortfin/
-
-          # Try with the latest nightly releases, not what iree-turbine pins.
-          # We could also pin to a known working or stable version.
-          # This should eventually stabilize. Do the best we can for now.
-          pip install -f https://iree.dev/pip-release-links.html --upgrade \
-            iree-compiler \
-            iree-runtime \
-            "numpy<2.0"
 
       - name: Run SDXL test
-        run: pytest shortfin/tests/apps/sd/e2e_test.py -v -s --longrun --device=amdgpu
+        run: pytest shortfin/tests/apps/sd/e2e_test.py -v -s --device=amdgpu
