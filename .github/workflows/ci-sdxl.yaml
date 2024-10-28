@@ -62,7 +62,7 @@ jobs:
           pip install --no-compile -r pytorch-cpu-requirements.txt
           pip install --no-compile -f https://iree.dev/pip-release-links.html --src deps \
             -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
-          pip install --no-compile -r requirements.txt -r sharktank/requirements-tests.txt -e sharktank/
+          pip install --no-compile -r requirements.txt -r sharktank/requirements-tests.txt -e sharktank/ shortfin/
 
           # Try with the latest nightly releases, not what iree-turbine pins.
           # We could also pin to a known working or stable version.
