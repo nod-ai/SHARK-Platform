@@ -73,4 +73,4 @@ jobs:
             "numpy<2.0"
 
       - name: Run SDXL test
-        run: pytest shortfin/tests/apps/sd/e2e_test -v -s --longrun --device=amdgpu
+        run: pytest shortfin/tests/apps/sd/e2e_test.py -v -s --longrun --device=amdgpu
