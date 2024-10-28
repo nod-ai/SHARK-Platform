@@ -144,6 +144,7 @@ def main():
             #   [bs, seq_length, attn_head_count, attn_head_dim]
             dynamic_shapes = [None]
             arg_affinities = {}
+            shard_dim = None
             return torch.stack(cache_state), shard_dim, dynamic_shapes, arg_affinities
         else:
             raise NotImplementedError(f"Unsupported KV cache type: {type(model.cache)}")
