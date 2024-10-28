@@ -6,14 +6,14 @@ on:
     paths:
       - '.github/workflows/ci-sharktank.yml'
       - 'sharktank/**'
-      - '*requirements.txt'
+      - '*requirements*.txt'
   push:
     branches:
       - main
     paths:
       - '.github/workflows/ci-sharktank.yml'
       - 'sharktank/**'
-      - '*requirements.txt'
+      - '*requirements*.txt'
 
 concurrency:
   # A PR number if a pull request and otherwise the commit hash. This cancels
@@ -52,7 +52,7 @@ jobs:
         id: cache-pip
         with:
           path: ${{ env.PIP_CACHE_DIR }}
-          key: pip-${{ steps.setup_python.outputs.python-version }}-${{ hashFiles('*requirements.txt') }}
+          key: pip-${{ steps.setup_python.outputs.python-version }}-${{ hashFiles('*requirements*.txt','sharktank/requirements*.txt') }}
 
       - name: Install pip deps
         run: |
