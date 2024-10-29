@@ -43,7 +43,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt update -y
-        sudo apt install clang lld cmake ninja-build -y
+        sudo apt install cmake ninja-build -y
 
     - name: Checkout repository
       uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
@@ -89,9 +89,6 @@ jobs:
           -Bbuild \
           -DCMAKE_C_COMPILER=clang-18 \
           -DCMAKE_CXX_COMPILER=clang++-18 \
-          -DCMAKE_C_LINKER=lld-18 \
-          -DCMAKE_CXX_LINKER=lld-18 \
-          -DCMAKE_LINKER_TYPE=LLD \
           -DSHORTFIN_BUNDLE_DEPS=ON \
           -DSHORTFIN_IREE_SOURCE_DIR="${{ env.IREE_REPO_DIR }}" \
           -DSHORTFIN_BUILD_PYTHON_BINDINGS=ON
