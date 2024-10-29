@@ -337,20 +337,29 @@ class InferenceExecutorProcess(sf.Process):
                         m.items = self.exec_requests[i].input_token_ids
             tokens_host.copy_to(tokens)
 
-            # Populate seq_lens.
-            seq_lens_host = seq_lens.for_transfer()
-            with seq_lens_host.map(discard=True) as m:
-                m.fill(0)
-                m.items = [len(req.input_token_ids) for req in self.exec_requests]
-            seq_lens_host.copy_to(seq_lens)
+            # For prefill, populate seq_lens
+            if self.phase == InferencePhase.PREFILL:
+                seq_lens_host = seq_lens.for_transfer()
+                with seq_lens_host.map(discard=True) as m:
+                    m.fill(0)
+                    m.items = [len(req.input_token_ids) for req in self.exec_requests]
+                seq_lens_host.copy_to(seq_lens)
 
-            # For decode, populate start_positions.
+            # For decode, populate start_positions and seq_lens.
+            # paged_llm_v1 and export_paged_llm_v1 do some funky things with start_positions and seq_lens
+            # TODO: make them not so funky
             if self.phase == InferencePhase.DECODE:
                 start_positions_host = start_positions.for_transfer()
                 with start_positions_host.map(discard=True) as m:
                     m.fill(0)
                     m.items = [req.start_position for req in self.exec_requests]
                 start_positions_host.copy_to(start_positions)
+
+                seq_lens_host = seq_lens.for_transfer()
+                with seq_lens_host.map(discard=True) as m:
+                    m.fill(0)
+                    m.items = [req.start_position + 1 for req in self.exec_requests]
+                seq_lens_host.copy_to(seq_lens)
 
             # Populate cache pages.
             seq_block_ids_host = seq_block_ids.for_transfer()
