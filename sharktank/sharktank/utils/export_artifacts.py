@@ -14,7 +14,6 @@ from datetime import timedelta
 from typing import List
 
 import iree.compiler as ireec
-import iree.runtime as iree_rt
 
 logger = logging.getLogger("eval")
 
