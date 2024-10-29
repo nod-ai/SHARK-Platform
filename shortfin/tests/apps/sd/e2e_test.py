@@ -82,6 +82,7 @@ def start_server(fibers_per_device=1, isolation="per_fiber"):
         [
             f"--fibers_per_device={fibers_per_device}",
             f"--isolation={isolation}",
+            f"--show_progress=False",
         ]
     )
     runner = ServerRunner(srv_args)
@@ -230,8 +231,6 @@ def bytes_to_img(bytes, idx=0, width=1024, height=1024):
     image = Image.frombytes(
         mode="RGB", size=(width, height), data=base64.b64decode(bytes)
     )
-    if os.environ["SF_SAVE_TEST_IMAGES"] == "1":
-        image.save(f"shortfin_test_output_{timestamp}.png", format="PNG")
     return image
 
 

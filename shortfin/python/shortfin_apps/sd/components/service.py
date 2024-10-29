@@ -47,6 +47,7 @@ class GenerateService:
         model_params: ModelParams,
         fibers_per_device: int,
         prog_isolation: str = "per_fiber",
+        show_progress: bool = False,
     ):
         self.name = name
 
@@ -59,6 +60,7 @@ class GenerateService:
         self.inference_functions: dict[str, dict[str, sf.ProgramFunction]] = {}
         self.inference_programs: dict[str, sf.Program] = {}
         self.trace_execution = False
+        self.show_progress = show_progress
         self.fibers_per_device = fibers_per_device
         self.prog_isolation = prog_isolations[prog_isolation]
         self.workers = []
@@ -515,7 +517,7 @@ class InferenceExecutorProcess(sf.Process):
         )
         for i, t in tqdm(
             enumerate(range(step_count)),
-            disable=False,
+            disable=(not self.show_progress),
             desc=f"Worker #{self.worker_index} DENOISE (bs{req_bs})",
         ):
             step = sfnp.device_array.for_device(device, [1], sfnp.sint64)
