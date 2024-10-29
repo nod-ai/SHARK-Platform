@@ -47,7 +47,7 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
     def setUp(self):
         super().setUp()
         # TODO: add numpy files to Azure and download from it
-        self.artifacts_dir = Path("/data/extra/models/llama3.1_8B")
+        self.artifacts_dir = Path("/data/llama-3.1/8b")
         self.irpa_path = self.artifacts_dir / "llama8b_f16.irpa"
         self.irpa_path_fp8 = self.artifacts_dir / "llama8b_fp8.irpa"
         self.tensor_parallelism_size = 1
@@ -105,6 +105,8 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
             "--benchmark_repetitions=3",
         ]
 
+    @longrun
+    @is_mi300x
     def testBenchmark8B_f16_Decomposed(self):
         output_file_name = self.dir_path_8b / "f16_decomposed"
         output_mlir = self.llama8b_f16_artifacts.create_file(
@@ -152,6 +154,8 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
             cwd=self.repo_root,
         )
 
+    @longrun
+    @is_mi300x
     @pytest.mark.xfail(reason="torch_sdpa not yet plumbed through", strict=True)
     def testBenchmark8B_f16_Non_Decomposed(self):
         output_file_name = self.dir_path_8b / "f16_torch"
