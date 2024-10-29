@@ -183,7 +183,7 @@ elseif (SHORTFIN_BUNDLE_DEPS)
   FetchContent_Declare(
     shortfin_iree
     GIT_REPOSITORY https://github.com/iree-org/iree.git
-    GIT_TAG 67ba1c45424d5cedc7baf7bfe8a998ee86e510af
+    GIT_TAG candidate-20241029.1062
     GIT_SUBMODULES ${IREE_SUBMODULES}
     GIT_SHALLOW TRUE
     SYSTEM
