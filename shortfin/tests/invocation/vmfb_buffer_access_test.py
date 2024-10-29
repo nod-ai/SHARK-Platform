@@ -14,6 +14,7 @@ import shortfin.array as sfnp
 import array
 import random
 import struct
+import sys
 
 
 @pytest.fixture(scope="session")
@@ -115,14 +116,7 @@ def kvcache_compiled_cpu_path():
             input_type="AUTO",
         )
 
-        # Read the compiled binary
-        compiled_binary = vmfb_path.read_bytes()
-
-        # Create a new temporary file for the final vmfb
-        final_vmfb = tmp_dir_path / "final_kvcache_cpu.vmfb"
-        final_vmfb.write_bytes(compiled_binary)
-
-        yield final_vmfb
+        yield vmfb_path
 
 
 def float_to_float16(f):
@@ -192,6 +186,10 @@ def create_scalar_device_array(device, value, dtype=sfnp.int64):
     return arr
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="PermissionError: [WinError 5] Access is denied: 'C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\tmpkuq8cdap\\final_kvcache_cpu.vmfb'",
+)
 @pytest.mark.parametrize(
     "await_before_invoke",
     [
