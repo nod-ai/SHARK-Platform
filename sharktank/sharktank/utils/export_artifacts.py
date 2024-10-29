@@ -5,11 +5,13 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 import os
+import sys
 import subprocess
 import logging
 import time
 from pathlib import Path
 from datetime import timedelta
+from typing import List
 
 import iree.compiler as ireec
 
@@ -25,6 +27,7 @@ logger.root.handlers[0].setFormatter(
 class ExportArtifacts:
     def __init__(
         self,
+        *,
         irpa_path: str,
         batch_size: int,
         iree_hip_target: str,
@@ -60,8 +63,43 @@ class ExportArtifacts:
         return wrapper
 
     @timeit
+    def shard_irpa_file(
+        self,
+        *,
+        output_file: str,
+    ):
+        shard_irpa_args = [
+            "python3",
+            "-m",
+            "sharktank.models.llama.tools.shard_llama",
+            "--irpa-file",
+            self.irpa_path,
+            "--output-file",
+            output_file,
+            "--shard_count",
+            str(self.tensor_parallelism_size),
+        ]
+
+        cwd = self.sharktank_dir
+        cmd = subprocess.list2cmdline(shard_irpa_args)
+
+        logger.info(f"Sharding irpa file:\n" f"cd {cwd} && {cmd}")
+
+        proc = subprocess.run(cmd, shell=True, capture_output=True, cwd=cwd)
+        if proc.returncode != 0:
+            logger.error(
+                f"Error sharding irpa file with shard_llama.py\n"
+                f"{proc.stdout+proc.stderr}"
+            )
+        else:
+            logger.info(f"Sharded irpa file successfully:\n" f"{proc.stdout}")
+
+        return proc.returncode
+
+    @timeit
     def export_to_mlir(
         self,
+        *,
         mlir_path: str,
         json_path: str,
     ):
@@ -78,18 +116,16 @@ class ExportArtifacts:
             "--bs",
             str(self.batch_size),
         ]
-        if self.attention_kernel == "decomposed":
+        if self.attention_kernel in ["decomposed", "torch"]:
             export_args.append("--attention-kernel")
             export_args.append(self.attention_kernel)
-        elif self.attention_kernel == "torch_sdpa":
-            raise NotImplementedError("attention_kernel torch_sdpa not implemented yet")
 
         cwd = self.sharktank_dir
         cmd = subprocess.list2cmdline(export_args)
 
         logger.info(f"Exporting mlir:\n" f"cd {cwd} && {cmd}")
 
-        proc = subprocess.run(export_args, capture_output=True, cwd=cwd, text=True)
+        proc = subprocess.run(cmd, shell=True, capture_output=True, cwd=cwd)
         if proc.returncode != 0:
             logger.error(
                 f"Error exporting mlir with export_paged_llm_v1.py\n"
@@ -103,12 +139,14 @@ class ExportArtifacts:
     @timeit
     def compile_to_vmfb(
         self,
+        *,
         mlir_path,
         vmfb_path,
+        hal_dump_path,
     ):
         # TODO: Control flag to enable multiple backends
         compile_flags = ["--iree-hip-target=" + self.iree_hip_target]
-
+        compile_flags += [f"--iree-hal-dump-executable-files-to={hal_dump_path}/files"]
         try:
             ireec.compile_file(
                 input_file=mlir_path,
@@ -121,7 +159,43 @@ class ExportArtifacts:
         else:
             logger.info(f"Compiled to vmfb successfully:\n" f"{vmfb_path}")
 
-    def create_file(self, suffix, prefix):
+    def iree_benchmark_vmfb(
+        self,
+        *,
+        hip_device_id: str,
+        vmfb_name: str,
+        irpa_path: str,
+        args: List[str],
+        cwd: str | Path,
+    ):
+        """Runs a compiled program with the given args using `iree-benchmark-module`.
+        This assumes that the `iree-benchmark-module` command is available (usually via PATH).
+        Args:
+            vmfb_name: Name of the .vmfb file (relative to `cwd`).
+            args: List of arguments to pass to `iree-benchmark-module`.
+            cwd: Working directory to run the command within. (either string or Path works)
+            compile_cmd: Command used to compile the program, for inclusion in error messages.
+        Raises Exception if running fails for some reason.
+        """
+        benchmark_args = [
+            f"ROCR_VISIBLE_DEVICES={hip_device_id}",
+            "iree-benchmark-module",
+            f"--device=hip://{hip_device_id}",
+            "--hip_use_streams=true",
+            "--hip_allow_inline_execution=true",
+            "--device_allocator=caching",
+            f"--module={vmfb_name}",
+            f"--parameters=model={irpa_path}",
+        ]
+        benchmark_args += args
+        cmd = subprocess.list2cmdline(benchmark_args)
+        logging.getLogger().info(f"Launching run command:\n" f"cd {cwd} && {cmd}")
+        proc = subprocess.run(cmd, shell=True, stdout=sys.stdout, cwd=cwd)
+        return_code = proc.returncode
+        if return_code != 0:
+            raise RuntimeError(f"Error running benchmark {cmd} in cwd {cwd}")
+
+    def create_file(self, *, suffix, prefix):
         file_path = Path(prefix).with_suffix(suffix)
         f = open(file_path, "w")
         return file_path
