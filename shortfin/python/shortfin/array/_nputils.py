@@ -71,6 +71,13 @@ def _find_mode(
 def debug_log_tensor_stats(tensor: sfnp.device_array) -> None:
     """Log statistics about a device array to the debug log.
 
+    The following statistics are logged:
+    - NaN count
+    - Shape, dtype
+    - Min, max, mean, mode (excluding NaN values)
+    - First 10 elements
+    - Last 10 elements
+
     Args:
         tensor (sfnp.device_array): The device array to log statistics for.
     """
