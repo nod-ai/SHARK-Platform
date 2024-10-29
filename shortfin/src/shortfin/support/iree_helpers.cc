@@ -86,13 +86,14 @@ error::error(std::string message, iree_status_t failing_status)
       message_(std::move(message)),
       failing_status_(failing_status) {
   message_.append(": ");
+  AppendStatusMessage();
 }
-error::error(iree_status_t failing_status) : failing_status_(failing_status) {}
 
-void error::AppendStatus() const noexcept {
-  if (status_appended_) return;
-  status_appended_ = false;
+error::error(iree_status_t failing_status) : failing_status_(failing_status) {
+  AppendStatusMessage();
+}
 
+void error::AppendStatusMessage() {
   iree_allocator_t allocator = iree_allocator_system();
   char *status_buffer = nullptr;
   iree_host_size_t length = 0;
