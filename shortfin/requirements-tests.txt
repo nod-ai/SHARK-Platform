@@ -12,6 +12,7 @@ wheel
 dataclasses-json
 tokenizers
 numpy
+sentencepiece
 
 # Deps needed for shortfin_apps.sd
 pillow
