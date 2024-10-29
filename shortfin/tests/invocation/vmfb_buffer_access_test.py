@@ -185,10 +185,6 @@ def create_scalar_device_array(device, value, dtype=sfnp.int64):
     return arr
 
 
-@pytest.mark.skipif(
-    sys.platform == "win32",
-    reason="PermissionError: [WinError 5] Access is denied: 'C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\tmpkuq8cdap\\final_kvcache_cpu.vmfb'",
-)
 @pytest.mark.parametrize(
     "await_before_invoke",
     [
