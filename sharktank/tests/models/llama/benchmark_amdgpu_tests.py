@@ -13,6 +13,7 @@ import pytest
 import subprocess
 from pathlib import Path
 from typing import List
+from sharktank.utils.export_artifacts import ExportArtifacts
 
 longrun = pytest.mark.skipif("not config.getoption('longrun')")
 is_mi300x = pytest.mark.skipif("config.getoption('iree_hip_target') != 'gfx942'")
@@ -82,7 +83,7 @@ class IreeBenchmarkException(Exception):
         )
 
 
-@pytest.mark.usefixtures("iree_hip_target_type")
+@pytest.mark.usefixtures("get_iree_flags")
 class BaseBenchmarkTest(unittest.TestCase):
     directory_created = False
     current_date = datetime.now()
@@ -251,21 +252,29 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
     def setUp(self):
         super().setUp()
         # TODO: add numpy files to Azure and download from it
-        artifacts_dir = Path("/data/llama-3.1/8b")
-        self.irpa_path = artifacts_dir / "llama8b_f16.irpa"
-        self.irpa_path_fp8 = artifacts_dir / "llama8b_fp8.irpa"
+        self.artifacts_dir = Path("/data/llama-3.1/8b")
+        self.irpa_path = self.artifacts_dir / "llama8b_f16.irpa"
+        self.irpa_path_fp8 = self.artifacts_dir / "llama8b_fp8.irpa"
         self.tensor_parallelism_size = 1
         self.dir_path_8b = self.dir_path / "llama-8b"
         self.temp_dir_8b = Path(self.dir_path_8b)
         self.temp_dir_8b.mkdir(parents=True, exist_ok=True)
+        self.llama8b_f16_artifacts = ExportArtifacts(
+            irpa_path=str(self.irpa_path),
+            batch_size=4,
+            iree_hip_target="gfx942",
+            iree_hal_target_backends="rocm",
+            attention_kernel="decomposed",
+            tensor_parallelism_size=self.tensor_parallelism_size,
+        )
         self.iree_compile_args = [
             "--iree-hal-target-backends=rocm",
-            f"--iree-hip-target={self.iree_hip_target_type}",
+            f"--iree-hip-target={self.iree_hip_target}",
         ]
-        self.prefill_args_f16 = artifacts_dir / "prefill_args"
-        self.decode_args_f16 = artifacts_dir / "decode_args"
-        self.prefill_args_fp8 = artifacts_dir / "prefill_args_fp8"
-        self.decode_args_fp8 = artifacts_dir / "decode_args_fp8"
+        self.prefill_args_f16 = self.artifacts_dir / "prefill_args"
+        self.decode_args_f16 = self.artifacts_dir / "decode_args"
+        self.prefill_args_fp8 = self.artifacts_dir / "prefill_args_fp8"
+        self.decode_args_fp8 = self.artifacts_dir / "decode_args_fp8"
         self.iree_run_prefill_args = [
             "--function=prefill_bs4",
             f"--input=@{self.prefill_args_f16}/tokens.npy",
@@ -308,39 +317,47 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
         output_mlir = self.create_file(suffix=".mlir", prefix=output_file_name)
         output_json = self.create_file(suffix=".json", prefix=output_file_name)
         output_vmfb = self.create_file(suffix=".vmfb", prefix=output_file_name)
-        self.export_mlir(
-            attention_kernel="decomposed",
-            tensor_parallelism_size=self.tensor_parallelism_size,
-            irpa_path=self.irpa_path,
-            output_mlir_path=output_mlir,
-            output_json_path=output_json,
-            cwd=self.repo_root,
+        # shard_irpa file
+        return_code = self.llama8b_f16_artifacts.shard_irpa_file(
+            output_file=str(
+                self.artifacts_dir
+                / f"llama3.1_8b_fp16_tp{self.tensor_parallelism_size}_parameters.irpa"
+            )
         )
-        iree_compile_args = self.iree_compile_args + [
-            f"--iree-hal-dump-executable-files-to={output_file_name}/files"
-        ]
-        self.iree_compile(
-            mlir_path=output_mlir,
-            output_vmfb_path=output_vmfb,
-            args=iree_compile_args,
-            cwd=self.repo_root,
-        )
-        # benchmark prefill
-        self.iree_benchmark_module(
-            hip_device_id=self.hip_device_id,
-            vmfb_name=output_vmfb,
-            irpa_path=self.irpa_path,
-            args=self.iree_run_prefill_args,
-            cwd=self.repo_root,
-        )
-        # benchmark decode
-        self.iree_benchmark_module(
-            hip_device_id=self.hip_device_id,
-            vmfb_name=output_vmfb,
-            irpa_path=self.irpa_path,
-            args=self.iree_run_decode_args,
-            cwd=self.repo_root,
-        )
+        print("return code:", return_code)
+        # self.export_mlir(
+        #     attention_kernel="decomposed",
+        #     tensor_parallelism_size=self.tensor_parallelism_size,
+        #     irpa_path=self.irpa_path,
+        #     output_mlir_path=output_mlir,
+        #     output_json_path=output_json,
+        #     cwd=self.repo_root,
+        # )
+        # iree_compile_args = self.iree_compile_args + [
+        #     f"--iree-hal-dump-executable-files-to={output_file_name}/files"
+        # ]
+        # self.iree_compile(
+        #     mlir_path=output_mlir,
+        #     output_vmfb_path=output_vmfb,
+        #     args=iree_compile_args,
+        #     cwd=self.repo_root,
+        # )
+        # # benchmark prefill
+        # self.iree_benchmark_module(
+        #     hip_device_id=self.hip_device_id,
+        #     vmfb_name=output_vmfb,
+        #     irpa_path=self.irpa_path,
+        #     args=self.iree_run_prefill_args,
+        #     cwd=self.repo_root,
+        # )
+        # # benchmark decode
+        # self.iree_benchmark_module(
+        #     hip_device_id=self.hip_device_id,
+        #     vmfb_name=output_vmfb,
+        #     irpa_path=self.irpa_path,
+        #     args=self.iree_run_decode_args,
+        #     cwd=self.repo_root,
+        # )
 
     @longrun
     @is_mi300x
@@ -482,7 +499,7 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
         self.temp_dir_70b.mkdir(parents=True, exist_ok=True)
         self.iree_compile_args = [
             "--iree-hal-target-backends=rocm",
-            f"--iree-hip-target={self.iree_hip_target_type}",
+            f"--iree-hip-target={self.iree_hip_target}",
         ]
         self.prefill_args_f16 = artifacts_dir / "prefill_args"
         self.decode_args_f16 = artifacts_dir / "decode_args"
@@ -705,7 +722,7 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
         self.temp_dir_405b.mkdir(parents=True, exist_ok=True)
         self.iree_compile_args = [
             "--iree-hal-target-backends=rocm",
-            f"--iree-hip-target={self.iree_hip_target_type}",
+            f"--iree-hip-target={self.iree_hip_target}",
         ]
         self.prefill_args_f16 = artifacts_dir / "prefill_args"
         self.decode_args_f16 = artifacts_dir / "decode_args"

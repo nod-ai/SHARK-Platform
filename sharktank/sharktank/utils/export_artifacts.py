@@ -25,6 +25,7 @@ logger.root.handlers[0].setFormatter(
 class ExportArtifacts:
     def __init__(
         self,
+        *,
         irpa_path: str,
         batch_size: int,
         iree_hip_target: str,
@@ -60,8 +61,43 @@ class ExportArtifacts:
         return wrapper
 
     @timeit
+    def shard_irpa_file(
+        self,
+        *,
+        output_file: str,
+    ):
+        shard_irpa_args = [
+            "python3",
+            "-m",
+            "sharktank.models.llama.tools.shard_llama",
+            "--irpa-file",
+            self.irpa_path,
+            "--output-file",
+            output_file,
+            "--shard_count",
+            str(self.tensor_parallelism_size),
+        ]
+
+        cwd = self.sharktank_dir
+        cmd = subprocess.list2cmdline(shard_irpa_args)
+
+        logger.info(f"Sharding irpa file:\n" f"cd {cwd} && {cmd}")
+
+        proc = subprocess.run(shard_irpa_args, shell=True, capture_output=True, cwd=cwd)
+        if proc.returncode != 0:
+            logger.error(
+                f"Error sharding irpa file with shard_llama.py\n"
+                f"{proc.stdout+proc.stderr}"
+            )
+        else:
+            logger.info(f"Sharded irpa file successfully:\n" f"{proc.stdout}")
+
+        return proc.returncode
+
+    @timeit
     def export_to_mlir(
         self,
+        *,
         mlir_path: str,
         json_path: str,
     ):
