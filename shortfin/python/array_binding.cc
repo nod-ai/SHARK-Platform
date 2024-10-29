@@ -232,7 +232,7 @@ class PyMapping {
     auto it = table.find(*dtype());
     if (it == table.end()) {
       throw std::invalid_argument(
-          fmt::format("Python array.array type code not know for dtype "
+          fmt::format("Python array.array type code not known for dtype "
                       "{}: Cannot access items",
                       dtype()->name()));
     }
@@ -296,7 +296,7 @@ class PyMapping {
     auto it = table.find(*dtype());
     if (it == table.end()) {
       throw std::invalid_argument(
-          fmt::format("Python array.array type code not know for dtype "
+          fmt::format("Python array.array type code not known for dtype "
                       "{}: Cannot access items",
                       dtype()->name()));
     }
@@ -316,7 +316,7 @@ class PyMapping {
     auto it = table.find(*dtype());
     if (it == table.end()) {
       throw std::invalid_argument(
-          fmt::format("Python array.array type code not know for dtype "
+          fmt::format("Python array.array type code not known for dtype "
                       "{}: Cannot access items",
                       dtype()->name()));
     }
@@ -627,7 +627,7 @@ void BindArray(py::module_ &m) {
                auto it = table.find(self.dtype());
                if (it == table.end()) {
                  throw std::invalid_argument(fmt::format(
-                     "Python array.array type code not know for dtype "
+                     "Python array.array type code not known for dtype "
                      "{}: Cannot access items",
                      self.dtype().name()));
                }
@@ -669,7 +669,7 @@ void BindArray(py::module_ &m) {
           auto it = table.find(self.dtype());
           if (it == table.end()) {
             throw std::invalid_argument(
-                fmt::format("Python array.array type code not know for dtype "
+                fmt::format("Python array.array type code not known for dtype "
                             "{}: Cannot access items",
                             self.dtype().name()));
           }

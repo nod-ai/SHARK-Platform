@@ -8,18 +8,34 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-def debug_dump_array(tensor: sfnp.device_array):
+def debug_dump_array(tensor: sfnp.device_array) -> None:
+    """Dump the contents of a device array to the debug log.
+
+    Args:
+        tensor (sfnp.device_array): The device array to dump.
+    """
     np_array = np.array(tensor)
     logger.debug(np_array)
 
 
-def debug_fill_array(tensor: sfnp.device_array, fill_value: int | float):
+def debug_fill_array(tensor: sfnp.device_array, fill_value: int | float) -> np.ndarray:
+    """Fill a device array with a given value and return the resulting numpy array.
+
+    Args:
+        tensor (sfnp.device_array): The device array to fill.
+        fill_value (int | float): The value to fill the array with.
+
+    Returns:
+        np.ndarray: The filled numpy array.
+    """
     np_array = np.array(tensor)
     np_array.fill(fill_value)
     return np_array
 
 
-def _find_mode(arr: np.ndarray, axis=0, keepdims=False):
+def _find_mode(
+    arr: np.ndarray, axis=0, keepdims=False
+) -> tuple[np.ndarray, np.ndarray]:
     """
     Find the mode of an array along a given axis.
 
@@ -29,7 +45,7 @@ def _find_mode(arr: np.ndarray, axis=0, keepdims=False):
         keepdims: If True, the output shape is the same as arr except along the specified axis.
 
     Returns:
-        The mode of the input array.
+        tuple: A tuple containing the mode values and the count of the mode values.
     """
 
     def _mode(arr):
@@ -52,7 +68,13 @@ def _find_mode(arr: np.ndarray, axis=0, keepdims=False):
     return mode_values, mode_count
 
 
-def debug_log_tensor_stats(tensor: sfnp.device_array):
+def debug_log_tensor_stats(tensor: sfnp.device_array) -> None:
+    """Log statistics about a device array to the debug log.
+
+    Args:
+        tensor (sfnp.device_array): The device array to log statistics for.
+    """
+
     np_array = np.array(tensor)
 
     nan_count = np.isnan(np_array).sum()
@@ -72,4 +94,4 @@ def debug_log_tensor_stats(tensor: sfnp.device_array):
         logger.debug(f"First 10 elements: {np_array_no_nan.flatten()[:10]}")
         logger.debug(f"Last 10 elements: {np_array_no_nan.flatten()[-10:]}")
     else:
-        logger.warning(f"  All values are NaN")
+        logger.warning(f"All values are NaN")
