@@ -73,7 +73,7 @@ class GenerateService:
                 )
             ]
             + self.inference_modules,
-            fiber=self.main_fiber,
+            devices=self.sysman.ls.devices,
             trace_execution=False,
         )
         # Resolve prefill entrypoints.
@@ -393,7 +393,7 @@ class InferenceExecutorProcess(sf.Process):
                 "".join([f"\n  {i}: {ary.shape}" for i, ary in enumerate(args)]),
             )
             # Invoke. Logits are of shape [bs, bsl, d].
-            (logits,) = await fn(*args)
+            (logits,) = await fn(*args, fiber=self.fiber)
 
             # Return results.
             for i in range(req_count):
