@@ -288,6 +288,7 @@ class SHORTFIN_API error : public std::exception {
   iree_status_code_t code() const { return code_; }
 
  private:
+  void AppendStatusMessage();
   iree_status_code_t code_;
   std::string message_;
   mutable iree_status_t failing_status_;
