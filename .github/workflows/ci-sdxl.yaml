@@ -89,6 +89,8 @@ jobs:
           -Bbuild \
           -DCMAKE_C_COMPILER=clang-18 \
           -DCMAKE_CXX_COMPILER=clang++-18 \
+          -DCMAKE_C_LINKER=lld-18 \
+          -DCMAKE_CXX_LINKER=lld-18 \
           -DCMAKE_LINKER_TYPE=LLD \
           -DSHORTFIN_BUNDLE_DEPS=ON \
           -DSHORTFIN_IREE_SOURCE_DIR="${{ env.IREE_REPO_DIR }}" \
