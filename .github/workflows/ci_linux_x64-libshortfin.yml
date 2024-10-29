@@ -38,6 +38,9 @@ jobs:
   build-and-test:
     name: Build and test
     runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
 
     steps:
     - name: Install dependencies
@@ -67,10 +70,10 @@ jobs:
         git submodule update --init --depth 1 -- third_party/googletest
         git submodule update --init --depth 1 -- third_party/hip-build-deps/
 
-    - name: Setup Python
+    - name: Setup Python ${{ matrix.python-version }}
       uses: actions/setup-python@39cd14951b08e74b54015e9e001cdefcf80e669f # v5.1.1
       with:
-        python-version: "3.12"
+        python-version: ${{ matrix.python-version }}
         cache: "pip"
     - name: Install Python packages
       # TODO: Switch to `pip install -r requirements.txt -e shortfin/`.
