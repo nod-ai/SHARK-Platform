@@ -1,9 +1,3 @@
-# Copyright 2024 Advanced Micro Devices, Inc.
-#
-# Licensed under the Apache License v2.0 with LLVM Exceptions.
-# See https://llvm.org/LICENSE.txt for license information.
-# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-
 import json
 import requests
 import time
@@ -241,27 +235,24 @@ def bytes_to_img(bytes, idx=0, width=1024, height=1024):
     return image
 
 
-def send_json_file(url="http://0.0.0.0:8000"):
+def send_json_file(url="http://0.0.0.0:8000", num_copies=1):
     # Read the JSON file
     data = copy.deepcopy(sample_request)
     imgs = []
     # Send the data to the /generate endpoint
+    data["prompt"] = (
+        [data["prompt"]]
+        if isinstance(data["prompt"], str)
+        else data["prompt"] * num_copies
+    )
     try:
         response = requests.post(url + "/generate", json=data)
         response.raise_for_status()  # Raise an error for bad responses
         request = json.loads(response.request.body.decode("utf-8"))
 
         for idx, item in enumerate(response.json()["images"]):
-            width = (
-                request["width"][idx]
-                if isinstance(request["height"], list)
-                else request["height"]
-            )
-            height = (
-                request["height"][idx]
-                if isinstance(request["height"], list)
-                else request["height"]
-            )
+            width = getbatched(request, idx, "width")
+            height = getbatched(request, idx, "height")
             img = bytes_to_img(item.encode("utf-8"), idx, width, height)
             imgs.append(img)
 
@@ -269,6 +260,16 @@ def send_json_file(url="http://0.0.0.0:8000"):
         print(f"Error sending the request: {e}")
 
     return imgs, response.status_code
+
+
+def getbatched(req, idx, key):
+    if isinstance(req[key], list):
+        if len(req[key]) == 1:
+            return req[key][0]
+        elif len(req[key]) > idx:
+            return req[key][idx]
+    else:
+        return req[key]
 
 
 def find_free_port():
