@@ -55,34 +55,6 @@ class IreeCompileException(Exception):
         )
 
 
-class IreeBenchmarkException(Exception):
-    """Runtime exception that preserves the command line and error output."""
-
-    def __init__(
-        self, process: subprocess.CompletedProcess, cwd: str, compile_cmd: str
-    ):
-        # iree-run-module sends output to both stdout and stderr
-        try:
-            errs = process.stderr.decode("utf-8")
-        except:
-            errs = str(process.stderr)
-        try:
-            outs = process.stdout.decode("utf-8")
-        except:
-            outs = str(process.stdout)
-
-        super().__init__(
-            f"Error invoking iree-benchmark-module\n"
-            f"Error code: {process.returncode}\n"
-            f"Stderr diagnostics:\n{errs}\n"
-            f"Stdout diagnostics:\n{outs}\n"
-            f"Compiled with:\n"
-            f"  cd {cwd} && {compile_cmd}\n\n"
-            f"Run with:\n"
-            f"  cd {cwd} && {process.args}\n\n"
-        )
-
-
 @pytest.mark.usefixtures("get_iree_flags")
 class BaseBenchmarkTest(unittest.TestCase):
     directory_created = False
@@ -211,48 +183,12 @@ class BaseBenchmarkTest(unittest.TestCase):
         if return_code != 0:
             raise IreeCompileException(proc, cwd)
 
-    def iree_benchmark_module(
-        self,
-        *,
-        hip_device_id: str,
-        vmfb_name: str,
-        irpa_path: str,
-        args: List[str],
-        cwd: str | Path,
-    ):
-        """Runs a compiled program with the given args using `iree-benchmark-module`.
-        This assumes that the `iree-benchmark-module` command is available (usually via PATH).
-        Args:
-            vmfb_name: Name of the .vmfb file (relative to `cwd`).
-            args: List of arguments to pass to `iree-benchmark-module`.
-            cwd: Working directory to run the command within. (either string or Path works)
-            compile_cmd: Command used to compile the program, for inclusion in error messages.
-        Raises Exception if running fails for some reason.
-        """
-        benchmark_args = [
-            f"ROCR_VISIBLE_DEVICES={hip_device_id}",
-            "iree-benchmark-module",
-            f"--device=hip://{hip_device_id}",
-            "--hip_use_streams=true",
-            "--hip_allow_inline_execution=true",
-            "--device_allocator=caching",
-            f"--module={vmfb_name}",
-            f"--parameters=model={irpa_path}",
-        ]
-        benchmark_args += args
-        cmd = subprocess.list2cmdline(benchmark_args)
-        logging.getLogger().info(f"Launching run command:\n" f"cd {cwd} && {cmd}")
-        proc = subprocess.run(cmd, shell=True, stdout=sys.stdout, cwd=cwd)
-        return_code = proc.returncode
-        if return_code != 0:
-            raise IreeBenchmarkException(proc, cwd, cmd)
-
 
 class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
     def setUp(self):
         super().setUp()
         # TODO: add numpy files to Azure and download from it
-        self.artifacts_dir = Path("/data/llama-3.1/8b")
+        self.artifacts_dir = Path("/data/extra/models/llama3.1_8B")
         self.irpa_path = self.artifacts_dir / "llama8b_f16.irpa"
         self.irpa_path_fp8 = self.artifacts_dir / "llama8b_fp8.irpa"
         self.tensor_parallelism_size = 1
@@ -317,47 +253,44 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
         output_mlir = self.create_file(suffix=".mlir", prefix=output_file_name)
         output_json = self.create_file(suffix=".json", prefix=output_file_name)
         output_vmfb = self.create_file(suffix=".vmfb", prefix=output_file_name)
-        # shard_irpa file
-        return_code = self.llama8b_f16_artifacts.shard_irpa_file(
-            output_file=str(
-                self.artifacts_dir
-                / f"llama3.1_8b_fp16_tp{self.tensor_parallelism_size}_parameters.irpa"
-            )
+        output_shard_file_name = str(
+            self.artifacts_dir
+            / f"llama3.1_8b_fp16_tp{self.tensor_parallelism_size}_parameters.irpa"
         )
-        print("return code:", return_code)
-        # self.export_mlir(
-        #     attention_kernel="decomposed",
-        #     tensor_parallelism_size=self.tensor_parallelism_size,
-        #     irpa_path=self.irpa_path,
-        #     output_mlir_path=output_mlir,
-        #     output_json_path=output_json,
-        #     cwd=self.repo_root,
-        # )
+        # shard_irpa file
+        shard_return_code = self.llama8b_f16_artifacts.shard_irpa_file(
+            output_file=output_shard_file_name
+        )
+        if shard_return_code == 0:
+            self.irpa_path = output_shard_file_name
+        export_return_code = self.llama8b_f16_artifacts.export_to_mlir(
+            mlir_path=output_mlir,
+            json_path=output_json,
+        )
         # iree_compile_args = self.iree_compile_args + [
         #     f"--iree-hal-dump-executable-files-to={output_file_name}/files"
         # ]
-        # self.iree_compile(
-        #     mlir_path=output_mlir,
-        #     output_vmfb_path=output_vmfb,
-        #     args=iree_compile_args,
-        #     cwd=self.repo_root,
-        # )
-        # # benchmark prefill
-        # self.iree_benchmark_module(
-        #     hip_device_id=self.hip_device_id,
-        #     vmfb_name=output_vmfb,
-        #     irpa_path=self.irpa_path,
-        #     args=self.iree_run_prefill_args,
-        #     cwd=self.repo_root,
-        # )
-        # # benchmark decode
-        # self.iree_benchmark_module(
-        #     hip_device_id=self.hip_device_id,
-        #     vmfb_name=output_vmfb,
-        #     irpa_path=self.irpa_path,
-        #     args=self.iree_run_decode_args,
-        #     cwd=self.repo_root,
-        # )
+        self.llama8b_f16_artifacts.compile_to_vmfb(
+            mlir_path=str(output_mlir),
+            vmfb_path=output_vmfb,
+            hal_dump_path=output_file_name,
+        )
+        # benchmark prefill
+        self.llama8b_f16_artifacts.iree_benchmark_vmfb(
+            hip_device_id=self.hip_device_id,
+            vmfb_name=output_vmfb,
+            irpa_path=self.irpa_path,
+            args=self.iree_run_prefill_args,
+            cwd=self.repo_root,
+        )
+        # benchmark decode
+        self.llama8b_f16_artifacts.iree_benchmark_vmfb(
+            hip_device_id=self.hip_device_id,
+            vmfb_name=output_vmfb,
+            irpa_path=self.irpa_path,
+            args=self.iree_run_decode_args,
+            cwd=self.repo_root,
+        )
 
     @longrun
     @is_mi300x

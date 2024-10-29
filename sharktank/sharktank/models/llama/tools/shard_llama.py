@@ -33,12 +33,10 @@ def main():
     dataset = cli.get_input_dataset(args)
 
     if args.output_file is None:
-        print(f"Need file destination for IRPA file")
-        return
+        raise RuntimeError(f"Need file destination for IRPA file")
 
     if args.shard_count < 2:
-        print(f"Expect sharding greater than 1 found {args.shard_count}")
-        return
+        raise RuntimeError(f"Expect sharding greater than 1 found {args.shard_count}")
 
     hp = configs.LlamaHParams.from_gguf_props(dataset.properties)
     llama_config = LlamaModelConfig(hp)

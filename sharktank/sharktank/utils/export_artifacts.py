@@ -5,13 +5,16 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 import os
+import sys
 import subprocess
 import logging
 import time
 from pathlib import Path
 from datetime import timedelta
+from typing import List
 
 import iree.compiler as ireec
+import iree.runtime as iree_rt
 
 logger = logging.getLogger("eval")
 
@@ -83,7 +86,7 @@ class ExportArtifacts:
 
         logger.info(f"Sharding irpa file:\n" f"cd {cwd} && {cmd}")
 
-        proc = subprocess.run(shard_irpa_args, shell=True, capture_output=True, cwd=cwd)
+        proc = subprocess.run(cmd, shell=True, capture_output=True, cwd=cwd)
         if proc.returncode != 0:
             logger.error(
                 f"Error sharding irpa file with shard_llama.py\n"
@@ -125,7 +128,7 @@ class ExportArtifacts:
 
         logger.info(f"Exporting mlir:\n" f"cd {cwd} && {cmd}")
 
-        proc = subprocess.run(export_args, capture_output=True, cwd=cwd, text=True)
+        proc = subprocess.run(cmd, shell=True, capture_output=True, cwd=cwd)
         if proc.returncode != 0:
             logger.error(
                 f"Error exporting mlir with export_paged_llm_v1.py\n"
@@ -139,12 +142,14 @@ class ExportArtifacts:
     @timeit
     def compile_to_vmfb(
         self,
+        *,
         mlir_path,
         vmfb_path,
+        hal_dump_path,
     ):
         # TODO: Control flag to enable multiple backends
         compile_flags = ["--iree-hip-target=" + self.iree_hip_target]
-
+        compile_flags += [f"--iree-hal-dump-executable-files-to={hal_dump_path}/files"]
         try:
             ireec.compile_file(
                 input_file=mlir_path,
@@ -156,6 +161,69 @@ class ExportArtifacts:
             logger.error(f"Error running iree-compile:\n" f"{error}")
         else:
             logger.info(f"Compiled to vmfb successfully:\n" f"{vmfb_path}")
+
+    class IreeBenchmarkException(Exception):
+        """Runtime exception that preserves the command line and error output."""
+
+        def __init__(
+            self, process: subprocess.CompletedProcess, cwd: str, compile_cmd: str
+        ):
+            # iree-run-module sends output to both stdout and stderr
+            try:
+                errs = process.stderr.decode("utf-8")
+            except:
+                errs = str(process.stderr)
+            try:
+                outs = process.stdout.decode("utf-8")
+            except:
+                outs = str(process.stdout)
+
+            super().__init__(
+                f"Error invoking iree-benchmark-module\n"
+                f"Error code: {process.returncode}\n"
+                f"Stderr diagnostics:\n{errs}\n"
+                f"Stdout diagnostics:\n{outs}\n"
+                f"Compiled with:\n"
+                f"  cd {cwd} && {compile_cmd}\n\n"
+                f"Run with:\n"
+                f"  cd {cwd} && {process.args}\n\n"
+            )
+
+    def iree_benchmark_vmfb(
+        self,
+        *,
+        hip_device_id: str,
+        vmfb_name: str,
+        irpa_path: str,
+        args: List[str],
+        cwd: str | Path,
+    ):
+        """Runs a compiled program with the given args using `iree-benchmark-module`.
+        This assumes that the `iree-benchmark-module` command is available (usually via PATH).
+        Args:
+            vmfb_name: Name of the .vmfb file (relative to `cwd`).
+            args: List of arguments to pass to `iree-benchmark-module`.
+            cwd: Working directory to run the command within. (either string or Path works)
+            compile_cmd: Command used to compile the program, for inclusion in error messages.
+        Raises Exception if running fails for some reason.
+        """
+        benchmark_args = [
+            f"ROCR_VISIBLE_DEVICES={hip_device_id}",
+            "iree-benchmark-module",
+            f"--device=hip://{hip_device_id}",
+            "--hip_use_streams=true",
+            "--hip_allow_inline_execution=true",
+            "--device_allocator=caching",
+            f"--module={vmfb_name}",
+            f"--parameters=model={irpa_path}",
+        ]
+        benchmark_args += args
+        cmd = subprocess.list2cmdline(benchmark_args)
+        logging.getLogger().info(f"Launching run command:\n" f"cd {cwd} && {cmd}")
+        proc = subprocess.run(cmd, shell=True, stdout=sys.stdout, cwd=cwd)
+        return_code = proc.returncode
+        if return_code != 0:
+            raise IreeBenchmarkException(proc, cwd, cmd)
 
     def create_file(self, suffix, prefix):
         file_path = Path(prefix).with_suffix(suffix)
