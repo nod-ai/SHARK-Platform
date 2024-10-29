@@ -10,44 +10,23 @@
     " a cat under the snow with blue eyes, covered by snow, cinematic style, medium shot, professional photo"
   ],
   "neg_prompt": [
-    "Watermark, blurry, oversaturated, low resolution, pollution",
-    "Watermark, blurry, oversaturated, low resolution, pollution",
-    "Watermark, blurry, oversaturated, low resolution, pollution",
-    "Watermark, blurry, oversaturated, low resolution, pollution",
-    "Watermark, blurry, oversaturated, low resolution, pollution",
-    "Watermark, blurry, oversaturated, low resolution, pollution",
-    "Watermark, blurry, oversaturated, low resolution, pollution",
     "Watermark, blurry, oversaturated, low resolution, pollution"
   ],
   "height": [
-    1024,
-    1024,
-    1024,
-    1024,
-    1024,
-    1024,
-    1024,
     1024
   ],
   "width": [
-    1024,
-    1024,
-    1024,
-    1024,
-    1024,
-    1024,
-    1024,
     1024
   ],
   "steps": [
     20,
+    30,
+    40,
+    50,
     20,
-    20,
-    20,
-    20,
-    20,
-    20,
-    20
+    30,
+    40,
+    50
   ],
   "guidance_scale": [
     7.5,
@@ -60,14 +39,7 @@
     7.5
   ],
   "seed": [
-    0,
-    1000,
-    2000,
-    3000,
-    4000,
-    5000,
-    602234764,
-    159360312
+    0
   ],
   "output_type": [
     "base64"

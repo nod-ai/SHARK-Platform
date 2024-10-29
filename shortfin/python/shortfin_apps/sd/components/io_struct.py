@@ -41,24 +41,30 @@ class GenerateReqInput:
         ):
             raise ValueError("Either text or input_ids should be provided.")
 
-        prev_input_len = None
-        for i in [self.prompt, self.neg_prompt, self.input_ids, self.neg_input_ids]:
-            if isinstance(i, str):
-                self.num_output_images = 1
-                continue
-            elif not i:
-                continue
-            if not isinstance(i, list):
-                raise ValueError("Text inputs should be strings or lists.")
-            if prev_input_len and not (prev_input_len == len(i)):
-                raise ValueError("Positive, Negative text inputs should be same length")
-            self.num_output_images = len(i)
-            prev_input_len = len(i)
-        if not self.num_output_images:
-            self.num_output_images = (
-                len[self.prompt] if self.prompt is not None else len(self.input_ids)
-            )
+        if isinstance(self.prompt, str):
+            self.prompt = [str]
 
+        self.num_output_images = (
+            len(self.prompt) if self.prompt is not None else len(self.input_ids)
+        )
+
+        batchable_args = [
+            self.prompt,
+            self.neg_prompt,
+            self.height,
+            self.width,
+            self.steps,
+            self.guidance_scale,
+            self.seed,
+            self.input_ids,
+            self.neg_input_ids,
+        ]
+        for arg in batchable_args:
+            if isinstance(arg, list):
+                if len(arg) != self.num_output_images and len(arg) != 1:
+                    raise ValueError(
+                        f"Batchable arguments should either be singular or as many as the full batch ({self.num_output_images})."
+                    )
         if self.rid is None:
             self.rid = [uuid.uuid4().hex for _ in range(self.num_output_images)]
         else:
