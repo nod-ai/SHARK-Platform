@@ -76,7 +76,7 @@ jobs:
             "numpy<2.0"
 
       - name: Run llama test
-        run: pytest sharktank/tests/models/llama/benchmark_amdgpu_test.py -v -s --longrun
+        run: pytest sharktank/tests/models/llama/benchmark_amdgpu_test.py -v -s --longrun --iree-hip-target=gfx942
 
       - name: Upload llama executable files
         uses: actions/upload-artifact@v4
