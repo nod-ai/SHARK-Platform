@@ -8,6 +8,9 @@ import uuid
 import tempfile
 import shutil
 
+pytest.importorskip("transformers", "transformers is not installed")
+pytest.importorskip("tokenizers", "tokenizers is not installed")
+
 BATCH_SIZES = [1, 4]
 
 cpu_settings = {
