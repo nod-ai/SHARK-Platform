@@ -11,6 +11,8 @@ import numpy as np
 from tqdm.auto import tqdm
 from pathlib import Path
 from PIL import Image
+import io
+import base64
 
 import shortfin as sf
 import shortfin.array as sfnp
@@ -48,15 +50,17 @@ class GenerateService:
         self.inference_modules: dict[str, sf.ProgramModule] = {}
         self.inference_functions: dict[str, dict[str, sf.ProgramFunction]] = {}
         self.inference_programs: dict[str, sf.Program] = {}
-        self.procs_per_device = 2
+        self.procs_per_device = 1
         self.workers = []
         self.fibers = []
+        self.locks = []
         for idx, device in enumerate(self.sysman.ls.devices):
             for i in range(self.procs_per_device):
                 worker = sysman.ls.create_worker(f"{name}-inference-{device.name}-{i}")
                 fiber = sysman.ls.create_fiber(worker, devices=[device])
                 self.workers.append(worker)
                 self.fibers.append(fiber)
+                self.locks.append(asyncio.Lock())
 
         # Scope dependent objects.
         self.batcher = BatcherProcess(self)
@@ -84,18 +88,19 @@ class GenerateService:
         self.inference_parameters[component].append(p)
 
     def start(self):
-        for component in self.inference_modules:
-            component_modules = [
-                sf.ProgramModule.parameter_provider(
-                    self.sysman.ls, *self.inference_parameters.get(component, [])
-                ),
-                *self.inference_modules[component],
-            ]
-            self.inference_programs[component] = sf.Program(
-                modules=component_modules,
-                fiber=self.fibers[0],
-                trace_execution=False,
-            )
+        for fiber in self.fibers:
+            for component in self.inference_modules:
+                component_modules = [
+                    sf.ProgramModule.parameter_provider(
+                        self.sysman.ls, *self.inference_parameters.get(component, [])
+                    ),
+                    *self.inference_modules[component],
+                ]
+                self.inference_programs[component] = sf.Program(
+                    modules=component_modules,
+                    devices=fiber.raw_devices,
+                    trace_execution=False,
+                )
 
         # TODO: export vmfbs with multiple batch size entrypoints
 
@@ -175,7 +180,7 @@ class BatcherProcess(sf.Process):
         while not self.batcher_infeed.closed:
             await asyncio.sleep(
                 BatcherProcess.STROBE_SHORT_DELAY
-                if len(self.pending_preps) > 0
+                if len(self.pending_requests) > 0
                 else BatcherProcess.STROBE_LONG_DELAY
             )
             if self.strobe_enabled:
@@ -192,6 +197,7 @@ class BatcherProcess(sf.Process):
                 self.strobes += 1
             else:
                 logger.error("Illegal message received by batcher: %r", item)
+
             self.board_flights()
             self.strobe_enabled = True
         await strober_task
@@ -207,7 +213,7 @@ class BatcherProcess(sf.Process):
 
         batches = self.sort_pending()
         for idx in batches.keys():
-            self.board(batches[idx]["reqs"])
+            self.board(batches[idx]["reqs"], index=idx)
 
     def sort_pending(self):
         """Returns pending requests as sorted batches suitable for program invocations."""
@@ -233,11 +239,11 @@ class BatcherProcess(sf.Process):
                 }
         return batches
 
-    def board(self, request_bundle):
+    def board(self, request_bundle, index):
         pending = request_bundle
         if len(pending) == 0:
             return
-        exec_process = InferenceExecutorProcess(self.service, 0)
+        exec_process = InferenceExecutorProcess(self.service, index)
         for req in pending:
             if len(exec_process.exec_requests) >= self.ideal_batch_size:
                 break
@@ -264,6 +270,7 @@ class InferenceExecutorProcess(sf.Process):
     ):
         super().__init__(fiber=service.fibers[index])
         self.service = service
+        self.worker_index = index
         self.exec_requests: list[InferenceExecRequest] = []
 
     async def run(self):
@@ -273,22 +280,22 @@ class InferenceExecutorProcess(sf.Process):
                 if phase:
                     if phase != req.phase:
                         logger.error("Executor process recieved disjoint batch.")
+                phase = req.phase
             phases = self.exec_requests[0].phases
 
             req_count = len(self.exec_requests)
-            device0 = self.fiber.device(0)
-            await device0
-
-            if phases[InferencePhase.PREPARE]["required"]:
-                await self._prepare(device=device0, requests=self.exec_requests)
-            if phases[InferencePhase.ENCODE]["required"]:
-                await self._encode(device=device0, requests=self.exec_requests)
-            if phases[InferencePhase.DENOISE]["required"]:
-                await self._denoise(device=device0, requests=self.exec_requests)
-            if phases[InferencePhase.DECODE]["required"]:
-                await self._decode(device=device0, requests=self.exec_requests)
-            if phases[InferencePhase.POSTPROCESS]["required"]:
-                await self._postprocess(device=device0, requests=self.exec_requests)
+            async with self.service.locks[self.worker_index]:
+                device0 = self.fiber.device(0)
+                if phases[InferencePhase.PREPARE]["required"]:
+                    await self._prepare(device=device0, requests=self.exec_requests)
+                if phases[InferencePhase.ENCODE]["required"]:
+                    await self._encode(device=device0, requests=self.exec_requests)
+                if phases[InferencePhase.DENOISE]["required"]:
+                    await self._denoise(device=device0, requests=self.exec_requests)
+                if phases[InferencePhase.DECODE]["required"]:
+                    await self._decode(device=device0, requests=self.exec_requests)
+                if phases[InferencePhase.POSTPROCESS]["required"]:
+                    await self._postprocess(device=device0, requests=self.exec_requests)
 
             for i in range(req_count):
                 req = self.exec_requests[i]
@@ -384,7 +391,7 @@ class InferenceExecutorProcess(sf.Process):
             "".join([f"\n  {i}: {ary.shape}" for i, ary in enumerate(clip_inputs)]),
         )
         await device
-        pe, te = await fn(*clip_inputs)
+        pe, te = await fn(*clip_inputs, fiber=self.fiber)
 
         await device
         for i in range(req_bs):
@@ -396,6 +403,7 @@ class InferenceExecutorProcess(sf.Process):
 
     async def _denoise(self, device, requests):
         req_bs = len(requests)
+        step_count = requests[0].steps
         cfg_mult = 2 if self.service.model_params.cfg_mode else 1
         # Produce denoised latents
         entrypoints = self.service.inference_functions["denoise"]
@@ -463,6 +471,12 @@ class InferenceExecutorProcess(sf.Process):
 
         denoise_inputs["guidance_scale"].copy_from(gs_host)
 
+        num_steps = sfnp.device_array.for_device(device, [1], sfnp.sint64)
+        ns_host = num_steps.for_transfer()
+        with ns_host.map(write=True) as m:
+            ns_host.items = [step_count]
+        num_steps.copy_from(ns_host)
+
         await device
         # Initialize scheduler.
         logger.info(
@@ -470,25 +484,20 @@ class InferenceExecutorProcess(sf.Process):
             fns["init"],
             "".join([f"\n  0: {latents_shape}"]),
         )
-        (latents, time_ids, step_indexes, timesteps,) = await fns[
-            "init"
-        ](denoise_inputs["sample"])
+        (latents, time_ids, timesteps, sigmas) = await fns["init"](
+            denoise_inputs["sample"], num_steps, fiber=self.fiber
+        )
+
         await device
-        ts_host = timesteps.for_transfer()
-        ts_host.copy_from(timesteps)
         for i, t in tqdm(
-            enumerate(ts_host.items),
+            enumerate(range(step_count)),
         ):
             step = sfnp.device_array.for_device(device, [1], sfnp.sint64)
             s_host = step.for_transfer()
             with s_host.map(write=True) as m:
                 s_host.items = [i]
             step.copy_from(s_host)
-            scale_inputs = [
-                latents,
-                step,
-                timesteps,
-            ]
+            scale_inputs = [latents, step, timesteps, sigmas]
             logger.info(
                 "INVOKE %r: %s",
                 fns["scale"],
@@ -497,7 +506,9 @@ class InferenceExecutorProcess(sf.Process):
                 ),
             )
             await device
-            latent_model_input, t = await fns["scale"](*scale_inputs)
+            latent_model_input, t, sigma, next_sigma = await fns["scale"](
+                *scale_inputs, fiber=self.fiber
+            )
             await device
 
             unet_inputs = [
@@ -514,17 +525,17 @@ class InferenceExecutorProcess(sf.Process):
                 "".join([f"\n  {i}: {ary.shape}" for i, ary in enumerate(unet_inputs)]),
             )
             await device
-            (noise_pred,) = await fns["unet"](*unet_inputs)
+            (noise_pred,) = await fns["unet"](*unet_inputs, fiber=self.fiber)
             await device
 
-            step_inputs = [noise_pred, t, latents]
+            step_inputs = [noise_pred, latents, sigma, next_sigma]
             logger.info(
                 "INVOKE %r: %s",
                 fns["step"],
                 "".join([f"\n  {i}: {ary.shape}" for i, ary in enumerate(step_inputs)]),
             )
             await device
-            (latent_model_output,) = await fns["step"](*step_inputs)
+            (latent_model_output,) = await fns["step"](*step_inputs, fiber=self.fiber)
             latents.copy_from(latent_model_output)
             await device
 
@@ -558,7 +569,7 @@ class InferenceExecutorProcess(sf.Process):
 
         await device
         # Decode the denoised latents.
-        (image,) = await fn(latents)
+        (image,) = await fn(latents, fiber=self.fiber)
 
         await device
         images_shape = [
@@ -575,6 +586,7 @@ class InferenceExecutorProcess(sf.Process):
         ]
         images_host = sfnp.device_array.for_host(device, images_shape, sfnp.float16)
         images_host.copy_from(image)
+        await device
         for idx, req in enumerate(requests):
             image_array = images_host.view(idx).items
             dtype = image_array.typecode
@@ -591,5 +603,8 @@ class InferenceExecutorProcess(sf.Process):
             # TODO: reimpl with sfnp
             permuted = np.transpose(req.image_array, (0, 2, 3, 1))[0]
             cast_image = (permuted * 255).round().astype("uint8")
-            req.result_image = Image.fromarray(cast_image).tobytes()
+            image_bytes = Image.fromarray(cast_image).tobytes()
+
+            image = base64.b64encode(image_bytes).decode("utf-8")
+            req.result_image = image
         return
