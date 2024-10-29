@@ -194,7 +194,7 @@ def create_scalar_device_array(device, value, dtype=sfnp.int64):
     "await_before_invoke",
     [
         True,
-        False,  # if we don't await GPU it might fail.
+        False,  # Need to potentially xfail this case if using GPU
     ],
 )
 def test_kvcache_noreturn(lsys, fiber, kvcache_compiled_cpu_path, await_before_invoke):
