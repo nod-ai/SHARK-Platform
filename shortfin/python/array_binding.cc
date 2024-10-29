@@ -495,117 +495,212 @@ void BindArray(py::module_ &m) {
   py::class_<base_array>(m, "base_array")
       .def_prop_ro("dtype", &base_array::dtype)
       .def_prop_ro("shape", &base_array::shape);
-  py::class_<device_array, base_array>(m, "device_array")
-      .def("__init__", [](py::args, py::kwargs) {})
-      .def_static(
-          "__new__",
-          [](py::handle py_type, class storage storage,
-             std::span<const size_t> shape, DType dtype) {
-            return custom_new_keep_alive<device_array>(
-                py_type, /*keep_alive=*/storage.fiber(), storage, shape, dtype);
-          },
-          py::arg("cls"), py::arg("storage"), py::arg("shape"),
-          py::arg("dtype"))
-      .def_static(
-          "__new__",
-          [](py::handle py_type, local::ScopedDevice &device,
-             std::span<const size_t> shape, DType dtype) {
-            return custom_new_keep_alive<device_array>(
-                py_type, /*keep_alive=*/device.fiber(),
-                device_array::for_device(device, shape, dtype));
-          },
-          py::arg("cls"), py::arg("device"), py::arg("shape"), py::arg("dtype"))
-      .def("__sfinv_marshal__",
-           [](device_array *self, py::capsule inv_capsule, int barrier) {
-             auto *inv =
-                 static_cast<local::ProgramInvocation *>(inv_capsule.data());
-             static_cast<local::ProgramInvocationMarshalable *>(self)
-                 ->AddAsInvocationArgument(
-                     inv, static_cast<local::ProgramResourceBarrier>(barrier));
-           })
-      .def_static("for_device",
-                  [](local::ScopedDevice &device, std::span<const size_t> shape,
-                     DType dtype) {
-                    return custom_new_keep_alive<device_array>(
-                        py::type<device_array>(), /*keep_alive=*/device.fiber(),
-                        device_array::for_device(device, shape, dtype));
-                  })
-      .def_static("for_host",
-                  [](local::ScopedDevice &device, std::span<const size_t> shape,
-                     DType dtype) {
-                    return custom_new_keep_alive<device_array>(
-                        py::type<device_array>(), /*keep_alive=*/device.fiber(),
-                        device_array::for_host(device, shape, dtype));
-                  })
-      .def("for_transfer",
-           [](device_array &self) {
-             return custom_new_keep_alive<device_array>(
-                 py::type<device_array>(),
-                 /*keep_alive=*/self.device().fiber(), self.for_transfer());
-           })
-      .def_prop_ro("device", &device_array::device,
-                   py::rv_policy::reference_internal)
-      .def_prop_ro("storage", &device_array::storage,
-                   py::rv_policy::reference_internal)
-      .def(
-          "fill",
-          [](py::handle_t<device_array> self, py::handle buffer) {
-            self.attr("storage").attr("fill")(buffer);
-          },
-          py::arg("pattern"), DOCSTRING_ARRAY_FILL)
-      .def("copy_from", &device_array::copy_from, py::arg("source_array"),
-           DOCSTRING_ARRAY_COPY_FROM)
-      .def("copy_to", &device_array::copy_to, py::arg("dest_array"),
-           DOCSTRING_ARRAY_COPY_TO)
-      .def("view", PyDeviceArrayView, DOCSTRING_ARRAY_VIEW)
-      .def(
-          "map",
-          [](device_array &self, bool read, bool write, bool discard) {
-            int access = 0;
-            if (read) access |= IREE_HAL_MEMORY_ACCESS_READ;
-            if (write || discard) access |= IREE_HAL_MEMORY_ACCESS_WRITE;
-            if (discard) access |= IREE_HAL_MEMORY_ACCESS_DISCARD;
-            if (!access) {
-              throw std::invalid_argument(
-                  "One of the access flags must be set");
-            }
-            PyMapping *cpp_mapping = nullptr;
-            py::object py_mapping = CreateMappingObject(&cpp_mapping);
-            cpp_mapping->set_dtype(self.dtype());
-            self.storage().map_explicit(
-                cpp_mapping->mapping(),
-                static_cast<iree_hal_memory_access_bits_t>(access));
-            return py_mapping;
-          },
-          py::kw_only(), py::arg("read") = false, py::arg("write") = false,
-          py::arg("discard") = false, DOCSTRING_ARRAY_MAP)
-      .def_prop_rw(
-          "items",
-          [refs](device_array &self) {
-            PyMapping *mapping;
-            py::object mapping_obj = CreateMappingObject(&mapping);
-            mapping->set_dtype(self.dtype());
-            self.storage().map_explicit(
-                mapping->mapping(), static_cast<iree_hal_memory_access_bits_t>(
-                                        IREE_HAL_MEMORY_ACCESS_READ));
-            return mapping->GetItems(mapping_obj, refs.get());
-          },
-          [refs](device_array &self, py::handle initializer) {
-            PyMapping mapping;
-            mapping.set_dtype(self.dtype());
-            self.storage().map_explicit(
-                mapping.mapping(), static_cast<iree_hal_memory_access_bits_t>(
-                                       IREE_HAL_MEMORY_ACCESS_READ));
-            return mapping.SetItems(refs.get(), initializer);
-          },
-          DOCSTRING_ARRAY_ITEMS)
 
-      .def("__repr__", &device_array::to_s)
-      .def("__str__", [](device_array &self) -> std::string {
-        auto contents = self.contents_to_s();
-        if (!contents) return "<<unmappable>>";
-        return *contents;
-      });
+  auto device_array_class =
+      py::class_<device_array, base_array>(m, "device_array")
+          .def("__init__", [](py::args, py::kwargs) {})
+          .def_static(
+              "__new__",
+              [](py::handle py_type, class storage storage,
+                 std::span<const size_t> shape, DType dtype) {
+                return custom_new_keep_alive<device_array>(
+                    py_type, /*keep_alive=*/storage.fiber(), storage, shape,
+                    dtype);
+              },
+              py::arg("cls"), py::arg("storage"), py::arg("shape"),
+              py::arg("dtype"))
+          .def_static(
+              "__new__",
+              [](py::handle py_type, local::ScopedDevice &device,
+                 std::span<const size_t> shape, DType dtype) {
+                return custom_new_keep_alive<device_array>(
+                    py_type, /*keep_alive=*/device.fiber(),
+                    device_array::for_device(device, shape, dtype));
+              },
+              py::arg("cls"), py::arg("device"), py::arg("shape"),
+              py::arg("dtype"))
+          .def("__sfinv_marshal__",
+               [](device_array *self, py::capsule inv_capsule, int barrier) {
+                 auto *inv = static_cast<local::ProgramInvocation *>(
+                     inv_capsule.data());
+                 static_cast<local::ProgramInvocationMarshalable *>(self)
+                     ->AddAsInvocationArgument(
+                         inv,
+                         static_cast<local::ProgramResourceBarrier>(barrier));
+               })
+          .def_static("for_device",
+                      [](local::ScopedDevice &device,
+                         std::span<const size_t> shape, DType dtype) {
+                        return custom_new_keep_alive<device_array>(
+                            py::type<device_array>(),
+                            /*keep_alive=*/device.fiber(),
+                            device_array::for_device(device, shape, dtype));
+                      })
+          .def_static("for_host",
+                      [](local::ScopedDevice &device,
+                         std::span<const size_t> shape, DType dtype) {
+                        return custom_new_keep_alive<device_array>(
+                            py::type<device_array>(),
+                            /*keep_alive=*/device.fiber(),
+                            device_array::for_host(device, shape, dtype));
+                      })
+          .def("for_transfer",
+               [](device_array &self) {
+                 return custom_new_keep_alive<device_array>(
+                     py::type<device_array>(),
+                     /*keep_alive=*/self.device().fiber(), self.for_transfer());
+               })
+          .def_prop_ro("device", &device_array::device,
+                       py::rv_policy::reference_internal)
+          .def_prop_ro("storage", &device_array::storage,
+                       py::rv_policy::reference_internal)
+          .def(
+              "fill",
+              [](py::handle_t<device_array> self, py::handle buffer) {
+                self.attr("storage").attr("fill")(buffer);
+              },
+              py::arg("pattern"), DOCSTRING_ARRAY_FILL)
+          .def("copy_from", &device_array::copy_from, py::arg("source_array"),
+               DOCSTRING_ARRAY_COPY_FROM)
+          .def("copy_to", &device_array::copy_to, py::arg("dest_array"),
+               DOCSTRING_ARRAY_COPY_TO)
+          .def("view", PyDeviceArrayView, DOCSTRING_ARRAY_VIEW)
+          .def(
+              "map",
+              [](device_array &self, bool read, bool write, bool discard) {
+                int access = 0;
+                if (read) access |= IREE_HAL_MEMORY_ACCESS_READ;
+                if (write || discard) access |= IREE_HAL_MEMORY_ACCESS_WRITE;
+                if (discard) access |= IREE_HAL_MEMORY_ACCESS_DISCARD;
+                if (!access) {
+                  throw std::invalid_argument(
+                      "One of the access flags must be set");
+                }
+                PyMapping *cpp_mapping = nullptr;
+                py::object py_mapping = CreateMappingObject(&cpp_mapping);
+                cpp_mapping->set_dtype(self.dtype());
+                self.storage().map_explicit(
+                    cpp_mapping->mapping(),
+                    static_cast<iree_hal_memory_access_bits_t>(access));
+                return py_mapping;
+              },
+              py::kw_only(), py::arg("read") = false, py::arg("write") = false,
+              py::arg("discard") = false, DOCSTRING_ARRAY_MAP)
+          .def_prop_rw(
+              "items",
+              [refs](device_array &self) {
+                PyMapping *mapping;
+                py::object mapping_obj = CreateMappingObject(&mapping);
+                mapping->set_dtype(self.dtype());
+                self.storage().map_explicit(
+                    mapping->mapping(),
+                    static_cast<iree_hal_memory_access_bits_t>(
+                        IREE_HAL_MEMORY_ACCESS_READ));
+                return mapping->GetItems(mapping_obj, refs.get());
+              },
+              [refs](device_array &self, py::handle initializer) {
+                PyMapping mapping;
+                mapping.set_dtype(self.dtype());
+                self.storage().map_explicit(
+                    mapping.mapping(),
+                    static_cast<iree_hal_memory_access_bits_t>(
+                        IREE_HAL_MEMORY_ACCESS_READ));
+                return mapping.SetItems(refs.get(), initializer);
+              },
+              DOCSTRING_ARRAY_ITEMS)
+          .def("__repr__", &device_array::to_s)
+          .def("__str__", [](device_array &self) -> std::string {
+            auto contents = self.contents_to_s();
+            if (!contents) return "<<unmappable>>";
+            return *contents;
+          });
+
+  // Numpy Array Protocol, if numpy is available
+  py::object importlib = py::module_::import_("importlib");
+  if (!importlib.attr("util").attr("find_spec")("numpy").is_none()) {
+    device_array_class
+        .def("__array__",
+             [refs](device_array &self) {
+               py::object np = py::module_::import_("numpy");
+
+               auto &table = refs->element_type_array_type_code_table;
+               auto it = table.find(self.dtype());
+               if (it == table.end()) {
+                 throw std::invalid_argument(fmt::format(
+                     "Python array.array type code not know for dtype "
+                     "{}: Cannot access items",
+                     self.dtype().name()));
+               }
+
+               auto typeString = py::str();
+               if (it->first == DType::float16()) {
+                 // Special case to support float16.
+                 typeString = py::str(np.attr("dtype")(np.attr("float16")));
+               } else {
+                 typeString = py::str(it->second);
+               }
+
+               PyMapping *mapping;
+               py::object mapping_obj = CreateMappingObject(&mapping);
+               mapping->set_dtype(self.dtype());
+               self.storage().map_explicit(
+                   mapping->mapping(),
+                   static_cast<iree_hal_memory_access_bits_t>(
+                       IREE_HAL_MEMORY_ACCESS_READ));
+               auto items = mapping->GetItems(mapping_obj, refs.get());
+               return np.attr("array")(items, py::arg("dtype") = typeString);
+             })
+        .def_prop_ro("__array_interface__", [refs](device_array &self) {
+          py::object np = py::module_::import_("numpy");
+
+          py::dict interface;
+          interface["version"] = 3;
+          interface["strides"] = py::none();
+
+          auto shape = self.shape();
+          py::list shapeList;
+          for (size_t i = 0; i < shape.size(); ++i) {
+            shapeList.append(shape[i]);
+          }
+          py::tuple shape_tuple(py::cast(shapeList));
+          interface["shape"] = shape_tuple;
+
+          auto &table = refs->element_type_array_type_code_table;
+          auto it = table.find(self.dtype());
+          if (it == table.end()) {
+            throw std::invalid_argument(
+                fmt::format("Python array.array type code not know for dtype "
+                            "{}: Cannot access items",
+                            self.dtype().name()));
+          }
+
+          auto typeString = py::str();
+          if (it->first == DType::float16()) {
+            typeString = py::str(np.attr("dtype")(np.attr("float16")));
+          } else {
+            typeString = py::str(it->second);
+          }
+          interface["typestr"] = typeString;
+
+          PyMapping *mapping;
+          py::object mapping_obj = CreateMappingObject(&mapping);
+          mapping->set_dtype(self.dtype());
+          self.storage().map_explicit(
+              mapping->mapping(), static_cast<iree_hal_memory_access_bits_t>(
+                                      IREE_HAL_MEMORY_ACCESS_READ));
+          auto items = mapping->GetItems(mapping_obj, refs.get());
+
+          // Obtain pointer to first element in items
+          Py_buffer buffer;
+          if (PyObject_GetBuffer(items.ptr(), &buffer, PyBUF_SIMPLE) != 0) {
+            throw std::runtime_error("Failed to get buffer from items");
+          }
+          void *itemsPtr = buffer.buf;
+          interface["data"] =
+              py::make_tuple(reinterpret_cast<intptr_t>(itemsPtr), false);
+          return interface;
+        });
+  }
 
   BindArrayHostOps(m);
 }
