@@ -5,7 +5,6 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 import urllib.request
-import tempfile
 from pathlib import Path
 import functools
 import pytest
