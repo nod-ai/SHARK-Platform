@@ -10,6 +10,18 @@ import shutil
 
 BATCH_SIZES = [1, 4]
 
+cpu_settings = {
+    "device_flags": ["-iree-hal-target-backends=llvm-cpu"],
+    "device": "local-task",
+}
+
+gpu_settings = {
+    "device_flags": ["-iree-hal-target-backends=rocm", "--iree-hip-target=gfx1100"],
+    "device": "hip",
+}
+
+settings = cpu_settings
+
 
 @pytest.fixture(scope="module")
 def model_test_dir():
@@ -62,10 +74,10 @@ tokenizer.save_pretrained("{tmp_dir}")
                 [
                     "iree-compile",
                     mlir_path,
-                    "--iree-hal-target-backends=llvm-cpu",
                     "-o",
                     vmfb_path,
-                ],
+                ]
+                + settings["device_flags"],
                 check=True,
             )
 
@@ -103,7 +115,7 @@ def llm_server(model_test_dir):
             f"--model_config={os.path.join(model_test_dir, 'edited_config.json')}",
             f"--vmfb={os.path.join(model_test_dir, 'model.vmfb')}",
             f"--parameters={os.path.join(model_test_dir, 'open-llama-3b-v2-f16.gguf')}",
-            "--device=local-task",
+            f"--device={settings['device']}",
         ]
     )
 
