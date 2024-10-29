@@ -517,7 +517,7 @@ class InferenceExecutorProcess(sf.Process):
         )
         for i, t in tqdm(
             enumerate(range(step_count)),
-            disable=(not self.show_progress),
+            disable=(not self.service.show_progress),
             desc=f"Worker #{self.worker_index} DENOISE (bs{req_bs})",
         ):
             step = sfnp.device_array.for_device(device, [1], sfnp.sint64)

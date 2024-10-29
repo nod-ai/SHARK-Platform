@@ -22,7 +22,7 @@ sample_request = {
     "neg_prompt": ["Watermark, blurry, oversaturated, low resolution, pollution"],
     "height": [1024],
     "width": [1024],
-    "steps": [20],
+    "steps": [5],
     "guidance_scale": [7.5],
     "seed": [0],
     "output_type": ["base64"],
@@ -82,7 +82,6 @@ def start_server(fibers_per_device=1, isolation="per_fiber"):
         [
             f"--fibers_per_device={fibers_per_device}",
             f"--isolation={isolation}",
-            f"--show_progress=False",
         ]
     )
     runner = ServerRunner(srv_args)

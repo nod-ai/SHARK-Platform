@@ -95,6 +95,7 @@ def configure(args) -> SystemManager:
         model_params=model_params,
         fibers_per_device=args.fibers_per_device,
         prog_isolation=args.isolation,
+        show_progress=args.show_progress,
     )
     sm.load_inference_module(args.clip_vmfb, component="clip")
     sm.load_inference_module(args.unet_vmfb, component="unet")
@@ -210,6 +211,11 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
     )
     parser.add_argument(
         "--log_level", type=str, default="error", choices=["info", "debug", "error"]
+    )
+    parser.add_argument(
+        "--show_progress",
+        action="store_true",
+        help="enable tqdm progress for unet iterations.",
     )
     log_levels = {
         "info": logging.INFO,
