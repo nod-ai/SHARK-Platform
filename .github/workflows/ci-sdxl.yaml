@@ -4,19 +4,19 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-name: CI - shortfin
+name: CI - shortfin - SDXL
 
 on:
   workflow_dispatch:
   pull_request:
     paths:
-      - '.github/workflows/ci_linux_x64-libshortfin.yml'
+      - '.github/workflows/ci-sdxl.yaml'
       - 'shortfin/**'
   push:
     branches:
       - main
     paths:
-      - '.github/workflows/ci_linux_x64-libshortfin.yml'
+      - '.github/workflows/ci-sdxl.yaml'
       - 'shortfin/**'
 
 permissions:
@@ -37,13 +37,13 @@ env:
 jobs:
   build-and-test:
     name: Build and test
-    runs-on: ubuntu-24.04
+    runs-on: mi300-sdxl-kernel
 
     steps:
     - name: Install dependencies
       run: |
-        sudo apt update
-        sudo apt install clang lld cmake ninja-build
+        sudo apt update -y
+        sudo apt install cmake ninja-build -y
 
     - name: Checkout repository
       uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
@@ -89,7 +89,6 @@ jobs:
           -Bbuild \
           -DCMAKE_C_COMPILER=clang-18 \
           -DCMAKE_CXX_COMPILER=clang++-18 \
-          -DCMAKE_LINKER_TYPE=LLD \
           -DSHORTFIN_BUNDLE_DEPS=ON \
           -DSHORTFIN_IREE_SOURCE_DIR="${{ env.IREE_REPO_DIR }}" \
           -DSHORTFIN_BUILD_PYTHON_BINDINGS=ON
@@ -100,23 +99,4 @@ jobs:
       working-directory: ${{ env.LIBSHORTFIN_DIR }}
       run: |
         ctest --timeout 30 --output-on-failure --test-dir build
-        pytest -s
-
-    - name: Build shortfin (host-only)
-      working-directory: ${{ env.LIBSHORTFIN_DIR }}
-      run: |
-        mkdir build-host-only
-        # In this configuration, also build static+dynamic in order to verify
-        # that path structurally works.
-        cmake -GNinja \
-          -S. \
-          -Bbuild-host-only \
-          -DCMAKE_C_COMPILER=clang-18 \
-          -DCMAKE_CXX_COMPILER=clang++-18 \
-          -DCMAKE_LINKER_TYPE=LLD \
-          -DSHORTFIN_IREE_SOURCE_DIR="${{ env.IREE_REPO_DIR }}" \
-          -DSHORTFIN_BUILD_PYTHON_BINDINGS=ON \
-          -DSHORTFIN_HAVE_AMDGPU=OFF \
-          -DSHORTFIN_BUILD_STATIC=ON \
-          -DSHORTFIN_BUILD_DYNAMIC=ON
-        cmake --build build-host-only --target all
+        pytest tests/apps/sd/e2e_test.py -v -s --system=amdgpu

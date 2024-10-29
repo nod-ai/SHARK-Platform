@@ -7,6 +7,7 @@
 import asyncio
 import io
 import logging
+import json
 
 import shortfin as sf
 import shortfin.array as sfnp
@@ -95,12 +96,8 @@ class ClientGenerateBatchProcess(sf.Process):
 
             # TODO: stream image outputs
             logging.debug("Responding to one shot batch")
-            out = io.BytesIO()
-            result_images = [p.result_image for p in gen_processes]
-            for idx, result_image in enumerate(result_images):
-                out.write(result_image)
-                # TODO: save or return images
-                logging.debug("Wrote images as bytes to response.")
-            self.responder.send_response(out.getvalue())
+            response_data = {"images": [p.result_image for p in gen_processes]}
+            json_str = json.dumps(response_data)
+            self.responder.send_response(json_str)
         finally:
             self.responder.ensure_response()
