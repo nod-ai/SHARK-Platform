@@ -146,6 +146,23 @@ class SHORTFIN_API Fiber : public std::enable_shared_from_this<Fiber> {
   std::unordered_map<std::string_view, int> device_class_count_;
   // Ordered devices named as `<device_class><index>`.
   std::vector<std::pair<std::string_view, Device *>> devices_;
+
+  // Program isolation control.
+  // This data structure is manipulated by APIs on the Program class hierarchy.
+  // It maps a parent context pointer to an isolate accounting struct. This
+  // struct contains a strong reference to the parent_context and a vector
+  // of fork contexts. For PER_FIBER invocations, there will only ever be either
+  // zero or one fork_contexts: when no calls have been issued there will be one
+  // and if a call is outstanding, there will be zero. This is used to guard
+  // concurrent access. For PER_CALL invocations, there will be as many
+  // fork_contexts as are needed to satisfy the peak number of calls in flight
+  // at any time.
+  // The program_isolate_mu_ must be held to manipulate the accounting structs.
+  iree::slim_mutex program_isolate_mu_;
+  std::unordered_map<iree_vm_context_t *,
+                     std::unique_ptr<detail::ProgramIsolate>>
+      program_isolates_;
+  friend struct detail::ProgramIsolate;
 };
 
 }  // namespace shortfin::local
