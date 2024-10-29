@@ -19,42 +19,6 @@ longrun = pytest.mark.skipif("not config.getoption('longrun')")
 is_mi300x = pytest.mark.skipif("config.getoption('iree_hip_target') != 'gfx942'")
 
 
-class ExportMlirException(Exception):
-    """SHARK-Platform export MLIR exception that preserves the command line and error output."""
-
-    def __init__(self, process: subprocess.CompletedProcess, cwd: str):
-        try:
-            errs = process.stderr.decode("utf-8")
-        except:
-            errs = str(process.stderr)
-
-        super().__init__(
-            f"Error invoking export_paged_llama_v1.py\n"
-            f"Error code: {process.returncode}\n"
-            f"Stderr diagnostics:\n{errs}\n\n"
-            f"Invoked with:\n"
-            f"  cd {cwd} && {process.args}\n\n"
-        )
-
-
-class IreeCompileException(Exception):
-    """Compiler exception that preserves the command line and error output."""
-
-    def __init__(self, process: subprocess.CompletedProcess, cwd: str):
-        try:
-            errs = process.stderr.decode("utf-8")
-        except:
-            errs = str(process.stderr)
-
-        super().__init__(
-            f"Error invoking iree-compile\n"
-            f"Error code: {process.returncode}\n"
-            f"Stderr diagnostics:\n{errs}\n\n"
-            f"Invoked with:\n"
-            f"  cd {cwd} && {process.args}\n\n"
-        )
-
-
 @pytest.mark.usefixtures("get_iree_flags")
 class BaseBenchmarkTest(unittest.TestCase):
     directory_created = False
@@ -77,111 +41,6 @@ class BaseBenchmarkTest(unittest.TestCase):
 
     def setUp(self):
         self.hip_device_id = os.getenv("HIP_DEVICE_ID", default="0")
-
-    def create_file(self, *, suffix, prefix):
-        file_path = Path(prefix).with_suffix(suffix)
-        f = open(file_path, "w")
-        return file_path
-
-    def get_export_cmd(
-        self,
-        *,
-        attention_kernel: str,
-        tensor_parallelism_size: int,
-        irpa_path: str,
-        output_mlir_path: str,
-        output_json_path: str,
-    ):
-        export_args = [
-            "python3",
-            "-m",
-            "sharktank.examples.export_paged_llm_v1",
-            "--irpa-file",
-            irpa_path,
-            "--output-mlir",
-            output_mlir_path,
-            "--output-config",
-            output_json_path,
-        ]
-        if attention_kernel == "decomposed":
-            export_args.append("--attention-kernel")
-            export_args.append(attention_kernel)
-        elif attention_kernel == "torch_sdpa":
-            raise NotImplementedError(
-                "attention_kernel torch_sdpa not yet plumbed through"
-            )
-        if tensor_parallelism_size:
-            export_args.append("--tensor-parallelism-size")
-            export_args.append(str(tensor_parallelism_size))
-
-        cmd = subprocess.list2cmdline(export_args)
-        return cmd
-
-    def get_compile_cmd(
-        self, *, output_mlir_path: str, output_vmfb_path: str, args: [str]
-    ):
-        compile_args = ["iree-compile", output_mlir_path]
-        compile_args += args
-        compile_args += ["-o", output_vmfb_path]
-        cmd = subprocess.list2cmdline(compile_args)
-        return cmd
-
-    def export_mlir(
-        self,
-        *,
-        attention_kernel: str,
-        tensor_parallelism_size: int,
-        irpa_path: str,
-        output_mlir_path: str,
-        output_json_path: str,
-        cwd: str | Path,
-    ):
-        """Runs export_paged_llm_v1.py and exports an MLIR file.
-        Args:
-            irpa_path: Path to the model irpa file.
-            output_mlir_path: Path to the file to save the exported file.
-            output_json_path: Path to the file to save the config json file.
-        """
-        cmd = self.get_export_cmd(
-            attention_kernel=attention_kernel,
-            tensor_parallelism_size=tensor_parallelism_size,
-            irpa_path=irpa_path,
-            output_mlir_path=output_mlir_path,
-            output_json_path=output_json_path,
-        )
-        logging.getLogger().info(f"Launching export command:\n" f"cd {cwd} && {cmd}")
-        proc = subprocess.run(cmd, shell=True, capture_output=True, cwd=cwd)
-        return_code = proc.returncode
-        if return_code != 0:
-            raise ExportMlirException(proc, cwd)
-
-    def iree_compile(
-        self,
-        *,
-        mlir_path: str,
-        output_vmfb_path: str,
-        args: List[str],
-        cwd: str | Path,
-    ):
-        """Compiles an input MLIR file to an output .vmfb file.
-        This assumes that the `iree-compile` command is available (usually via PATH).
-        Args:
-            mlir_path: Path to the input MLIR file.
-            output_vmfb_path: Path for the output .vmfb file. The directory must already exist.
-            args: List of arguments to pass to `iree-compile`.
-            cwd: current working directory
-        Raises Exception if compilation fails for some reason.
-        """
-        cmd = self.get_compile_cmd(
-            output_mlir_path=mlir_path,
-            output_vmfb_path=output_vmfb_path,
-            args=args,
-        )
-        logging.getLogger().info(f"Launching compile command:\n" f"cd {cwd} && {cmd}")
-        proc = subprocess.run(cmd, shell=True, capture_output=True, cwd=cwd)
-        return_code = proc.returncode
-        if return_code != 0:
-            raise IreeCompileException(proc, cwd)
 
 
 class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
@@ -246,12 +105,17 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
             "--benchmark_repetitions=3",
         ]
 
-    @is_mi300x
     def testBenchmark8B_f16_Decomposed(self):
         output_file_name = self.dir_path_8b / "f16_decomposed"
-        output_mlir = self.create_file(suffix=".mlir", prefix=output_file_name)
-        output_json = self.create_file(suffix=".json", prefix=output_file_name)
-        output_vmfb = self.create_file(suffix=".vmfb", prefix=output_file_name)
+        output_mlir = self.llama8b_f16_artifacts.create_file(
+            suffix=".mlir", prefix=output_file_name
+        )
+        output_json = self.llama8b_f16_artifacts.create_file(
+            suffix=".json", prefix=output_file_name
+        )
+        output_vmfb = self.llama8b_f16_artifacts.create_file(
+            suffix=".vmfb", prefix=output_file_name
+        )
         output_shard_file_name = str(
             self.artifacts_dir
             / f"llama3.1_8b_fp16_tp{self.tensor_parallelism_size}_parameters.irpa"
@@ -288,18 +152,19 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
             cwd=self.repo_root,
         )
 
-    @longrun
-    @is_mi300x
-    # @pytest.mark.xfail(reason="torch_sdpa not yet plumbed through", strict=True)
+    @pytest.mark.xfail(reason="torch_sdpa not yet plumbed through", strict=True)
     def testBenchmark8B_f16_Non_Decomposed(self):
         output_file_name = self.dir_path_8b / "f16_torch"
-        output_mlir = self.create_file(suffix=".mlir", prefix=output_file_name)
-        output_json = self.create_file(suffix=".json", prefix=output_file_name)
-        output_vmfb = self.create_file(suffix=".vmfb", prefix=output_file_name)
+        output_mlir = self.llama8b_f16_artifacts.create_file(
+            suffix=".mlir", prefix=output_file_name
+        )
+        output_json = self.llama8b_f16_artifacts.create_file(
+            suffix=".json", prefix=output_file_name
+        )
+        output_vmfb = self.llama8b_f16_artifacts.create_file(
+            suffix=".vmfb", prefix=output_file_name
+        )
         self.llama8b_f16_artifacts.attention_kernel = "torch"
-        import pdb
-
-        pdb.set_trace()
         output_shard_file_name = str(
             self.artifacts_dir
             / f"llama3.1_8b_fp16_tp{self.tensor_parallelism_size}_parameters_torch_sdpa.irpa"

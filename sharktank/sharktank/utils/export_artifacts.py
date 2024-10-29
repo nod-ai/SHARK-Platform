@@ -117,11 +117,9 @@ class ExportArtifacts:
             "--bs",
             str(self.batch_size),
         ]
-        if self.attention_kernel == "decomposed":
+        if self.attention_kernel in ["decomposed", "torch"]:
             export_args.append("--attention-kernel")
             export_args.append(self.attention_kernel)
-        elif self.attention_kernel == "torch_sdpa":
-            raise NotImplementedError("attention_kernel torch_sdpa not implemented yet")
 
         cwd = self.sharktank_dir
         cmd = subprocess.list2cmdline(export_args)
@@ -162,33 +160,6 @@ class ExportArtifacts:
         else:
             logger.info(f"Compiled to vmfb successfully:\n" f"{vmfb_path}")
 
-    class IreeBenchmarkException(Exception):
-        """Runtime exception that preserves the command line and error output."""
-
-        def __init__(
-            self, process: subprocess.CompletedProcess, cwd: str, compile_cmd: str
-        ):
-            # iree-run-module sends output to both stdout and stderr
-            try:
-                errs = process.stderr.decode("utf-8")
-            except:
-                errs = str(process.stderr)
-            try:
-                outs = process.stdout.decode("utf-8")
-            except:
-                outs = str(process.stdout)
-
-            super().__init__(
-                f"Error invoking iree-benchmark-module\n"
-                f"Error code: {process.returncode}\n"
-                f"Stderr diagnostics:\n{errs}\n"
-                f"Stdout diagnostics:\n{outs}\n"
-                f"Compiled with:\n"
-                f"  cd {cwd} && {compile_cmd}\n\n"
-                f"Run with:\n"
-                f"  cd {cwd} && {process.args}\n\n"
-            )
-
     def iree_benchmark_vmfb(
         self,
         *,
@@ -223,9 +194,9 @@ class ExportArtifacts:
         proc = subprocess.run(cmd, shell=True, stdout=sys.stdout, cwd=cwd)
         return_code = proc.returncode
         if return_code != 0:
-            raise IreeBenchmarkException(proc, cwd, cmd)
+            raise RuntimeError(f"Error running benchmark {cmd} in cwd {cwd}")
 
-    def create_file(self, suffix, prefix):
+    def create_file(self, *, suffix, prefix):
         file_path = Path(prefix).with_suffix(suffix)
         f = open(file_path, "w")
         return file_path
