@@ -191,8 +191,8 @@ class DirectKVCache(BaseKVCache):
         update_count = len(cache_partitions)
 
         for b in range(bs):
-            row_index = torch.tensor(b, dtype=torch.int64)
-            row_start_pos = seq_positions[row_index]
+            row_index = torch.tensor([b], dtype=torch.int64)
+            row_start_pos = seq_positions[row_index].unsqueeze(0)
 
             for i, update in enumerate(cache_partitions):
                 cache = state[transformer_block_index * update_count + i]
