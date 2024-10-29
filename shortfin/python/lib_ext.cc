@@ -248,8 +248,9 @@ void PyAddProgramInvocationArg(py::capsule &inv_capsule, py::handle arg) {
 }
 
 local::ProgramInvocation::Future PyFunctionCall(local::ProgramFunction &self,
-                                                py::args args) {
-  auto inv = self.CreateInvocation();
+                                                py::args args,
+                                                local::Fiber &fiber) {
+  auto inv = self.CreateInvocation(fiber.shared_from_this());
   py::capsule inv_capsule(inv.get());
   for (py::handle arg : args) {
     PyAddProgramInvocationArg(inv_capsule, arg);
@@ -592,13 +593,14 @@ void BindLocal(py::module_ &m) {
 
   py::class_<local::Program>(m, "Program")
       .def(py::new_([](std::span<const local::ProgramModule> modules,
-                       local::Fiber &fiber, bool trace_execution) {
+                       std::vector<const local::Device *> devices,
+                       bool trace_execution) {
              local::Program::Options options;
+             options.devices = devices;
              options.trace_execution = trace_execution;
-             return local::Program::Load(fiber.shared_from_this(), modules,
-                                         std::move(options));
+             return local::Program::Load(modules, std::move(options));
            }),
-           py::arg("modules"), py::arg("fiber"), py::kw_only(),
+           py::arg("modules"), py::kw_only(), py::arg("devices"),
            py::arg("trace_execution") = false)
       .def_prop_ro("exports", &local::Program::exports)
       .def("lookup_function", &local::Program::LookupRequiredFunction)
@@ -607,9 +609,14 @@ void BindLocal(py::module_ &m) {
       .def_prop_ro("name", &local::ProgramFunction::name)
       .def_prop_ro("calling_convention",
                    &local::ProgramFunction::calling_convention)
-      .def("invocation", &local::ProgramFunction::CreateInvocation,
-           DOCSTRING_PROGRAM_FUNCTION_INVOCATION)
-      .def("__call__", PyFunctionCall, py::arg("args"))
+      .def(
+          "invocation",
+          [](local::ProgramFunction &self, local::Fiber &fiber) {
+            return self.CreateInvocation(fiber.shared_from_this());
+          },
+          DOCSTRING_PROGRAM_FUNCTION_INVOCATION)
+      .def("__call__", PyFunctionCall, py::arg("args"), py::kw_only(),
+           py::arg("fiber"))
       .def("__repr__", &local::ProgramFunction::to_s);
   py::class_<local::ProgramModule>(m, "ProgramModule")
       .def_prop_ro("exports", &local::ProgramModule::exports)
@@ -718,8 +725,17 @@ void BindLocal(py::module_ &m) {
   };
   py::class_<local::Fiber>(m, "Fiber")
       .def("__repr__", &local::Fiber::to_s)
-      .def_prop_ro("raw_devices", &local::Fiber::raw_devices,
-                   py::rv_policy::reference_internal)
+      .def_prop_ro(
+          "raw_devices",
+          [](local::Fiber &self) {
+            std::vector<local::Device *> devices;
+            devices.reserve(self.raw_devices().size());
+            for (auto it : self.raw_devices()) {
+              devices.push_back(it.second);
+            }
+            return devices;
+          },
+          py::rv_policy::reference_internal)
       .def(
           "raw_device",
           [](local::Fiber &self, int index) { return self.raw_device(index); },

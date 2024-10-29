@@ -36,12 +36,12 @@ void GetVmModuleExports(iree_vm_module_t *vm_module,
 // -------------------------------------------------------------------------- //
 
 ProgramFunction::ProgramFunction(
-    std::shared_ptr<Fiber> fiber, iree::vm_context_ptr vm_context,
-    iree_vm_function_t vm_function,
+    iree::vm_context_ptr vm_context, iree_vm_function_t vm_function,
+    ProgramIsolation isolation,
     std::optional<ProgramInvocationModel> invocation_model)
-    : fiber_(std::move(fiber)),
-      vm_context_(std::move(vm_context)),
+    : vm_context_(std::move(vm_context)),
       vm_function_(vm_function),
+      isolation_(isolation),
       invocation_model_(invocation_model
                             ? *invocation_model
                             : GetInvocationModelFromFunction(vm_function)) {}
@@ -73,9 +73,19 @@ std::string_view ProgramFunction::calling_convention() const {
       iree_vm_function_signature(&vm_function_).calling_convention);
 }
 
-ProgramInvocation::Ptr ProgramFunction::CreateInvocation() {
-  return ProgramInvocation::New(fiber_, vm_context_, vm_function_,
-                                invocation_model_);
+ProgramInvocation::Ptr ProgramFunction::CreateInvocation(
+    std::shared_ptr<Fiber> fiber) {
+  // Low-overhead NONE isolation handling (saves some ref-count twiddling).
+  if (isolation_ == ProgramIsolation::NONE) {
+    return ProgramInvocation::New(std::move(fiber), vm_context_, vm_function_,
+                                  invocation_model_, /*isolate=*/nullptr);
+  }
+
+  // Create an isolated invocation.
+  auto [isolated_context, isolate] =
+      detail::ProgramIsolate::AcquireIsolate(*fiber, vm_context_, isolation_);
+  return ProgramInvocation::New(std::move(fiber), std::move(isolated_context),
+                                vm_function_, invocation_model_, isolate);
 }
 
 std::string ProgramFunction::to_s() const {
@@ -106,7 +116,7 @@ ProgramModule ProgramModule::Load(System &system,
       system.vm_instance(), contents.const_buffer(), contents.deallocator(),
       system.host_allocator(), module.for_output()));
   contents.release();  // Must be invoked on success path only.
-  return ProgramModule(std::move(module));
+  return ProgramModule(system.shared_from_this(), std::move(module));
 }
 
 ProgramModule ProgramModule::ParameterProvider(
@@ -126,7 +136,7 @@ ProgramModule ProgramModule::ParameterProvider(
   SHORTFIN_THROW_IF_ERROR(iree_io_parameters_module_create(
       system.vm_instance(), providers.size(), providers.data(),
       system.host_allocator(), module.for_output()));
-  return ProgramModule(std::move(module));
+  return ProgramModule(system.shared_from_this(), std::move(module));
 }
 
 std::string_view ProgramModule::name() const {
@@ -158,14 +168,27 @@ std::vector<std::string> ProgramModule::exports() const {
 // Program
 // -------------------------------------------------------------------------- //
 
-Program Program::Load(std::shared_ptr<Fiber> fiber,
-                      std::span<const ProgramModule> modules, Options options) {
+Program Program::Load(std::span<const ProgramModule> modules,
+                      Options &&options) {
   std::vector<iree_vm_module_t *> all_modules;
   std::vector<iree_hal_device_t *> raw_devices;
 
+  System *system = nullptr;
   // By default, bind all devices in the fiber in order to the program.
-  for (auto &it : fiber->raw_devices()) {
-    raw_devices.push_back(it.second->hal_device());
+  for (auto &it : options.devices) {
+    raw_devices.push_back(it->hal_device());
+  }
+
+  for (auto &mod : modules) {
+    if (system && &mod.system() != system) {
+      throw std::invalid_argument(
+          "Cannot create Program from modules loaded from multiple system "
+          "instances");
+    }
+    system = &mod.system();
+  }
+  if (!system) {
+    throw std::invalid_argument("Cannot create Program with no modules");
   }
 
   // Add a HAL module.
@@ -177,12 +200,11 @@ Program Program::Load(std::shared_ptr<Fiber> fiber,
   // functionality (or module versions; iree_vm_module_dependency_t has the
   // minimum version required so you can switch between them, and whether they
   // are optional/required).
-  auto &system = fiber->system();
   iree::vm_module_ptr hal_module;
-  SHORTFIN_THROW_IF_ERROR(
-      iree_hal_module_create(system.vm_instance(), raw_devices.size(),
-                             raw_devices.data(), IREE_HAL_MODULE_FLAG_NONE,
-                             system.host_allocator(), hal_module.for_output()));
+  SHORTFIN_THROW_IF_ERROR(iree_hal_module_create(
+      system->vm_instance(), raw_devices.size(), raw_devices.data(),
+      IREE_HAL_MODULE_FLAG_NONE, system->host_allocator(),
+      hal_module.for_output()));
   all_modules.push_back(hal_module);
 
   // Add explicit modules.
@@ -195,10 +217,10 @@ Program Program::Load(std::shared_ptr<Fiber> fiber,
   iree_vm_context_flags_t flags = IREE_VM_CONTEXT_FLAG_CONCURRENT;
   if (options.trace_execution) flags |= IREE_VM_CONTEXT_FLAG_TRACE_EXECUTION;
   SHORTFIN_THROW_IF_ERROR(iree_vm_context_create_with_modules(
-      system.vm_instance(), flags, all_modules.size(), all_modules.data(),
-      system.host_allocator(), context.for_output()));
+      system->vm_instance(), flags, all_modules.size(), all_modules.data(),
+      system->host_allocator(), context.for_output()));
 
-  return Program(std::move(fiber), std::move(context));
+  return Program(std::move(context), options.isolation);
 }
 
 std::optional<ProgramFunction> Program::LookupFunction(std::string_view name) {
@@ -217,7 +239,7 @@ std::optional<ProgramFunction> Program::LookupFunction(std::string_view name) {
       // TODO: Torch import is not setting the coarse-fences abi.model on
       // its functions. Get it from there instead of just assuming based on
       // name.
-      return ProgramFunction(fiber_, vm_context_, f,
+      return ProgramFunction(vm_context_, f, isolation_,
                              ProgramInvocationModel::COARSE_FENCES);
     } else if (!iree_status_is_not_found(status)) {
       SHORTFIN_THROW_IF_ERROR(status);
@@ -229,7 +251,7 @@ std::optional<ProgramFunction> Program::LookupFunction(std::string_view name) {
       vm_context_, to_iree_string_view(name), &f);
   if (iree_status_is_not_found(status)) return {};
   SHORTFIN_THROW_IF_ERROR(status);
-  return ProgramFunction(fiber_, vm_context_, f);
+  return ProgramFunction(vm_context_, f, isolation_);
 }
 
 ProgramFunction Program::LookupRequiredFunction(std::string_view name) {
@@ -260,6 +282,15 @@ std::vector<std::string> Program::exports() const {
   return results;
 }
 
+void Program::PrepareIsolate(Fiber &fiber) {
+  if (isolation_ == ProgramIsolation::NONE) return;
+  auto [context, isolate] =
+      detail::ProgramIsolate::AcquireIsolate(fiber, vm_context_, isolation_);
+  if (isolate) {
+    detail::ProgramIsolate::ReleaseIsolate(fiber, std::move(context), isolate);
+  }
+}
+
 // -------------------------------------------------------------------------- //
 // ProgramInvocation
 // -------------------------------------------------------------------------- //
@@ -287,18 +318,23 @@ void ProgramInvocation::Deleter::operator()(ProgramInvocation *inst) {
 }
 
 ProgramInvocation::ProgramInvocation() = default;
-ProgramInvocation::~ProgramInvocation() {
-  if (!scheduled()) {
-    // This instance was dropped on the floor before scheduling.
-    // Clean up the initialization parameters.
-    iree::vm_context_ptr drop =
-        iree::vm_context_ptr::steal_reference(state.params.context);
+ProgramInvocation::~ProgramInvocation() { ReleaseContext(); }
+
+void ProgramInvocation::ReleaseContext() {
+  if (vm_context_) {
+    if (isolate_) {
+      detail::ProgramIsolate::ReleaseIsolate(*fiber_, std::move(vm_context_),
+                                             isolate_);
+    } else {
+      vm_context_.reset();
+    }
   }
 }
 
 ProgramInvocation::Ptr ProgramInvocation::New(
     std::shared_ptr<Fiber> fiber, iree::vm_context_ptr vm_context,
-    iree_vm_function_t &vm_function, ProgramInvocationModel invocation_model) {
+    iree_vm_function_t &vm_function, ProgramInvocationModel invocation_model,
+    detail::ProgramIsolate *isolate) {
   auto sig = iree_vm_function_signature(&vm_function);
   iree_host_size_t arg_count;
   iree_host_size_t result_count;
@@ -337,8 +373,8 @@ ProgramInvocation::Ptr ProgramInvocation::New(
                static_cast<void *>(inst_storage.release())),
            Deleter());
   inst->fiber_ = std::move(fiber);
-  inst->state.params.context =
-      vm_context.release();  // Ref transfer to ProgramInvocation.
+  inst->vm_context_ = std::move(vm_context);
+  inst->isolate_ = isolate;
   inst->state.params.function = vm_function;
   inst->state.params.invocation_model = invocation_model;
   inst->result_list_ = result_list;
@@ -421,7 +457,6 @@ ProgramInvocation::Future ProgramInvocation::Invoke(
   Params params = invocation->state.params;
 
   auto schedule = [](ProgramInvocation *raw_invocation, Worker *worker,
-                     iree_vm_context_t *owned_context,
                      iree_vm_function_t function,
                      ProgramInvocationModel invocation_model,
                      std::optional<ProgramInvocation::Future> failure_future) {
@@ -440,6 +475,7 @@ ProgramInvocation::Future ProgramInvocation::Invoke(
       ProgramInvocation::Ptr invocation(
           static_cast<ProgramInvocation *>(user_data));
       ProgramInvocation *raw_invocation = invocation.get();
+      raw_invocation->ReleaseContext();
       if (iree_status_is_ok(status)) {
         raw_invocation->future_->set_result(std::move(invocation));
       } else {
@@ -469,7 +505,7 @@ ProgramInvocation::Future ProgramInvocation::Invoke(
     if (iree_status_is_ok(status)) {
       status = iree_vm_async_invoke(worker->loop(),
                                     &invocation->state.async_invoke_state,
-                                    owned_context, function,
+                                    invocation->vm_context_.get(), function,
                                     /*flags=*/IREE_VM_INVOCATION_FLAG_NONE,
                                     /*policy=*/nullptr,
                                     /*inputs=*/invocation->arg_list(),
@@ -477,10 +513,6 @@ ProgramInvocation::Future ProgramInvocation::Invoke(
                                     iree_allocator_system(), +complete_callback,
                                     /*user_data=*/invocation.get());
     }
-
-    // Regardless of status, the context reference we were holding is no
-    // longer needed. Drop it on the floor.
-    iree::vm_context_ptr::steal_reference(owned_context);
 
     // On success, then the complete callback takes ownership of the
     // invocation, so we release it here and return. We have to treat
@@ -490,9 +522,11 @@ ProgramInvocation::Future ProgramInvocation::Invoke(
       invocation.release();
     } else if (failure_future) {
       // Requested to set any failure on the future.
+      invocation->ReleaseContext();
       failure_future->set_failure(status);
     } else {
       // Synchronous: just throw.
+      invocation->ReleaseContext();
       SHORTFIN_THROW_IF_ERROR(status);
     }
   };
@@ -504,14 +538,13 @@ ProgramInvocation::Future ProgramInvocation::Invoke(
 
   if (&worker == Worker::GetCurrent()) {
     // On the same worker: fast-path directly to the loop.
-    schedule(invocation.release(), &worker, params.context, params.function,
+    schedule(invocation.release(), &worker, params.function,
              params.invocation_model, /*failure_future=*/{});
   } else {
     // Cross worker coordination: submit an external task to bootstrap.
-    auto bound_schedule =
-        std::bind(schedule, invocation.release(), &worker, params.context,
-                  params.function, params.invocation_model,
-                  /*failure_future=*/fork_future);
+    auto bound_schedule = std::bind(schedule, invocation.release(), &worker,
+                                    params.function, params.invocation_model,
+                                    /*failure_future=*/fork_future);
     worker.CallThreadsafe(bound_schedule);
   }
 
@@ -621,6 +654,71 @@ void StaticProgramParameters::Load(std::filesystem::path file_path,
   // Parse.
   SHORTFIN_THROW_IF_ERROR(iree_io_parse_file_index(
       to_iree_string_view(options.format), file_handle.get(), index_.get()));
+}
+
+// -------------------------------------------------------------------------- //
+// ProgramIsolate
+// -------------------------------------------------------------------------- //
+
+std::pair<iree::vm_context_ptr, detail::ProgramIsolate *>
+detail::ProgramIsolate::AcquireIsolate(Fiber &fiber,
+                                       iree::vm_context_ptr root_context,
+                                       ProgramIsolation isolation) {
+  assert(isolation != ProgramIsolation::NONE &&
+         "cannot AcquireIsolate when isolation == NONE");
+  // Some isolation required.
+  detail::ProgramIsolate *isolate = nullptr;
+  {
+    iree::slim_mutex_lock_guard lock(fiber.program_isolate_mu_);
+    auto found_it = fiber.program_isolates_.find(root_context.get());
+    if (found_it != fiber.program_isolates_.end()) {
+      isolate = found_it->second.get();
+    }
+    if (isolate && !isolate->fork_contexts.empty()) {
+      // Fast path: there is an existing isolate and a context avaialable.
+      auto isolated_context = std::move(isolate->fork_contexts.back());
+      isolate->fork_contexts.pop_back();
+      return std::make_pair(std::move(isolated_context), isolate);
+    } else if (!isolate) {
+      // Initialize a new isolate accounting struct while in the lock.
+      // Note that this can cause a fault for PER_FIBER mode if the call
+      // to fork fails below as it will leave the isolate with no available
+      // context and every future call will raise an exception indicating that
+      // the context is busy (vs trying to create a new one). This is deemed
+      // an acceptable situation for a system fault (which is the only reason
+      // a fork will fail).
+      auto [inserted_it, inserted] =
+          fiber.program_isolates_.insert(std::make_pair(
+              root_context.get(),
+              std::make_unique<detail::ProgramIsolate>(root_context)));
+      isolate = inserted_it->second.get();
+    } else if (isolation == ProgramIsolation::PER_FIBER) {
+      throw std::logic_error(
+          "Cannot make concurrent invocations of a PER_FIBER program from "
+          "the same Fiber. This typically means that two invocations were "
+          "attempted on the same program on the same fiber without an "
+          "await. Consider fixing adding appropriate sequencing or switching "
+          "to either PER_CALL or NONE isolation if appropriate for the use "
+          "case. This exception can also occur if the first invocation to this "
+          "Program failed, leaving no initialized Program for this fiber.");
+    }
+  }
+
+  // Slow-path: fork needed (and possibly new isolate registration needed).
+  iree::vm_context_ptr new_context;
+  SHORTFIN_THROW_IF_ERROR(iree_vm_context_fork(
+      root_context.get(), fiber.host_allocator(), new_context.for_output()));
+  return std::make_pair(std::move(new_context), isolate);
+}
+
+void detail::ProgramIsolate::ReleaseIsolate(Fiber &fiber,
+                                            iree::vm_context_ptr context,
+                                            detail::ProgramIsolate *isolate) {
+  assert(isolate && "attempt to release null isolate");
+  {
+    iree::slim_mutex_lock_guard lock(fiber.program_isolate_mu_);
+    isolate->fork_contexts.push_back(std::move(context));
+  }
 }
 
 }  // namespace shortfin::local
