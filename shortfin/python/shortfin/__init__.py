@@ -20,6 +20,7 @@ Node = _sfl.local.Node
 Process = _sfl.local.Process
 Program = _sfl.local.Program
 ProgramFunction = _sfl.local.ProgramFunction
+ProgramIsolation = _sfl.local.ProgramIsolation
 ProgramInvocation = _sfl.local.ProgramInvocation
 ProgramInvocationFuture = _sfl.local.ProgramInvocationFuture
 ProgramModule = _sfl.local.ProgramModule

@@ -214,8 +214,11 @@ class SHORTFIN_API ProgramFunction {
   std::string_view name() const;
   std::string_view calling_convention() const;
   ProgramInvocationModel invocation_model() const { return invocation_model_; }
-
-  ProgramInvocation::Ptr CreateInvocation(std::shared_ptr<Fiber> fiber);
+  // Gets the default isolation level for this function.
+  ProgramIsolation isolation() const { return isolation_; }
+  ProgramInvocation::Ptr CreateInvocation(
+      std::shared_ptr<Fiber> fiber,
+      std::optional<ProgramIsolation> isolation = std::nullopt);
 
   std::string to_s() const;
 
@@ -323,6 +326,9 @@ class SHORTFIN_API Program {
 
   // Gets the name of all exported functions.
   std::vector<std::string> exports() const;
+
+  // Gets the default isolation level for all functions in this program.
+  ProgramIsolation isolation() const { return isolation_; }
 
   // Eagerly does any per-fiber isolation preparation for the program at a
   // convenient point (usually init time) to avoid first-invocation overhead.
