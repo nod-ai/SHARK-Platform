@@ -18,7 +18,7 @@ import sys
 
 
 @pytest.fixture(scope="session")
-def kvcache_compiled_cpu_path():
+def kvcache_compiled_cpu_path(tmp_path):
     try:
         import iree.compiler.tools as tools
     except ModuleNotFoundError:
@@ -98,25 +98,25 @@ def kvcache_compiled_cpu_path():
     """
 
     # Create temporary directory for our files
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp_dir_path = Path(tmp_dir)
 
-        # Write MLIR to temporary file
-        mlir_path = tmp_dir_path / "kvcache.mlir"
-        mlir_path.write_text(KVCACHE_MODULE_CONTENTS)
+    tmp_dir_path = Path(tmp_path)
 
-        # Define output path for compiled binary
-        vmfb_path = tmp_dir_path / "kvcache_cpu.vmfb"
+    # Write MLIR to temporary file
+    mlir_path = tmp_dir_path / "kvcache.mlir"
+    mlir_path.write_text(KVCACHE_MODULE_CONTENTS)
 
-        # Compile the MLIR to VMFB
-        tools.compile_file(
-            str(mlir_path),
-            output_file=str(vmfb_path),
-            target_backends=["llvm-cpu"],
-            input_type="AUTO",
-        )
+    # Define output path for compiled binary
+    vmfb_path = tmp_dir_path / "kvcache_cpu.vmfb"
 
-        yield vmfb_path
+    # Compile the MLIR to VMFB
+    tools.compile_file(
+        str(mlir_path),
+        output_file=str(vmfb_path),
+        target_backends=["llvm-cpu"],
+        input_type="AUTO",
+    )
+
+    yield vmfb_path
 
 
 def float_to_float16(f):
