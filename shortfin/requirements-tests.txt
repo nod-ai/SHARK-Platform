@@ -11,4 +11,3 @@ wheel
 # Deps needed for shortfin_apps.llm
 dataclasses-json
 tokenizers
-transformers
