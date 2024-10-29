@@ -246,7 +246,6 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
             "--benchmark_repetitions=3",
         ]
 
-    @longrun
     @is_mi300x
     def testBenchmark8B_f16_Decomposed(self):
         output_file_name = self.dir_path_8b / "f16_decomposed"
@@ -267,9 +266,6 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
             mlir_path=output_mlir,
             json_path=output_json,
         )
-        # iree_compile_args = self.iree_compile_args + [
-        #     f"--iree-hal-dump-executable-files-to={output_file_name}/files"
-        # ]
         self.llama8b_f16_artifacts.compile_to_vmfb(
             mlir_path=str(output_mlir),
             vmfb_path=output_vmfb,
@@ -294,31 +290,37 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
 
     @longrun
     @is_mi300x
-    @pytest.mark.xfail(reason="torch_sdpa not yet plumbed through", strict=True)
+    # @pytest.mark.xfail(reason="torch_sdpa not yet plumbed through", strict=True)
     def testBenchmark8B_f16_Non_Decomposed(self):
-        output_file_name = self.dir_path_8b / "f16_torch_sdpa"
+        output_file_name = self.dir_path_8b / "f16_torch"
         output_mlir = self.create_file(suffix=".mlir", prefix=output_file_name)
         output_json = self.create_file(suffix=".json", prefix=output_file_name)
         output_vmfb = self.create_file(suffix=".vmfb", prefix=output_file_name)
-        self.export_mlir(
-            attention_kernel="torch_sdpa",
-            tensor_parallelism_size=self.tensor_parallelism_size,
-            irpa_path=self.irpa_path,
-            output_mlir_path=output_mlir,
-            output_json_path=output_json,
-            cwd=self.repo_root,
+        self.llama8b_f16_artifacts.attention_kernel = "torch"
+        import pdb
+
+        pdb.set_trace()
+        output_shard_file_name = str(
+            self.artifacts_dir
+            / f"llama3.1_8b_fp16_tp{self.tensor_parallelism_size}_parameters_torch_sdpa.irpa"
         )
-        iree_compile_args = self.iree_compile_args + [
-            f"--iree-hal-dump-executable-files-to={output_file_name}/files"
-        ]
-        self.iree_compile(
+        # shard_irpa file
+        shard_return_code = self.llama8b_f16_artifacts.shard_irpa_file(
+            output_file=output_shard_file_name
+        )
+        if shard_return_code == 0:
+            self.irpa_path = output_shard_file_name
+        export_return_code = self.llama8b_f16_artifacts.export_to_mlir(
             mlir_path=output_mlir,
-            output_vmfb_path=output_vmfb,
-            args=iree_compile_args,
-            cwd=self.repo_root,
+            json_path=output_json,
+        )
+        self.llama8b_f16_artifacts.compile_to_vmfb(
+            mlir_path=str(output_mlir),
+            vmfb_path=output_vmfb,
+            hal_dump_path=output_file_name,
         )
         # benchmark prefill
-        self.iree_benchmark_module(
+        self.llama8b_f16_artifacts.iree_benchmark_vmfb(
             hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path,
@@ -326,7 +328,7 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
             cwd=self.repo_root,
         )
         # benchmark decode
-        self.iree_benchmark_module(
+        self.llama8b_f16_artifacts.iree_benchmark_vmfb(
             hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path,
