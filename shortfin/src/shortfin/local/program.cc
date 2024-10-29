@@ -74,16 +74,17 @@ std::string_view ProgramFunction::calling_convention() const {
 }
 
 ProgramInvocation::Ptr ProgramFunction::CreateInvocation(
-    std::shared_ptr<Fiber> fiber) {
+    std::shared_ptr<Fiber> fiber, std::optional<ProgramIsolation> isolation) {
+  ProgramIsolation actual_isolation = isolation ? *isolation : isolation_;
   // Low-overhead NONE isolation handling (saves some ref-count twiddling).
-  if (isolation_ == ProgramIsolation::NONE) {
+  if (actual_isolation == ProgramIsolation::NONE) {
     return ProgramInvocation::New(std::move(fiber), vm_context_, vm_function_,
                                   invocation_model_, /*isolate=*/nullptr);
   }
 
   // Create an isolated invocation.
-  auto [isolated_context, isolate] =
-      detail::ProgramIsolate::AcquireIsolate(*fiber, vm_context_, isolation_);
+  auto [isolated_context, isolate] = detail::ProgramIsolate::AcquireIsolate(
+      *fiber, vm_context_, actual_isolation);
   return ProgramInvocation::New(std::move(fiber), std::move(isolated_context),
                                 vm_function_, invocation_model_, isolate);
 }
@@ -403,26 +404,27 @@ iree_status_t ProgramInvocation::FinalizeCallingConvention(
   // Handle post-processing invocation model setup.
   if (invocation_model == ProgramInvocationModel::COARSE_FENCES) {
     // If we have a device_selection, set up to signal the leader account.
+    iree_hal_fence_t *maybe_wait_fence = nullptr;
     if (device_selection_) {
       ScopedDevice scoped_device(*fiber(), device_selection_);
       auto &sched_account =
           fiber()->scheduler().GetDefaultAccount(scoped_device);
-      iree_hal_fence_t *wait_fence = this->wait_fence();
+      maybe_wait_fence = this->wait_fence();
       iree_hal_semaphore_t *timeline_sem = sched_account.timeline_sem();
       uint64_t timeline_now = sched_account.timeline_idle_timepoint();
       SHORTFIN_SCHED_LOG("Invocation {}: Wait on account timeline {}@{}",
                          static_cast<void *>(this),
                          static_cast<void *>(timeline_sem), timeline_now);
       IREE_RETURN_IF_ERROR(
-          iree_hal_fence_insert(wait_fence, timeline_sem, timeline_now));
+          iree_hal_fence_insert(maybe_wait_fence, timeline_sem, timeline_now));
       signal_sem_ = sched_account.timeline_sem();
       signal_timepoint_ = sched_account.timeline_acquire_timepoint();
     }
 
     // Push wait fence (or null if no wait needed).
     ::iree::vm::ref<iree_hal_fence_t> wait_ref;
-    if (wait_fence_) {
-      ::iree::vm::retain_ref(wait_fence());
+    if (maybe_wait_fence) {
+      wait_ref = ::iree::vm::retain_ref(maybe_wait_fence);
     }
     IREE_RETURN_IF_ERROR(iree_vm_list_push_ref_move(arg_list, wait_ref));
 
