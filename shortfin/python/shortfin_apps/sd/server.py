@@ -31,7 +31,9 @@ from .components.service import GenerateService
 from .components.tokenizer import Tokenizer
 
 
-logger = logging.getLogger(__name__)
+from shortfin.support.logging_setup import configure_main_logger
+
+logger = configure_main_logger("server")
 
 
 @asynccontextmanager
@@ -87,7 +89,12 @@ def configure(args) -> SystemManager:
 
     model_params = ModelParams.load_json(args.model_config)
     sm = GenerateService(
-        name="sd", sysman=sysman, tokenizers=tokenizers, model_params=model_params
+        name="sd",
+        sysman=sysman,
+        tokenizers=tokenizers,
+        model_params=model_params,
+        fibers_per_device=args.fibers_per_device,
+        prog_isolation=args.isolation,
     )
     sm.load_inference_module(args.clip_vmfb, component="clip")
     sm.load_inference_module(args.unet_vmfb, component="unet")
@@ -188,10 +195,35 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
         nargs="*",
         help="Parameter archives to load",
     )
+    parser.add_argument(
+        "--fibers_per_device",
+        type=int,
+        default=1,
+        help="Concurrency control -- how many fibers are created per device to run inference.",
+    )
+    parser.add_argument(
+        "--isolation",
+        type=str,
+        default="per_fiber",
+        choices=["per_fiber", "per_call", "none"],
+        help="Concurrency control -- How to isolate programs.",
+    )
+    parser.add_argument(
+        "--log_level", type=str, default="error", choices=["info", "debug", "error"]
+    )
+    log_levels = {
+        "info": logging.INFO,
+        "debug": logging.DEBUG,
+        "error": logging.ERROR,
+    }
+
     args = parser.parse_args(argv)
+
+    log_level = log_levels[args.log_level]
+    logger.setLevel(log_level)
+
     global sysman
     sysman = configure(args)
-
     uvicorn.run(
         app,
         host=args.host,
@@ -202,9 +234,6 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
 
 
 if __name__ == "__main__":
-    from shortfin.support.logging_setup import configure_main_logger
-
-    logger = configure_main_logger("server")
     main(
         sys.argv[1:],
         # Make logging defer to the default shortfin logging config.

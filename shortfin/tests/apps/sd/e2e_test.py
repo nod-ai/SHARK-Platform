@@ -13,6 +13,7 @@ import subprocess
 import os
 import socket
 import sys
+import copy
 from contextlib import closing
 
 from datetime import datetime as dt
@@ -51,12 +52,7 @@ def sd_artifacts(target: str = "gfx942"):
 cache = os.path.abspath("./tmp/sharktank/sd/")
 
 
-@pytest.fixture(scope="module")
-def sd_server():
-    # Create necessary directories
-
-    os.makedirs(cache, exist_ok=True)
-
+def start_server(fibers_per_device=1, isolation="per_fiber"):
     # Download model if it doesn't exist
     vmfbs_bucket = "https://sharkpublic.blob.core.windows.net/sharkpublic/sdxl/vmfbs/"
     weights_bucket = (
@@ -88,9 +84,67 @@ def sd_server():
     for arg in sd_artifacts().keys():
         artifact_arg = f"--{arg}={cache}/{sd_artifacts()[arg]}"
         srv_args.extend([artifact_arg])
+    srv_args.extend(
+        [
+            f"--fibers_per_device={fibers_per_device}",
+            f"--isolation={isolation}",
+        ]
+    )
     runner = ServerRunner(srv_args)
     # Wait for server to start
-    time.sleep(5)
+    time.sleep(3)
+    return runner
+
+
+@pytest.fixture(scope="module")
+def sd_server_fpd1():
+    # Create necessary directories
+
+    os.makedirs(cache, exist_ok=True)
+
+    runner = start_server(fibers_per_device=1)
+
+    yield runner
+
+    # Teardown: kill the server
+    del runner
+
+
+@pytest.fixture(scope="module")
+def sd_server_fpd1_per_call():
+    # Create necessary directories
+
+    os.makedirs(cache, exist_ok=True)
+
+    runner = start_server(fibers_per_device=1, isolation="per_call")
+
+    yield runner
+
+    # Teardown: kill the server
+    del runner
+
+
+@pytest.fixture(scope="module")
+def sd_server_fpd2():
+    # Create necessary directories
+
+    os.makedirs(cache, exist_ok=True)
+
+    runner = start_server(fibers_per_device=2)
+
+    yield runner
+
+    # Teardown: kill the server
+    del runner
+
+
+@pytest.fixture(scope="module")
+def sd_server_fpd8():
+    # Create necessary directories
+
+    os.makedirs(cache, exist_ok=True)
+
+    runner = start_server(fibers_per_device=8)
 
     yield runner
 
@@ -99,9 +153,37 @@ def sd_server():
 
 
 @pytest.mark.system("amdgpu")
-def test_sd_server(sd_server):
-    imgs, status_code = send_json_file(sd_server.url)
+def test_sd_server(sd_server_fpd1):
+    imgs, status_code = send_json_file(sd_server_fpd1.url)
     assert len(imgs) == 1
+    assert status_code == 200
+
+
+@pytest.mark.system("amdgpu")
+def test_sd_server_bs4_dense(sd_server_fpd1):
+    imgs, status_code = send_json_file(sd_server_fpd1.url, num_copies=4)
+    assert len(imgs) == 4
+    assert status_code == 200
+
+
+@pytest.mark.system("amdgpu")
+def test_sd_server_bs8_percall(sd_server_fpd1_per_call):
+    imgs, status_code = send_json_file(sd_server_fpd1_per_call.url, num_copies=8)
+    assert len(imgs) == 8
+    assert status_code == 200
+
+
+@pytest.mark.system("amdgpu")
+def test_sd_server_bs4_dense_fpd2(sd_server_fpd2):
+    imgs, status_code = send_json_file(sd_server_fpd2.url, num_copies=4)
+    assert len(imgs) == 4
+    assert status_code == 200
+
+
+@pytest.mark.system("amdgpu")
+def test_sd_server_bs8_dense_fpd8(sd_server_fpd8):
+    imgs, status_code = send_json_file(sd_server_fpd8.url, num_copies=8)
+    assert len(imgs) == 8
     assert status_code == 200
 
 
@@ -111,7 +193,6 @@ class ServerRunner:
         self.url = "http://0.0.0.0:" + port
         env = os.environ.copy()
         env["PYTHONUNBUFFERED"] = "1"
-        env["HIP_VISIBLE_DEVICES"] = "0"
         self.process = subprocess.Popen(
             [
                 *args,
@@ -155,12 +236,14 @@ def bytes_to_img(bytes, idx=0, width=1024, height=1024):
     image = Image.frombytes(
         mode="RGB", size=(width, height), data=base64.b64decode(bytes)
     )
+    if os.environ["SF_SAVE_TEST_IMAGES"] == "1":
+        image.save(f"shortfin_test_output_{timestamp}.png", format="PNG")
     return image
 
 
 def send_json_file(url="http://0.0.0.0:8000"):
     # Read the JSON file
-    data = sample_request
+    data = copy.deepcopy(sample_request)
     imgs = []
     # Send the data to the /generate endpoint
     try:
