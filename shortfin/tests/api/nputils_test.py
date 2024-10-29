@@ -14,10 +14,10 @@ from unittest.mock import patch
 
 import shortfin as sf
 import shortfin.array as sfnp
-from shortfin.array import nputils
 import shortfin.host
 
 np = pytest.importorskip("numpy", reason="numpy is not installed")
+from shortfin.array import nputils
 
 
 @pytest.fixture
