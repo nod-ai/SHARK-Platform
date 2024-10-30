@@ -137,8 +137,9 @@ def wait_for_server(url, timeout=10):
 
 
 @pytest.fixture(scope="module")
-def llm_server(model_test_dir, available_port):
+def llm_server(request, model_test_dir, available_port):
     # Start the server
+    model_file = request.param["model_file"]
     server_process = subprocess.Popen(
         [
             "python",
@@ -147,7 +148,7 @@ def llm_server(model_test_dir, available_port):
             f"--tokenizer={model_test_dir / 'tokenizer.json'}",
             f"--model_config={model_test_dir / 'edited_config.json'}",
             f"--vmfb={model_test_dir / 'model.vmfb'}",
-            f"--parameters={model_test_dir / 'open-llama-3b-v2-f16.gguf'}",
+            f"--parameters={model_test_dir / model_file}",
             f"--device={settings['device']}",
         ]
     )
@@ -190,13 +191,18 @@ def do_generate(prompt, port):
 
 
 @pytest.mark.parametrize(
-    "model_test_dir",
+    "model_test_dir,llm_server",
     [
-        {
-            "repo_id": "SlyEcho/open_llama_3b_v2_gguf",
-            "model_file": "open-llama-3b-v2-f16.gguf",
-            "tokenizer_id": "openlm-research/open_llama_3b_v2",
-        }
+        (
+            {
+                "repo_id": "SlyEcho/open_llama_3b_v2_gguf",
+                "model_file": "open-llama-3b-v2-f16.gguf",
+                "tokenizer_id": "openlm-research/open_llama_3b_v2",
+            },
+            {
+                "model_file": "open-llama-3b-v2-f16.gguf",
+            },
+        )
     ],
     indirect=True,
 )
