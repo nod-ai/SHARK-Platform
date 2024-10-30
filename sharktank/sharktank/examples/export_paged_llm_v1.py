@@ -315,7 +315,7 @@ def main():
             print(f"EXPORT {name}:\n{ep}")
 
     print("Exporting")
-    output = export(fxb)
+    output = export(fxb, import_symbolic_shape_expressions=True)
     print(f"Saving to '{args.output_mlir}'")
     output.save_mlir(args.output_mlir)
     json.dump(config, open(args.output_config, "w"))
