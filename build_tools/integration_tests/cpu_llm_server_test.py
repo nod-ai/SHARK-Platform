@@ -10,7 +10,6 @@ import pytest
 import requests
 import shutil
 import subprocess
-import sys
 import time
 import uuid
 
@@ -73,6 +72,7 @@ def model_test_dir(request, tmp_path_factory):
                 ],
                 check=True,
             )
+
         # Compile model if it doesn't exist
         vmfb_path = tmp_dir / "model.vmfb"
         if not os.path.exists(vmfb_path):
