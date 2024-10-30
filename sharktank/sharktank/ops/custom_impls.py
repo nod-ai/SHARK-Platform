@@ -30,7 +30,7 @@ from .signatures import *
 
 
 # Fused FP matmul.
-# Disabled: See https://github.com/nod-ai/sharktank/issues/44
+# Disabled: See https://github.com/nod-ai/SHARK-Platform/issues/44
 # @matmul.override(Tensor, Tensor)
 # def matmul_mmtfp_tensor_tensor(lhs, rhs, *, transpose_rhs: bool):
 #     lhs = unbox_tensor(lhs)
