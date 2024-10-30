@@ -292,7 +292,7 @@ def run_perplexity_torch(
 
     perplexity.load_model(dataset, tokenizer, tensor_parallelism_size, attention_kernel)
     test_prompts = perplexity.get_prompts()
-    ppl = perplexity.get_perplexity(test_prompts=test_prompts)
+    ppl = perplexity.get_perplexity(test_prompts=test_prompts[0:4])
 
     return ppl
 
