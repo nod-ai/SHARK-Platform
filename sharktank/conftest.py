@@ -8,7 +8,6 @@ from pathlib import Path
 import pytest
 from pytest import FixtureRequest
 from typing import Optional, Any
-from pytest_html import extras, plugin
 
 
 # Tests under each top-level directory will get a mark.
@@ -259,18 +258,18 @@ def get_iree_flags(request: FixtureRequest):
     )
 
 def pytest_html_results_table_header(cells):
-    cells.insert(2, plugin.html.th("XFail Reason"))
+    cells.insert(2, "<th>XFail Reason</th>")
 
 def pytest_html_results_table_row(report, cells):
     if hasattr(report, "wasxfail"):
-        cells.insert(2, plugin.html.td(report.wasxfail))
+        cells.insert(2, f"<td>{report.wasxfail}</td>")
     else:
-        cells.insert(2, plugin.html.td(""))
+        cells.insert(2, f"<td></td>")
 
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_makereport(item, call):
     outcome = yield
     report = outcome.get_result()
 
-    if report.when == "call" and hasattr(report, "wasxfail"):
-        report.wasxfail = getattr(report, "wasxfail", "")
+    if report.when == "call" and hasattr(item, "wasxfail"):
+        report.wasxfail = item.wasxfail
