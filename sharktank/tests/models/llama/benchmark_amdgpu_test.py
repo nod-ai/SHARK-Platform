@@ -378,10 +378,10 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
             attention_kernel="torch",
             tensor_parallelism_size=self.tensor_parallelism_size,
         )
-        self.prefill_args_f16 = artifacts_dir / "prefill_args"
-        self.decode_args_f16 = artifacts_dir / "decode_args"
-        self.prefill_args_fp8 = artifacts_dir / "prefill_args_fp8"
-        self.decode_args_fp8 = artifacts_dir / "decode_args_fp8"
+        self.prefill_args_f16 = self.artifacts_dir / "prefill_args"
+        self.decode_args_f16 = self.artifacts_dir / "decode_args"
+        self.prefill_args_fp8 = self.artifacts_dir / "prefill_args_fp8"
+        self.decode_args_fp8 = self.artifacts_dir / "decode_args_fp8"
         self.iree_run_prefill_args = [
             "--function=prefill_bs4",
             f"--input=@{self.prefill_args_f16}/tokens.npy",
@@ -614,10 +614,10 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
             "--iree-hal-target-backends=rocm",
             f"--iree-hip-target={self.iree_hip_target}",
         ]
-        self.prefill_args_f16 = artifacts_dir / "prefill_args"
-        self.decode_args_f16 = artifacts_dir / "decode_args"
-        self.prefill_args_fp8 = artifacts_dir / "prefill_args_fp8"
-        self.decode_args_fp8 = artifacts_dir / "decode_args_fp8"
+        self.prefill_args_f16 = self.artifacts_dir / "prefill_args"
+        self.decode_args_f16 = self.artifacts_dir / "decode_args"
+        self.prefill_args_fp8 = self.artifacts_dir / "prefill_args_fp8"
+        self.decode_args_fp8 = self.artifacts_dir / "decode_args_fp8"
         self.iree_run_prefill_args = [
             "--function=prefill_bs4",
             f"--input=@{self.prefill_args_f16}/tokens.npy",
