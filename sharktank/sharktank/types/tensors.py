@@ -19,6 +19,7 @@ from typing import (
 from copy import deepcopy
 from collections.abc import Collection, Sequence
 from numbers import Integral, Number
+import os
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -54,6 +55,18 @@ __all__ = [
     "unbox_tensor",
     "UnreducedTensor",
 ]
+
+if (
+    "SHARKTANK_OVERRIDE_TORCH_TENSOR_REPR" in os.environ
+    and os.environ["SHARKTANK_OVERRIDE_TORCH_TENSOR_REPR"] != "0"
+):
+
+    def _tensor_debugger_friendly_repr(self: torch.Tensor):
+        """Override for the torch.Tensor.__repr__ so it does not take forever when the
+        debugger wants to query many/large tensors."""
+        return f"Tensor({list(self.shape)}, {self.dtype})"
+
+    Tensor.__repr__ = _tensor_debugger_friendly_repr
 
 # JSON encodable value types.
 MetaDataValueType = Union[int, bool, float, str]
