@@ -417,6 +417,7 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
             "--benchmark_repetitions=3",
         ]
 
+    @longrun
     @is_mi300x
     def testBenchmark70B_f16_Decomposed(self):
         output_file_name = self.dir_path_70b / "f16_decomposed"
