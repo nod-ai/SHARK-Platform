@@ -11,6 +11,7 @@ wheel
 # Deps needed for shortfin_apps.llm
 dataclasses-json
 tokenizers
+huggingface_hub[cli]
 
 # Deps needed for shortfin_apps.sd
 pillow
