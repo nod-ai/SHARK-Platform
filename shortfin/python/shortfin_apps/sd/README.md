@@ -32,7 +32,7 @@ wget https://sharkpublic.blob.core.windows.net/sharkpublic/sdxl/vmfbs/stable_dif
 
 # You can download real weights with:
 wget https://sharkpublic.blob.core.windows.net/sharkpublic/sdxl/weights/sfsd_weights_1023.zip
-# Splat weights: 
+# Splat weights:
 wget https://sharkpublic.blob.core.windows.net/sharkpublic/sdxl/weights/sfsd_splat_1023.zip
 ```
  - Unzip the downloaded weights archive to /weights
