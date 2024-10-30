@@ -23,12 +23,19 @@ python -m shortfin_apps.sd.server --help
  - Download runtime artifacts (vmfbs, weights):
 
 ```
-wget https://sharkpublic.blob.core.windows.net/sharkpublic/sdxl/vmfbs/sfsd_vmfbs_gfx942_1028.zip
+mkdir vmfbs
+mkdir weights
+wget https://sharkpublic.blob.core.windows.net/sharkpublic/sdxl/vmfbs/stable_diffusion_xl_base_1_0_bs1_64_1024x1024_i8_punet_gfx942.vmfb -O vmfbs/stable_diffusion_xl_base_1_0_bs1_64_1024x1024_i8_punet_gfx942.vmfb
+wget https://sharkpublic.blob.core.windows.net/sharkpublic/sdxl/vmfbs/stable_diffusion_xl_base_1_0_bs1_64_fp16_text_encoder_gfx942.vmfb -O vmfbs/stable_diffusion_xl_base_1_0_bs1_64_fp16_text_encoder_gfx942.vmfb
+wget https://sharkpublic.blob.core.windows.net/sharkpublic/sdxl/vmfbs/stable_diffusion_xl_base_1_0_EulerDiscreteScheduler_bs1_1024x1024_fp16_gfx942.vmfb -O vmfbs/stable_diffusion_xl_base_1_0_EulerDiscreteScheduler_bs1_1024x1024_fp16_gfx942.vmfb
+wget https://sharkpublic.blob.core.windows.net/sharkpublic/sdxl/vmfbs/stable_diffusion_xl_base_1_0_bs1_1024x1024_fp16_vae_gfx942.vmfb -O vmfbs/stable_diffusion_xl_base_1_0_bs1_1024x1024_fp16_vae_gfx942.vmfb
 
-# The sfsd_vmfbs_gfx942_1028.zip includes splat weights. You can download real weights with:
+# You can download real weights with:
 wget https://sharkpublic.blob.core.windows.net/sharkpublic/sdxl/weights/sfsd_weights_1023.zip
+# Splat weights: 
+wget https://sharkpublic.blob.core.windows.net/sharkpublic/sdxl/weights/sfsd_splat_1023.zip
 ```
- - Unzip the downloaded archives to ./vmfbs and /weights
+ - Unzip the downloaded weights archive to /weights
  - Run CLI server interface (you can find `sdxl_config_i8.json` in shortfin_apps/sd/examples):
 
 ```
@@ -40,5 +47,5 @@ python -m shortfin_apps.sd.server --model_config=./sdxl_config_i8.json --clip_vm
 ```
  - Run a request in a separate shell:
 ```
-python shortfin/python/shortfin_apps/sd/examples/send_request.py shortfin/python/shortfin_apps/sd/examples/sdxl_request.json
+python shortfin/python/shortfin_apps/sd/examples/send_request.py --file=shortfin/python/shortfin_apps/sd/examples/sdxl_request.json
 ```
