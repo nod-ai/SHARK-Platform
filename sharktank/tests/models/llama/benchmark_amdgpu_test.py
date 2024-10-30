@@ -13,7 +13,12 @@ import pytest
 import subprocess
 from pathlib import Path
 from typing import List
-from sharktank.utils.export_artifacts import ExportArtifacts, ExportMlirException, IreeBenchmarkException, IreeCompileException
+from sharktank.utils.export_artifacts import (
+    ExportArtifacts,
+    ExportMlirException,
+    IreeBenchmarkException,
+    IreeCompileException,
+)
 
 longrun = pytest.mark.skipif("not config.getoption('longrun')")
 is_mi300x = pytest.mark.skipif("config.getoption('iree_hip_target') != 'gfx942'")
@@ -157,9 +162,7 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
 
     @longrun
     @is_mi300x
-    @pytest.mark.xfail(
-        reason="Compile Error", strict=True, raises=IreeCompileException
-    )
+    @pytest.mark.xfail(reason="Compile Error", strict=True, raises=IreeCompileException)
     def testBenchmark8B_f16_Non_Decomposed(self):
         output_file_name = self.dir_path_8b / "f16_torch"
         output_mlir = self.llama8b_f16_artifacts.create_file(

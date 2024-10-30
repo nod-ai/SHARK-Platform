@@ -257,14 +257,17 @@ def get_iree_flags(request: FixtureRequest):
         request, "--iree-hal-target-backends", "iree_hal_target_backends"
     )
 
+
 def pytest_html_results_table_header(cells):
     cells.insert(2, "<th>XFail Reason</th>")
+
 
 def pytest_html_results_table_row(report, cells):
     if hasattr(report, "wasxfail"):
         cells.insert(2, f"<td>{report.wasxfail}</td>")
     else:
         cells.insert(2, f"<td></td>")
+
 
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_makereport(item, call):

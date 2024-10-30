@@ -23,8 +23,10 @@ logger.root.handlers[0].setFormatter(
     logging.Formatter(fmt="\n%(levelname)s:%(name)-8s %(message)s")
 )
 
+
 class ExportMlirException(Exception):
     """SHARK-Platform export MLIR exception that preserves the command line and error output."""
+
     def __init__(self, process: subprocess.CompletedProcess, cwd: str):
         try:
             errs = process.stderr.decode("utf-8")
@@ -38,8 +40,10 @@ class ExportMlirException(Exception):
             f"  cd {cwd} && {process.args}\n\n"
         )
 
+
 class IreeCompileException(Exception):
     """Compiler exception that preserves the command line and error output."""
+
     def __init__(self, process: subprocess.CompletedProcess, cwd: str):
         try:
             errs = process.stderr.decode("utf-8")
@@ -53,11 +57,11 @@ class IreeCompileException(Exception):
             f"  cd {cwd} && {process.args}\n\n"
         )
 
+
 class IreeBenchmarkException(Exception):
     """Runtime exception that preserves the command line and error output."""
-    def __init__(
-        self, process: subprocess.CompletedProcess, cwd: str
-    ):
+
+    def __init__(self, process: subprocess.CompletedProcess, cwd: str):
         # iree-run-module sends output to both stdout and stderr
         try:
             errs = process.stderr.decode("utf-8")
@@ -187,14 +191,7 @@ class ExportArtifacts:
         return proc.returncode
 
     @timeit
-    def compile_to_vmfb(
-        self,
-        *,
-        mlir_path,
-        vmfb_path,
-        hal_dump_path,
-        cwd
-    ):
+    def compile_to_vmfb(self, *, mlir_path, vmfb_path, hal_dump_path, cwd):
         compile_flags = ["--iree-hip-target=" + self.iree_hip_target]
         compile_flags += ["--iree-hal-target-backends=rocm"]
         compile_flags += [f"--iree-hal-dump-executable-files-to={hal_dump_path}/files"]
@@ -249,7 +246,7 @@ class ExportArtifacts:
         file_path = Path(prefix).with_suffix(suffix)
         f = open(file_path, "w")
         return file_path
-    
+
     def get_compile_cmd(
         self, *, output_mlir_path: str, output_vmfb_path: str, args: [str]
     ):
