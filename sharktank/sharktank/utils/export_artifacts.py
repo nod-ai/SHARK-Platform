@@ -85,7 +85,7 @@ class ExportArtifacts:
 
         logger.info(f"Sharding irpa file:\n" f"cd {cwd} && {cmd}")
 
-        proc = subprocess.run(cmd, shell=True, capture_output=True, cwd=cwd)
+        proc = subprocess.run(cmd, shell=True, capture_output=True, cwd=cwd, text=True)
         if proc.returncode != 0:
             logger.error(
                 f"Error sharding irpa file with shard_llama.py\n"
@@ -125,7 +125,7 @@ class ExportArtifacts:
 
         logger.info(f"Exporting mlir:\n" f"cd {cwd} && {cmd}")
 
-        proc = subprocess.run(cmd, shell=True, capture_output=True, cwd=cwd)
+        proc = subprocess.run(cmd, shell=True, capture_output=True, cwd=cwd, text=True)
         if proc.returncode != 0:
             logger.error(
                 f"Error exporting mlir with export_paged_llm_v1.py\n"
