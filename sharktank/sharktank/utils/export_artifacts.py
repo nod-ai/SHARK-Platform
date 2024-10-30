@@ -196,6 +196,7 @@ class ExportArtifacts:
         cwd
     ):
         compile_flags = ["--iree-hip-target=" + self.iree_hip_target]
+        compile_flags += ["--iree-hal-target-backends=rocm"]
         compile_flags += [f"--iree-hal-dump-executable-files-to={hal_dump_path}/files"]
         cmd = self.get_compile_cmd(
             output_mlir_path=mlir_path,
