@@ -164,14 +164,10 @@ class ExportArtifacts:
             "python3",
             "-m",
             "sharktank.examples.export_paged_llm_v1",
-            "--irpa-file",
-            self.irpa_path,
-            "--output-mlir",
-            mlir_path,
-            "--output-config",
-            json_path,
-            "--bs",
-            str(self.batch_size),
+            f"--irpa-file={self.irpa_path}",
+            f"--output-mlir={mlir_path}",
+            f"--output-config={json_path}",
+            f"--bs={str(self.batch_size)}",
         ]
         if self.attention_kernel in ["decomposed", "torch"]:
             export_args.append("--attention-kernel")
@@ -201,7 +197,8 @@ class ExportArtifacts:
     ):
         # TODO: Control flag to enable multiple backends
         compile_args = [
-            f"iree-compile={mlir_path}",
+            f"iree-compile",
+            f"{mlir_path}",
             f"--iree-hip-target={self.iree_hip_target}",
             f"--iree-hal-target-backends={self.iree_hal_target_backends}",
             f"-o={vmfb_path}",
