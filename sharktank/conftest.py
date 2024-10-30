@@ -258,6 +258,7 @@ def get_iree_flags(request: FixtureRequest):
     )
 
 
+# The following three functions allow us to add a "XFail Reason" column to the html reports for each test
 def pytest_html_results_table_header(cells):
     cells.insert(2, "<th>XFail Reason</th>")
 
