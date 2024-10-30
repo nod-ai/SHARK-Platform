@@ -46,6 +46,7 @@ class ModelParams:
     # Height and Width, respectively, for which Unet and VAE are compiled. e.g. [[512, 512], [1024, 1024]]
     dims: list[list[int]]
 
+    base_model_name: str = "SDXL"
     # Name of the IREE module for each submodel.
     clip_module_name: str = "compiled_clip"
     unet_module_name: str = "compiled_unet"
@@ -79,9 +80,12 @@ class ModelParams:
         return self.vae_batch_sizes[-1]
 
     @property
+    def all_batch_sizes(self) -> list:
+        return [self.clip_batch_sizes, self.unet_batch_sizes, self.vae_batch_sizes]
+
+    @property
     def max_batch_size(self):
-        # TODO: a little work on the batcher should loosen this up.
-        return max(self.clip_batch_sizes, self.unet_batch_sizes, self.vae_batch_sizes)
+        return max(self.all_batch_sizes)
 
     @staticmethod
     def load_json(path: Path | str):
@@ -91,3 +95,11 @@ class ModelParams:
         if isinstance(raw_params.unet_dtype, str):
             raw_params.unet_dtype = str_to_dtype[raw_params.unet_dtype]
         return raw_params
+
+    def __repr__(self):
+        return (
+            f"base model: {self.base_model_name} \n"
+            f"     output size (H,W): {self.dims} \n"
+            f"     max token sequence length : {self.max_seq_len} \n"
+            f"     classifier free guidance : {self.cfg_mode} \n"
+        )

@@ -31,12 +31,22 @@ def measure(fn):
         ret = await fn(*args, **kwargs)
         duration_str = get_duration_str(start)
         logger.info(f"Completed {fn.__qualname__} in {duration_str}")
+        if fn.__qualname__ == "ClientGenerateBatchProcess.run":
+            sps_str = get_samples_per_second(start, *args)
+            logger.info(f"SAMPLES PER SECOND = {sps_str}")
         return ret
 
     if asyncio.iscoroutinefunction(fn):
         return wrapped_fn_async
     else:
         return wrapped_fn
+
+
+def get_samples_per_second(start, *args: Any) -> str:
+    duration = time.time() - start
+    bs = args[0].gen_req.num_output_images
+    sps = str(float(bs) / duration)
+    return sps
 
 
 def get_duration_str(start: float) -> str:
