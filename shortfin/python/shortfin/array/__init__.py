@@ -4,6 +4,8 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
+import importlib.util
+
 from _shortfin import lib as _sfl
 
 # All dtype aliases.
@@ -83,3 +85,10 @@ __all__ = [
     "fill_randn",
     "RandomGenerator",
 ]
+
+# Import nputils if numpy is present.
+np_present = importlib.util.find_spec("numpy") is not None
+if np_present:
+    from . import _nputils as nputils
+
+    __all__.append("nputils")
