@@ -18,6 +18,7 @@ from shortfin.interop.fastapi import FastAPIResponder
 from .io_struct import GenerateReqInput
 from .messages import InferenceExecRequest, InferencePhase
 from .service import GenerateService
+from .utils import measure
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +83,7 @@ class ClientGenerateBatchProcess(sf.Process):
         self.batcher = service.batcher
         self.complete_infeed = self.system.create_queue()
 
+    @measure
     async def run(self):
         logger.debug("Started ClientBatchGenerateProcess: %r", self)
         try:

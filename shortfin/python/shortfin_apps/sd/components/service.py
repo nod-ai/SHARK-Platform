@@ -21,6 +21,8 @@ from .config_struct import ModelParams
 from .manager import SystemManager
 from .messages import InferenceExecRequest, InferencePhase, StrobeMessage
 from .tokenizer import Tokenizer
+from .utils import measure
+
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +50,7 @@ class GenerateService:
         fibers_per_device: int,
         prog_isolation: str = "per_fiber",
         show_progress: bool = False,
+        trace_execution: bool = False,
     ):
         self.name = name
 
@@ -59,7 +62,7 @@ class GenerateService:
         self.inference_modules: dict[str, sf.ProgramModule] = {}
         self.inference_functions: dict[str, dict[str, sf.ProgramFunction]] = {}
         self.inference_programs: dict[str, sf.Program] = {}
-        self.trace_execution = False
+        self.trace_execution = trace_execution
         self.show_progress = show_progress
         self.fibers_per_device = fibers_per_device
         self.prog_isolation = prog_isolations[prog_isolation]
@@ -301,6 +304,7 @@ class InferenceExecutorProcess(sf.Process):
         self.worker_index = index
         self.exec_requests: list[InferenceExecRequest] = []
 
+    @measure
     async def run(self):
         try:
             phase = None
