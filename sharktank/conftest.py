@@ -202,13 +202,6 @@ def caching(request: FixtureRequest) -> Optional[bool]:
 
 
 @pytest.fixture(scope="class")
-def iree_hip_target_type(request: FixtureRequest) -> Optional[str]:
-    return set_fixture_from_cli_option(
-        request, "iree_hip_target", "iree_hip_target_type"
-    )
-
-
-@pytest.fixture(scope="class")
 def tensor_parallelism_size(request: FixtureRequest) -> Optional[str]:
     return set_fixture_from_cli_option(
         request, "tensor_parallelism_size", "tensor_parallelism_size"

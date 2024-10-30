@@ -111,12 +111,12 @@ if DEV_MODE:
 
 # Due to a quirk of setuptools, that package_dir map must only contain
 # paths relative to the directory containing setup.py. Why? No one knows.
-REL_SOURCE_DIR = SOURCE_DIR.relative_to(SETUPPY_DIR, walk_up=True)
-REL_BINARY_DIR = BINARY_DIR.relative_to(SETUPPY_DIR, walk_up=True)
-REL_CMAKE_DEFAULT_BUILD_DIR = CMAKE_DEFAULT_BUILD_DIR.relative_to(
-    SETUPPY_DIR, walk_up=True
+REL_SOURCE_DIR = Path(os.path.relpath(SOURCE_DIR, SETUPPY_DIR))
+REL_BINARY_DIR = Path(os.path.relpath(BINARY_DIR, SETUPPY_DIR))
+REL_CMAKE_DEFAULT_BUILD_DIR = Path(
+    os.path.relpath(CMAKE_DEFAULT_BUILD_DIR, SETUPPY_DIR)
 )
-REL_CMAKE_TRACY_BUILD_DIR = CMAKE_TRACY_BUILD_DIR.relative_to(SETUPPY_DIR, walk_up=True)
+REL_CMAKE_TRACY_BUILD_DIR = Path(os.path.relpath(CMAKE_TRACY_BUILD_DIR, SETUPPY_DIR))
 
 
 class CMakeExtension(Extension):

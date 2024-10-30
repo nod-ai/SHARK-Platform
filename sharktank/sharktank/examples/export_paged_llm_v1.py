@@ -57,7 +57,7 @@ def main():
         "--attention-kernel",
         type=str,
         default="decomposed",
-        choices=["decomposed", "torch_sdpa"],
+        choices=["decomposed", "torch"],
     )
 
     args = cli.parse(parser)
