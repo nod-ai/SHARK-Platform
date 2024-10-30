@@ -195,6 +195,8 @@ class ExportArtifacts:
         hal_dump_path,
         cwd
     ):
+        compile_flags = ["--iree-hip-target=" + self.iree_hip_target]
+        compile_flags += [f"--iree-hal-dump-executable-files-to={hal_dump_path}/files"]
         cmd = self.get_compile_cmd(
             output_mlir_path=mlir_path,
             output_vmfb_path=vmfb_path,
@@ -240,7 +242,7 @@ class ExportArtifacts:
         proc = subprocess.run(cmd, shell=True, stdout=sys.stdout, cwd=cwd)
         return_code = proc.returncode
         if return_code != 0:
-            raise IreeBenchmarkException(proc, cwd, cmd)
+            raise IreeBenchmarkException(proc, cwd)
 
     def create_file(self, *, suffix, prefix):
         file_path = Path(prefix).with_suffix(suffix)
