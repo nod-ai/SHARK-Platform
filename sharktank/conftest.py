@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from pytest import FixtureRequest
 from typing import Optional, Any
-from pytest_html import extras, hooks
+from pytest_html import extras, plugin
 
 
 # Tests under each top-level directory will get a mark.
@@ -258,15 +258,14 @@ def get_iree_flags(request: FixtureRequest):
         request, "--iree-hal-target-backends", "iree_hal_target_backends"
     )
 
-# Hook to add extra columns or modify the table row in the pytest-html report
 def pytest_html_results_table_header(cells):
-    cells.insert(2, hooks.html.Cell("XFail Reason"))
+    cells.insert(2, plugin.html.th("XFail Reason"))
 
 def pytest_html_results_table_row(report, cells):
     if hasattr(report, "wasxfail"):
-        cells.insert(2, hooks.html.Cell(report.wasxfail))
+        cells.insert(2, plugin.html.td(report.wasxfail))
     else:
-        cells.insert(2, hooks.html.Cell(""))
+        cells.insert(2, plugin.html.td(""))
 
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_makereport(item, call):
