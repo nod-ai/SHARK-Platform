@@ -4,10 +4,10 @@ author: Stella Laurenzo
 date: June 30, 2024
 ---
 
-# Direct Quantization with sharktank
+# Direct Quantization with SHARK Tank
 
 As a toolkit for building and adapting PyTorch based models for deployment,
-sharktank provides rich quantization support. By targeting the
+SHARK Tank provides rich quantization support. By targeting the
 [IREE compiler](https://github.com/iree-org/iree) for optimizations, we can
 strike a balance with our quantization setup that:
 
@@ -36,7 +36,7 @@ supports these indirect schemes -- effectively using compiler transformations
 under the covers to do opaque model transformations that mirror a subset of
 what is exposed directly to the user in the rest of this document.
 
-As an alternative, when developing sharktank and bringing up the initial
+As an alternative, when developing SHARK Tank and bringing up the initial
 models, we wanted something more flexible, easier to debug/extend, and
 less laden with needing to lowest common denominator something for everyone
 in order to fit into fixed-function op sets that are very expensive to change.
@@ -63,7 +63,7 @@ amount of Python code implementing direct math and packing schemes.
    drop-in replacements for subsets of the functionality available in stock
    PyTorch modules like `Linear` and `Conv2D`.
 2. Types/Ops: The `nn.Module` implementations we provide are built in terms
-   of sharktank custom
+   of SHARK Tank custom
    [`InferenceTensor`](https://github.com/nod-ai/SHARK-Platform/blob/main/sharktank/sharktank/types/tensors.py#L153)
    and [polymorphic functional ops library](https://github.com/nod-ai/SHARK-Platform/blob/main/sharktank/sharktank/ops/signatures.py).
 3. Op specializations for optimized subsets of op type signatures and features
