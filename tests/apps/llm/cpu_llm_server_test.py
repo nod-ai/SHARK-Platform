@@ -33,14 +33,17 @@ settings = cpu_settings
 
 
 @pytest.fixture(scope="module")
-def model_test_dir(tmp_path_factory):
+def model_test_dir(request, tmp_path_factory):
+    repo_id = request.param["repo_id"]
+    model_file = request.param["model_file"]
+    tokenizer_id = request.param["tokenizer_id"]
     tmp_dir = tmp_path_factory.mktemp("cpu_llm_server_test")
     try:
         # Download model if it doesn't exist
-        model_path = tmp_dir / "open-llama-3b-v2-f16.gguf"
+        model_path = tmp_dir / model_file
         if not os.path.exists(model_path):
             subprocess.run(
-                f"huggingface-cli download --local-dir {tmp_dir} SlyEcho/open_llama_3b_v2_gguf open-llama-3b-v2-f16.gguf",
+                f"huggingface-cli download --local-dir {tmp_dir} {repo_id} {model_file}",
                 shell=True,
                 check=True,
             )
@@ -49,7 +52,7 @@ def model_test_dir(tmp_path_factory):
         tokenizer_path = tmp_dir / "tokenizer.json"
         if not os.path.exists(tokenizer_path):
             tokenizer = AutoTokenizer.from_pretrained(
-                "openlm-research/open_llama_3b_v2"
+                tokenizer_id,
             )
             tokenizer.save_pretrained(tmp_dir)
 
@@ -186,6 +189,17 @@ def do_generate(prompt, port):
         response.raise_for_status()
 
 
+@pytest.mark.parametrize(
+    "model_test_dir",
+    [
+        {
+            "repo_id": "SlyEcho/open_llama_3b_v2_gguf",
+            "model_file": "open-llama-3b-v2-f16.gguf",
+            "tokenizer_id": "openlm-research/open_llama_3b_v2",
+        }
+    ],
+    indirect=True,
+)
 def test_llm_server(llm_server, available_port):
     # Here you would typically make requests to your server
     # and assert on the responses
