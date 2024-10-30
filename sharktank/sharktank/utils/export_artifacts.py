@@ -200,26 +200,24 @@ class ExportArtifacts:
         hal_dump_path: Optional[Path] = None,
     ):
         # TODO: Control flag to enable multiple backends
-        compile_flags = [
-          "--iree-hip-target=" + self.iree_hip_target,
-          "--iree-hal-target-backends=" + self.iree_hal_target_backends,
+        compile_args = [
+            f"iree-compile={mlir_path}",
+            f"--iree-hip-target={self.iree_hip_target}",
+            f"--iree-hal-target-backends={self.iree_hal_target_backends}",
+            f"-o={vmfb_path}",
         ]
         if hal_dump_path:
-            compile_flags += [
+            compile_args += [
                 f"--iree-hal-dump-executable-files-to={hal_dump_path}/files"
             ]
-       
-        cmd = self.get_compile_cmd(
-            output_mlir_path=mlir_path,
-            output_vmfb_path=vmfb_path,
-            args=compile_flags,
-        )
+
+        cmd = subprocess.list2cmdline(compile_args)
+
         logging.getLogger().info(f"Launching compile command:\n" f"cd {cwd} && {cmd}")
         proc = subprocess.run(cmd, shell=True, capture_output=True, cwd=cwd)
         return_code = proc.returncode
         if return_code != 0:
             raise IreeCompileException(proc, cwd)
-
 
     def iree_benchmark_vmfb(
         self,
@@ -262,15 +260,6 @@ class ExportArtifacts:
         f = open(file_path, "w")
         return file_path
 
-    def get_compile_cmd(
-        self, *, output_mlir_path: str, output_vmfb_path: str, args: [str]
-    ):
-        compile_args = ["iree-compile", output_mlir_path]
-        compile_args += args
-        compile_args += ["-o", output_vmfb_path]
-        cmd = subprocess.list2cmdline(compile_args)
-        return cmd
-
     def get_artifacts(self):
 
         self.dir_path = self.sharktank_dir + "/" + "tmp_perplexity_ci_artifacts/"
@@ -302,6 +291,7 @@ class ExportArtifacts:
                 self.compile_to_vmfb(
                     mlir_path=mlir_path,
                     vmfb_path=vmfb_path,
+                    cwd=self.sharktank_dir,
                 )
 
         return vmfb_path
