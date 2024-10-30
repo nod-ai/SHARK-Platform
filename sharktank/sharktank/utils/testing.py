@@ -36,17 +36,13 @@ class TempDirTestBase(unittest.TestCase):
 
 
 @pytest.mark.usefixtures("path_prefix")
-class PathPrefixTestBase(unittest.TestCase):
+class PathPrefixTestBase(TempDirTestBase):
     """Creates a temporary directory and uses it if a path prefix is not given."""
 
     def setUp(self):
+        super().setUp()
         if self.path_prefix is None:
-            self.temp_dir = tempfile.mkdtemp(type(self).__qualname__)
-            self.path_prefix = f"{self.temp_dir}/"
-
-    def tearDown(self):
-        if hasattr(self, "temp_dir"):
-            shutil.rmtree(self.temp_dir)
+            self.path_prefix = f"{self._temp_dir}/"
 
 
 class MainRunnerTestBase(TempDirTestBase):
