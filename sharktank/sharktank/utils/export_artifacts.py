@@ -23,6 +23,59 @@ logger.root.handlers[0].setFormatter(
     logging.Formatter(fmt="\n%(levelname)s:%(name)-8s %(message)s")
 )
 
+class ExportMlirException(Exception):
+    """SHARK-Platform export MLIR exception that preserves the command line and error output."""
+    def __init__(self, process: subprocess.CompletedProcess, cwd: str):
+        try:
+            errs = process.stderr.decode("utf-8")
+        except:
+            errs = str(process.stderr)
+        super().__init__(
+            f"Error invoking export_paged_llama_v1.py\n"
+            f"Error code: {process.returncode}\n"
+            f"Stderr diagnostics:\n{errs}\n\n"
+            f"Invoked with:\n"
+            f"  cd {cwd} && {process.args}\n\n"
+        )
+
+class IreeCompileException(Exception):
+    """Compiler exception that preserves the command line and error output."""
+    def __init__(self, process: subprocess.CompletedProcess, cwd: str):
+        try:
+            errs = process.stderr.decode("utf-8")
+        except:
+            errs = str(process.stderr)
+        super().__init__(
+            f"Error invoking iree-compile\n"
+            f"Error code: {process.returncode}\n"
+            f"Stderr diagnostics:\n{errs}\n\n"
+            f"Invoked with:\n"
+            f"  cd {cwd} && {process.args}\n\n"
+        )
+
+class IreeBenchmarkException(Exception):
+    """Runtime exception that preserves the command line and error output."""
+    def __init__(
+        self, process: subprocess.CompletedProcess, cwd: str
+    ):
+        # iree-run-module sends output to both stdout and stderr
+        try:
+            errs = process.stderr.decode("utf-8")
+        except:
+            errs = str(process.stderr)
+        try:
+            outs = process.stdout.decode("utf-8")
+        except:
+            outs = str(process.stdout)
+        super().__init__(
+            f"Error invoking iree-benchmark-module\n"
+            f"Error code: {process.returncode}\n"
+            f"Stderr diagnostics:\n{errs}\n"
+            f"Stdout diagnostics:\n{outs}\n"
+            f"Run with:\n"
+            f"  cd {cwd} && {process.args}\n\n"
+        )
+
 
 class ExportArtifacts:
     def __init__(
@@ -44,6 +97,15 @@ class ExportArtifacts:
         self.iree_hal_target_backends = iree_hal_target_backends
         self.attention_kernel = attention_kernel
         self.tensor_parallelism_size = tensor_parallelism_size
+    
+    def get_compile_cmd(
+        self, *, output_mlir_path: str, output_vmfb_path: str, args: [str]
+    ):
+        compile_args = ["iree-compile", output_mlir_path]
+        compile_args += args
+        compile_args += ["-o", output_vmfb_path]
+        cmd = subprocess.list2cmdline(compile_args)
+        return cmd
 
     def timeit(func):
         def wrapper(*args, **kwargs):
@@ -127,10 +189,7 @@ class ExportArtifacts:
 
         proc = subprocess.run(cmd, shell=True, capture_output=True, cwd=cwd)
         if proc.returncode != 0:
-            logger.error(
-                f"Error exporting mlir with export_paged_llm_v1.py\n"
-                f"{proc.stdout+proc.stderr}"
-            )
+            raise ExportMlirException(proc, cwd)
         else:
             logger.info(f"Exported to mlir successfully:\n" f"{proc.stdout}")
 
@@ -143,21 +202,18 @@ class ExportArtifacts:
         mlir_path,
         vmfb_path,
         hal_dump_path,
+        cwd
     ):
-        # TODO: Control flag to enable multiple backends
-        compile_flags = ["--iree-hip-target=" + self.iree_hip_target]
-        compile_flags += [f"--iree-hal-dump-executable-files-to={hal_dump_path}/files"]
-        try:
-            ireec.compile_file(
-                input_file=mlir_path,
-                target_backends=[self.iree_hal_target_backends],
-                extra_args=compile_flags,
-                output_file=vmfb_path,
-            )
-        except Exception as error:
-            logger.error(f"Error running iree-compile:\n" f"{error}")
-        else:
-            logger.info(f"Compiled to vmfb successfully:\n" f"{vmfb_path}")
+        cmd = self.get_compile_cmd(
+            output_mlir_path=mlir_path,
+            output_vmfb_path=vmfb_path,
+            args=compile_flags,
+        )
+        logging.getLogger().info(f"Launching compile command:\n" f"cd {cwd} && {cmd}")
+        proc = subprocess.run(cmd, shell=True, capture_output=True, cwd=cwd)
+        return_code = proc.returncode
+        if return_code != 0:
+            raise IreeCompileException(proc, cwd)
 
     def iree_benchmark_vmfb(
         self,
@@ -193,7 +249,7 @@ class ExportArtifacts:
         proc = subprocess.run(cmd, shell=True, stdout=sys.stdout, cwd=cwd)
         return_code = proc.returncode
         if return_code != 0:
-            raise RuntimeError(f"Error running benchmark {cmd} in cwd {cwd}")
+            raise IreeBenchmarkException(proc, cwd, cmd)
 
     def create_file(self, *, suffix, prefix):
         file_path = Path(prefix).with_suffix(suffix)

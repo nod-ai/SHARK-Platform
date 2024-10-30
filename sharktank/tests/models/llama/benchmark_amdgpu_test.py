@@ -13,7 +13,7 @@ import pytest
 import subprocess
 from pathlib import Path
 from typing import List
-from sharktank.utils.export_artifacts import ExportArtifacts
+from sharktank.utils.export_artifacts import ExportArtifacts, ExportMlirException, IreeBenchmarkException, IreeCompileException
 
 longrun = pytest.mark.skipif("not config.getoption('longrun')")
 is_mi300x = pytest.mark.skipif("config.getoption('iree_hip_target') != 'gfx942'")
