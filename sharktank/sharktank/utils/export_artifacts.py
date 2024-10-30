@@ -11,7 +11,7 @@ import logging
 import time
 from pathlib import Path
 from datetime import timedelta
-from typing import List
+from typing import List, Optional
 
 import iree.compiler as ireec
 
@@ -142,11 +142,14 @@ class ExportArtifacts:
         *,
         mlir_path,
         vmfb_path,
-        hal_dump_path,
+        hal_dump_path: Optional[Path] = None,
     ):
         # TODO: Control flag to enable multiple backends
         compile_flags = ["--iree-hip-target=" + self.iree_hip_target]
-        compile_flags += [f"--iree-hal-dump-executable-files-to={hal_dump_path}/files"]
+        if hal_dump_path:
+            compile_flags += [
+                f"--iree-hal-dump-executable-files-to={hal_dump_path}/files"
+            ]
         try:
             ireec.compile_file(
                 input_file=mlir_path,
