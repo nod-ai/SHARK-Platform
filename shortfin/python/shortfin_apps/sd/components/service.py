@@ -21,7 +21,7 @@ from .config_struct import ModelParams
 from .manager import SystemManager
 from .messages import InferenceExecRequest, InferencePhase, StrobeMessage
 from .tokenizer import Tokenizer
-from .utils import measure
+from .metrics import measure
 
 
 logger = logging.getLogger(__name__)

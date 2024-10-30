@@ -18,7 +18,7 @@ from shortfin.interop.fastapi import FastAPIResponder
 from .io_struct import GenerateReqInput
 from .messages import InferenceExecRequest, InferencePhase
 from .service import GenerateService
-from .utils import measure
+from .metrics import measure
 
 logger = logging.getLogger(__name__)
 
