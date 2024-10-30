@@ -8,6 +8,7 @@ name: Llama Benchmarking Tests
 
 on:
   workflow_dispatch:
+  pull_request:
   schedule:
     # Weekdays at 5:00 AM UTC = 10:00 PM PST.
     - cron: "0 5 * * 1-5"
@@ -75,7 +76,7 @@ jobs:
             "numpy<2.0"
 
       - name: Run llama test
-        run: pytest sharktank/tests/models/llama/benchmark_amdgpu_tests.py -v -s --longrun
+        run: pytest sharktank/tests/models/llama/benchmark_amdgpu_test.py -v -s --longrun --iree-hip-target=gfx942
 
       - name: Upload llama executable files
         uses: actions/upload-artifact@v4
