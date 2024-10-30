@@ -1,9 +1,3 @@
-# Copyright 2024 Advanced Micro Devices, Inc.
-#
-# Licensed under the Apache License v2.0 with LLVM Exceptions.
-# See https://llvm.org/LICENSE.txt for license information.
-# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-
 import json
 import requests
 import time
@@ -13,6 +7,7 @@ import subprocess
 import os
 import socket
 import sys
+import copy
 from contextlib import closing
 
 from datetime import datetime as dt
@@ -27,7 +22,7 @@ sample_request = {
     "neg_prompt": ["Watermark, blurry, oversaturated, low resolution, pollution"],
     "height": [1024],
     "width": [1024],
-    "steps": [20],
+    "steps": [5],
     "guidance_scale": [7.5],
     "seed": [0],
     "output_type": ["base64"],
@@ -51,12 +46,7 @@ def sd_artifacts(target: str = "gfx942"):
 cache = os.path.abspath("./tmp/sharktank/sd/")
 
 
-@pytest.fixture(scope="module")
-def sd_server():
-    # Create necessary directories
-
-    os.makedirs(cache, exist_ok=True)
-
+def start_server(fibers_per_device=1, isolation="per_fiber"):
     # Download model if it doesn't exist
     vmfbs_bucket = "https://sharkpublic.blob.core.windows.net/sharkpublic/sdxl/vmfbs/"
     weights_bucket = (
@@ -88,9 +78,67 @@ def sd_server():
     for arg in sd_artifacts().keys():
         artifact_arg = f"--{arg}={cache}/{sd_artifacts()[arg]}"
         srv_args.extend([artifact_arg])
+    srv_args.extend(
+        [
+            f"--fibers_per_device={fibers_per_device}",
+            f"--isolation={isolation}",
+        ]
+    )
     runner = ServerRunner(srv_args)
     # Wait for server to start
-    time.sleep(5)
+    time.sleep(3)
+    return runner
+
+
+@pytest.fixture(scope="module")
+def sd_server_fpd1():
+    # Create necessary directories
+
+    os.makedirs(cache, exist_ok=True)
+
+    runner = start_server(fibers_per_device=1)
+
+    yield runner
+
+    # Teardown: kill the server
+    del runner
+
+
+@pytest.fixture(scope="module")
+def sd_server_fpd1_per_call():
+    # Create necessary directories
+
+    os.makedirs(cache, exist_ok=True)
+
+    runner = start_server(fibers_per_device=1, isolation="per_call")
+
+    yield runner
+
+    # Teardown: kill the server
+    del runner
+
+
+@pytest.fixture(scope="module")
+def sd_server_fpd2():
+    # Create necessary directories
+
+    os.makedirs(cache, exist_ok=True)
+
+    runner = start_server(fibers_per_device=2)
+
+    yield runner
+
+    # Teardown: kill the server
+    del runner
+
+
+@pytest.fixture(scope="module")
+def sd_server_fpd8():
+    # Create necessary directories
+
+    os.makedirs(cache, exist_ok=True)
+
+    runner = start_server(fibers_per_device=8)
 
     yield runner
 
@@ -99,9 +147,37 @@ def sd_server():
 
 
 @pytest.mark.system("amdgpu")
-def test_sd_server(sd_server):
-    imgs, status_code = send_json_file(sd_server.url)
+def test_sd_server(sd_server_fpd1):
+    imgs, status_code = send_json_file(sd_server_fpd1.url)
     assert len(imgs) == 1
+    assert status_code == 200
+
+
+@pytest.mark.system("amdgpu")
+def test_sd_server_bs4_dense(sd_server_fpd1):
+    imgs, status_code = send_json_file(sd_server_fpd1.url, num_copies=4)
+    assert len(imgs) == 4
+    assert status_code == 200
+
+
+@pytest.mark.system("amdgpu")
+def test_sd_server_bs8_percall(sd_server_fpd1_per_call):
+    imgs, status_code = send_json_file(sd_server_fpd1_per_call.url, num_copies=8)
+    assert len(imgs) == 8
+    assert status_code == 200
+
+
+@pytest.mark.system("amdgpu")
+def test_sd_server_bs4_dense_fpd2(sd_server_fpd2):
+    imgs, status_code = send_json_file(sd_server_fpd2.url, num_copies=4)
+    assert len(imgs) == 4
+    assert status_code == 200
+
+
+@pytest.mark.system("amdgpu")
+def test_sd_server_bs8_dense_fpd8(sd_server_fpd8):
+    imgs, status_code = send_json_file(sd_server_fpd8.url, num_copies=8)
+    assert len(imgs) == 8
     assert status_code == 200
 
 
@@ -111,7 +187,6 @@ class ServerRunner:
         self.url = "http://0.0.0.0:" + port
         env = os.environ.copy()
         env["PYTHONUNBUFFERED"] = "1"
-        env["HIP_VISIBLE_DEVICES"] = "0"
         self.process = subprocess.Popen(
             [
                 *args,
@@ -158,27 +233,24 @@ def bytes_to_img(bytes, idx=0, width=1024, height=1024):
     return image
 
 
-def send_json_file(url="http://0.0.0.0:8000"):
+def send_json_file(url="http://0.0.0.0:8000", num_copies=1):
     # Read the JSON file
-    data = sample_request
+    data = copy.deepcopy(sample_request)
     imgs = []
     # Send the data to the /generate endpoint
+    data["prompt"] = (
+        [data["prompt"]]
+        if isinstance(data["prompt"], str)
+        else data["prompt"] * num_copies
+    )
     try:
         response = requests.post(url + "/generate", json=data)
         response.raise_for_status()  # Raise an error for bad responses
         request = json.loads(response.request.body.decode("utf-8"))
 
         for idx, item in enumerate(response.json()["images"]):
-            width = (
-                request["width"][idx]
-                if isinstance(request["height"], list)
-                else request["height"]
-            )
-            height = (
-                request["height"][idx]
-                if isinstance(request["height"], list)
-                else request["height"]
-            )
+            width = getbatched(request, idx, "width")
+            height = getbatched(request, idx, "height")
             img = bytes_to_img(item.encode("utf-8"), idx, width, height)
             imgs.append(img)
 
@@ -186,6 +258,16 @@ def send_json_file(url="http://0.0.0.0:8000"):
         print(f"Error sending the request: {e}")
 
     return imgs, response.status_code
+
+
+def getbatched(req, idx, key):
+    if isinstance(req[key], list):
+        if len(req[key]) == 1:
+            return req[key][0]
+        elif len(req[key]) > idx:
+            return req[key][idx]
+    else:
+        return req[key]
 
 
 def find_free_port():
