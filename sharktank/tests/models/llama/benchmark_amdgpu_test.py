@@ -287,7 +287,7 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
         reason="Test not yet implemented", strict=True, raises=ExportMlirException
     )
     def testBenchmark8B_fp8_Decodeposed(self):
-        output_file_name = self.dir_path_8b / "fp8_torch_sdpa"
+        output_file_name = self.dir_path_8b / "fp8_torch"
         output_mlir = self.llama8b_fp8_decodeposed_artifacts.create_file(
             suffix=".mlir", prefix=output_file_name
         )
