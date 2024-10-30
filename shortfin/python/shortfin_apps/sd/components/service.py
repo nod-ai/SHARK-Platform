@@ -162,7 +162,7 @@ class GenerateService:
             f"     {key} : {value}" for key, value in self.inference_parameters.items()
         ]
         return (
-            f"ServiceManager(\n"
+            f"ServiceManager("
             f"\n  INFERENCE DEVICES : \n"
             f"     {self.sysman.ls.devices}\n"
             f"\n  MODEL PARAMS: \n"
