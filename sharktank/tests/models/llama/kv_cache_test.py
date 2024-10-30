@@ -107,9 +107,7 @@ class KVCacheTest(unittest.TestCase):
         self.embedding_batch_mask = self.attention_embedding.compute_batch_mask(
             self.start_positions, batch_seq_len=1
         )
-        self.model = causal_llm.BaseCausalLMModel(
-            self.attention_block_theta, context_length=self.max_seq_len
-        )
+        self.model = causal_llm.BaseCausalLMModel(context_length=self.max_seq_len)
         self.prefill_attention_mask = self.model.attention_mask(
             self.model.input_mask(self.start_positions, self.seq_len)
         )

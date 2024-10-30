@@ -32,7 +32,7 @@ class TorchGenerator:
 
     def __init__(
         self,
-        model: PagedLlamaModelV1,
+        model: CausalLMModelABC,
         tokenizer: InferenceTokenizer,
         page_cache_size: int = 128,
         # Need to look at the model more for this.
@@ -162,17 +162,14 @@ class Batch:
 
     def prefill(self):
         model = self.parent.model
-        attention_mask = model.attention_mask(
-            model.input_mask(self.seq_lens, self.token_ids.shape[1])
-        )
         seq_block_ids_tensor = self.pad_block_ids()
         print(f":: Invoke prefill:")
         trace_tensor("prefill.token_ids", self.token_ids)
+        trace_tensor("prefill.seq_lens", self.seq_lens)
         trace_tensor("prefill.seq_block_ids", seq_block_ids_tensor)
-        trace_tensor("prefill.attention_mask", attention_mask)
-        logits = model.prefill(
+        self.logits = model.prefill_from_seq_lens(
             self.token_ids,
-            attention_mask=attention_mask,
+            seq_lens=self.seq_lens,
             seq_block_ids=seq_block_ids_tensor,
             cache_state=self.cache_state,
         )
@@ -181,7 +178,7 @@ class Batch:
         # TODO: Normalize the output of extract_tokens_from_logits into
         # tensor [bs, 1].
         tokens = torch.tensor(
-            model.extract_tokens_from_logits(logits, self.seq_lens)
+            model.extract_tokens_from_logits(self.logits, self.seq_lens)
         ).unsqueeze(1)
         print(f":: Prefill results:\n{tokens.tolist()}")
         self.add_result_token(tokens)
@@ -194,28 +191,22 @@ class Batch:
         self.allocate_seq_block_ids()
         # TODO: Allocate more blocks on overflow.
         seq_block_ids_tensor = self.pad_block_ids()
-        decode_attention_mask = model.decode_attention_mask(
-            model.input_mask(
-                self.seq_lens,
-                seq_block_ids_tensor.shape[1] * self.parent.block_seq_stride,
-            )
-        )
         trace_tensor("decode.token_ids", self.next_tokens)
+        trace_tensor("decode.seq_lens", self.seq_lens)
         trace_tensor("decode.start_positions", start_positions)
         trace_tensor("decode.seq_block_ids", seq_block_ids_tensor)
-        trace_tensor("decode.attention_mask", decode_attention_mask)
-        logits = model.decode(
+        self.logits = model.decode_from_seq_lens(
             self.next_tokens,
-            attention_mask=decode_attention_mask,
+            seq_lens=self.seq_lens,
             start_positions=start_positions,
             seq_block_ids=seq_block_ids_tensor,
             cache_state=self.cache_state,
         )
-        trace_tensor("decode.logits", logits)
+        trace_tensor("decode.logits", self.logits)
         # TODO: Normalize the output of extract_tokens_from_logits into
         # tensor [bs, 1].
         tokens = torch.tensor(
-            model.extract_tokens_from_logits(logits, [1] * self.bs),
+            model.extract_tokens_from_logits(self.logits, [1] * self.bs),
             device=self.parent.model.device,
         ).unsqueeze(1)
         self.add_result_token(tokens)
