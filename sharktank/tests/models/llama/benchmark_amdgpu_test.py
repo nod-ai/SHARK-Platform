@@ -13,7 +13,12 @@ import pytest
 import subprocess
 from pathlib import Path
 from typing import List
-from sharktank.utils.export_artifacts import ExportArtifacts
+from sharktank.utils.export_artifacts import (
+    ExportArtifacts,
+    ExportMlirException,
+    IreeBenchmarkException,
+    IreeCompileException,
+)
 
 longrun = pytest.mark.skipif("not config.getoption('longrun')")
 is_mi300x = pytest.mark.skipif("config.getoption('iree_hip_target') != 'gfx942'")
@@ -136,6 +141,7 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
             mlir_path=str(output_mlir),
             vmfb_path=output_vmfb,
             hal_dump_path=output_file_name,
+            cwd=self.repo_root,
         )
         # benchmark prefill
         self.llama8b_f16_artifacts.iree_benchmark_vmfb(
@@ -156,7 +162,7 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
 
     @longrun
     @is_mi300x
-    @pytest.mark.xfail(reason="torch_sdpa not yet plumbed through", strict=True)
+    @pytest.mark.xfail(reason="Compile Error", strict=True, raises=IreeCompileException)
     def testBenchmark8B_f16_Non_Decomposed(self):
         output_file_name = self.dir_path_8b / "f16_torch"
         output_mlir = self.llama8b_f16_artifacts.create_file(
@@ -187,6 +193,7 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
             mlir_path=str(output_mlir),
             vmfb_path=output_vmfb,
             hal_dump_path=output_file_name,
+            cwd=self.repo_root,
         )
         # benchmark prefill
         self.llama8b_f16_artifacts.iree_benchmark_vmfb(
@@ -207,7 +214,9 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
 
     @longrun
     @is_mi300x
-    @pytest.mark.xfail(reason="8B fp8 irpa path not stored yet", strict=True)
+    @pytest.mark.xfail(
+        reason="Test not yet implemented", strict=True, raises=AttributeError
+    )
     def testBenchmark8B_fp8_Decomposed(self):
         output_file_name = self.dir_path_8b / "fp8_decomposed"
         output_mlir = self.create_file(suffix=".mlir", prefix=output_file_name)
@@ -249,7 +258,9 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
 
     @longrun
     @is_mi300x
-    @pytest.mark.xfail(reason="torch_sdpa not yet plumbed through", strict=True)
+    @pytest.mark.xfail(
+        reason="Test not yet implemented", strict=True, raises=AttributeError
+    )
     def testBenchmark8B_fp8_Non_Decomposed(self):
         output_file_name = self.dir_path_8b / "fp8_torch_sdpa"
         output_mlir = self.create_file(suffix=".mlir", prefix=output_file_name)
@@ -346,7 +357,9 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
 
     @longrun
     @is_mi300x
-    @pytest.mark.xfail(reason="70b f16 irpa path not stored yet", strict=True)
+    @pytest.mark.xfail(
+        reason="Test not yet implemented", strict=True, raises=AttributeError
+    )
     def testBenchmark70B_f16_Decomposed(self):
         output_file_name = self.dir_path_70b / "f16_decomposed"
         output_mlir = self.create_file(suffix=".mlir", prefix=output_file_name)
@@ -388,7 +401,9 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
 
     @longrun
     @is_mi300x
-    @pytest.mark.xfail(reason="torch_sdpa not yet plumbed through", strict=True)
+    @pytest.mark.xfail(
+        reason="Test not yet implemented", strict=True, raises=AttributeError
+    )
     def testBenchmark70B_f16_Non_Decomposed(self):
         output_file_name = self.dir_path_70b / "f16_torch_sdpa"
         output_mlir = self.create_file(suffix=".mlir", prefix=output_file_name)
@@ -430,7 +445,9 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
 
     @longrun
     @is_mi300x
-    @pytest.mark.xfail(reason="70B fp8 irpa path not stored yet", strict=True)
+    @pytest.mark.xfail(
+        reason="Test not yet implemented", strict=True, raises=AttributeError
+    )
     def testBenchmark70B_fp8_Decomposed(self):
         output_file_name = self.dir_path_70b / "fp8_decomposed"
         output_mlir = self.create_file(suffix=".mlir", prefix=output_file_name)
@@ -472,7 +489,9 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
 
     @longrun
     @is_mi300x
-    @pytest.mark.xfail(reason="torch_sdpa not yet plumbed through", strict=True)
+    @pytest.mark.xfail(
+        reason="Test not yet implemented", strict=True, raises=AttributeError
+    )
     def testBenchmark70B_fp8_Non_Decomposed(self):
         output_file_name = self.dir_path_70b / "fp8_torch_sdpa"
         output_mlir = self.create_file(suffix=".mlir", prefix=output_file_name)
@@ -569,7 +588,9 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
 
     @longrun
     @is_mi300x
-    @pytest.mark.xfail(reason="405B f16 irpa path not stored yet", strict=True)
+    @pytest.mark.xfail(
+        reason="Test not yet implemented", strict=True, raises=AttributeError
+    )
     def testBenchmark405B_f16_Decomposed(self):
         output_file_name = self.dir_path_405b / "f16_decomposed"
         output_mlir = self.create_file(suffix=".mlir", prefix=output_file_name)
@@ -611,7 +632,9 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
 
     @longrun
     @is_mi300x
-    @pytest.mark.xfail(reason="torch_sdpa not yet plumbed through", strict=True)
+    @pytest.mark.xfail(
+        reason="Test not yet implemented", strict=True, raises=AttributeError
+    )
     def testBenchmark405B_f16_Non_Decomposed(self):
         output_file_name = self.dir_path_405b / "f16_torch_sdpa"
         output_mlir = self.create_file(suffix=".mlir", prefix=output_file_name)
@@ -653,7 +676,9 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
 
     @longrun
     @is_mi300x
-    @pytest.mark.xfail(reason="405B fp8 irpa path not stored yet", strict=True)
+    @pytest.mark.xfail(
+        reason="Test not yet implemented", strict=True, raises=AttributeError
+    )
     def testBenchmark405B_fp8_Decomposed(self):
         output_file_name = self.dir_path_405b / "fp8_decomposed"
         output_mlir = self.create_file(suffix=".mlir", prefix=output_file_name)
@@ -695,7 +720,9 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
 
     @longrun
     @is_mi300x
-    @pytest.mark.xfail(reason="torch_sdpa not yet plumbed through", strict=True)
+    @pytest.mark.xfail(
+        reason="Test not yet implemented", strict=True, raises=AttributeError
+    )
     def testBenchmark405B_fp8_Non_Decomposed(self):
         output_file_name = self.dir_path_405b / "fp8_torch_sdpa"
         output_mlir = self.create_file(suffix=".mlir", prefix=output_file_name)

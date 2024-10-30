@@ -256,3 +256,24 @@ def get_iree_flags(request: FixtureRequest):
     model_path["iree_hal_target_backends"] = set_fixture_from_cli_option(
         request, "--iree-hal-target-backends", "iree_hal_target_backends"
     )
+
+
+# The following three functions allow us to add a "XFail Reason" column to the html reports for each test
+def pytest_html_results_table_header(cells):
+    cells.insert(2, "<th>XFail Reason</th>")
+
+
+def pytest_html_results_table_row(report, cells):
+    if hasattr(report, "wasxfail"):
+        cells.insert(2, f"<td>{report.wasxfail}</td>")
+    else:
+        cells.insert(2, f"<td></td>")
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    outcome = yield
+    report = outcome.get_result()
+
+    if report.when == "call" and hasattr(item, "wasxfail"):
+        report.wasxfail = item.wasxfail
