@@ -136,6 +136,7 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
             mlir_path=str(output_mlir),
             vmfb_path=output_vmfb,
             hal_dump_path=output_file_name,
+            cwd=self.repo_root,
         )
         # benchmark prefill
         self.llama8b_f16_artifacts.iree_benchmark_vmfb(
@@ -189,6 +190,7 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
             mlir_path=str(output_mlir),
             vmfb_path=output_vmfb,
             hal_dump_path=output_file_name,
+            cwd=self.repo_root,
         )
         # benchmark prefill
         self.llama8b_f16_artifacts.iree_benchmark_vmfb(

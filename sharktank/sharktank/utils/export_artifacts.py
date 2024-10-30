@@ -97,15 +97,6 @@ class ExportArtifacts:
         self.iree_hal_target_backends = iree_hal_target_backends
         self.attention_kernel = attention_kernel
         self.tensor_parallelism_size = tensor_parallelism_size
-    
-    def get_compile_cmd(
-        self, *, output_mlir_path: str, output_vmfb_path: str, args: [str]
-    ):
-        compile_args = ["iree-compile", output_mlir_path]
-        compile_args += args
-        compile_args += ["-o", output_vmfb_path]
-        cmd = subprocess.list2cmdline(compile_args)
-        return cmd
 
     def timeit(func):
         def wrapper(*args, **kwargs):
@@ -255,6 +246,15 @@ class ExportArtifacts:
         file_path = Path(prefix).with_suffix(suffix)
         f = open(file_path, "w")
         return file_path
+    
+    def get_compile_cmd(
+        self, *, output_mlir_path: str, output_vmfb_path: str, args: [str]
+    ):
+        compile_args = ["iree-compile", output_mlir_path]
+        compile_args += args
+        compile_args += ["-o", output_vmfb_path]
+        cmd = subprocess.list2cmdline(compile_args)
+        return cmd
 
     def get_artifacts(self):
 
