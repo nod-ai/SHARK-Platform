@@ -51,7 +51,7 @@ jobs:
     steps:
     - name: Cache Python ASan
       id: cache-python-asan
-      uses: actions/cache@0c45773b623bea8c8e75f6c82b208c3cf94ea4f9 # v4.0.2
+      uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4.1.2
       with:
         path: ${{ env.PYENV_ROOT }}
         key: ${{ runner.os }}-python-asan-${{ env.PYENV_REF }}-${{ env.PYTHON_VER }}-v${{ env.CACHE_ASAN_VER }}
@@ -66,7 +66,7 @@ jobs:
 
     - name: Checkout pyenv
       if: steps.cache-python-asan.outputs.cache-hit != 'true'
-      uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       with:
         repository: pyenv/pyenv
         ref: ${{ env.PYENV_REF }}
@@ -99,12 +99,12 @@ jobs:
         sudo apt install clang lld cmake ninja-build
 
     - name: Checkout repository
-      uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       with:
         submodules: false
 
     - name: Checkout IREE repo
-      uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       with:
         repository: iree-org/iree
         path: ${{ env.IREE_SOURCE_DIR }}
