@@ -21,6 +21,8 @@ from .config_struct import ModelParams
 from .manager import SystemManager
 from .messages import InferenceExecRequest, InferencePhase, StrobeMessage
 from .tokenizer import Tokenizer
+from .metrics import measure
+
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +50,7 @@ class GenerateService:
         fibers_per_device: int,
         prog_isolation: str = "per_fiber",
         show_progress: bool = False,
+        trace_execution: bool = False,
     ):
         self.name = name
 
@@ -59,7 +62,7 @@ class GenerateService:
         self.inference_modules: dict[str, sf.ProgramModule] = {}
         self.inference_functions: dict[str, dict[str, sf.ProgramFunction]] = {}
         self.inference_programs: dict[str, sf.Program] = {}
-        self.trace_execution = False
+        self.trace_execution = trace_execution
         self.show_progress = show_progress
         self.fibers_per_device = fibers_per_device
         self.prog_isolation = prog_isolations[prog_isolation]
@@ -152,11 +155,25 @@ class GenerateService:
         self.batcher.shutdown()
 
     def __repr__(self):
+        modules = [
+            f"     {key} : {value}" for key, value in self.inference_modules.items()
+        ]
+        params = [
+            f"     {key} : {value}" for key, value in self.inference_parameters.items()
+        ]
         return (
-            f"ServiceManager(\n"
-            f"  model_params={self.model_params}\n"
-            f"  inference_modules={self.inference_modules}\n"
-            f"  inference_parameters={self.inference_parameters}\n"
+            f"ServiceManager("
+            f"\n  INFERENCE DEVICES : \n"
+            f"     {self.sysman.ls.devices}\n"
+            f"\n  MODEL PARAMS : \n"
+            f"{self.model_params}"
+            f"\n  SERVICE PARAMS : \n"
+            f"     fibers per device : {self.fibers_per_device}\n"
+            f"     program isolation mode : {self.prog_isolation}\n"
+            f"\n  INFERENCE MODULES : \n"
+            f"{'\n'.join(modules)}\n"
+            f"\n  INFERENCE PARAMETERS : \n"
+            f"{'\n'.join(params)}\n"
             f")"
         )
 
@@ -301,6 +318,7 @@ class InferenceExecutorProcess(sf.Process):
         self.worker_index = index
         self.exec_requests: list[InferenceExecRequest] = []
 
+    @measure(type="exec", task="inference process")
     async def run(self):
         try:
             phase = None

@@ -41,7 +41,8 @@ async def lifespan(app: FastAPI):
     sysman.start()
     try:
         for service_name, service in services.items():
-            logging.info("Initializing service '%s': %r", service_name, service)
+            logging.info("Initializing service '%s':", service_name)
+            logging.info(str(service))
             service.start()
     except:
         sysman.shutdown()
@@ -96,6 +97,7 @@ def configure(args) -> SystemManager:
         fibers_per_device=args.fibers_per_device,
         prog_isolation=args.isolation,
         show_progress=args.show_progress,
+        trace_execution=args.trace_execution,
     )
     sm.load_inference_module(args.clip_vmfb, component="clip")
     sm.load_inference_module(args.unet_vmfb, component="unet")
@@ -216,6 +218,11 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
         "--show_progress",
         action="store_true",
         help="enable tqdm progress for unet iterations.",
+    )
+    parser.add_argument(
+        "--trace_execution",
+        action="store_true",
+        help="Enable tracing of program modules.",
     )
     log_levels = {
         "info": logging.INFO,

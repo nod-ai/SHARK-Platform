@@ -1,7 +1,7 @@
 # Model cookbook
 
-Note: These are early notes and commands that the sharktank team is using and
-will turn into proper docs later.
+Note: These are early notes and commands that the SHARK-Platform team is using
+and will turn into proper docs later.
 
 ## Diagrams
 
