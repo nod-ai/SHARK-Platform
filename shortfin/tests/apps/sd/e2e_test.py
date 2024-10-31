@@ -198,7 +198,6 @@ class ServerRunner:
             stdout=sys.stdout,
             stderr=sys.stderr,
         )
-        print(self.process.args)
         self._wait_for_ready()
 
     def _wait_for_ready(self):
@@ -210,7 +209,7 @@ class ServerRunner:
                     return
             except Exception as e:
                 if self.process.errors is not None:
-                    raise RuntimeError("API server processs terminated") from e
+                    raise RuntimeError("API server process terminated") from e
             time.sleep(1.0)
             if (time.time() - start) > 30:
                 raise RuntimeError("Timeout waiting for server start")
