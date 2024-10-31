@@ -98,8 +98,8 @@ class ModelParams:
 
     def __repr__(self):
         return (
-            f"base model: {self.base_model_name} \n"
-            f"     output size (H,W): {self.dims} \n"
+            f"     base model : {self.base_model_name} \n"
+            f"     output size (H,W) : {self.dims} \n"
             f"     max token sequence length : {self.max_seq_len} \n"
             f"     classifier free guidance : {self.cfg_mode} \n"
         )
