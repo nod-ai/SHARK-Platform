@@ -193,7 +193,7 @@ is an `ABC`, supporting:
 There are a number of implementations, as every quantization scheme typically
 needs at least one concrete `QuantizedLayout`. Simple schemes like affine
 quantization can be fully defined in terms of a single
-[`TensorScaledLayout`](https://github.com/nod-ai/SHARK-Platform/blob/quant_docs/sharktank/sharktank/types/layouts.py#L43).
+[`TensorScaledLayout`](https://github.com/nod-ai/SHARK-Platform/blob/main/sharktank/sharktank/types/layouts.py#L43).
 Whereas packed schemes like we find in inference engines like GGML and XNNPACK
 optimally require both a packed layout and a planar layout.
 
@@ -224,7 +224,7 @@ interpreting/transforming using their natively defined forms.
 Previously, we found a rich type system defining all manner of layouts and
 quantization schemes, but what can be done with it? That is where the
 sharktank functional op library comes in. These
-[logical ops](https://github.com/nod-ai/SHARK-Platform/blob/quant_docs/sharktank/sharktank/ops/signatures.py)
+[logical ops](https://github.com/nod-ai/SHARK-Platform/blob/main/sharktank/sharktank/ops/signatures.py)
 provide the building blocks to implement built-in and custom `nn.Module`
 implementations operating on `InferenceTensor` (and torch.Tensor) types.
 
@@ -239,12 +239,12 @@ implementation at any needed level of granularity:
   structures and preserve it when computing (when combined with a
   fusing compiler, this alone provides decent fallback implementations for a
   variety of "weight compression" oriented techniques). See
-  [some examples](https://github.com/nod-ai/SHARK-Platform/blob/quant_docs/sharktank/sharktank/ops/custom_impls.py#L51).
+  [some examples](https://github.com/nod-ai/SHARK-Platform/blob/main/sharktank/sharktank/ops/custom_impls.py#L51).
 * Pure-Torch decompositions for algebraic techniques like affine quantization
   (when combined with a fusing compiler, this alone is sufficient for
   optimization). See
-  [qlinear](https://github.com/nod-ai/SHARK-Platform/blob/quant_docs/sharktank/sharktank/ops/qlinear_impls.py) and
-  [qconv](https://github.com/nod-ai/SHARK-Platform/blob/quant_docs/sharktank/sharktank/ops/qconv_impls.py)
+  [qlinear](https://github.com/nod-ai/SHARK-Platform/blob/main/sharktank/sharktank/ops/qlinear_impls.py) and
+  [qconv](https://github.com/nod-ai/SHARK-Platform/blob/main/sharktank/sharktank/ops/qconv_impls.py)
   implementations of actual affine quantized decompositions.
 * Completely custom packed/optimized implementation. These can be written to
   activate on any level of detail of the type hierarchy. The implementation
