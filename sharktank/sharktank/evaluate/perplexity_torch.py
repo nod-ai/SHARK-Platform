@@ -36,7 +36,7 @@ log_levels = {
 }
 logger = logging.getLogger("eval")
 
-logger.setLevel(log_levels["info"])
+logger.setLevel(log_levels["debug"])
 
 logger.root.handlers[0].setFormatter(
     logging.Formatter(fmt="\n%(levelname)s:%(name)-8s %(message)s")
@@ -144,6 +144,10 @@ class Perplexity_torch:
             s.replace("\n", "").rstrip()
             for s in test_prompts
             if s != "" and len(s.split()) >= 20 and s.count("=") < 2
+        ]
+
+        test_prompts = [
+            "Robert Boulter is an English film, television and theatre actor."
         ]
 
         logger.info(f" num_test_prompts: {len(test_prompts)}")

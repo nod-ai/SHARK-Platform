@@ -7,6 +7,7 @@
 name: Evaluation Tests
 
 on:
+  pull_request:
   workflow_dispatch:
   schedule:
     # Weekdays nightly at 07:00 UTC = 23:00 PST / 00:00 PDT.
@@ -72,7 +73,7 @@ jobs:
             iree-runtime \
             "numpy<2.0"
       - name: Run perplexity test with vmfb
-        run:  pytest -n 8 -v -s sharktank/tests/evaluate/perplexity_vmfb_test.py --longrun --iree-device='hip://7' --iree-hip-target=gfx942 --iree-hal-target-backends=rocm --llama3-8b-f16-model-path=/data/llama3.1/8b/llama8b_f16.irpa --llama3-8b-tokenizer-path=/data/llama3.1/8b/tokenizer_config.json
+        run:  pytest -n 8 -v -s sharktank/tests/evaluate/perplexity_vmfb_test.py --longrun --iree-device='hip://0' --iree-hip-target=gfx942 --iree-hal-target-backends=rocm --llama3-8b-f16-model-path=/data/llama3.1/8b/llama8b_f16.irpa --llama3-8b-tokenizer-path=/data/llama3.1/8b/tokenizer_config.json
 
   test_perplexity_torch:
     timeout-minutes: 1000

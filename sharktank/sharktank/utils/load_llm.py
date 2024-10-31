@@ -148,6 +148,13 @@ class Batch:
         attention_mask = model.attention_mask(
             model.input_mask(self.seq_lens, self.token_ids.shape[1])
         )
+
+        print(
+            "prefill cache load_llm",
+            len(self.cache_state),
+            len(self.cache_state[0]),
+            self.cache_state,
+        )
         seq_block_ids_tensor = self.pad_block_ids()
         trace_tensor("prefill.token_ids", self.token_ids)
         trace_tensor("prefill.seq_block_ids", seq_block_ids_tensor)
@@ -183,6 +190,13 @@ class Batch:
                 seq_block_ids_tensor.shape[1] * self.parent.block_seq_stride,
             )
         )
+        print(
+            "decode cache load_llm",
+            len(self.cache_state),
+            len(self.cache_state[0]),
+            self.cache_state,
+        )
+
         trace_tensor("decode.token_ids", self.token_ids)
         trace_tensor("decode.start_positions", start_positions)
         trace_tensor("decode.seq_block_ids", seq_block_ids_tensor)

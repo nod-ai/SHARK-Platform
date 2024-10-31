@@ -183,6 +183,10 @@ class Perplexity:
             if s != "" and len(s.split()) >= 20 and s.count("=") < 2
         ]
 
+        test_prompts = [
+            "Robert Boulter is an English film, television and theatre actor."
+        ]
+
         self.bs = len(test_prompts)
 
         return test_prompts
@@ -208,6 +212,10 @@ class Perplexity:
             token_batch=token_batch,
             seq_lens_batch=self.seq_lens_batch,
             bs=self.bs,
+        )
+
+        print(
+            "prefill cache", len(self.batch.cache_state), len(self.batch.cache_state[0])
         )
 
         seq_block_ids = self.batch.pad_block_ids()
@@ -241,6 +249,10 @@ class Perplexity:
         self.batch.seq_lens.add_(1)
         self.batch.allocate_seq_block_ids()
         seq_block_ids = self.batch.pad_block_ids()
+
+        print(
+            "decode cache", len(self.batch.cache_state), len(self.batch.cache_state[0])
+        )
 
         decode_logits = self.runner.ctx.modules.module[f"decode_bs{self.bs}"](
             token_batch,
