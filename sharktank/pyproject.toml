@@ -20,7 +20,7 @@ classifiers = [
 ]
 requires-python = ">= 3.11"
 dependencies = ["iree-turbine"]
-dynamic = ["version"]
+dynamic = ["version"]  # the version is set via the `setup.py`
 
 [project.optional-dependencies]
 testing = ["pytest"]
@@ -37,7 +37,6 @@ namespaces = true
 sharktank = ["py.typed", "kernels/templates/*.mlir"]
 
 [tool.setuptools.dynamic]
-# version = {file = ["version_info"]}
 dependencies = {file = ["requirements.txt"]}
 
 [tool.pytest.ini_options]
