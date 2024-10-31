@@ -300,7 +300,7 @@ class PagedKVCache(BaseKVCache):
         """Shard an unsharded state.
         We can't just split the slab on the sub page dims.
         First it needs to be reinterpreted into the actual shape.
-        The split the head dimension, then flatten each shard.
+        Then split the head dimension, then flatten each shard.
         This is a work-around for the lack of block-cyclic sharded tensor type."""
         if self.shard_count == 1:
             return state
@@ -323,6 +323,9 @@ class PagedKVCache(BaseKVCache):
         ]
         flat_sharded_page_table = SplitPrimitiveTensor(ts=shards, shard_dim=1)
         return [flat_sharded_page_table]
+
+    def unshard_state(self, state: list[SplitPrimitiveTensor]) -> list[torch.Tensor]:
+        return [ops.unshard(self.unflatten_page_table(state)).flatten(start_dim=1)]
 
     @property
     def pad_sequence_stride(self) -> int:

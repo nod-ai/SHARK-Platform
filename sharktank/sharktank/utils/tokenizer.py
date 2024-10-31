@@ -75,7 +75,7 @@ class InferenceTokenizer(ABC):
         return token_ids, lengths
 
     @abstractmethod
-    def _encode(self, texts: list[str]) -> list[list[int]]:
+    def _encode(self, texts: list[str], add_start_token: bool) -> list[list[int]]:
         ...
 
     @abstractmethod
