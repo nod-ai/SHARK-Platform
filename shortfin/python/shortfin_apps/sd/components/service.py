@@ -318,7 +318,7 @@ class InferenceExecutorProcess(sf.Process):
         self.worker_index = index
         self.exec_requests: list[InferenceExecRequest] = []
 
-    @measure
+    @measure(type="exec", task="inference process")
     async def run(self):
         try:
             phase = None

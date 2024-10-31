@@ -2,55 +2,45 @@ import logging
 import time
 import asyncio
 from typing import Callable, Any
+import functools
 
 logger = logging.getLogger(__name__)
 
-# measurement helper
-def measure(fn):
 
-    """
-    Decorator log test start and end time of a function
-    :param fn: Function to decorate
-    :return: Decorated function
-    Example:
-    >>> @timed
-    >>> def test_fn():
-    >>>     time.sleep(1)
-    >>> test_fn()
-    """
+def measure(fn=None, type="exec", task=None, num_items=None, freq=1, label="items"):
+    assert callable(fn) or fn is None
 
-    def wrapped_fn(*args: Any, **kwargs: Any) -> Any:
-        start = time.time()
-        ret = fn(*args, **kwargs)
-        duration_str = get_duration_str(start)
-        logger.info(f"Completed {fn.__qualname__} in {duration_str}")
-        return ret
+    def _decorator(func):
+        @functools.wraps(func)
+        async def wrapped_fn_async(*args: Any, **kwargs: Any) -> Any:
+            start = time.time()
+            ret = await func(*args, **kwargs)
+            duration = time.time() - start
+            if type == "exec":
+                batch_size = len(getattr(args[0], "exec_requests", []))
+                log_duration_str(duration, task=task, batch_size=batch_size)
+            if type == "throughput":
+                if isinstance(num_items, str):
+                    items = getattr(args[0].gen_req, num_items)
+                else:
+                    items = str(num_items)
+                log_throughput(duration, items, freq, label)
+            return ret
 
-    async def wrapped_fn_async(*args: Any, **kwargs: Any) -> Any:
-        start = time.time()
-        ret = await fn(*args, **kwargs)
-        duration_str = get_duration_str(start)
-        logger.info(f"Completed {fn.__qualname__} in {duration_str}")
-        if fn.__qualname__ == "ClientGenerateBatchProcess.run":
-            sps_str = get_samples_per_second(start, *args)
-            logger.info(f"SAMPLES PER SECOND = {sps_str}")
-        return ret
-
-    if asyncio.iscoroutinefunction(fn):
         return wrapped_fn_async
-    else:
-        return wrapped_fn
+
+    return _decorator(fn) if callable(fn) else _decorator
 
 
-def get_samples_per_second(start, *args: Any) -> str:
-    duration = time.time() - start
-    bs = args[0].gen_req.num_output_images
-    sps = str(float(bs) / duration)
-    return sps
+def log_throughput(duration, num_items, freq, label) -> str:
+    sps = str(float(num_items) / duration) * freq
+    freq_str = "second" if freq == 1 else f"{freq} seconds"
+    logger.info(f"THROUGHPUT: {sps} {label} per {freq_str}")
 
 
-def get_duration_str(start: float) -> str:
+def log_duration_str(duration: float, task, batch_size=0) -> str:
     """Get human readable duration string from start time"""
-    duration = time.time() - start
+    if batch_size > 0:
+        task = f"{task} (batch size {batch_size})"
     duration_str = f"{round(duration * 1e3)}ms"
-    return duration_str
+    logger.info(f"Completed {task} in {duration_str}")

@@ -83,7 +83,7 @@ class ClientGenerateBatchProcess(sf.Process):
         self.batcher = service.batcher
         self.complete_infeed = self.system.create_queue()
 
-    @measure
+    @measure(type="throughput", num_items="num_output_images", freq=1, label="samples")
     async def run(self):
         logger.debug("Started ClientBatchGenerateProcess: %r", self)
         try:
