@@ -132,7 +132,7 @@ class ExportArtifacts:
             "sharktank.examples.sharding.shard_llm_dataset",
             "--gguf-file",
             gguf_file,
-            "--output-irpa",
+            "--output-irpa-file",
             output_irpa,
             "--tensor-parallelism-size",
             str(self.tensor_parallelism_size),

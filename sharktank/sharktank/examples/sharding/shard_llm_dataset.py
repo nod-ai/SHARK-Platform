@@ -30,7 +30,7 @@ def main(raw_args=None):
     args = cli.parse(parser, args=raw_args)
     dataset = cli.get_input_dataset(args)
 
-    if args.output_file is None:
+    if args.output_irpa_file is None:
         raise RuntimeError(f"Need file destination for IRPA file")
 
     if args.tensor_parallelism_size < 2:
