@@ -59,6 +59,7 @@ jobs:
           - runs-on: ubuntu-24.04
             platform: linux-x86_64
             package: sharktank
+            python-version: cp311-cp311  # Ignored (generic wheel), set for workflow naming
           - runs-on: ubuntu-24.04
             platform: linux-x86_64
             package: shortfin
