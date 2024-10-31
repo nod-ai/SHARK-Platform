@@ -27,9 +27,8 @@ jobs:
     strategy:
       matrix:
         version: [3.11]
-        os: [ubuntu-latest, windows-latest]
       fail-fast: false
-    runs-on: ${{ matrix.os }}
+    runs-on: nodai-amdgpu-mi250-x86-64
     defaults:
       run:
         shell: bash
