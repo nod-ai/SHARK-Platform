@@ -140,9 +140,6 @@ class ExportArtifacts:
 
         cwd = self.sharktank_dir
         cmd = subprocess.list2cmdline(shard_irpa_args)
-        import pdb
-
-        pdb.set_trace()
 
         logger.info(f"Sharding irpa file:\n" f"cd {cwd} && {cmd}")
 
