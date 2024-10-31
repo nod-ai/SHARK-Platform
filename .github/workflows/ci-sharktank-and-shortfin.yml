@@ -22,13 +22,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test_llama:
+  test_shortfin_llm_server:
     name: "Integration Tests - Shortfin LLM Server"
     strategy:
       matrix:
         version: [3.11]
+        os: [ubuntu-latest, windows-latest]
       fail-fast: false
-    runs-on: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     defaults:
       run:
         shell: bash
