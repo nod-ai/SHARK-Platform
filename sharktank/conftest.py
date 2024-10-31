@@ -141,7 +141,6 @@ def pytest_addoption(parser):
     parser.addoption(
         "--iree-hal-target-backends",
         action="store",
-        default="rocm",
         help="Specify the iree-hal target backend (e.g., rocm)",
     )
 
