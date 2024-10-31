@@ -204,6 +204,12 @@ class ExportArtifacts:
             f"--iree-hal-target-backends={self.iree_hal_target_backends}",
             f"-o={vmfb_path}",
         ]
+        if self.tensor_parallelism_size > 1:
+            iree_hal_target_devices = " ".join(
+                f"--iree-hal-target-device=hip[{i}]"
+                for i in range(self.tensor_parallelism_size)
+            )
+            compile_args += iree_hal_target_devices
         if hal_dump_path:
             compile_args += [
                 f"--iree-hal-dump-executable-files-to={hal_dump_path}/files"
@@ -243,8 +249,16 @@ class ExportArtifacts:
             "--hip_allow_inline_execution=true",
             "--device_allocator=caching",
             f"--module={vmfb_name}",
-            f"--parameters=model={irpa_path}",
         ]
+        if self.tensor_parallelism_size > 1:
+            base_irpa_path, _ = os.path.splitext(path)
+            params = " ".join(
+                f"--parameters=model={base_irpa_path}.rank{i}.irpa"
+                for i in range(self.tensor_parallelism_size)
+            )
+        else:
+            params = f"--parameters=model={irpa_path}"
+        benchmark_args.append(params)
         benchmark_args += args
         cmd = subprocess.list2cmdline(benchmark_args)
         logging.getLogger().info(f"Launching run command:\n" f"cd {cwd} && {cmd}")

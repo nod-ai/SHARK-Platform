@@ -472,11 +472,7 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
             cwd=self.repo_root,
         )
 
-    @pytest.mark.xfail(
-        reason="'tm_tensor.attention' op query and mask batch dimension mismatch",
-        strict=True,
-        raises=IreeCompileException,
-    )
+    @pytest.mark.xfail(reason="Compile Error", strict=True, raises=IreeCompileException)
     def testBenchmark70B_f16_Decodeposed(self):
         output_file_name = self.dir_path_70b / "f16_torch"
         output_mlir = self.llama70b_f16_decodeposed_artifacts.create_file(
@@ -714,7 +710,9 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
         ]
 
     @pytest.mark.xfail(
-        reason="Export with sharding failing", strict=True, raises=ExportMlirException
+        reason="error: 'util.global' op references a promised device that was not declared",
+        strict=True,
+        raises=IreeCompileException,
     )
     def testBenchmark405B_f16_Decomposed(self):
         output_file_name = self.dir_path_405b / "f16_decomposed"
@@ -764,9 +762,7 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
             cwd=self.repo_root,
         )
 
-    @pytest.mark.xfail(
-        reason="Test not yet implemented", strict=True, raises=ExportMlirException
-    )
+    @pytest.mark.xfail(reason="Compile Error", strict=True, raises=IreeCompileException)
     def testBenchmark405B_f16_Decodeposed(self):
         output_file_name = self.dir_path_405b / "f16_torch"
         output_mlir = self.llama405b_f16_decodeposed_artifacts.create_file(
