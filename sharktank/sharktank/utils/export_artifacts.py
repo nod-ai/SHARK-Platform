@@ -123,29 +123,33 @@ class ExportArtifacts:
     def shard_irpa_file(
         self,
         *,
-        output_file: str,
+        gguf_file: str,
+        output_irpa: str,
     ):
         shard_irpa_args = [
             "python3",
             "-m",
-            "sharktank.models.llama.tools.shard_llama",
-            "--irpa-file",
-            self.irpa_path,
-            "--output-file",
-            output_file,
-            "--shard_count",
+            "sharktank.examples.sharding.shard_llm_dataset",
+            "--gguf-file",
+            gguf_file,
+            "--output-irpa",
+            output_irpa,
+            "--tensor-parallelism-size",
             str(self.tensor_parallelism_size),
         ]
 
         cwd = self.sharktank_dir
         cmd = subprocess.list2cmdline(shard_irpa_args)
+        import pdb
+
+        pdb.set_trace()
 
         logger.info(f"Sharding irpa file:\n" f"cd {cwd} && {cmd}")
 
         proc = subprocess.run(cmd, shell=True, capture_output=True, cwd=cwd, text=True)
         if proc.returncode != 0:
             logger.error(
-                f"Error sharding irpa file with shard_llama.py\n"
+                f"Error sharding irpa file with shard_llm_dataset.py\n"
                 f"{proc.stdout+proc.stderr}"
             )
         else:

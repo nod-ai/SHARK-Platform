@@ -58,6 +58,7 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
         # TODO: add numpy files to Azure and download from it
         self.artifacts_dir = Path("/data/llama-3.1/weights/8b")
         self.irpa_path = self.artifacts_dir / "fp16/llama3.1_8b_fp16.irpa"
+        self.gguf_path = self.artifacts_dir / "fp16/llama3.1_8b_fp16.gguf"
         self.irpa_path_fp8 = self.artifacts_dir / "f8/llama8b_fp8.irpa"
         self.tensor_parallelism_size = 1
         self.dir_path_8b = self.dir_path / "llama-8b"
@@ -151,7 +152,7 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
         )
         # shard_irpa file
         shard_return_code = self.llama8b_f16_decomposed_artifacts.shard_irpa_file(
-            output_file=output_shard_file_name
+            gguf_file=self.gguf_path, output_irpa=output_shard_file_name
         )
         if shard_return_code == 0:
             self.irpa_path = output_shard_file_name
@@ -201,7 +202,7 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
         )
         # shard_irpa file
         shard_return_code = self.llama8b_f16_decodeposed_artifacts.shard_irpa_file(
-            output_file=output_shard_file_name
+            gguf_file=self.gguf_path, output_irpa=output_shard_file_name
         )
         if shard_return_code == 0:
             self.irpa_path = output_shard_file_name
@@ -252,7 +253,7 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
         )
         # shard_irpa file
         shard_return_code = self.llama8b_fp8_decomposed_artifacts.shard_irpa_file(
-            output_file=output_shard_file_name
+            gguf_file=self.gguf_path, output_irpa=output_shard_file_name
         )
         if shard_return_code == 0:
             self.irpa_path = output_shard_file_name
@@ -303,7 +304,7 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
         )
         # shard_irpa file
         shard_return_code = self.llama8b_fp8_decodeposed_artifacts.shard_irpa_file(
-            output_file=output_shard_file_name
+            gguf_file=self.gguf_path, output_irpa=output_shard_file_name
         )
         if shard_return_code == 0:
             self.irpa_path = output_shard_file_name
@@ -342,6 +343,7 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
         super().setUp()
         # TODO: add numpy files to Azure and download from it
         artifacts_dir = Path("/data/llama-3.1/weights/70b")
+        self.gguf_path = self.artifacts_dir / "fp16/llama3.1_70b_f16.gguf"
         self.irpa_path = artifacts_dir / "fp16/llama3.1_70b_f16.irpa"
         self.irpa_path_fp8 = artifacts_dir / "f8/llama70b_fp8.irpa"
         self.tensor_parallelism_size = 1
@@ -439,7 +441,7 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
         )
         # shard_irpa file
         shard_return_code = self.llama70b_f16_decomposed_artifacts.shard_irpa_file(
-            output_file=output_shard_file_name
+            gguf_file=self.gguf_path, output_irpa=output_shard_file_name
         )
         if shard_return_code == 0:
             self.irpa_path = output_shard_file_name
@@ -471,7 +473,9 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
         )
 
     @pytest.mark.xfail(
-        reason="Test not yet implemented", strict=True, raises=ExportMlirException
+        reason="'tm_tensor.attention' op query and mask batch dimension mismatch",
+        strict=True,
+        raises=IreeCompileException,
     )
     def testBenchmark70B_f16_Decodeposed(self):
         output_file_name = self.dir_path_70b / "f16_torch"
@@ -490,7 +494,7 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
         )
         # shard_irpa file
         shard_return_code = self.llama70b_f16_decodeposed_artifacts.shard_irpa_file(
-            output_file=output_shard_file_name
+            gguf_file=self.gguf_path, output_irpa=output_shard_file_name
         )
         if shard_return_code == 0:
             self.irpa_path = output_shard_file_name
@@ -541,7 +545,7 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
         )
         # shard_irpa file
         shard_return_code = self.llama70b_fp8_decomposed_artifacts.shard_irpa_file(
-            output_file=output_shard_file_name
+            gguf_file=self.gguf_path, output_irpa=output_shard_file_name
         )
         if shard_return_code == 0:
             self.irpa_path = output_shard_file_name
@@ -592,7 +596,7 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
         )
         # shard_irpa file
         shard_return_code = self.llama70b_fp8_decodeposed_artifacts.shard_irpa_file(
-            output_file=output_shard_file_name
+            gguf_file=self.gguf_path, output_irpa=output_shard_file_name
         )
         if shard_return_code == 0:
             self.irpa_path = output_shard_file_name
@@ -631,6 +635,7 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
         super().setUp()
         # TODO: add numpy files to Azure and download from it
         artifacts_dir = Path("/data/llama-3.1/weights/405b")
+        self.gguf_path = self.artifacts_dir / "fp16/llama3_405b_f16.gguf"
         self.irpa_path = artifacts_dir / "fp16/llama3.1_405b_fp16.irpa"
         self.irpa_path_fp8 = artifacts_dir / "f8/llama405b_fp8.irpa"
         self.tensor_parallelism_size = 8
@@ -728,7 +733,7 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
         )
         # shard_irpa file
         shard_return_code = self.llama405b_f16_decomposed_artifacts.shard_irpa_file(
-            output_file=output_shard_file_name
+            gguf_file=self.gguf_path, output_irpa=output_shard_file_name
         )
         if shard_return_code == 0:
             self.irpa_path = output_shard_file_name
@@ -779,7 +784,7 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
         )
         # shard_irpa file
         shard_return_code = self.llama405b_f16_decodeposed_artifacts.shard_irpa_file(
-            output_file=output_shard_file_name
+            gguf_file=self.gguf_path, output_irpa=output_shard_file_name
         )
         if shard_return_code == 0:
             self.irpa_path = output_shard_file_name
@@ -830,7 +835,7 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
         )
         # shard_irpa file
         shard_return_code = self.llama405b_fp8_decomposed_artifacts.shard_irpa_file(
-            output_file=output_shard_file_name
+            gguf_file=self.gguf_path, output_irpa=output_shard_file_name
         )
         if shard_return_code == 0:
             self.irpa_path = output_shard_file_name
@@ -881,7 +886,7 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
         )
         # shard_irpa file
         shard_return_code = self.llama405b_fp8_decodeposed_artifacts.shard_irpa_file(
-            output_file=output_shard_file_name
+            gguf_file=self.gguf_path, output_irpa=output_shard_file_name
         )
         if shard_return_code == 0:
             self.irpa_path = output_shard_file_name
