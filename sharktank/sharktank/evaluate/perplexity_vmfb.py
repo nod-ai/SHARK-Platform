@@ -213,16 +213,16 @@ class Perplexity:
         seq_block_ids = self.batch.pad_block_ids()
         prefill_logits = self.runner.ctx.modules.module[f"prefill_bs{self.bs}"](
             token_batch,
-            self.seq_lens_batch,
+            self.batch.seq_lens,
             seq_block_ids,
-            self.batch.cache_state[0].to(torch.float16),
+            self.batch.cache_state.to(torch.float16),
         )
 
         prefill_logits = torch.tensor(prefill_logits[:, :, :])
 
         tokens = torch.tensor(
             self.generator.model.extract_tokens_from_logits(
-                prefill_logits, seq_lens_batch
+                prefill_logits, self.batch.seq_lens
             )
         ).unsqueeze(1)
         self.batch.add_result_token(tokens)
@@ -237,17 +237,17 @@ class Perplexity:
         logger.debug(f"{self.generator.tokenizer.decode(token_batch)}")
         logger.debug(f"{token_batch.tolist()}")
 
-        start_positions = self.seq_lens_batch.clone()
-        self.seq_lens_batch.add_(1)
+        start_positions = self.batch.seq_lens.clone()
+        self.batch.seq_lens.add_(1)
         self.batch.allocate_seq_block_ids()
         seq_block_ids = self.batch.pad_block_ids()
 
         decode_logits = self.runner.ctx.modules.module[f"decode_bs{self.bs}"](
             token_batch,
-            self.seq_lens_batch,
+            self.batch.seq_lens,
             start_positions,
             seq_block_ids,
-            self.batch.cache_state[0].to(torch.float16),
+            self.batch.cache_state.to(torch.float16),
         )
 
         decode_logits = torch.tensor(decode_logits[:, :, :])
