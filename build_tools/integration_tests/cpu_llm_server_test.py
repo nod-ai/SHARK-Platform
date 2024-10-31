@@ -6,6 +6,7 @@
 
 import json
 import os
+from pathlib import Path
 import pytest
 import requests
 import shutil
@@ -37,72 +38,72 @@ def model_test_dir(request, tmp_path_factory):
     model_file = request.param["model_file"]
     tokenizer_id = request.param["tokenizer_id"]
     tmp_dir = tmp_path_factory.mktemp("cpu_llm_server_test")
+    hf_home = os.environ.get("HF_HOME", None)
+    hf_home = Path(hf_home) if hf_home is not None else tmp_dir
     try:
         # Download model if it doesn't exist
-        model_path = tmp_dir / model_file
+        model_path = hf_home / model_file
         if not os.path.exists(model_path):
             subprocess.run(
-                f"huggingface-cli download --local-dir {tmp_dir} {repo_id} {model_file}",
+                f"huggingface-cli download --local-dir {hf_home} {repo_id} {model_file}",
                 shell=True,
                 check=True,
             )
 
         # Set up tokenizer if it doesn't exist
-        tokenizer_path = tmp_dir / "tokenizer.json"
+        tokenizer_path = hf_home / "tokenizer.json"
         if not os.path.exists(tokenizer_path):
             tokenizer = AutoTokenizer.from_pretrained(
                 tokenizer_id,
             )
-            tokenizer.save_pretrained(tmp_dir)
+            tokenizer.save_pretrained(hf_home)
 
         # Export model if it doesn't exist
         mlir_path = tmp_dir / "model.mlir"
         config_path = tmp_dir / "config.json"
-        if not os.path.exists(mlir_path) or not os.path.exists(config_path):
-            bs_string = ",".join(map(str, BATCH_SIZES))
-            subprocess.run(
-                [
-                    "python",
-                    "-m",
-                    "sharktank.examples.export_paged_llm_v1",
-                    f"--gguf-file={model_path}",
-                    f"--output-mlir={mlir_path}",
-                    f"--output-config={config_path}",
-                    f"--bs={bs_string}",
-                ],
-                check=True,
-            )
+        bs_string = ",".join(map(str, BATCH_SIZES))
+        subprocess.run(
+            [
+                "python",
+                "-m",
+                "sharktank.examples.export_paged_llm_v1",
+                f"--gguf-file={model_path}",
+                f"--output-mlir={mlir_path}",
+                f"--output-config={config_path}",
+                f"--bs={bs_string}",
+            ],
+            check=True,
+        )
 
         # Compile model if it doesn't exist
         vmfb_path = tmp_dir / "model.vmfb"
-        if not os.path.exists(vmfb_path):
-            subprocess.run(
-                [
-                    "iree-compile",
-                    mlir_path,
-                    "-o",
-                    vmfb_path,
-                ]
-                + settings["device_flags"],
-                check=True,
-            )
+        subprocess.run(
+            [
+                "iree-compile",
+                mlir_path,
+                "-o",
+                vmfb_path,
+            ]
+            + settings["device_flags"],
+            check=True,
+        )
+
         # Write config if it doesn't exist
         edited_config_path = tmp_dir / "edited_config.json"
-        if not os.path.exists(edited_config_path):
-            config = {
-                "module_name": "module",
-                "module_abi_version": 1,
-                "max_seq_len": 2048,
-                "attn_head_count": 32,
-                "attn_head_dim": 100,
-                "prefill_batch_sizes": BATCH_SIZES,
-                "decode_batch_sizes": BATCH_SIZES,
-                "transformer_block_count": 26,
-                "paged_kv_cache": {"block_seq_stride": 16, "device_block_count": 256},
-            }
-            with open(edited_config_path, "w") as f:
-                json.dump(config, f)
-        yield tmp_dir
+        config = {
+            "module_name": "module",
+            "module_abi_version": 1,
+            "max_seq_len": 2048,
+            "attn_head_count": 32,
+            "attn_head_dim": 100,
+            "prefill_batch_sizes": BATCH_SIZES,
+            "decode_batch_sizes": BATCH_SIZES,
+            "transformer_block_count": 26,
+            "paged_kv_cache": {"block_seq_stride": 16, "device_block_count": 256},
+        }
+        with open(edited_config_path, "w") as f:
+            json.dump(config, f)
+        yield hf_home, tmp_dir
     finally:
         shutil.rmtree(tmp_dir)
 
@@ -139,16 +140,17 @@ def wait_for_server(url, timeout=10):
 @pytest.fixture(scope="module")
 def llm_server(request, model_test_dir, available_port):
     # Start the server
+    hf_home, tmp_dir = model_test_dir
     model_file = request.param["model_file"]
     server_process = subprocess.Popen(
         [
             "python",
             "-m",
             "shortfin_apps.llm.server",
-            f"--tokenizer={model_test_dir / 'tokenizer.json'}",
-            f"--model_config={model_test_dir / 'edited_config.json'}",
-            f"--vmfb={model_test_dir / 'model.vmfb'}",
-            f"--parameters={model_test_dir / model_file}",
+            f"--tokenizer={hf_home / 'tokenizer.json'}",
+            f"--model_config={tmp_dir / 'edited_config.json'}",
+            f"--vmfb={tmp_dir / 'model.vmfb'}",
+            f"--parameters={hf_home / model_file}",
             f"--device={settings['device']}",
         ]
     )
