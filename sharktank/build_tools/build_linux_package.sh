@@ -23,3 +23,8 @@ python -m pip wheel --disable-pip-version-check -v -w "${OUTPUT_DIR}" "${REPO_RO
 
 wheel_output="$(echo "${OUTPUT_DIR}/sharktank-"*".whl")"
 ls "${wheel_output}"
+
+echo "Deleting other wheels"
+pushd ${OUTPUT_DIR}
+ls | grep -xv "sharktank-"*".whl" | xargs rm
+popd
