@@ -44,6 +44,12 @@ def main():
         default="4",
     )
     parser.add_argument(
+        "--block-seq-stride",
+        help="Block sequence stride for a paged KV cache.",
+        type=int,
+        default=LlamaModelConfig.default_block_seq_stride,
+    )
+    parser.add_argument(
         "--verbose",
         help="Include verbose logging",
         action="store_true",
@@ -59,6 +65,16 @@ def main():
         default="decomposed",
         choices=["decomposed", "torch"],
     )
+    parser.add_argument(
+        "--attention-dtype",
+        type=str,
+        default=dtype_to_serialized_name(LlamaModelConfig.default_attention_dtype),
+    )
+    parser.add_argument(
+        "--activation-dtype",
+        type=str,
+        default=dtype_to_serialized_name(LlamaModelConfig.default_activation_dtype),
+    )
 
     args = cli.parse(parser)
     dataset_type = cli.get_input_data_files(args)
@@ -73,11 +89,14 @@ def main():
     )
     llama_config = LlamaModelConfig(
         hp,
+        block_seq_stride=args.block_seq_stride,
         tensor_parallelism_size=tensor_parallelism_size,
         use_hf=False,
         static_tables=False,  # Rely on the compiler for hoisting tables.
         kv_cache_type="direct" if args.bs == [1] else "paged",
         attention_kernel=args.attention_kernel,
+        attention_dtype=serialized_name_to_dtype(args.attention_dtype),
+        activation_dtype=serialized_name_to_dtype(args.activation_dtype),
     )
 
     if llama_config.hp.expert_count:
