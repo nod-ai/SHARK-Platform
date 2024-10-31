@@ -419,6 +419,9 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
             "--benchmark_repetitions=3",
         ]
 
+    @pytest.mark.xfail(
+        reason="hipErrorOutOfMemory", strict=True, raises=IreeBenchmarkException
+    )
     def testBenchmark70B_f16_Decomposed(self):
         output_file_name = self.dir_path_70b / "f16_decomposed"
         output_mlir = self.llama70b_f16_decomposed_artifacts.create_file(
