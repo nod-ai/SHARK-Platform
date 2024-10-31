@@ -11,7 +11,7 @@ import logging
 import time
 from pathlib import Path
 from datetime import timedelta
-from typing import List
+from typing import List, Optional
 
 import iree.compiler as ireec
 
@@ -142,7 +142,7 @@ class ExportArtifacts:
 
         logger.info(f"Sharding irpa file:\n" f"cd {cwd} && {cmd}")
 
-        proc = subprocess.run(cmd, shell=True, capture_output=True, cwd=cwd)
+        proc = subprocess.run(cmd, shell=True, capture_output=True, cwd=cwd, text=True)
         if proc.returncode != 0:
             logger.error(
                 f"Error sharding irpa file with shard_llama.py\n"
@@ -164,14 +164,10 @@ class ExportArtifacts:
             "python3",
             "-m",
             "sharktank.examples.export_paged_llm_v1",
-            "--irpa-file",
-            self.irpa_path,
-            "--output-mlir",
-            mlir_path,
-            "--output-config",
-            json_path,
-            "--bs",
-            str(self.batch_size),
+            f"--irpa-file={self.irpa_path}",
+            f"--output-mlir={mlir_path}",
+            f"--output-config={json_path}",
+            f"--bs={str(self.batch_size)}",
         ]
         if self.attention_kernel in ["decomposed", "torch"]:
             export_args.append("--attention-kernel")
@@ -182,7 +178,7 @@ class ExportArtifacts:
 
         logger.info(f"Exporting mlir:\n" f"cd {cwd} && {cmd}")
 
-        proc = subprocess.run(cmd, shell=True, capture_output=True, cwd=cwd)
+        proc = subprocess.run(cmd, shell=True, capture_output=True, cwd=cwd, text=True)
         if proc.returncode != 0:
             raise ExportMlirException(proc, cwd)
         else:
@@ -191,15 +187,29 @@ class ExportArtifacts:
         return proc.returncode
 
     @timeit
-    def compile_to_vmfb(self, *, mlir_path, vmfb_path, hal_dump_path, cwd):
-        compile_flags = ["--iree-hip-target=" + self.iree_hip_target]
-        compile_flags += ["--iree-hal-target-backends=rocm"]
-        compile_flags += [f"--iree-hal-dump-executable-files-to={hal_dump_path}/files"]
-        cmd = self.get_compile_cmd(
-            output_mlir_path=mlir_path,
-            output_vmfb_path=vmfb_path,
-            args=compile_flags,
-        )
+    def compile_to_vmfb(
+        self,
+        *,
+        mlir_path,
+        vmfb_path,
+        cwd,
+        hal_dump_path: Optional[Path] = None,
+    ):
+        # TODO: Control flag to enable multiple backends
+        compile_args = [
+            f"iree-compile",
+            f"{mlir_path}",
+            f"--iree-hip-target={self.iree_hip_target}",
+            f"--iree-hal-target-backends={self.iree_hal_target_backends}",
+            f"-o={vmfb_path}",
+        ]
+        if hal_dump_path:
+            compile_args += [
+                f"--iree-hal-dump-executable-files-to={hal_dump_path}/files"
+            ]
+
+        cmd = subprocess.list2cmdline(compile_args)
+
         logging.getLogger().info(f"Launching compile command:\n" f"cd {cwd} && {cmd}")
         proc = subprocess.run(cmd, shell=True, capture_output=True, cwd=cwd)
         return_code = proc.returncode
@@ -247,15 +257,6 @@ class ExportArtifacts:
         f = open(file_path, "w")
         return file_path
 
-    def get_compile_cmd(
-        self, *, output_mlir_path: str, output_vmfb_path: str, args: [str]
-    ):
-        compile_args = ["iree-compile", output_mlir_path]
-        compile_args += args
-        compile_args += ["-o", output_vmfb_path]
-        cmd = subprocess.list2cmdline(compile_args)
-        return cmd
-
     def get_artifacts(self):
 
         self.dir_path = self.sharktank_dir + "/" + "tmp_perplexity_ci_artifacts/"
@@ -287,6 +288,7 @@ class ExportArtifacts:
                 self.compile_to_vmfb(
                     mlir_path=mlir_path,
                     vmfb_path=vmfb_path,
+                    cwd=self.sharktank_dir,
                 )
 
         return vmfb_path
