@@ -22,7 +22,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test_llama:
+  test_llama_large:
     name: "Llama Benchmarking 70B and 405B Tests"
     strategy:
       matrix:

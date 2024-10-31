@@ -19,7 +19,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test_llama:
+  test_llama_quick:
     name: "Llama Benchmarking 8B Tests"
     strategy:
       matrix:
