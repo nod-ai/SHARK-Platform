@@ -9,6 +9,9 @@ name: Llama Benchmarking 8B Tests
 on:
   workflow_dispatch:
   pull_request:
+  push:
+    branches:
+      - main
 
 concurrency:
   # A PR number if a pull request and otherwise the commit hash. This cancels
@@ -73,13 +76,7 @@ jobs:
             "numpy<2.0"
 
       - name: Run llama 8b tests
-        run: pytest sharktank/tests/models/llama/benchmark_amdgpu_test.py -v -s --iree-hip-target=gfx942
-
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.SHARK_PLATFORM_GH_TOKEN }}
-          publish_dir: ./out
+        run: pytest sharktank/tests/models/llama/benchmark_amdgpu_test.py -v -s --iree-hip-target=gfx942 --run-8b-llama
 
       - name: Upload llama executable files
         uses: actions/upload-artifact@v4
