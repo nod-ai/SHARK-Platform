@@ -7,7 +7,7 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 # build_linux_package.sh
-# One stop build of shortfin Python package for Linux. The Linux build is
+# One stop build of shortfin Python packages for Linux. The Linux build is
 # complicated because it has to be done via a manylinux docker container.
 #
 # Usage:
