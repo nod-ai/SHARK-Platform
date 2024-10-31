@@ -53,7 +53,7 @@ python -m sharktank.tools.dump_gguf --hf-dataset=open_llama_3b_v2_f16_gguf
 
     ```bash
     # Build sharktank.*.whl into the dist/ directory
-    #   e.g. `sharktank-3.0.0.dev0-py3-non-any.whl`
+    #   e.g. `sharktank-3.0.0.dev0-py3-none-any.whl`
     python3 -m pip wheel -v -w dist .
 
     # Install the built wheel.
