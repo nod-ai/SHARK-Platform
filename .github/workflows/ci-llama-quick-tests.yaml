@@ -1,0 +1,88 @@
+# Copyright 2024 Advanced Micro Devices, Inc.
+#
+# Licensed under the Apache License v2.0 with LLVM Exceptions.
+# See https://llvm.org/LICENSE.txt for license information.
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+
+name: Llama Benchmarking 8B Tests
+
+on:
+  workflow_dispatch:
+  pull_request:
+
+concurrency:
+  # A PR number if a pull request and otherwise the commit hash. This cancels
+  # queued and in-progress runs for the same PR (presubmit) or commit
+  # (postsubmit). The workflow name is prepended to avoid conflicts between
+  # different workflows.
+  group: ${{ github.workflow }}-${{ github.event.number || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  test_llama:
+    name: "Llama Benchmarking 8B Tests"
+    strategy:
+      matrix:
+        version: [3.11]
+      fail-fast: false
+    runs-on: llama-mi300x-1
+    defaults:
+      run:
+        shell: bash
+    env:
+      PIP_CACHE_DIR: "${{ github.workspace }}/.pip-cache"
+      VENV_DIR: ${{ github.workspace }}/.venv
+    steps:
+      - name: Get Current Date
+        id: date
+        run: echo "::set-output name=date::$(date +'%Y-%m-%d')"
+
+      - name: "Setting up Python"
+        id: setup_python
+        uses: actions/setup-python@v3
+        with:
+          python-version: ${{matrix.version}}
+
+      - name: "Checkout Code"
+        uses: actions/checkout@v3
+
+      - name: Cache Pip Packages
+        uses: actions/cache@v4
+        id: cache-pip
+        with:
+          path: ${{ env.PIP_CACHE_DIR }}
+          key: pip-${{ steps.setup_python.outputs.python-version }}-${{ hashFiles('*requirements.txt') }}
+
+      - name: Install pip deps
+        run: |
+          python -m pip install --no-compile --upgrade pip
+          # Note: We install in three steps in order to satisfy requirements
+          # from non default locations first. Installing the PyTorch CPU
+          # wheels saves multiple minutes and a lot of bandwidth on runner setup.
+          pip install --no-compile -r pytorch-cpu-requirements.txt
+          pip install --no-compile -f https://iree.dev/pip-release-links.html --src deps \
+            -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
+          pip install --no-compile -r requirements.txt -r sharktank/requirements-tests.txt -e sharktank/
+
+          # Try with the latest nightly releases, not what iree-turbine pins.
+          # We could also pin to a known working or stable version.
+          # This should eventually stabilize. Do the best we can for now.
+          pip install -f https://iree.dev/pip-release-links.html --upgrade \
+            iree-compiler \
+            iree-runtime \
+            "numpy<2.0"
+
+      - name: Run llama 8b tests
+        run: pytest sharktank/tests/models/llama/benchmark_amdgpu_test.py -v -s --iree-hip-target=gfx942
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.SHARK_PLATFORM_GH_TOKEN }}
+          publish_dir: ./out
+
+      - name: Upload llama executable files
+        uses: actions/upload-artifact@v4
+        with:
+          name: llama-files
+          path: ${{ github.workspace }}/${{ steps.date.outputs.date }}
