@@ -11,7 +11,7 @@ import logging
 import time
 from pathlib import Path
 from datetime import timedelta
-from typing import List
+from typing import List, Optional
 
 import iree.compiler as ireec
 
@@ -22,6 +22,63 @@ logger.setLevel(logging.INFO)
 logger.root.handlers[0].setFormatter(
     logging.Formatter(fmt="\n%(levelname)s:%(name)-8s %(message)s")
 )
+
+
+class ExportMlirException(Exception):
+    """SHARK-Platform export MLIR exception that preserves the command line and error output."""
+
+    def __init__(self, process: subprocess.CompletedProcess, cwd: str):
+        try:
+            errs = process.stderr.decode("utf-8")
+        except:
+            errs = str(process.stderr)
+        super().__init__(
+            f"Error invoking export_paged_llama_v1.py\n"
+            f"Error code: {process.returncode}\n"
+            f"Stderr diagnostics:\n{errs}\n\n"
+            f"Invoked with:\n"
+            f"  cd {cwd} && {process.args}\n\n"
+        )
+
+
+class IreeCompileException(Exception):
+    """Compiler exception that preserves the command line and error output."""
+
+    def __init__(self, process: subprocess.CompletedProcess, cwd: str):
+        try:
+            errs = process.stderr.decode("utf-8")
+        except:
+            errs = str(process.stderr)
+        super().__init__(
+            f"Error invoking iree-compile\n"
+            f"Error code: {process.returncode}\n"
+            f"Stderr diagnostics:\n{errs}\n\n"
+            f"Invoked with:\n"
+            f"  cd {cwd} && {process.args}\n\n"
+        )
+
+
+class IreeBenchmarkException(Exception):
+    """Runtime exception that preserves the command line and error output."""
+
+    def __init__(self, process: subprocess.CompletedProcess, cwd: str):
+        # iree-run-module sends output to both stdout and stderr
+        try:
+            errs = process.stderr.decode("utf-8")
+        except:
+            errs = str(process.stderr)
+        try:
+            outs = process.stdout.decode("utf-8")
+        except:
+            outs = str(process.stdout)
+        super().__init__(
+            f"Error invoking iree-benchmark-module\n"
+            f"Error code: {process.returncode}\n"
+            f"Stderr diagnostics:\n{errs}\n"
+            f"Stdout diagnostics:\n{outs}\n"
+            f"Run with:\n"
+            f"  cd {cwd} && {process.args}\n\n"
+        )
 
 
 class ExportArtifacts:
@@ -85,7 +142,7 @@ class ExportArtifacts:
 
         logger.info(f"Sharding irpa file:\n" f"cd {cwd} && {cmd}")
 
-        proc = subprocess.run(cmd, shell=True, capture_output=True, cwd=cwd)
+        proc = subprocess.run(cmd, shell=True, capture_output=True, cwd=cwd, text=True)
         if proc.returncode != 0:
             logger.error(
                 f"Error sharding irpa file with shard_llama.py\n"
@@ -107,14 +164,10 @@ class ExportArtifacts:
             "python3",
             "-m",
             "sharktank.examples.export_paged_llm_v1",
-            "--irpa-file",
-            self.irpa_path,
-            "--output-mlir",
-            mlir_path,
-            "--output-config",
-            json_path,
-            "--bs",
-            str(self.batch_size),
+            f"--irpa-file={self.irpa_path}",
+            f"--output-mlir={mlir_path}",
+            f"--output-config={json_path}",
+            f"--bs={str(self.batch_size)}",
         ]
         if self.attention_kernel in ["decomposed", "torch"]:
             export_args.append("--attention-kernel")
@@ -125,12 +178,9 @@ class ExportArtifacts:
 
         logger.info(f"Exporting mlir:\n" f"cd {cwd} && {cmd}")
 
-        proc = subprocess.run(cmd, shell=True, capture_output=True, cwd=cwd)
+        proc = subprocess.run(cmd, shell=True, capture_output=True, cwd=cwd, text=True)
         if proc.returncode != 0:
-            logger.error(
-                f"Error exporting mlir with export_paged_llm_v1.py\n"
-                f"{proc.stdout+proc.stderr}"
-            )
+            raise ExportMlirException(proc, cwd)
         else:
             logger.info(f"Exported to mlir successfully:\n" f"{proc.stdout}")
 
@@ -142,22 +192,29 @@ class ExportArtifacts:
         *,
         mlir_path,
         vmfb_path,
-        hal_dump_path,
+        cwd,
+        hal_dump_path: Optional[Path] = None,
     ):
         # TODO: Control flag to enable multiple backends
-        compile_flags = ["--iree-hip-target=" + self.iree_hip_target]
-        compile_flags += [f"--iree-hal-dump-executable-files-to={hal_dump_path}/files"]
-        try:
-            ireec.compile_file(
-                input_file=mlir_path,
-                target_backends=[self.iree_hal_target_backends],
-                extra_args=compile_flags,
-                output_file=vmfb_path,
-            )
-        except Exception as error:
-            logger.error(f"Error running iree-compile:\n" f"{error}")
-        else:
-            logger.info(f"Compiled to vmfb successfully:\n" f"{vmfb_path}")
+        compile_args = [
+            f"iree-compile",
+            f"{mlir_path}",
+            f"--iree-hip-target={self.iree_hip_target}",
+            f"--iree-hal-target-backends={self.iree_hal_target_backends}",
+            f"-o={vmfb_path}",
+        ]
+        if hal_dump_path:
+            compile_args += [
+                f"--iree-hal-dump-executable-files-to={hal_dump_path}/files"
+            ]
+
+        cmd = subprocess.list2cmdline(compile_args)
+
+        logging.getLogger().info(f"Launching compile command:\n" f"cd {cwd} && {cmd}")
+        proc = subprocess.run(cmd, shell=True, capture_output=True, cwd=cwd)
+        return_code = proc.returncode
+        if return_code != 0:
+            raise IreeCompileException(proc, cwd)
 
     def iree_benchmark_vmfb(
         self,
@@ -193,7 +250,7 @@ class ExportArtifacts:
         proc = subprocess.run(cmd, shell=True, stdout=sys.stdout, cwd=cwd)
         return_code = proc.returncode
         if return_code != 0:
-            raise RuntimeError(f"Error running benchmark {cmd} in cwd {cwd}")
+            raise IreeBenchmarkException(proc, cwd)
 
     def create_file(self, *, suffix, prefix):
         file_path = Path(prefix).with_suffix(suffix)
@@ -231,6 +288,7 @@ class ExportArtifacts:
                 self.compile_to_vmfb(
                     mlir_path=mlir_path,
                     vmfb_path=vmfb_path,
+                    cwd=self.sharktank_dir,
                 )
 
         return vmfb_path
