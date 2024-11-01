@@ -17,19 +17,21 @@ import uuid
 pytest.importorskip("transformers")
 from transformers import AutoTokenizer
 
-BATCH_SIZES = [1, 4]
-cpu_settings = {
+CPU_SETTINGS = {
     "device_flags": [
         "-iree-hal-target-backends=llvm-cpu",
         "--iree-llvmcpu-target-cpu=host",
     ],
     "device": "local-task",
 }
+IREE_HIP_TARGET = os.environ.get("IREE_HIP_TARGET", "gfx1100")
 gpu_settings = {
-    "device_flags": ["-iree-hal-target-backends=rocm", "--iree-hip-target=gfx1100"],
+    "device_flags": [
+        "-iree-hal-target-backends=rocm",
+        f"--iree-hip-target={IREE_HIP_TARGET}",
+    ],
     "device": "hip",
 }
-settings = cpu_settings
 
 
 @pytest.fixture(scope="module")
@@ -37,6 +39,9 @@ def model_test_dir(request, tmp_path_factory):
     repo_id = request.param["repo_id"]
     model_file = request.param["model_file"]
     tokenizer_id = request.param["tokenizer_id"]
+    settings = request.param["settings"]
+    batch_sizes = request.param["batch_sizes"]
+
     tmp_dir = tmp_path_factory.mktemp("cpu_llm_server_test")
     hf_home = os.environ.get("HF_HOME", None)
     hf_home = Path(hf_home) if hf_home is not None else tmp_dir
@@ -61,7 +66,7 @@ def model_test_dir(request, tmp_path_factory):
         # Export model if it doesn't exist
         mlir_path = tmp_dir / "model.mlir"
         config_path = tmp_dir / "config.json"
-        bs_string = ",".join(map(str, BATCH_SIZES))
+        bs_string = ",".join(map(str, batch_sizes))
         subprocess.run(
             [
                 "python",
@@ -96,8 +101,8 @@ def model_test_dir(request, tmp_path_factory):
             "max_seq_len": 2048,
             "attn_head_count": 32,
             "attn_head_dim": 100,
-            "prefill_batch_sizes": BATCH_SIZES,
-            "decode_batch_sizes": BATCH_SIZES,
+            "prefill_batch_sizes": batch_sizes,
+            "decode_batch_sizes": batch_sizes,
             "transformer_block_count": 26,
             "paged_kv_cache": {"block_seq_stride": 16, "device_block_count": 256},
         }
@@ -142,6 +147,7 @@ def llm_server(request, model_test_dir, available_port):
     # Start the server
     hf_home, tmp_dir = model_test_dir
     model_file = request.param["model_file"]
+    settings = request.param["settings"]
     server_process = subprocess.Popen(
         [
             "python",
@@ -200,10 +206,10 @@ def do_generate(prompt, port):
                 "repo_id": "SlyEcho/open_llama_3b_v2_gguf",
                 "model_file": "open-llama-3b-v2-f16.gguf",
                 "tokenizer_id": "openlm-research/open_llama_3b_v2",
+                "settings": CPU_SETTINGS,
+                "batch_sizes": [1, 4],
             },
-            {
-                "model_file": "open-llama-3b-v2-f16.gguf",
-            },
+            {"model_file": "open-llama-3b-v2-f16.gguf", "settings": CPU_SETTINGS},
         )
     ],
     indirect=True,
