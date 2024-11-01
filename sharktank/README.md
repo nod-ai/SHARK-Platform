@@ -10,6 +10,8 @@ This sub-project is a work in progress. It is intended to be a repository of
 layers, model recipes, and conversion tools from popular LLM quantization
 tooling.
 
+[![CI - Perplexity](https://github.com/nod-ai/SHARK-Platform/actions/workflows/ci_eval.yaml/badge.svg)](https://github.com/nod-ai/SHARK-Platform/actions/workflows/ci_eval.yaml)
+
 ## Examples
 
 The repository will ultimately grow a curated set of models and tools for
