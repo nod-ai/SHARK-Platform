@@ -122,7 +122,11 @@ def get_modules(args):
     out_file = io.StringIO()
     iree_build_main(
         mod,
-        args=[f"--model_json={args.model_config}", f"--target={args.target}"],
+        args=[
+            f"--model_json={args.model_config}",
+            f"--target={args.target}",
+            f"--splat={args.splat}",
+        ],
         stdout=out_file,
     )
     filenames = out_file.getvalue().strip().split("\n")
@@ -187,40 +191,6 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
         help="Path to the model config file",
     )
     parser.add_argument(
-        "--clip_vmfb",
-        type=Path,
-        help="Model VMFB to load",
-    )
-    parser.add_argument(
-        "--unet_vmfb",
-        type=Path,
-        help="Model VMFB to load",
-    )
-    parser.add_argument("--scheduler_vmfb", type=Path, help="Scheduler VMFB to load.")
-    parser.add_argument(
-        "--vae_vmfb",
-        type=Path,
-        help="Model VMFB to load",
-    )
-    parser.add_argument(
-        "--clip_params",
-        type=Path,
-        nargs="*",
-        help="Parameter archives to load",
-    )
-    parser.add_argument(
-        "--unet_params",
-        type=Path,
-        nargs="*",
-        help="Parameter archives to load",
-    )
-    parser.add_argument(
-        "--vae_params",
-        type=Path,
-        nargs="*",
-        help="Parameter archives to load",
-    )
-    parser.add_argument(
         "--fibers_per_device",
         type=int,
         default=1,
@@ -245,6 +215,11 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
         "--trace_execution",
         action="store_true",
         help="Enable tracing of program modules.",
+    )
+    parser.add_argument(
+        "--splat",
+        action="store_true",
+        help="Use splat (empty) parameter files, usually for testing.",
     )
     log_levels = {
         "info": logging.INFO,
