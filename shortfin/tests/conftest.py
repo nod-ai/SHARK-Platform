@@ -24,6 +24,9 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers", "system(name): mark test to run only on a named system"
     )
+    config.addinivalue_line(
+        "markers", "slow: mark test to run in a separate, slow suite."
+    )
 
 
 def pytest_runtest_setup(item):

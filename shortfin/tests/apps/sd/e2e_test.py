@@ -1,6 +1,7 @@
 import json
 import requests
 import time
+import asyncio
 import base64
 import pytest
 import subprocess
@@ -8,6 +9,7 @@ import os
 import socket
 import sys
 import copy
+import math
 from contextlib import closing
 
 from datetime import datetime as dt
@@ -178,6 +180,23 @@ def test_sd_server_bs4_dense_fpd2(sd_server_fpd2):
 def test_sd_server_bs8_dense_fpd8(sd_server_fpd8):
     imgs, status_code = send_json_file(sd_server_fpd8.url, num_copies=8)
     assert len(imgs) == 8
+    assert status_code == 200
+
+
+@pytest.mark.slow
+@pytest.mark.system("amdgpu")
+def test_sd_server_bs64_dense_fpd8(sd_server_fpd8):
+    imgs, status_code = send_json_file(sd_server_fpd8.url, num_copies=64)
+    assert len(imgs) == 64
+    assert status_code == 200
+
+
+@pytest.mark.slow
+@pytest.mark.xfail(reason="Unexpectedly large client batch.")
+@pytest.mark.system("amdgpu")
+def test_sd_server_bs512_dense_fpd8(sd_server_fpd8):
+    imgs, status_code = send_json_file(sd_server_fpd8.url, num_copies=512)
+    assert len(imgs) == 512
     assert status_code == 200
 
 

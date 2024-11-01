@@ -10,9 +10,13 @@
   "vae_batch_sizes": [
     1
   ],
+  "scheduler_batch_sizes": [
+    1
+  ],
   "unet_dtype": "float16",
   "unet_module_name": "compiled_punet",
   "unet_fn_name": "main",
+  "use_i8_punet": true,
   "dims": [
     [
       1024,
