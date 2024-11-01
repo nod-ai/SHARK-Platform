@@ -346,7 +346,7 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
         self.gguf_path = self.artifacts_dir / "fp16/llama3.1_70b_f16.gguf"
         self.irpa_path = artifacts_dir / "fp16/llama3.1_70b_f16.irpa"
         self.irpa_path_fp8 = artifacts_dir / "f8/llama70b_fp8.irpa"
-        self.tensor_parallelism_size = 1
+        self.tensor_parallelism_size = 8
         self.dir_path_70b = self.dir_path / "llama-70b"
         self.temp_dir_70b = Path(self.dir_path_70b)
         self.temp_dir_70b.mkdir(parents=True, exist_ok=True)
@@ -421,10 +421,7 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
             "--benchmark_repetitions=3",
         ]
 
-    @pytest.mark.xfail(
-        reason="hipErrorOutOfMemory", strict=True, raises=IreeBenchmarkException
-    )
-    def testBenchmark70B_f16_Decomposed(self):
+    def testBenchmark70B_f16_TP8_Decomposed(self):
         output_file_name = self.dir_path_70b / "f16_decomposed"
         output_mlir = self.llama70b_f16_decomposed_artifacts.create_file(
             suffix=".mlir", prefix=output_file_name
@@ -473,7 +470,7 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
         )
 
     @pytest.mark.xfail(reason="Compile Error", strict=True, raises=IreeCompileException)
-    def testBenchmark70B_f16_Decodeposed(self):
+    def testBenchmark70B_f16_TP8_Decodeposed(self):
         output_file_name = self.dir_path_70b / "f16_torch"
         output_mlir = self.llama70b_f16_decodeposed_artifacts.create_file(
             suffix=".mlir", prefix=output_file_name
@@ -524,7 +521,7 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
     @pytest.mark.xfail(
         reason="Test not yet implemented", strict=True, raises=ExportMlirException
     )
-    def testBenchmark70B_fp8_Decomposed(self):
+    def testBenchmark70B_fp8_TP8_Decomposed(self):
         output_file_name = self.dir_path_70b / "fp8_decomposed"
         output_mlir = self.llama70b_fp8_decomposed_artifacts.create_file(
             suffix=".mlir", prefix=output_file_name
@@ -575,7 +572,7 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
     @pytest.mark.xfail(
         reason="Test not yet implemented", strict=True, raises=ExportMlirException
     )
-    def testBenchmark70B_fp8_Decodeposed(self):
+    def testBenchmark70B_fp8_TP8_Decodeposed(self):
         output_file_name = self.dir_path_70b / "fp8_torch"
         output_mlir = self.llama70b_fp8_decodeposed_artifacts.create_file(
             suffix=".mlir", prefix=output_file_name
