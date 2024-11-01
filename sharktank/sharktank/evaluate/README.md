@@ -1,5 +1,7 @@
 # LLM Evaluation Pipeline
 
+![CI - Perplexity](https://github.com/nod-ai/SHARK-Platform/actions/workflows/ci_eval.yml/badge.svg)
+
 ## Setup
 Setup SHARK Platform's Evaluation Pipeline
 
