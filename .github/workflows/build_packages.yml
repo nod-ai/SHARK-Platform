@@ -58,6 +58,10 @@ jobs:
           # Ubuntu packages.
           - runs-on: ubuntu-24.04
             platform: linux-x86_64
+            package: sharktank
+            python-version: cp311-cp311  # Ignored (generic wheel), set for workflow naming
+          - runs-on: ubuntu-24.04
+            platform: linux-x86_64
             package: shortfin
             python-version: cp312-cp312
           - runs-on: ubuntu-24.04
@@ -71,7 +75,6 @@ jobs:
 
           # TODO(#130): macOS platform
           # TODO(#130): Windows platform
-          # TODO(#130): sharktank packages
 
     steps:
     - name: Checkout repository
@@ -86,6 +89,14 @@ jobs:
         name: version_info_rc
         path: ./c/
         merge-multiple: true
+
+    - name: Build sharktank (Linux x86_64)
+      if: "matrix.package == 'sharktank' && matrix.platform == 'linux-x86_64'"
+      env:
+        OUTPUT_DIR: "${{ github.workspace }}/bindist"
+      run: |
+        [ -e ./bindist/* ] && rm ./bindist/*
+        ./c/sharktank/build_tools/build_linux_package.sh
 
     - name: Build shortfin (Linux x86_64, ${{ matrix.python-version }})
       if: "matrix.package == 'shortfin' && matrix.platform == 'linux-x86_64'"
