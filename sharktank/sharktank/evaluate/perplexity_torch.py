@@ -111,7 +111,7 @@ class Perplexity_torch:
             attention_dtype=self.attention_dtype,
             tensor_parallelism_size=tensor_parallelism_size,
         )
-
+        config.attention_kernel="torch"
         if config.tensor_parallelism_size > 1:
             dataset.root_theta = shard_theta(dataset.root_theta, config)
 
