@@ -202,7 +202,7 @@ class ExportArtifacts:
             f"{mlir_path}",
             f"--iree-hip-target={self.iree_hip_target}",
             f"--iree-hal-target-backends={self.iree_hal_target_backends}",
-            f"-o {vmfb_path}",
+            f"-o={vmfb_path}",
         ]
         if self.tensor_parallelism_size > 1:
             iree_hal_target_devices = [
