@@ -342,10 +342,10 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
     def setUp(self):
         super().setUp()
         # TODO: add numpy files to Azure and download from it
-        artifacts_dir = Path("/data/llama-3.1/weights/70b")
+        self.artifacts_dir = Path("/data/llama-3.1/weights/70b")
         self.gguf_path = self.artifacts_dir / "fp16/llama3.1_70b_f16.gguf"
-        self.irpa_path = artifacts_dir / "fp16/llama3.1_70b_f16.irpa"
-        self.irpa_path_fp8 = artifacts_dir / "f8/llama70b_fp8.irpa"
+        self.irpa_path = self.artifacts_dir / "fp16/llama3.1_70b_f16.irpa"
+        self.irpa_path_fp8 = self.artifacts_dir / "f8/llama70b_fp8.irpa"
         self.tensor_parallelism_size = 8
         self.dir_path_70b = self.dir_path / "llama-70b"
         self.temp_dir_70b = Path(self.dir_path_70b)
@@ -627,10 +627,10 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
     def setUp(self):
         super().setUp()
         # TODO: add numpy files to Azure and download from it
-        artifacts_dir = Path("/data/llama-3.1/weights/405b")
-        self.gguf_path = self.artifacts_dir / "fp16/llama3_405b_f16.gguf"
-        self.irpa_path = artifacts_dir / "fp16/llama3.1_405b_fp16.irpa"
-        self.irpa_path_fp8 = artifacts_dir / "f8/llama405b_fp8.irpa"
+        self.artifacts_dir = Path("/data/llama-3.1/weights/405b")
+        self.irpa_path = self.artifacts_dir / "f16/llama3.1_405b_fp16.irpa"
+        self.gguf_path = self.artifacts_dir / "f16/llama3_405b_f16.gguf"
+        self.irpa_path_fp8 = self.artifacts_dir / "f8/llama405b_fp8.irpa"
         self.tensor_parallelism_size = 8
         self.dir_path_405b = self.dir_path / "llama-405b"
         self.temp_dir_405b = Path(self.dir_path_405b)
