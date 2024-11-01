@@ -42,8 +42,15 @@ jobs:
     steps:
     - name: Install dependencies
       run: |
-        sudo apt update -y
-        sudo apt install cmake ninja-build -y
+        if dpkg -s cmake &>/dev/null; then
+          echo 'cmake is installed'
+        else
+          sudo apt install cmake -y
+        fi
+        if dpkg -s ninja-build &>/dev/null; then
+          echo 'ninja is installed'
+        else
+          sudo apt install ninja -y
 
     - name: Checkout repository
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
