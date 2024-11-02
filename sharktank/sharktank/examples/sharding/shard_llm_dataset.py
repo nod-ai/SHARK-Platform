@@ -34,7 +34,9 @@ def main(raw_args=None):
         raise RuntimeError(f"Need file destination for IRPA file")
 
     if args.tensor_parallelism_size < 2:
-        raise RuntimeError(f"Expect sharding greater than 1 found {args.shard_count}")
+        raise RuntimeError(
+            f"Expect sharding greater than 1 found {args.tensor_parallelism_size}"
+        )
 
     hp = LlamaHParams.from_gguf_props(dataset.properties)
     llama_config = LlamaModelConfig(
