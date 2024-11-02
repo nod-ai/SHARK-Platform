@@ -8,12 +8,17 @@
 *.suo
 *.user
 
+# Common IREE source/build paths
+iree/
+iree-build/
+
 # macOS files
 .DS_Store
 
 # CMake artifacts
 build/
 build-*/
+_build/
 
 # Python
 __pycache__
@@ -30,6 +35,12 @@ wheelhouse
 *.safetensors
 *.gguf
 *.vmfb
+genfiles/
+*.zip
+tmp/
 
 # Known inference result blobs
 *output*.png
+
+# Log files.
+*.log

@@ -16,6 +16,11 @@ dtype_to_filetag = {
     sfnp.bfloat16: "bf16",
 }
 
+SDXL_BUCKET = "https://sharkpublic.blob.core.windows.net/sharkpublic/sdxl/11022024/"
+SDXL_WEIGHTS_BUCKET = (
+    "https://sharkpublic.blob.core.windows.net/sharkpublic/sdxl/weights/"
+)
+
 
 def get_mlir_filenames(model_params: ModelParams):
     mlir_filenames = []
@@ -134,21 +139,18 @@ def sdxl(
     splat=cl_arg("splat", default=False, help="Download empty weights (for testing)"),
 ):
     model_params = ModelParams.load_json(model_json)
-    mlir_bucket = "https://sharkpublic.blob.core.windows.net/sharkpublic/sdxl/mlir/"
+    mlir_bucket = SDXL_BUCKET + "mlir/"
     mlir_filenames = get_mlir_filenames(model_params)
     mlir_urls = get_url_map(mlir_filenames, mlir_bucket)
     for f, url in mlir_urls.items():
         fetch_http(name=f, url=url)
-    vmfb_bucket = "https://sharkpublic.blob.core.windows.net/sharkpublic/sdxl/vmfbs/"
+    vmfb_bucket = SDXL_BUCKET + "vmfbs/"
     vmfb_filenames = get_vmfb_filenames(model_params, target=target)
     vmfb_urls = get_url_map(vmfb_filenames, vmfb_bucket)
     for f, url in vmfb_urls.items():
         fetch_http(name=f, url=url)
-    params_bucket = (
-        "https://sharkpublic.blob.core.windows.net/sharkpublic/sdxl/weights/"
-    )
     params_filenames = get_params_filenames(model_params, splat)
-    params_urls = get_url_map(params_filenames, params_bucket)
+    params_urls = get_url_map(params_filenames, SDXL_WEIGHTS_BUCKET)
     ctx = executor.BuildContext.current()
     for f, url in params_urls.items():
         out_file = os.path.join(ctx.executor.output_dir, f)
