@@ -269,7 +269,6 @@ class PagedLlamaModelV1(BaseCausalLMModel):
         for block_idx, block in enumerate(self.attn_blocks):
             if block_idx == 0:
                 self.trace_tensor(f"llama.attn_block.{block_idx}.input", h)
-            block.attn.attention_kernel = "decomposed"
             h = block(
                 h,
                 start_positions=start_positions,
