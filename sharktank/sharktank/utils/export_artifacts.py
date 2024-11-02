@@ -244,21 +244,28 @@ class ExportArtifacts:
         benchmark_args = [
             f"ROCR_VISIBLE_DEVICES={hip_device_id}",
             "iree-benchmark-module",
-            f"--device=hip://{hip_device_id}",
             "--hip_use_streams=true",
             "--hip_allow_inline_execution=true",
             "--device_allocator=caching",
             f"--module={vmfb_name}",
         ]
         if self.tensor_parallelism_size > 1:
+            import pdb
+
+            pdb.set_trace()
             base_irpa_path, _ = os.path.splitext(irpa_path)
             params = [
                 f"--parameters=model={base_irpa_path}.rank{i}.irpa"
                 for i in range(self.tensor_parallelism_size)
             ]
+            devices = [
+                f"--device=hip[{i}]" for i in range(self.tensor_parallelism_size)
+            ]
         else:
             params = [f"--parameters=model={irpa_path}"]
+            devices = [f"--device=hip://{hip_device_id}"]
         benchmark_args += params
+        benchmark_args += devices
         benchmark_args += args
         cmd = subprocess.list2cmdline(benchmark_args)
         logging.getLogger().info(f"Launching run command:\n" f"cd {cwd} && {cmd}")
