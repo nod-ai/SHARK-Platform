@@ -56,10 +56,10 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
     def setUp(self):
         super().setUp()
         # TODO: add numpy files to Azure and download from it
-        self.artifacts_dir = Path("/data/llama-3.1/weights/8b")
-        self.gguf_path = self.artifacts_dir / "fp16/llama3.1_8b_fp16.gguf"
-        self.irpa_path = self.artifacts_dir / "fp16/llama3.1_8b_fp16.irpa"
-        self.irpa_path_fp8 = self.artifacts_dir / "f8/llama8b_fp8.irpa"
+        self.artifacts_dir = Path("/data/extra/models/llama3.1_8B")
+        self.gguf_path = self.artifacts_dir / "llama8b_f16.gguf"
+        self.irpa_path = self.artifacts_dir / "llama8b_f16.irpa"
+        self.irpa_path_fp8 = self.artifacts_dir / "llama8b_fp8.irpa"
         self.tensor_parallelism_size = 1
         self.dir_path_8b = self.dir_path / "llama-8b"
         self.temp_dir_8b = Path(self.dir_path_8b)
@@ -711,7 +711,7 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
         strict=True,
         raises=IreeCompileException,
     )
-    def testBenchmark405B_f16_Decomposed(self):
+    def testBenchmark405B_f16_TP8_Decomposed(self):
         output_file_name = self.dir_path_405b / "f16_decomposed"
         output_mlir = self.llama405b_f16_decomposed_artifacts.create_file(
             suffix=".mlir", prefix=output_file_name

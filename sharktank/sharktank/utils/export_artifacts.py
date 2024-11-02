@@ -251,13 +251,13 @@ class ExportArtifacts:
             f"--module={vmfb_name}",
         ]
         if self.tensor_parallelism_size > 1:
-            base_irpa_path, _ = os.path.splitext(path)
+            base_irpa_path, _ = os.path.splitext(irpa_path)
             params = [
                 f"--parameters=model={base_irpa_path}.rank{i}.irpa"
                 for i in range(self.tensor_parallelism_size)
             ]
         else:
-            params = f"--parameters=model={irpa_path}"
+            params = [f"--parameters=model={irpa_path}"]
         benchmark_args += params
         benchmark_args += args
         cmd = subprocess.list2cmdline(benchmark_args)
