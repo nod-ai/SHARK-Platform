@@ -250,9 +250,6 @@ class ExportArtifacts:
             f"--module={vmfb_name}",
         ]
         if self.tensor_parallelism_size > 1:
-            import pdb
-
-            pdb.set_trace()
             base_irpa_path, _ = os.path.splitext(irpa_path)
             params = [
                 f"--parameters=model={base_irpa_path}.rank{i}.irpa"
