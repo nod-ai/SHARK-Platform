@@ -118,9 +118,19 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         # Full sequence length.
         kv_seq_len = seq_block_ids.shape[1] * self.cache.block_seq_stride
 
-        if self.cache_quantizer and not self.fake_quant:
-            xk = self.cache_quantizer.quantize(xk).unpack().qs
-            xv = self.cache_quantizer.quantize(xv).unpack().qs
+        # Used by fp8_e4m3fnuz model
+        if self.cache_quantizer:
+            # For fake quant, store the fp16 qdq value in the cache
+            if self.fake_quant:
+                xk = self.cache_quantizer.quantize(xk).unpack().dequant().to(torch.float16)
+                xv = self.cache_quantizer.quantize(xv).unpack().dequant().to(torch.float16)
+            # For real quant, store the quantized fp8 value in the cache
+            else:
+                # TODO: this seems like a bastardization of our quantized tensor api
+                # Probably want to add support for using quantized tensors more directly
+                xk = self.cache_quantizer.quantize(xk).unpack().qs
+                xv = self.cache_quantizer.quantize(xv).unpack().qs
+
         xk, xv = self.transact_cache(
             xk_cache_update=xk,
             xv_cache_update=xv,
@@ -146,6 +156,7 @@ class PagedLlamaAttentionBlock(ThetaLayer):
             xk = repeat_kv(xk)
             xv = repeat_kv(xv)
 
+        # Fake quant is already dequantized when stored in the cache. 
         if self.cache_quantizer and not self.fake_quant:
             xk = self.cache_quantizer.dequantize_raw_tensor(xk, torch.float16, name="xk_deq")
             xv = self.cache_quantizer.dequantize_raw_tensor(xv, torch.float16, name="xv_deq")

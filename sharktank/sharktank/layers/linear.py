@@ -68,9 +68,8 @@ class LinearLayer(ThetaLayer):
 
         if q_input is not None:
             x = q_input.quantize(x)
-        elif qdq_input is not None:
-            # TODO: probably need a way to only do q_input if exporting.
-            x = qdq_input.quantize(x).unpack().dequant()
+            if self.fake_quant:
+                x = x.unpack().dequant()
 
         y = ops.linear(x, weight, bias)
 
@@ -79,20 +78,12 @@ class LinearLayer(ThetaLayer):
         # the QuantizedTensor escape.
         if isinstance(y, QuantizedTensor) and not self.fake_quant:
             y = y.unpack().dequant()
+        # Note that f8_e4m3fnuz types on AMD GPUs accumulate to fp32. 
+        # We can truncate to fp16 in iree, so we do a cast here
+        # to account for this in the IR.
         if not self.fake_quant and y.dtype==torch.float8_e4m3fnuz:
-            y = PlanarQuantizedTensor(
-                shape=y.shape,
-                name="hackmesackmenevergonnatrackme",
-                layout = TensorScaledLayout(
-                    shape=y.shape,
-                    d = weight.unpack()._d,
-                    qs = y,
-                    m = weight.unpack()._m,
-                    dtype = torch.float16,
-                )
-            )
-            y = y.unpack().dequant()
-            return y#.unpack().dequant()
+            y = ops.to(y, torch.float16)
+            return y
         if qdq_output is not None:
             # TODO: same as above.
             y = qdq_output.quantize(y).unpack().dequant()
