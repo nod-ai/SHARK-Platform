@@ -271,9 +271,6 @@ class ExportArtifacts:
         benchmark_args += devices
         benchmark_args += args
         cmd = subprocess.list2cmdline(benchmark_args)
-        import pdb
-
-        pdb.set_trace()
         logging.getLogger().info(f"Launching run command:\n" f"cd {cwd} && {cmd}")
         proc = subprocess.run(cmd, shell=True, stdout=sys.stdout, cwd=cwd)
         return_code = proc.returncode
