@@ -61,11 +61,13 @@ def main():
         choices=["decomposed", "torch"],
     )
 
+    cli.add_quantization_options(parser)
     args = cli.parse(parser)
     dataset_type = cli.get_input_data_files(args)
     dataset_type = "irpa" if "irpa" in dataset_type else "gguf"
     dataset = cli.get_input_dataset(args)
 
+    kv_cache_dtype = getattr(torch, args.kv_cache_dtype)
     hp = configs.LlamaHParams.from_gguf_props(dataset.properties)
     tensor_parallelism_size = (
         dataset.properties["tensor_parallelism_size"]
@@ -78,8 +80,10 @@ def main():
         use_hf=False,
         static_tables=False,  # Rely on the compiler for hoisting tables.
         kv_cache_type="direct" if args.bs == [1] else "paged",
+        kv_cache_dtype=kv_cache_dtype,
         attention_kernel=args.attention_kernel,
     )
+    llama_config.fake_quant = args.fake_quant
 
     if llama_config.hp.expert_count:
         if llama_config.hp.model_arch == "grok":

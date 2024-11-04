@@ -355,7 +355,8 @@ def matmul_default(lhs, rhs, *, transpose_rhs: bool) -> Tensor:
     rhs = unbox_tensor(rhs)
     if transpose_rhs:
         rhs = rhs.mT
-    return torch.matmul(lhs, rhs.to(lhs.dtype))
+    result = torch.matmul(lhs, rhs.to(lhs.dtype))
+    return result
 
 
 # Scaled dot product attention

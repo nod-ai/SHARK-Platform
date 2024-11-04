@@ -15,6 +15,7 @@ from ..types import (
     QuantizerTensor,
     StaticScaledQuantizer,
     TensorScaledLayout,
+    PlanarQuantizedTensor
 )
 
 __all__ = [
@@ -38,11 +39,13 @@ class LinearLayer(ThetaLayer):
         *,
         weight_name: str = "weight",
         bias_name: str = "bias",
+        fake_quant: bool = True,
     ):
         super().__init__(theta)
         self._simulate_native_quant = True
         self.weight = self.theta_tensor(weight_name)
         self.bias = None
+        self.fake_quant = fake_quant
         if bias_name in self.theta.keys:
             self.bias = self.theta_tensor(bias_name)
 
@@ -74,8 +77,22 @@ class LinearLayer(ThetaLayer):
         # Unconditionally dequantize.
         # TODO: Support a q_output specifier that signals the layer to let
         # the QuantizedTensor escape.
-        if isinstance(y, QuantizedTensor):
+        if isinstance(y, QuantizedTensor) and not self.fake_quant:
             y = y.unpack().dequant()
+        if not self.fake_quant and y.dtype==torch.float8_e4m3fnuz:
+            y = PlanarQuantizedTensor(
+                shape=y.shape,
+                name="hackmesackmenevergonnatrackme",
+                layout = TensorScaledLayout(
+                    shape=y.shape,
+                    d = weight.unpack()._d,
+                    qs = y,
+                    m = weight.unpack()._m,
+                    dtype = torch.float16,
+                )
+            )
+            y = y.unpack().dequant()
+            return y#.unpack().dequant()
         if qdq_output is not None:
             # TODO: same as above.
             y = qdq_output.quantize(y).unpack().dequant()

@@ -44,7 +44,7 @@ class LlamaHParams:
 
     @staticmethod
     def from_gguf_props(p: dict[str, Any]):
-        name_prefix = p["general.architecture"]
+        name_prefix = p.get("general.architecture", "llama") 
         default_expert_count = 0
         default_expert_used_count = 0
         default_rope_freq_base = 10000.0
@@ -115,6 +115,7 @@ def _optional_int_prop(p: dict[str, Any], name: str, default_value: int) -> int:
         raise ValueError(f"Property '{name}' expected to be an int and was not") from e
 
 
+
 @dataclass
 class LlamaModelConfig:
     hp: LlamaHParams
@@ -132,8 +133,13 @@ class LlamaModelConfig:
     # Dtype to use for general FP activations not otherwise configured.
     activation_dtype: torch.dtype = torch.float16
 
+    kv_cache_dtype: torch.dtype = torch.float16
+
     # Dtype to use for attention.
     attention_dtype: torch.dtype = torch.float16
+
+    # fake quant determines the mode the Layer Thetas operate w.r.t quantized tensors.
+    fake_quant: bool = True
 
     # How many devices are involved for tensor parallel sharding.
     # If greater than 1, the model will expect sharded model parameters and function
