@@ -55,7 +55,7 @@ def main():
     parser.add_argument(
         "--prompt",
         type=str,
-        default="1,2,3,4,5,",
+        default="1 2 3 4 5 ",
         help="The prompt text to send to the generate endpoint",
     )
 
