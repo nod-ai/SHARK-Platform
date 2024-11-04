@@ -71,4 +71,4 @@ jobs:
             "numpy<2.0"
 
       - name: Run shortfin LLM Server Integration Test
-        run: pytest -v build_tools/integration_tests/cpu_llm_server_test.py
+        run: pytest -v build_tools/integration_tests/
