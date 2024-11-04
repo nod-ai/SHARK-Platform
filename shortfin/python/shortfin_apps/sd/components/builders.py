@@ -59,7 +59,7 @@ def get_params_filenames(model_params: ModelParams, splat: bool):
     else:
         modnames.append("unet")
         mod_precs.append(dtype_to_filetag[model_params.unet_dtype])
-    if splat:
+    if splat == "True":
         for idx, mod in enumerate(modnames):
             params_filenames.extend(
                 ["_".join([mod, "splat", f"{mod_precs[idx]}.irpa"])]
@@ -165,7 +165,9 @@ def sdxl(
         default="gfx942",
         help="IREE target architecture.",
     ),
-    splat=cl_arg("splat", default=False, help="Download empty weights (for testing)"),
+    splat=cl_arg(
+        "splat", default=False, type=str, help="Download empty weights (for testing)"
+    ),
 ):
     model_params = ModelParams.load_json(model_json)
     ctx = executor.BuildContext.current()
@@ -185,7 +187,6 @@ def sdxl(
     for f, url in vmfb_urls.items():
         if update or needs_file(f, ctx):
             fetch_http(name=f, url=url)
-
     params_filenames = get_params_filenames(model_params, splat)
     params_urls = get_url_map(params_filenames, SDXL_WEIGHTS_BUCKET)
     for f, url in params_urls.items():
