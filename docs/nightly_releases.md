@@ -39,7 +39,8 @@ You will need a recent version of Python.
 
 * As of Nov 1, 2024, sharktank is compatible with Python 3.11. See
   https://github.com/nod-ai/SHARK-Platform/issues/349 for Python 3.12 support.
-* As of Nov 1, 2024, shortfin publishes packages for Python 3.12, 3.13, and 3.13t
+* As of Nov 4, 2024, shortfin publishes packages for Python 3.11, 3.12, 3.13,
+  and 3.13t
 
 For example, to install Python 3.11 on Ubuntu:
 
