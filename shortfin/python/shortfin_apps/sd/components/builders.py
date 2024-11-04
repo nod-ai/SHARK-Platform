@@ -16,7 +16,10 @@ dtype_to_filetag = {
     sfnp.bfloat16: "bf16",
 }
 
-SDXL_BUCKET = "https://sharkpublic.blob.core.windows.net/sharkpublic/sdxl/11022024/"
+ARTIFACT_VERSION = "11022024"
+SDXL_BUCKET = (
+    f"https://sharkpublic.blob.core.windows.net/sharkpublic/sdxl/{ARTIFACT_VERSION}/"
+)
 SDXL_WEIGHTS_BUCKET = (
     "https://sharkpublic.blob.core.windows.net/sharkpublic/sdxl/weights/"
 )
@@ -56,15 +59,15 @@ def get_params_filenames(model_params: ModelParams, splat: bool):
     else:
         modnames.append("unet")
         mod_precs.append(dtype_to_filetag[model_params.unet_dtype])
-    if not splat:
+    if splat:
         for idx, mod in enumerate(modnames):
             params_filenames.extend(
-                [base + "_" + mod + "_dataset_" + mod_precs[idx] + ".irpa"]
+                ["_".join([mod, "splat", f"{mod_precs[idx]}.irpa"])]
             )
     else:
         for idx, mod in enumerate(modnames):
             params_filenames.extend(
-                ["_".join([mod, "splat", f"{mod_precs[idx]}.irpa"])]
+                [base + "_" + mod + "_dataset_" + mod_precs[idx] + ".irpa"]
             )
     return params_filenames
 
@@ -124,6 +127,32 @@ def get_url_map(filenames: list[str], bucket: str):
     return file_map
 
 
+def needs_update(ctx):
+    stamp = ctx.allocate_file("version.txt")
+    stamp_path = stamp.get_fs_path()
+    if os.path.exists(stamp_path):
+        with open(stamp_path, "r") as s:
+            ver = s.read()
+        if ver != ARTIFACT_VERSION:
+            return True
+    else:
+        with open(stamp_path, "w") as s:
+            s.write(ARTIFACT_VERSION)
+        return True
+    return False
+
+
+def needs_file(filename, ctx):
+    out_file = ctx.allocate_file(filename).get_fs_path()
+    if os.path.exists(out_file):
+        needed = False
+    else:
+        filekey = f"{ctx.path}/{filename}"
+        ctx.executor.all[filekey] = None
+        needed = True
+    return needed
+
+
 @entrypoint(description="Retreives a set of SDXL submodels.")
 def sdxl(
     model_json=cl_arg(
@@ -134,29 +163,37 @@ def sdxl(
     target=cl_arg(
         "target",
         default="gfx942",
-        help="IREE HIP target arch",
+        help="IREE target architecture.",
     ),
     splat=cl_arg("splat", default=False, help="Download empty weights (for testing)"),
 ):
     model_params = ModelParams.load_json(model_json)
+    ctx = executor.BuildContext.current()
+    update = needs_update(ctx)
+
     mlir_bucket = SDXL_BUCKET + "mlir/"
+    vmfb_bucket = SDXL_BUCKET + "vmfbs/"
+
     mlir_filenames = get_mlir_filenames(model_params)
     mlir_urls = get_url_map(mlir_filenames, mlir_bucket)
     for f, url in mlir_urls.items():
-        fetch_http(name=f, url=url)
-    vmfb_bucket = SDXL_BUCKET + "vmfbs/"
+        if update or needs_file(f, ctx):
+            fetch_http(name=f, url=url)
+
     vmfb_filenames = get_vmfb_filenames(model_params, target=target)
     vmfb_urls = get_url_map(vmfb_filenames, vmfb_bucket)
     for f, url in vmfb_urls.items():
-        fetch_http(name=f, url=url)
+        if update or needs_file(f, ctx):
+            fetch_http(name=f, url=url)
+
     params_filenames = get_params_filenames(model_params, splat)
     params_urls = get_url_map(params_filenames, SDXL_WEIGHTS_BUCKET)
-    ctx = executor.BuildContext.current()
     for f, url in params_urls.items():
         out_file = os.path.join(ctx.executor.output_dir, f)
-        if not os.path.exists(out_file):
+        if update or needs_file(f, ctx):
             fetch_http(name=f, url=url)
-    filenames = [*vmfb_filenames, *params_filenames]
+
+    filenames = [*vmfb_filenames, *params_filenames, *mlir_filenames]
     return filenames
 
 
