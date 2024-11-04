@@ -93,7 +93,6 @@ class DirectKVCache(BaseKVCache):
         attn_head_dim: int,
         seq_length: int,
         shard_count: int = 1,
-        shard_count: int = 1,
         dtype: torch.dtype = torch.float32,
         device: Optional[torch.device] = None,
     ):

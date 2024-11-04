@@ -40,7 +40,6 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         attention_kernel: str = "decomposed",
         attention_scale: Optional[float] = None,
         softcap: Optional[float] = None,
-        use_grok: Optional[bool] = False,
         fake_quant: Optional[bool] = True,
     ):
         super().__init__(theta)
@@ -188,7 +187,7 @@ class PagedLlamaAttentionBlock(ThetaLayer):
                 q=xq,  # [bs, ..., sl, dim]
                 k=keys,  # [bs, ..., sl, dim]
                 v=values,  # [bs, ..., sl, dim]
-                a=attention_mask,  # [bs, ..., sl, sl]           attn_output = torch.nn.functional.scaled_dot_product_attention(
+                a=attention_mask,  # [bs, ..., sl, sl]
                 is_causal=is_causal,  # assumes causal masking when true
                 scale=None,  # defaults to 1/sqrt(dim)
             )
