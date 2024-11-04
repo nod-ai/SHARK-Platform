@@ -256,7 +256,7 @@ class ExportArtifacts:
                 for i in range(self.tensor_parallelism_size)
             ]
             devices = [
-                f"--device=hip[{i}]" for i in range(self.tensor_parallelism_size)
+                f"--device=hip://{i}" for i in range(self.tensor_parallelism_size)
             ]
         else:
             params = [f"--parameters=model={irpa_path}"]
