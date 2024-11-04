@@ -63,6 +63,10 @@ jobs:
           - runs-on: ubuntu-24.04
             platform: linux-x86_64
             package: shortfin
+            python-version: cp311-cp311
+          - runs-on: ubuntu-24.04
+            platform: linux-x86_64
+            package: shortfin
             python-version: cp312-cp312
           - runs-on: ubuntu-24.04
             platform: linux-x86_64
