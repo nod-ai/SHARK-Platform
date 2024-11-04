@@ -4,7 +4,7 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-name: CI - sharktank and shortfin
+name: CI - shark-platform
 
 on:
   workflow_dispatch:
@@ -70,5 +70,5 @@ jobs:
             iree-runtime \
             "numpy<2.0"
 
-      - name: Run shortfin LLM Server Integration Test
-        run: pytest -v build_tools/integration_tests/
+      - name: Run LLM Integration Tests
+        run: pytest -v build_tools/integration_tests/llm --log-cli-level=INFO
