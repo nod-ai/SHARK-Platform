@@ -59,7 +59,7 @@ class GenerateItemProcess(sf.Process):
             exec.start_position = len(self.input_token_ids) - 1
             # TODO: Use correct eot token from config.
             # while token_int != 128001:
-            for i in range(15):
+            for i in range(40):
                 exec.reset(InferencePhase.DECODE)
                 exec.input_token_ids = [token_int]
                 exec.start_position += 1
