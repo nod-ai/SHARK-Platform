@@ -654,9 +654,7 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
         ]
 
     @pytest.mark.xfail(
-        reason="error: 'util.global' op references a promised device that was not declared",
-        strict=True,
-        raises=IreeCompileException,
+        reason="Benchmarking Error", strict=True, raises=IreeBenchmarkException
     )
     def testBenchmark405B_f16_TP8_Decomposed(self):
         output_file_name = self.dir_path_405b / "f16_decomposed"
@@ -689,7 +687,7 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
         self.llama405b_f16_decomposed_artifacts.iree_benchmark_vmfb(
             hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
-            irpa_path=self.irpa_path_fp8,
+            irpa_path=self.irpa_path,
             args=self.iree_run_prefill_args,
             cwd=self.repo_root,
         )
@@ -697,7 +695,7 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
         self.llama405b_f16_decomposed_artifacts.iree_benchmark_vmfb(
             hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
-            irpa_path=self.irpa_path_fp8,
+            irpa_path=self.irpa_path,
             args=self.iree_run_decode_args,
             cwd=self.repo_root,
         )
@@ -734,7 +732,7 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
         self.llama405b_f16_torch_sdpa_artifacts.iree_benchmark_vmfb(
             hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
-            irpa_path=self.irpa_path_fp8,
+            irpa_path=self.irpa_path,
             args=self.iree_run_prefill_args,
             cwd=self.repo_root,
         )
@@ -742,7 +740,7 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
         self.llama405b_f16_torch_sdpa_artifacts.iree_benchmark_vmfb(
             hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
-            irpa_path=self.irpa_path_fp8,
+            irpa_path=self.irpa_path,
             args=self.iree_run_decode_args,
             cwd=self.repo_root,
         )
