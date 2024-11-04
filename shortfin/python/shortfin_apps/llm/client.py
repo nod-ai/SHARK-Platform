@@ -1,6 +1,8 @@
 import requests
 import json
 import uuid
+import argparse
+import time
 
 BASE_URL = "http://localhost:8000"
 
@@ -8,15 +10,15 @@ BASE_URL = "http://localhost:8000"
 def test_health():
     response = requests.get(f"{BASE_URL}/health")
     print(f"Health check status code: {response.status_code}")
-    return response.status_code == 200
+    response.raise_for_status()
 
 
-def test_generate():
+def test_generate(prompt_text):
     headers = {"Content-Type": "application/json"}
 
     # Create a GenerateReqInput-like structure
     data = {
-        "text": "1 2 3 4 5",
+        "text": prompt_text,
         "sampling_params": {"max_tokens": 50, "temperature": 0.7},
         "rid": uuid.uuid4().hex,
         "return_logprob": False,
@@ -49,10 +51,33 @@ def test_generate():
 
 
 def main():
-    print("Testing webapp...")
+    parser = argparse.ArgumentParser(description="Test webapp with custom prompt")
+    parser.add_argument(
+        "--prompt",
+        type=str,
+        default="1,2,3,4,5,",
+        help="The prompt text to send to the generate endpoint",
+    )
 
-    health_ok = test_health()
-    generate_ok = test_generate()
+    args = parser.parse_args()
+
+    print(f"Testing shortfin llm server at {BASE_URL}")
+
+    health_ok = False
+    # previous backoff for fibonacci backoff
+    prev_backoff = 0
+    backoff = 1
+    while not health_ok:
+        try:
+            health_ok = test_health()
+        except requests.exceptions.ConnectionError:
+            print(
+                f"Health check failed. Waiting for {backoff} seconds before retrying."
+            )
+            time.sleep(backoff)
+            prev_backoff, backoff = backoff, prev_backoff + backoff
+
+    generate_ok = test_generate(args.prompt)
 
     if health_ok and generate_ok:
         print("\nAll tests passed successfully!")
