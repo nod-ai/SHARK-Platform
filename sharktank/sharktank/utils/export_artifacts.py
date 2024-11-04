@@ -241,17 +241,14 @@ class ExportArtifacts:
             compile_cmd: Command used to compile the program, for inclusion in error messages.
         Raises Exception if running fails for some reason.
         """
-        benchmark_args = [
-            f"ROCR_VISIBLE_DEVICES={hip_device_id}",
-            "iree-benchmark-module",
-            "--hip_use_streams=true",
-            "--hip_allow_inline_execution=true",
-            "--device_allocator=caching",
-            f"--module={vmfb_name}",
-        ]
+        benchmark_args = []
         if self.tensor_parallelism_size > 1:
             base_irpa_path, _ = os.path.splitext(irpa_path)
-            params = [
+            rocr_visible_devices = [
+                f"ROCR_VISIBLE_DEVICES={','.join(str(i) for i in range(self.tensor_parallelism_size))}"
+            ]
+            params = [f"--parameters=model={base_irpa_path}.irpa"]
+            params += [
                 f"--parameters=model={base_irpa_path}.rank{i}.irpa"
                 for i in range(self.tensor_parallelism_size)
             ]
@@ -259,12 +256,24 @@ class ExportArtifacts:
                 f"--device=hip://{i}" for i in range(self.tensor_parallelism_size)
             ]
         else:
+            rocr_visible_devices = [f"ROCR_VISIBLE_DEVICES={hip_device_id}"]
             params = [f"--parameters=model={irpa_path}"]
             devices = [f"--device=hip://{hip_device_id}"]
+        benchmark_args += rocr_visible_devices
+        benchmark_args += [
+            "iree-benchmark-module",
+            "--hip_use_streams=true",
+            "--hip_allow_inline_execution=true",
+            "--device_allocator=caching",
+            f"--module={vmfb_name}",
+        ]
         benchmark_args += params
         benchmark_args += devices
         benchmark_args += args
         cmd = subprocess.list2cmdline(benchmark_args)
+        import pdb
+
+        pdb.set_trace()
         logging.getLogger().info(f"Launching run command:\n" f"cd {cwd} && {cmd}")
         proc = subprocess.run(cmd, shell=True, stdout=sys.stdout, cwd=cwd)
         return_code = proc.returncode
