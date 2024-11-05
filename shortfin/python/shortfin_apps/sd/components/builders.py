@@ -2,6 +2,7 @@ from iree.build import *
 import itertools
 import os
 import shortfin.array as sfnp
+import copy
 
 from shortfin_apps.sd.components.config_struct import ModelParams
 
@@ -25,23 +26,33 @@ SDXL_WEIGHTS_BUCKET = (
 )
 
 
-def get_mlir_filenames(model_params: ModelParams):
+def filter_by_model(filenames, model):
+    if not model:
+        return filenames
+    filtered = []
+    for i in filenames:
+        if model.lower() in i.lower():
+            filtered.extend([i])
+    return filtered
+
+
+def get_mlir_filenames(model_params: ModelParams, model=None):
     mlir_filenames = []
     file_stems = get_file_stems(model_params)
     for stem in file_stems:
         mlir_filenames.extend([stem + ".mlir"])
-    return mlir_filenames
+    return filter_by_model(mlir_filenames, model)
 
 
-def get_vmfb_filenames(model_params: ModelParams, target: str = "gfx942"):
+def get_vmfb_filenames(model_params: ModelParams, model=None, target: str = "gfx942"):
     vmfb_filenames = []
     file_stems = get_file_stems(model_params)
     for stem in file_stems:
         vmfb_filenames.extend([stem + "_" + target + ".vmfb"])
-    return vmfb_filenames
+    return filter_by_model(vmfb_filenames, model)
 
 
-def get_params_filenames(model_params: ModelParams, splat: bool):
+def get_params_filenames(model_params: ModelParams, model=None, splat: bool = False):
     params_filenames = []
     base = (
         "stable_diffusion_xl_base_1_0"
@@ -69,7 +80,7 @@ def get_params_filenames(model_params: ModelParams, splat: bool):
             params_filenames.extend(
                 [base + "_" + mod + "_dataset_" + mod_precs[idx] + ".irpa"]
             )
-    return params_filenames
+    return filter_by_model(params_filenames, model)
 
 
 def get_file_stems(model_params: ModelParams):
@@ -156,7 +167,7 @@ def needs_file(filename, ctx):
 @entrypoint(description="Retreives a set of SDXL submodels.")
 def sdxl(
     model_json=cl_arg(
-        "model_json",
+        "model-json",
         default=default_config_json,
         help="Local config filepath",
     ),
@@ -168,6 +179,12 @@ def sdxl(
     splat=cl_arg(
         "splat", default=False, type=str, help="Download empty weights (for testing)"
     ),
+    build_preference=cl_arg(
+        "build-preference",
+        default="compile",
+        help="Sets preference for artifact generation method: [compile, precompiled]",
+    ),
+    model=cl_arg("model", type=str, help="Submodel to fetch/compile for."),
 ):
     model_params = ModelParams.load_json(model_json)
     ctx = executor.BuildContext.current()
@@ -176,24 +193,38 @@ def sdxl(
     mlir_bucket = SDXL_BUCKET + "mlir/"
     vmfb_bucket = SDXL_BUCKET + "vmfbs/"
 
-    mlir_filenames = get_mlir_filenames(model_params)
+    mlir_filenames = get_mlir_filenames(model_params, model)
     mlir_urls = get_url_map(mlir_filenames, mlir_bucket)
     for f, url in mlir_urls.items():
         if update or needs_file(f, ctx):
             fetch_http(name=f, url=url)
 
-    vmfb_filenames = get_vmfb_filenames(model_params, target=target)
+    vmfb_filenames = get_vmfb_filenames(model_params, model=model, target=target)
     vmfb_urls = get_url_map(vmfb_filenames, vmfb_bucket)
-    for f, url in vmfb_urls.items():
-        if update or needs_file(f, ctx):
-            fetch_http(name=f, url=url)
-    params_filenames = get_params_filenames(model_params, splat)
+    if build_preference == "compile":
+        for idx, f in enumerate(copy.deepcopy(vmfb_filenames)):
+            if needs_file(f, ctx):
+                # We return .vmfb file stems for the compile builder.
+                file_stem = "_".join(f.split("_")[:-1])
+
+                for mlirname in mlir_filenames:
+                    if file_stem in mlirname:
+                        mlir_source = mlirname
+                        break
+                obj = compile(name=file_stem, source=mlir_source)
+                vmfb_filenames[idx] = obj[0]
+    else:
+        for f, url in vmfb_urls.items():
+            if update or needs_file(f, ctx):
+                fetch_http(name=f, url=url)
+
+    params_filenames = get_params_filenames(model_params, model=model, splat=splat)
     params_urls = get_url_map(params_filenames, SDXL_WEIGHTS_BUCKET)
     for f, url in params_urls.items():
         out_file = os.path.join(ctx.executor.output_dir, f)
         if update or needs_file(f, ctx):
             fetch_http(name=f, url=url)
-
+    breakpoint()
     filenames = [*vmfb_filenames, *params_filenames, *mlir_filenames]
     return filenames
 

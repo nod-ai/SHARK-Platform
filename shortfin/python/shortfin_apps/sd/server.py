@@ -12,6 +12,7 @@ from pathlib import Path
 import sys
 import os
 import io
+import copy
 
 from iree.build import *
 
@@ -119,17 +120,39 @@ def get_modules(args):
     vmfbs = {"clip": [], "unet": [], "vae": [], "scheduler": []}
     params = {"clip": [], "unet": [], "vae": []}
     mod = load_build_module(os.path.join(THIS_DIR, "components", "builders.py"))
+    model_flags = copy.deepcopy(vmfbs)
+    model_flags["all"] = args.compile_flags
+    model_flags["all"].extend([f"--iree-amdgpu-target={args.target}"])
+
+    if args.flagfile:
+        with open(args.flagfile, "r") as f:
+            contents = [line.rstrip() for line in f]
+        flagged_model = "all"
+        for elem in contents:
+            match = [keyw in elem for keyw in model_flags.keys()]
+            if any(match):
+                flagged_model = match[0]
+            else:
+                model_flags[flagged_model].extend([elem])
+
     out_file = io.StringIO()
-    iree_build_main(
-        mod,
-        args=[
-            f"--model_json={args.model_config}",
-            f"--target={args.target}",
-            f"--splat={args.splat}",
-        ],
-        stdout=out_file,
-    )
-    filenames = out_file.getvalue().strip().split("\n")
+    filenames = []
+    for modelname in vmfbs.keys():
+        iree_build_main(
+            mod,
+            args=[
+                f"--model-json={args.model_config}",
+                f"--target={args.target}",
+                f"--splat={args.splat}",
+                f"--build-preference={args.build_preference}",
+                f"--output-dir={args.artifacts_dir}",
+                f"--model={modelname}",
+            ]
+            + model_flags[modelname]
+            + model_flags["all"],
+            stdout=out_file,
+        )
+        filenames.extend(out_file.getvalue().strip().split("\n"))
     for name in filenames:
         for key in vmfbs.keys():
             if key in name.lower():
@@ -220,6 +243,31 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
         "--splat",
         action="store_true",
         help="Use splat (empty) parameter files, usually for testing.",
+    )
+    parser.add_argument(
+        "--build_preference",
+        type=str,
+        choices=["compile", "precompiled"],
+        default="precompiled",
+        help="Specify preference for builder artifact generation.",
+    )
+    parser.add_argument(
+        "--compile_flags",
+        type=str,
+        nargs="*",
+        default=[],
+        help="extra compile flags for all compile actions. For fine-grained control, use flagfiles.",
+    )
+    parser.add_argument(
+        "--flagfile",
+        type=Path,
+        help="Path to a flagfile to use for SDXL. If not specified, will use latest flagfile from azure.",
+    )
+    parser.add_argument(
+        "--artifacts_dir",
+        type=str,
+        default="./genfiles",
+        help="Path to local artifacts cache.",
     )
     log_levels = {
         "info": logging.INFO,
