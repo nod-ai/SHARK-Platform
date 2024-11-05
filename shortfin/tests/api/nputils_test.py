@@ -22,6 +22,9 @@ from shortfin.array import nputils
 
 @pytest.fixture
 def lsys():
+    # TODO: Port this test to use memory type independent access. It currently
+    # presumes unified memory.
+    # sc = sf.SystemBuilder()
     sc = sf.host.CPUSystemBuilder()
     lsys = sc.create_system()
     yield lsys

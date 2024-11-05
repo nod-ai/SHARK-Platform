@@ -34,6 +34,32 @@ SystemBuilder classes. This API is a shorthand for creating a SystemBuilder
 and calling create_system() on it.
 )";
 
+static const char DOCSTRING_SYSTEM_BUILDER_CTOR[] =
+    R"(Constructs a system with environment dependent configuration.
+
+Most configuration is done by way of key/value arguments. Arguments are meant
+to be derived from flags or config files and are expected to be simple strings
+or integer values:
+
+  * "system_type": A supported system type, corresponding to a subclass of
+    SystemBuilder. Typically available values include "hostcpu", "amdgpu", etc.
+  * Other keywords are passed to the concrete SystemBuilder subclass.
+
+Resolution for the `system_type` is special and is checked in three steps, with
+the first defined winning:
+
+1. `kwargs["system_type"]`
+2. Environment `SHORTFIN_SYSTEM_TYPE` variable (or as controlled by `env_prefix`)
+3. `SystemBuilder.default_system_type` as a process-wide default.
+
+Args:
+  env_prefix: Controls how options are looked up in the environment. By default,
+    the prefix is "SHORTFIN_" and upper-cased options are appended to it. Any
+    option not explicitly specified but in the environment will be used. Pass
+    None to disable environment lookup.
+  **kwargs: Key/value arguments for controlling setup of the system.
+)";
+
 static const char DOCSTRING_HOSTCPU_SYSTEM_BUILDER_CTOR[] =
     R"(Constructs a system with CPU based devices.
 
@@ -90,8 +116,19 @@ class Refs {
     return lazy_PyWorkerEventLoop_;
   }
 
+  std::optional<std::string> default_system_type() {
+    iree::slim_mutex_lock_guard g(mu_);
+    return default_system_type_;
+  }
+  void set_default_system_type(std::optional<std::string> st) {
+    iree::slim_mutex_lock_guard g(mu_);
+    default_system_type_ = st;
+  }
+
  private:
+  iree::slim_mutex mu_;
   py::object lazy_PyWorkerEventLoop_;
+  std::optional<std::string> default_system_type_;
 };
 
 // We need a fair bit of accounting additions in order to make Workers usable
@@ -453,6 +490,44 @@ void BindLocal(py::module_ &m) {
       .export_values();
 
   py::class_<local::SystemBuilder>(m, "SystemBuilder")
+      .def("__init__", [](py::args, py::kwargs) {})
+      .def_static(
+          "__new__",
+          [refs](py::handle cls, std::optional<std::string> env_prefix,
+                 bool validate_undef, py::kwargs kwargs) {
+            auto options =
+                CreateConfigOptions(env_prefix, kwargs, validate_undef);
+            std::optional<std::string_view> system_type =
+                options.GetOption("system_type");
+            std::optional<std::string> default_system_type;
+            if (!system_type) {
+              default_system_type = refs->default_system_type();
+              if (!default_system_type) {
+                throw std::invalid_argument(
+                    "In order to construct a generic SystemBuilder, a "
+                    "`system_type=` keyword (or appropriate environment "
+                    "variable) must be specified. Alternatively, a default can "
+                    "be set process wide via "
+                    "`SystemBuilder.default_system_type =`");
+              }
+              system_type = *default_system_type;
+            }
+            return local::SystemBuilder::ForSystem(
+                iree_allocator_system(), *system_type, std::move(options));
+          },
+          // Note that for some reason, no-arg construction passes no arguments
+          // to __new__. We allow the single positional argument to be none,
+          // which satisfies this case in practice.
+          py::arg("cls") = py::none(), py::kw_only(),
+          py::arg("env_prefix").none() = "SHORTFIN_",
+          py::arg("validate_undef") = true, py::arg("kwargs"),
+          DOCSTRING_SYSTEM_BUILDER_CTOR)
+      .def_prop_rw_static(
+          "default_system_type",
+          [refs](py::handle /*unused*/) { return refs->default_system_type(); },
+          [refs](py::handle /*unused*/, std::optional<std::string> st) {
+            refs->set_default_system_type(std::move(st));
+          })
       .def("create_system", [live_system_refs,
                              worker_initializer](local::SystemBuilder &self) {
         auto system_ptr = self.CreateSystem();
@@ -1123,17 +1198,21 @@ void BindHostSystem(py::module_ &global_m) {
       m, "SystemBuilder");
   py::class_<local::systems::HostCPUSystemBuilder,
              local::systems::HostSystemBuilder>(m, "CPUSystemBuilder")
-      .def(
-          "__init__",
-          [](local::systems::HostCPUSystemBuilder *self,
-             std::optional<std::string> env_prefix, bool validate_undef,
-             py::kwargs kwargs) {
+      .def("__init__", [](py::args, py::kwargs) {})
+      .def_static(
+          "__new__",
+          [](py::handle cls, std::optional<std::string> env_prefix,
+             bool validate_undef, py::kwargs kwargs) {
             auto options =
                 CreateConfigOptions(env_prefix, kwargs, validate_undef);
-            new (self) local::systems::HostCPUSystemBuilder(
+            return std::make_unique<local::systems::HostCPUSystemBuilder>(
                 iree_allocator_system(), std::move(options));
           },
-          py::kw_only(), py::arg("env_prefix").none() = "SHORTFIN_",
+          // Note that for some reason, no-arg construction passes no arguments
+          // to __new__. We allow the single positional argument to be none,
+          // which satisfies this case in practice.
+          py::arg("cls") = py::none(), py::kw_only(),
+          py::arg("env_prefix").none() = "SHORTFIN_",
           py::arg("validate_undef") = true, py::arg("kwargs"),
           DOCSTRING_HOSTCPU_SYSTEM_BUILDER_CTOR);
   py::class_<local::systems::HostCPUDevice, local::Device>(m, "HostCPUDevice");
@@ -1223,17 +1302,21 @@ void BindAMDGPUSystem(py::module_ &global_m) {
   auto m = global_m.def_submodule("amdgpu", "AMDGPU system config");
   py::class_<local::systems::AMDGPUSystemBuilder,
              local::systems::HostCPUSystemBuilder>(m, "SystemBuilder")
-      .def(
-          "__init__",
-          [](local::systems::AMDGPUSystemBuilder *self,
-             std::optional<std::string> env_prefix, bool validate_undef,
-             py::kwargs kwargs) {
+      .def("__init__", [](py::args, py::kwargs) {})
+      .def_static(
+          "__new__",
+          [](py::handle cls, std::optional<std::string> env_prefix,
+             bool validate_undef, py::kwargs kwargs) {
             auto options =
                 CreateConfigOptions(env_prefix, kwargs, validate_undef);
-            new (self) local::systems::AMDGPUSystemBuilder(
+            return std::make_unique<local::systems::AMDGPUSystemBuilder>(
                 iree_allocator_system(), std::move(options));
           },
-          py::kw_only(), py::arg("env_prefix").none() = "SHORTFIN_",
+          // Note that for some reason, no-arg construction passes no arguments
+          // to __new__. We allow the single positional argument to be none,
+          // which satisfies this case in practice.
+          py::arg("cls") = py::none(), py::kw_only(),
+          py::arg("env_prefix").none() = "SHORTFIN_",
           py::arg("validate_undef") = true, py::arg("kwargs"),
           DOCSTRING_AMDGPU_SYSTEM_BUILDER_CTOR)
       .def_prop_ro(

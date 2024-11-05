@@ -428,6 +428,7 @@ void BindArray(py::module_ &m) {
           py::kw_only(), py::arg("read") = false, py::arg("write") = false,
           py::arg("discard") = false, DOCSTRING_STORAGE_MAP)
       .def(py::self == py::self)
+      .def("__len__", &storage::byte_length)
       .def("__repr__", &storage::to_s);
 
   // mapping
