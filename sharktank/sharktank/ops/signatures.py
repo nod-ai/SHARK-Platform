@@ -53,6 +53,7 @@ __all__ = [
     "sharded_sum",
     "softmax",
     "to",
+    "trace_tensors",
     "transfer_to_logical_device",
     "transpose",
     "unflatten",
@@ -975,6 +976,23 @@ def _to_trampoline(d: SignatureDispatcher, tensor: AnyTensor, *args, **kwargs):
             return override, result
     else:
         d.fail(dispatch_args)
+
+
+@overridable
+def trace_tensors(key: str, *tensors: tuple[AnyTensor]):
+    ...
+
+
+@trace_tensors.trampoline
+def _transfer_to_logical_device_trampoline(
+    d: SignatureDispatcher, key: str, *tensors: tuple[AnyTensor]
+):
+    for override in d.find_overrides(tensors):
+        result = override(key, *tensors)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(tensors)
 
 
 @overridable

@@ -12,6 +12,9 @@ from parameterized import parameterized
 
 from sharktank import ops
 from sharktank.types import *
+from sharktank.utils import debugging
+from sharktank.utils.testing import TempDirTestBase
+import safetensors
 
 
 class BroadcastDimsTest(unittest.TestCase):
@@ -289,6 +292,47 @@ class TestOpExport(unittest.TestCase):
         ep = torch.export.export(my_module, (a, d, qs, m))
         s = str(ep)
         self.assertIn("mmt_block_scaled_offset_q4_unsigned.default", s)
+
+
+class TestTraceTensors(TempDirTestBase):
+    def testTraceOneTensorInEagerMode(self):
+        save_goldens_path_stash = debugging.flags.save_goldens_path
+        debugging.flags.save_goldens_path = self._temp_dir
+        debugging.flags.golden_sequence_value = 0
+
+        tensor = torch.arange(1, 5)
+        trace_key = "test_trace_key"
+        ops.trace_tensors(trace_key, tensor)
+
+        trace_filepath = (
+            debugging.flags.save_goldens_path / f"0000_{trace_key}.safetensors"
+        )
+        with safetensors.safe_open(trace_filepath, framework="pt", device="cpu") as f:
+            assert len(f.keys()) == 1
+            recorded_tensor = f.get_tensor("0")
+        torch.testing.assert_close(recorded_tensor, tensor, rtol=0, atol=0)
+
+        debugging.flags.save_goldens_path = save_goldens_path_stash
+
+    def testTraceOneShardedTensorInEagerMode(self):
+        save_goldens_path_stash = debugging.flags.save_goldens_path
+        debugging.flags.save_goldens_path = self._temp_dir
+        debugging.flags.golden_sequence_value = 0
+
+        tensor = torch.arange(1, 6)
+        sharded_tensor = ops.reshard_split(tensor, count=2, dim=0)
+        trace_key = "test_trace_key"
+        ops.trace_tensors(trace_key, sharded_tensor)
+
+        trace_filepath = (
+            debugging.flags.save_goldens_path / f"0000_{trace_key}.safetensors"
+        )
+        with safetensors.safe_open(trace_filepath, framework="pt", device="cpu") as f:
+            assert len(f.keys()) == 1
+            recorded_tensor = f.get_tensor("0")
+        torch.testing.assert_close(recorded_tensor, tensor, rtol=0, atol=0)
+
+        debugging.flags.save_goldens_path = save_goldens_path_stash
 
 
 if __name__ == "__main__":

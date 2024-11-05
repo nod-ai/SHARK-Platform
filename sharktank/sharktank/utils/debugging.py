@@ -5,13 +5,14 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 """Tools for debugging models."""
-from typing import Dict, Optional
+from typing import Callable, Dict, Optional, Tuple
 
 from dataclasses import dataclass
 import re
 import os
 from pathlib import Path
 from typing import Sequence
+import iree.turbine.support.debugging
 
 import torch
 
@@ -81,6 +82,25 @@ class DebugFlags:
 
 
 flags = DebugFlags.parse_from_env()
+
+TraceKey = str
+TraceTensors = Callable[[TraceKey, *Tuple[torch.Tensor, ...]], None]
+
+
+def set_trace_tensors_callback(callback: TraceTensors):
+    iree.turbine.support.debugging.trace_tensor_callback = callback
+
+
+def get_trace_tensors_callback() -> Optional[TraceTensors]:
+    return iree.turbine.support.debugging.trace_tensor_callback
+
+
+def default_trace_tensors_callback(key: str, *tensors: Tuple[torch.Tensor]):
+    tensors_in_dict = {f"{i}": t for i, t in enumerate(tensors)}
+    trace_tensors(key, tensors_in_dict, values=False, golden=True)
+
+
+set_trace_tensors_callback(default_trace_tensors_callback)
 
 
 def trace_tensor(
