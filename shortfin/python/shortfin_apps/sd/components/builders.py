@@ -1,4 +1,5 @@
 from iree.build import *
+from iree.build.executor import FileNamespace
 import itertools
 import os
 import shortfin.array as sfnp
@@ -153,12 +154,15 @@ def needs_update(ctx):
     return False
 
 
-def needs_file(filename, ctx):
-    out_file = ctx.allocate_file(filename).get_fs_path()
+def needs_file(filename, ctx, namespace=FileNamespace.GEN):
+    out_file = ctx.allocate_file(filename, namespace=namespace).get_fs_path()
     if os.path.exists(out_file):
         needed = False
     else:
-        filekey = f"{ctx.path}/{filename}"
+        name_path = "bin" if namespace == FileNamespace.BIN else ""
+        if name_path:
+            filename = os.path.join(name_path, filename)
+        filekey = os.path.join(ctx.path, filename)
         ctx.executor.all[filekey] = None
         needed = True
     return needed
@@ -166,8 +170,16 @@ def needs_file(filename, ctx):
 
 def needs_compile(filename, target, ctx):
     device = "amdgpu" if "gfx" in target else "llvmcpu"
-    vmfb_name = os.path.join("bin", f"{filename}_{device}-{target}.vmfb")
-    return needs_file(vmfb_name, ctx)
+    vmfb_name = f"{filename}_{device}-{target}.vmfb"
+    namespace = FileNamespace.BIN
+    return needs_file(vmfb_name, ctx, namespace)
+
+
+def get_cached_vmfb(filename, target, ctx):
+    device = "amdgpu" if "gfx" in target else "llvmcpu"
+    vmfb_name = f"{filename}_{device}-{target}.vmfb"
+    namespace = FileNamespace.BIN
+    return ctx.file(vmfb_name)
 
 
 @entrypoint(description="Retreives a set of SDXL submodels.")
@@ -218,6 +230,8 @@ def sdxl(
                         break
                 obj = compile(name=file_stem, source=mlir_source)
                 vmfb_filenames[idx] = obj[0]
+            else:
+                vmfb_filenames[idx] = get_cached_vmfb(file_stem, target, ctx)
     else:
         for f, url in vmfb_urls.items():
             if update or needs_file(f, ctx):
