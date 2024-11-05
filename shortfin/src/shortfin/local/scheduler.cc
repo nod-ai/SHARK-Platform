@@ -275,6 +275,7 @@ iree_status_t Scheduler::FlushWithStatus() noexcept {
             .semaphores = &signal_sem,
             .payload_values = &signal_timepoint,
         },
+        /*command_buffer_count=*/1,
         /*command_buffers=*/&active_command_buffer,
         /*binding_tables=*/&binding_tables));
     account.Reset();
