@@ -103,6 +103,7 @@ def configure(args) -> SystemManager:
         tokenizers=tokenizers,
         model_params=model_params,
         fibers_per_device=args.fibers_per_device,
+        workers_per_device=args.workers_per_device,
         prog_isolation=args.isolation,
         show_progress=args.show_progress,
         trace_execution=args.trace_execution,
@@ -136,27 +137,24 @@ def get_modules(args):
 
     filenames = []
     for modelname in vmfbs.keys():
-        ireec_args = model_flags[modelname] + model_flags["all"]
+        ireec_args = model_flags["all"] + model_flags[modelname]
         builder_args = [
+            sys.executable,
+            "-m",
+            "iree.build",
+            os.path.join(THIS_DIR, "components", "builders.py"),
             f"--model-json={args.model_config}",
             f"--target={args.target}",
             f"--splat={args.splat}",
             f"--build-preference={args.build_preference}",
             f"--output-dir={args.artifacts_dir}",
             f"--model={modelname}",
-            f"--iree-hal-target-device=hip",
-            f"--iree-hip-target=gfx942",
+            f"--iree-hal-target-device={args.device}",
+            f"--iree-hip-target={args.target}",
             f"--iree-compile-extra-args={" ".join(ireec_args)}",
         ]
-        output = subprocess.check_output(
-            [
-                sys.executable,
-                "-m",
-                "iree.build",
-                os.path.join(THIS_DIR, "components", "builders.py"),
-            ]
-            + builder_args
-        ).decode()
+        print("BUILDER INPUT:\n", " \ \n  ".join(builder_args))
+        output = subprocess.check_output(builder_args).decode()
         print("OUTPUT:", output)
 
         output_paths = output.splitlines()
@@ -222,6 +220,12 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
         help="Path to the model config file",
     )
     parser.add_argument(
+        "--workers_per_device",
+        type=int,
+        default=1,
+        help="Concurrency control -- how many fibers are created per device to run inference.",
+    )
+    parser.add_argument(
         "--fibers_per_device",
         type=int,
         default=1,
@@ -274,7 +278,7 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
     parser.add_argument(
         "--artifacts_dir",
         type=str,
-        default="./genfiles",
+        default="",
         help="Path to local artifacts cache.",
     )
     log_levels = {
