@@ -13,6 +13,7 @@ import sys
 import os
 import io
 import copy
+import subprocess
 
 from iree.build import *
 
@@ -119,10 +120,8 @@ def configure(args) -> SystemManager:
 def get_modules(args):
     vmfbs = {"clip": [], "unet": [], "vae": [], "scheduler": []}
     params = {"clip": [], "unet": [], "vae": []}
-    mod = load_build_module(os.path.join(THIS_DIR, "components", "builders.py"))
     model_flags = copy.deepcopy(vmfbs)
     model_flags["all"] = args.compile_flags
-    model_flags["all"].extend([f"--iree-amdgpu-target={args.target}"])
 
     if args.flagfile:
         with open(args.flagfile, "r") as f:
@@ -131,28 +130,37 @@ def get_modules(args):
         for elem in contents:
             match = [keyw in elem for keyw in model_flags.keys()]
             if any(match):
-                flagged_model = match[0]
+                flagged_model = elem
             else:
                 model_flags[flagged_model].extend([elem])
 
-    out_file = io.StringIO()
     filenames = []
     for modelname in vmfbs.keys():
-        iree_build_main(
-            mod,
-            args=[
-                f"--model-json={args.model_config}",
-                f"--target={args.target}",
-                f"--splat={args.splat}",
-                f"--build-preference={args.build_preference}",
-                f"--output-dir={args.artifacts_dir}",
-                f"--model={modelname}",
+        ireec_args = model_flags[modelname] + model_flags["all"]
+        builder_args = [
+            f"--model-json={args.model_config}",
+            f"--target={args.target}",
+            f"--splat={args.splat}",
+            f"--build-preference={args.build_preference}",
+            f"--output-dir={args.artifacts_dir}",
+            f"--model={modelname}",
+            f"--iree-hal-target-device=hip",
+            f"--iree-hip-target=gfx942",
+            f"--iree-compile-extra-args={" ".join(ireec_args)}",
+        ]
+        output = subprocess.check_output(
+            [
+                sys.executable,
+                "-m",
+                "iree.build",
+                os.path.join(THIS_DIR, "components", "builders.py"),
             ]
-            + model_flags[modelname]
-            + model_flags["all"],
-            stdout=out_file,
-        )
-        filenames.extend(out_file.getvalue().strip().split("\n"))
+            + builder_args
+        ).decode()
+        print("OUTPUT:", output)
+
+        output_paths = output.splitlines()
+        filenames.extend(output_paths)
     for name in filenames:
         for key in vmfbs.keys():
             if key in name.lower():

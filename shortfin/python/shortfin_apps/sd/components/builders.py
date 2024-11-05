@@ -164,6 +164,12 @@ def needs_file(filename, ctx):
     return needed
 
 
+def needs_compile(filename, target, ctx):
+    device = "amdgpu" if "gfx" in target else "llvmcpu"
+    vmfb_name = os.path.join("bin", f"{filename}_{device}-{target}.vmfb")
+    return needs_file(vmfb_name, ctx)
+
+
 @entrypoint(description="Retreives a set of SDXL submodels.")
 def sdxl(
     model_json=cl_arg(
@@ -181,7 +187,7 @@ def sdxl(
     ),
     build_preference=cl_arg(
         "build-preference",
-        default="compile",
+        default="precompiled",
         help="Sets preference for artifact generation method: [compile, precompiled]",
     ),
     model=cl_arg("model", type=str, help="Submodel to fetch/compile for."),
@@ -203,10 +209,9 @@ def sdxl(
     vmfb_urls = get_url_map(vmfb_filenames, vmfb_bucket)
     if build_preference == "compile":
         for idx, f in enumerate(copy.deepcopy(vmfb_filenames)):
-            if needs_file(f, ctx):
-                # We return .vmfb file stems for the compile builder.
-                file_stem = "_".join(f.split("_")[:-1])
-
+            # We return .vmfb file stems for the compile builder.
+            file_stem = "_".join(f.split("_")[:-1])
+            if needs_compile(file_stem, target, ctx):
                 for mlirname in mlir_filenames:
                     if file_stem in mlirname:
                         mlir_source = mlirname
@@ -224,7 +229,6 @@ def sdxl(
         out_file = os.path.join(ctx.executor.output_dir, f)
         if update or needs_file(f, ctx):
             fetch_http(name=f, url=url)
-    breakpoint()
     filenames = [*vmfb_filenames, *params_filenames, *mlir_filenames]
     return filenames
 
