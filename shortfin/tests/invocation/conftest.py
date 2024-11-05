@@ -36,7 +36,7 @@ def mobilenet_onnx_path(tmp_path_factory):
 
 
 @pytest.fixture(scope="session")
-def mobilenet_compiled_cpu_path(mobilenet_onnx_path):
+def mobilenet_compiled_path(mobilenet_onnx_path, compile_flags):
     try:
         import iree.compiler.tools as tools
         import iree.compiler.tools.import_onnx.__main__ as import_onnx
@@ -53,7 +53,7 @@ def mobilenet_compiled_cpu_path(mobilenet_onnx_path):
         tools.compile_file(
             str(mlir_path),
             output_file=str(vmfb_path),
-            target_backends=["llvm-cpu"],
             input_type="onnx",
+            extra_args=compile_flags,
         )
     return vmfb_path

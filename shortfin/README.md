@@ -111,10 +111,13 @@ Run platform independent tests only:
 pytest tests/
 ```
 
-Run tests including for a specific platform:
+Run tests including for a specific platform (in this example, a gfx1100 AMDGPU):
+
+(note that not all tests are system aware yet and some may only run on the CPU)
 
 ```bash
-pytest tests/ --system amdgpu
+pytest tests/ --system amdgpu \
+    --compile-flags="--iree-hal-target-backends=rocm --iree-hip-target=gfx1100"
 ```
 
 # Production Library Building
