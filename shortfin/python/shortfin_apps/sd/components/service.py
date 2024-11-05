@@ -48,6 +48,7 @@ class GenerateService:
         tokenizers: list[Tokenizer],
         model_params: ModelParams,
         fibers_per_device: int,
+        workers_per_device: int = 1,
         prog_isolation: str = "per_fiber",
         show_progress: bool = False,
         trace_execution: bool = False,
@@ -64,16 +65,20 @@ class GenerateService:
         self.inference_programs: dict[str, sf.Program] = {}
         self.trace_execution = trace_execution
         self.show_progress = show_progress
+        self.workers_per_device = workers_per_device
         self.fibers_per_device = fibers_per_device
         self.prog_isolation = prog_isolations[prog_isolation]
         self.workers = []
         self.fibers = []
         self.fiber_status = []
         for idx, device in enumerate(self.sysman.ls.devices):
-            for i in range(self.fibers_per_device):
+            for i in range(self.workers_per_device):
                 worker = sysman.ls.create_worker(f"{name}-inference-{device.name}-{i}")
-                fiber = sysman.ls.create_fiber(worker, devices=[device])
                 self.workers.append(worker)
+            for i in range(self.fibers_per_device):
+                fiber = sysman.ls.create_fiber(
+                    self.workers[i % len(self.workers)], devices=[device]
+                )
                 self.fibers.append(fiber)
                 self.fiber_status.append(0)
 

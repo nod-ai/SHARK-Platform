@@ -11,6 +11,9 @@ import logging
 from pathlib import Path
 import sys
 import os
+import io
+
+from iree.build import *
 
 import uvicorn.logging
 
@@ -29,11 +32,14 @@ from .components.io_struct import GenerateReqInput
 from .components.manager import SystemManager
 from .components.service import GenerateService
 from .components.tokenizer import Tokenizer
+from .components.builders import sdxl
 
 
 from shortfin.support.logging_setup import configure_main_logger
 
 logger = configure_main_logger("server")
+
+THIS_DIR = Path(__file__).resolve().parent
 
 
 @asynccontextmanager
@@ -99,23 +105,39 @@ def configure(args) -> SystemManager:
         show_progress=args.show_progress,
         trace_execution=args.trace_execution,
     )
-    sm.load_inference_module(args.clip_vmfb, component="clip")
-    sm.load_inference_module(args.unet_vmfb, component="unet")
-    sm.load_inference_module(args.scheduler_vmfb, component="scheduler")
-    sm.load_inference_module(args.vae_vmfb, component="vae")
-    sm.load_inference_parameters(
-        *args.clip_params, parameter_scope="model", component="clip"
-    )
-    sm.load_inference_parameters(
-        *args.unet_params,
-        parameter_scope="model",
-        component="unet",
-    )
-    sm.load_inference_parameters(
-        *args.vae_params, parameter_scope="model", component="vae"
-    )
+    vmfbs, params = get_modules(args)
+    for key, vmfblist in vmfbs.items():
+        for vmfb in vmfblist:
+            sm.load_inference_module(vmfb, component=key)
+    for key, datasets in params.items():
+        sm.load_inference_parameters(*datasets, parameter_scope="model", component=key)
     services[sm.name] = sm
     return sysman
+
+
+def get_modules(args):
+    vmfbs = {"clip": [], "unet": [], "vae": [], "scheduler": []}
+    params = {"clip": [], "unet": [], "vae": []}
+    mod = load_build_module(os.path.join(THIS_DIR, "components", "builders.py"))
+    out_file = io.StringIO()
+    iree_build_main(
+        mod,
+        args=[
+            f"--model_json={args.model_config}",
+            f"--target={args.target}",
+            f"--splat={args.splat}",
+        ],
+        stdout=out_file,
+    )
+    filenames = out_file.getvalue().strip().split("\n")
+    for name in filenames:
+        for key in vmfbs.keys():
+            if key in name.lower():
+                if any([x in name for x in [".irpa", ".safetensors", ".gguf"]]):
+                    params[key].extend([name])
+                elif "vmfb" in name:
+                    vmfbs[key].extend([name])
+    return vmfbs, params
 
 
 def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
@@ -139,6 +161,13 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
         help="Primary inferencing device",
     )
     parser.add_argument(
+        "--target",
+        type=str,
+        required=False,
+        default="gfx942",
+        help="Primary inferencing device LLVM target arch.",
+    )
+    parser.add_argument(
         "--device_ids",
         type=int,
         nargs="*",
@@ -160,43 +189,6 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
         type=Path,
         required=True,
         help="Path to the model config file",
-    )
-    parser.add_argument(
-        "--clip_vmfb",
-        type=Path,
-        required=True,
-        help="Model VMFB to load",
-    )
-    parser.add_argument(
-        "--unet_vmfb",
-        type=Path,
-        required=True,
-        help="Model VMFB to load",
-    )
-    parser.add_argument("--scheduler_vmfb", type=Path, help="Scheduler VMFB to load.")
-    parser.add_argument(
-        "--vae_vmfb",
-        type=Path,
-        required=True,
-        help="Model VMFB to load",
-    )
-    parser.add_argument(
-        "--clip_params",
-        type=Path,
-        nargs="*",
-        help="Parameter archives to load",
-    )
-    parser.add_argument(
-        "--unet_params",
-        type=Path,
-        nargs="*",
-        help="Parameter archives to load",
-    )
-    parser.add_argument(
-        "--vae_params",
-        type=Path,
-        nargs="*",
-        help="Parameter archives to load",
     )
     parser.add_argument(
         "--fibers_per_device",
@@ -224,6 +216,11 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
         action="store_true",
         help="Enable tracing of program modules.",
     )
+    parser.add_argument(
+        "--splat",
+        action="store_true",
+        help="Use splat (empty) parameter files, usually for testing.",
+    )
     log_levels = {
         "info": logging.INFO,
         "debug": logging.DEBUG,
@@ -234,7 +231,7 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
 
     log_level = log_levels[args.log_level]
     logger.setLevel(log_level)
-
+    logger.addHandler(logging.FileHandler("shortfin_sd.log"))
     global sysman
     sysman = configure(args)
     uvicorn.run(
