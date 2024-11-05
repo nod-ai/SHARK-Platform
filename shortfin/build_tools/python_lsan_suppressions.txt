@@ -8,3 +8,4 @@ leak:import_find_and_load
 leak:pyo3::pyclass::create_type_object
 leak:ufunc
 leak:pydantic_core
+leak:sentencepiece
