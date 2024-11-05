@@ -16,7 +16,9 @@ Array
 .. autoclass:: base_array
 .. autoclass:: device_array
     :members:
+.. autoclass:: RandomGenerator
 
+.. autofunction:: _shortfin_default.lib.array.fill_randn
 .. autofunction:: _shortfin_default.lib.array.argmax
 
 Local
@@ -52,6 +54,7 @@ AMD GPU
 ^^^^^^^
 .. automodule:: _shortfin_default.lib.local.amdgpu
 .. autoclass:: SystemBuilder
+  :members:
 .. autoclass:: AMDGPUDevice
 
 Host

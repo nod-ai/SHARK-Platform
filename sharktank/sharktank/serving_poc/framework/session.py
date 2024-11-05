@@ -319,7 +319,7 @@ class WorkQueue:
         self._semaphore = session.device.create_semaphore(0)
         self._step = 0
 
-    def execute_sequential(self, command_buffers: list[HalCommandBuffer]):
+    def execute_sequential(self, command_buffer: HalCommandBuffer):
         """Executes a list of command buffers at the current step, advancing to the
         next.
         """
@@ -329,7 +329,7 @@ class WorkQueue:
             self._step = next_step
         sem = self._semaphore
         self._device.queue_execute(
-            command_buffers, [(sem, current_step)], [(sem, next_step)]
+            command_buffer, [(sem, current_step)], [(sem, next_step)]
         )
 
     def current_fence(self) -> HalFence:
