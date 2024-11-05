@@ -1198,6 +1198,7 @@ void BindHostSystem(py::module_ &global_m) {
       m, "SystemBuilder");
   py::class_<local::systems::HostCPUSystemBuilder,
              local::systems::HostSystemBuilder>(m, "CPUSystemBuilder")
+      .def("__init__", [](py::args, py::kwargs) {})
       .def_static(
           "__new__",
           [](py::handle cls, std::optional<std::string> env_prefix,
@@ -1301,6 +1302,7 @@ void BindAMDGPUSystem(py::module_ &global_m) {
   auto m = global_m.def_submodule("amdgpu", "AMDGPU system config");
   py::class_<local::systems::AMDGPUSystemBuilder,
              local::systems::HostCPUSystemBuilder>(m, "SystemBuilder")
+      .def("__init__", [](py::args, py::kwargs) {})
       .def_static(
           "__new__",
           [](py::handle cls, std::optional<std::string> env_prefix,
