@@ -194,6 +194,7 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
         type=str,
         required=False,
         default="gfx942",
+        choices=["gfx942", "gfx1100"],
         help="Primary inferencing device LLVM target arch.",
     )
     parser.add_argument(
