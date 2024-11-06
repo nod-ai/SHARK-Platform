@@ -7,7 +7,7 @@
 from typing import Optional
 
 from dataclasses import dataclass
-from typing import Union
+from typing import Any, Union
 
 import torch
 import torch.nn as nn
@@ -27,7 +27,7 @@ __all__ = [
 ################################################################################
 
 
-class PagedLlamaModelV1(BaseCausalLMModel):
+class PagedLlamaModelV1(BaseCausalLMModel, CausalLMModelABC):
     """LlamaModel with a paged KV cache and supporting variable sequence
     length batched inference.
 
@@ -64,8 +64,8 @@ class PagedLlamaModelV1(BaseCausalLMModel):
 
     def __init__(self, theta: Theta, config: LlamaModelConfig):
         hp = config.hp
-        super().__init__(
-            theta,
+        BaseCausalLMModel.__init__(
+            self,
             context_length=config.hp.context_length,
             static_tables=config.static_tables,
             device=config.device,

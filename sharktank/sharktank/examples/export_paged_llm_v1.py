@@ -180,7 +180,7 @@ def main():
             "tokens": {1: sl_dim},
             "seq_lens": {},
             "seq_block_ids": {1: block_dim},
-            "cs": cache_dynamic_shapes,
+            "cache_state": cache_dynamic_shapes,
         }
 
         print(f"Exporting prefill_bs{bs}")
@@ -192,39 +192,21 @@ def main():
             strict=args.strict,
             arg_device=arg_affinities,
         )
-        def _(model, tokens, seq_lens, seq_block_ids, cs):
+        def _(model, tokens, seq_lens, seq_block_ids, cache_state):
             if (
                 model.config.tensor_parallelism_size == 1
                 and model.config.kv_cache_type == "direct"
             ):
-                cache_tensors = torch.unbind(cs)
-            else:
-                cache_tensors = cs
+                cache_state = torch.unbind(cache_state)
+            if model.config.tensor_parallelism_size != 1:
+                cache_state = repack_cache(cache_state, cache_shard_dim)
 
-            sl = tokens.shape[1]
-            input_mask = model.input_mask(seq_lens, sl)
-            attention_mask = model.attention_mask(input_mask)
-
-            if llama_config.tensor_parallelism_size != 1:
-                shard_count = llama_config.tensor_parallelism_size
-
-                tokens = ops.replicate(tokens, count=shard_count)
-                attention_mask = ops.replicate(attention_mask, count=shard_count)
-                seq_block_ids = ops.replicate(seq_block_ids, count=shard_count)
-
-                cache_tensors = repack_cache(cs, cache_shard_dim)
-
-            logits = model.prefill(
-                tokens,
-                attention_mask=attention_mask,
+            return model.prefill_from_seq_lens(
+                tokens=tokens,
+                seq_lens=seq_lens,
                 seq_block_ids=seq_block_ids,
-                cache_state=cache_tensors,
+                cache_state=cache_state,
             )
-
-            if llama_config.tensor_parallelism_size != 1:
-                logits = ops.unshard(logits)
-
-            return logits
 
     def generate_batch_decode(bs: int):
         # torch.export.Dim would make min at least 2
@@ -285,33 +267,20 @@ def main():
             seq_block_ids,
             cache_state,
         ):
-            input_mask = model.input_mask(
-                seq_lens, seq_block_ids.shape[1] * model.cache.block_seq_stride
-            )
-            attention_mask = model.decode_attention_mask(input_mask)
-
-            if llama_config.tensor_parallelism_size != 1:
-                shard_count = llama_config.tensor_parallelism_size
-
-                tokens = ops.replicate(tokens, count=shard_count)
-                attention_mask = ops.replicate(attention_mask, count=shard_count)
-                start_positions = ops.replicate(start_positions, count=shard_count)
-                seq_block_ids = ops.replicate(seq_block_ids, count=shard_count)
-
+            if (
+                model.config.tensor_parallelism_size == 1
+                and model.config.kv_cache_type == "direct"
+            ):
+                cache_state = torch.unbind(cache_state)
+            if model.config.tensor_parallelism_size != 1:
                 cache_state = repack_cache(cache_state, cache_shard_dim)
-
-            logits = model.decode(
-                tokens,
-                attention_mask=attention_mask,
+            return model.decode_from_seq_lens(
+                tokens=tokens,
+                seq_lens=seq_lens,
                 start_positions=start_positions,
                 seq_block_ids=seq_block_ids,
                 cache_state=cache_state,
             )
-
-            if llama_config.tensor_parallelism_size != 1:
-                logits = ops.unshard(logits)
-
-            return logits
 
     bsizes = []
     for bs in args.bs:
