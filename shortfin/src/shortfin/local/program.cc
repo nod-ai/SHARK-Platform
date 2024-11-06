@@ -204,8 +204,8 @@ Program Program::Load(std::span<const ProgramModule> modules,
   iree::vm_module_ptr hal_module;
   SHORTFIN_THROW_IF_ERROR(iree_hal_module_create(
       system->vm_instance(), raw_devices.size(), raw_devices.data(),
-      IREE_HAL_MODULE_FLAG_NONE, system->host_allocator(),
-      hal_module.for_output()));
+      IREE_HAL_MODULE_FLAG_NONE, iree_hal_module_debug_sink_stdio(stderr),
+      system->host_allocator(), hal_module.for_output()));
   all_modules.push_back(hal_module);
 
   // Add explicit modules.

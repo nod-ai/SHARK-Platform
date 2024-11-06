@@ -109,7 +109,7 @@ jobs:
         repository: iree-org/iree
         path: ${{ env.IREE_SOURCE_DIR }}
         submodules: false
-        ref: candidate-20241029.1062
+        ref: candidate-20241106.1070
 
     - name: Initalize IREE submodules
       working-directory: ${{ env.IREE_SOURCE_DIR }}

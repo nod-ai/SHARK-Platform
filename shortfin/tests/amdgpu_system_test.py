@@ -21,6 +21,14 @@ def test_create_amd_gpu_system_defaults():
 
 
 @pytest.mark.system("amdgpu")
+def test_create_amd_gpu_tracing_level():
+    sc = sf.amdgpu.SystemBuilder()
+    assert sc.tracing_level == 2  # Default
+    sc = sf.amdgpu.SystemBuilder(amdgpu_tracing_level=1)
+    assert sc.tracing_level == 1
+
+
+@pytest.mark.system("amdgpu")
 def test_create_amd_gpu_system_defaults():
     sc = sf.amdgpu.SystemBuilder(amdgpu_cpu_devices_enabled=True)
     with sc.create_system() as ls:

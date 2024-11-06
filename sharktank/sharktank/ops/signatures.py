@@ -784,7 +784,7 @@ def _replicate_trampoline(
 
 @overridable
 def scaled_dot_product_attention(
-    q: AnyTensor, k: AnyTensor, v: AnyTensor, a: Optional[AnyTensor]
+    q: AnyTensor, k: AnyTensor, v: AnyTensor, a: Optional[AnyTensor], is_causal: bool
 ) -> AnyTensor:
     """Computes the scaled dot product attention using QKV."""
     raise NotImplementedError
@@ -797,10 +797,12 @@ def _scaled_dot_product_attention(
     k: AnyTensor,
     v: AnyTensor,
     a: Optional[AnyTensor],
+    is_causal: bool = False,
+    scale: Optional[float] = None,
 ):
     tensors = (q, k, v, a)
     for override in d.find_overrides(tensors):
-        result = override(q, k, v, a)
+        result = override(q, k, v, a, is_causal=is_causal, scale=scale)
         if result is not NotImplemented:
             return override, result
     else:

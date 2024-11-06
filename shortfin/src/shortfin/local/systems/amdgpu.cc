@@ -20,8 +20,8 @@ AMDGPUSystemBuilder::AMDGPUSystemBuilder(iree_allocator_t host_allocator,
                                          ConfigOptions options)
     : HostCPUSystemBuilder(host_allocator, std::move(options)),
       available_devices_(host_allocator) {
-  InitializeDefaultSettings();
   iree_hal_hip_device_params_initialize(&default_device_params_);
+  InitializeDefaultSettings();
 }
 
 AMDGPUSystemBuilder::~AMDGPUSystemBuilder() = default;
@@ -40,6 +40,16 @@ void AMDGPUSystemBuilder::InitializeDefaultSettings() {
       hip_lib_search_paths_.push_back(std::string(entry));
     }
   }
+
+  // HIP options.
+  // "amdgpu_tracing_level": Matches IREE flag --hip_tracing:
+  // Permissible values are:
+  //   0 : stream tracing disabled.
+  //   1 : coarse command buffer level tracing enabled.
+  //   2 : fine-grained kernel level tracing enabled.
+  auto tracing_level =
+      config_options().GetInt("amdgpu_tracing_level", /*non_negative=*/true);
+  default_device_params_.stream_tracing = tracing_level ? *tracing_level : 2;
 
   // CPU devices.
   cpu_devices_enabled_ = config_options().GetBool("amdgpu_cpu_devices_enabled");

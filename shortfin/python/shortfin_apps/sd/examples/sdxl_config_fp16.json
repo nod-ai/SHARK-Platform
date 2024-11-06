@@ -10,6 +10,9 @@
   "vae_batch_sizes": [
     1
   ],
+  "scheduler_batch_sizes": [
+    1
+  ],
   "unet_module_name": "compiled_unet",
   "unet_fn_name": "run_forward",
   "dims": [

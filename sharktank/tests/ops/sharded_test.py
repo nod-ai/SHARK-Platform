@@ -588,6 +588,60 @@ class PermuteTest(unittest.TestCase):
         assert ops.equal(expected_result, result)
 
 
+class AttentionTest(unittest.TestCase):
+    def testAttentionShardedBatch(self):
+        q = torch.rand(4, 32, 16, dtype=torch.float32)
+        k = torch.rand(4, 32, 16, dtype=torch.float32)
+        v = torch.rand(4, 32, 16, dtype=torch.float32)
+
+        qs = SplitPrimitiveTensor(shard_dim=0, ts=q.split(4, dim=0))
+        ks = SplitPrimitiveTensor(shard_dim=0, ts=k.split(4, dim=0))
+        vs = SplitPrimitiveTensor(shard_dim=0, ts=v.split(4, dim=0))
+
+        expected_result = ops.scaled_dot_product_attention(q, k, v, a=None)
+        sharded_result = ops.scaled_dot_product_attention(qs, ks, vs, a=None)
+        unsharded_result = ops.sharded_cat(sharded_result)
+        torch.testing.assert_close(unsharded_result, expected_result)
+
+    def testAttentionShardedBatchCausal(self):
+        q = torch.rand(4, 32, 16, dtype=torch.float32)
+        k = torch.rand(4, 32, 16, dtype=torch.float32)
+        v = torch.rand(4, 32, 16, dtype=torch.float32)
+
+        qs = SplitPrimitiveTensor(shard_dim=0, ts=q.split(4, dim=0))
+        ks = SplitPrimitiveTensor(shard_dim=0, ts=k.split(4, dim=0))
+        vs = SplitPrimitiveTensor(shard_dim=0, ts=v.split(4, dim=0))
+
+        expected_result = ops.scaled_dot_product_attention(
+            q, k, v, a=None, is_causal=True
+        )
+        sharded_result = ops.scaled_dot_product_attention(
+            qs, ks, vs, a=None, is_causal=True
+        )
+        unsharded_result = ops.sharded_cat(sharded_result)
+        torch.testing.assert_close(unsharded_result, expected_result)
+
+    def testAttentionShardedBatchMask(self):
+        q = torch.rand(4, 32, 16, dtype=torch.float32)
+        k = torch.rand(4, 32, 16, dtype=torch.float32)
+        v = torch.rand(4, 32, 16, dtype=torch.float32)
+        a = torch.rand(1, 32, 32, dtype=torch.float32) > 0.5
+
+        q_s = SplitPrimitiveTensor(shard_dim=0, ts=q.split(1, dim=0))
+        k_s = SplitPrimitiveTensor(shard_dim=0, ts=k.split(1, dim=0))
+        v_s = SplitPrimitiveTensor(shard_dim=0, ts=v.split(1, dim=0))
+        a_s = ReplicatedTensor(ts=a, shard_count=4)
+
+        expected_result = ops.scaled_dot_product_attention(
+            q, k, v, a=a, is_causal=False
+        )
+        sharded_result = ops.scaled_dot_product_attention(
+            q_s, k_s, v_s, a=a_s, is_causal=False
+        )
+        unsharded_result = ops.sharded_cat(sharded_result)
+        torch.testing.assert_close(unsharded_result, expected_result)
+
+
 class MatmulTest(unittest.TestCase):
     def testTorchRHSColumnShardedTransposed(self):
         t1 = torch.rand(4, 32, 16, dtype=torch.float32)

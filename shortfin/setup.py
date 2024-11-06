@@ -141,36 +141,22 @@ class NoopBuildExtension(_build_ext):
 
 
 # Setup and get version information.
-VERSION_INFO_FILE = os.path.join(SOURCE_DIR, "version_info.json")
+VERSION_INFO_FILE = os.path.join(REL_SOURCE_DIR, "version_info.json")
+VERSION_INFO_RC_FILE = os.path.join(REL_SOURCE_DIR, "version_info_rc.json")
 
 
-def load_version_info():
-    with open(VERSION_INFO_FILE, "rt") as f:
+def load_version_info(version_file):
+    with open(version_file, "rt") as f:
         return json.load(f)
 
 
-def find_git_version():
-    try:
-        return (
-            subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=SOURCE_DIR)
-            .decode("utf-8")
-            .strip()
-        )
-    except subprocess.SubprocessError as e:
-        print(f"ERROR: Could not get git revision: {e}", file=sys.stderr)
-    return None
-
-
 try:
-    version_info = load_version_info()
+    version_info = load_version_info(VERSION_INFO_RC_FILE)
 except FileNotFoundError:
-    print("version_info.json not found. Using defaults", file=sys.stderr)
-    version_info = {}
-git_version = find_git_version()
+    print("version_info_rc.json not found. Default to dev build")
+    version_info = load_version_info(VERSION_INFO_FILE)
 
 PACKAGE_VERSION = version_info.get("package-version")
-if not PACKAGE_VERSION:
-    PACKAGE_VERSION = f"0.dev0+{git_version or '0'}"
 print(f"Using PACKAGE_VERSION: '{PACKAGE_VERSION}'")
 
 

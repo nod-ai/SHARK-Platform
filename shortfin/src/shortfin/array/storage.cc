@@ -111,7 +111,7 @@ void storage::fill(const void *pattern, iree_host_size_t pattern_length) {
             iree_hal_make_buffer_ref(
                 buffer_, /*offset=*/0,
                 /*length=*/iree_hal_buffer_byte_length(buffer_)),
-            pattern, pattern_length));
+            pattern, pattern_length, IREE_HAL_FILL_FLAG_NONE));
 
         // And move our own mutation barrier to the current pending timeline
         // value.
@@ -139,7 +139,8 @@ void storage::copy_from(storage &source_storage) {
             /*source_ref=*/
             iree_hal_make_buffer_ref(source_storage.buffer_, 0, byte_length()),
             /*target_ref=*/
-            iree_hal_make_buffer_ref(buffer_, 0, byte_length())));
+            iree_hal_make_buffer_ref(buffer_, 0, byte_length()),
+            IREE_HAL_COPY_FLAG_NONE));
 
         // Move our own mutation barrier to the current pending timeline
         // value.

@@ -13,7 +13,7 @@ import shortfin.array as sfnp
 
 @pytest.fixture
 def lsys():
-    sc = sf.host.CPUSystemBuilder()
+    sc = sf.SystemBuilder()
     lsys = sc.create_system()
     yield lsys
     lsys.shutdown()
@@ -30,13 +30,13 @@ def device(fiber):
 
 
 def test_allocate_host(device):
-    s = sfnp.storage.allocate_host(device, 32)
-    assert len(bytes(s.map(read=True))) == 32
+    h = sfnp.storage.allocate_host(device, 32)
+    assert len(h) == 32
 
 
 def test_allocate_device(device):
-    s = sfnp.storage.allocate_device(device, 64)
-    assert len(bytes(s.map(read=True))) == 64
+    d = sfnp.storage.allocate_device(device, 64)
+    assert len(d) == 64
 
 
 def test_fill1(lsys, device):
