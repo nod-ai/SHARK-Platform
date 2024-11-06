@@ -53,6 +53,7 @@ def pytest_runtest_setup(item):
 # Keys that will be cleaned project wide prior to and after each test run.
 # Test code can freely modify these.
 CLEAN_ENV_KEYS = [
+    "SHORTFIN_AMDGPU_TRACING_LEVEL",
     "SHORTFIN_HOSTCPU_TOPOLOGY_NODES",
     "SHORTFIN_HOSTCPU_TOPOLOGY_MAX_GROUP_COUNT",
     "SHORTFIN_SYSTEM_TYPE",
