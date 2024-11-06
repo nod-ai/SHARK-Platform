@@ -287,6 +287,8 @@ def index_put__default(
     values: Union[Tensor, PrimitiveTensor],
 ) -> Union[Tensor, PrimitiveTensor]:
     indices = tuple(unbox_tensor(index) for index in indices)
+    if values.dtype != inout.dtype:
+        values = values.to(inout.dtype)
     unbox_tensor(inout).index_put_(indices, unbox_tensor(values))
     return inout
 

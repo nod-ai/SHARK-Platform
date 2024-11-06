@@ -196,7 +196,7 @@ class DirectKVCache(BaseKVCache):
 
             for i, update in enumerate(cache_partitions):
                 cache = state[transformer_block_index * update_count + i]
-                cache.index_put_((row_index, row_start_pos), update[row_index, 0])
+                ops.index_put_(cache, (row_index, row_start_pos), update[row_index, 0])
 
     def write(
         self,
@@ -216,6 +216,8 @@ class DirectKVCache(BaseKVCache):
         for idx, update_src in enumerate(cache_partitions):
             cache_dest = state[transformer_block_index * update_count + idx]
             _, batch_seq_len, _, _ = update_src.shape
+            if update_src.dtype != cache_dest.dtype:
+                update_src = update_src.to(cache_dest.dtype)
             cache_dest[:, :batch_seq_len, :, :] = update_src
 
 
