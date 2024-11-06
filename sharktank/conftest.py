@@ -69,7 +69,23 @@ def pytest_addoption(parser):
         action="store_true",
         dest="longrun",
         default=False,
-        help="Enable long and slow tests",
+        help="Enable long tests",
+    )
+
+    parser.addoption(
+        "--run-8b-llama",
+        action="store_true",
+        dest="run-8b-llama",
+        default=False,
+        help="Enable llama 8b benchmarking tests",
+    )
+
+    parser.addoption(
+        "--run-all-llama",
+        action="store_true",
+        dest="run-all-llama",
+        default=False,
+        help="Enable all llama benchmarking tests",
     )
 
     # TODO: Remove all hardcoded paths in CI tests
