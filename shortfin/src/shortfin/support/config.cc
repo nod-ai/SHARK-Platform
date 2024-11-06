@@ -24,8 +24,8 @@ const std::optional<std::string_view> ConfigOptions::GetOption(
     std::string_view key) const {
   // Get explicit option.
   auto found_it = options_.find(key);
+  consumed_keys_.insert(key);
   if (found_it != options_.end()) {
-    consumed_keys_.insert(key);
     return found_it->second;
   }
 
