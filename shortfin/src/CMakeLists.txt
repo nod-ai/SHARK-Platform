@@ -20,10 +20,15 @@ message(STATUS "Linking optional components '${_SHORTFIN_LIB_OPTIONAL_COMPONENTS
 shortfin_public_library(
   NAME
     shortfin
+  LINUX_LD_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/shortfin.ld
   COMPONENTS
     shortfin_array
     shortfin_local
     shortfin_support
     shortfin_systems_factory
     ${_SHORTFIN_LIB_OPTIONAL_COMPONENTS}
+  USAGE_DEPS
+    spdlog::spdlog
+    fmt::fmt
+    iree_defs
 )

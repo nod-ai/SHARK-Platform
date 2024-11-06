@@ -207,6 +207,7 @@ def build_cmake_configuration(CMAKE_BUILD_DIR: Path, extra_cmake_args=[]):
     print(f"CMake build dir: {CMAKE_BUILD_DIR}")
     cmake_args = [
         "-GNinja",
+        "-Wno-dev",
         "--log-level=VERBOSE",
         "-DSHORTFIN_BUNDLE_DEPS=ON",
         f"-DCMAKE_BUILD_TYPE={cfg}",
@@ -221,6 +222,7 @@ def build_cmake_configuration(CMAKE_BUILD_DIR: Path, extra_cmake_args=[]):
             cmake_args.append("-DCMAKE_CXX_COMPILER=clang++")
         add_env_cmake_setting(cmake_args, "CMAKE_LINKER_TYPE", default_value="LLD")
 
+    add_env_cmake_setting(cmake_args, "SHORTFIN_ENABLE_LTO", default_value="ON")
     add_env_cmake_setting(cmake_args, "SHORTFIN_IREE_SOURCE_DIR")
     add_env_cmake_setting(cmake_args, "SHORTFIN_ENABLE_ASAN")
 

@@ -20,26 +20,64 @@ function(shortfin_public_library)
   cmake_parse_arguments(
     _RULE
     ""
-    "NAME"
-    "COMPONENTS"
+    "NAME;LINUX_LD_SCRIPT"
+    "SRCS;COMPONENTS;USAGE_DEPS"
     ${ARGN}
   )
+
+  # Get usage requirements from requested USAGE_DEPS and forward them from the
+  # public library. This is because the contents of the libraries stop at the
+  # public library vs propagating to callers. So we must manually control
+  # the combined usage requirements of the aggregate library.
+  set(_usage_include_directories)
+  set(_usage_compile_definitions)
+  foreach(_usage_dep _shortfin_defs ${_RULE_USAGE_DEPS})
+    get_target_property(_value ${_usage_dep} INTERFACE_INCLUDE_DIRECTORIES)
+    if(_value)
+      list(APPEND _usage_include_directories ${_value})
+    endif()
+    get_target_property(_value ${_usage_dep} INTERFACE_COMPILE_DEFINITIONS)
+    if(_value)
+      list(APPEND _usage_compile_definitions ${_value})
+    endif()
+  endforeach()
+
+  # Useful for debugging include/definition issues.
+  # message(STATUS "Public library ${_RULE_NAME}: Includes = ${_usage_include_directories}")
+  # message(STATUS "Public library ${_RULE_NAME}: Definitions = ${_usage_compile_definitions}")
+
   if(SHORTFIN_BUILD_STATIC)
     # Static library.
     shortfin_components_to_static_libs(_STATIC_COMPONENTS ${_RULE_COMPONENTS})
-    add_library("${_RULE_NAME}-static" STATIC)
+    add_library("${_RULE_NAME}-static" STATIC ${_RULE_SRCS})
+    target_compile_definitions("${_RULE_NAME}" INTERFACE
+      _SHORTFIN_USING_DYLIB
+      ${_usage_compile_definitions}
+    )
+    target_include_directories("${_RULE_NAME}" INTERFACE ${_usage_include_directories})
     target_link_libraries(
-      "${_RULE_NAME}-static" PUBLIC ${_STATIC_COMPONENTS}
+      "${_RULE_NAME}-static"
+      PRIVATE ${_STATIC_COMPONENTS}
     )
   endif()
 
   if(SHORTFIN_BUILD_DYNAMIC)
     # Dylib library.
     shortfin_components_to_dynamic_libs(_DYLIB_COMPONENTS ${_RULE_COMPONENTS})
-    add_library("${_RULE_NAME}" SHARED)
-    target_compile_definitions("${_RULE_NAME}" INTERFACE _SHORTFIN_USING_DYLIB)
+    add_library("${_RULE_NAME}" SHARED ${_RULE_SRCS})
+    target_compile_definitions("${_RULE_NAME}" INTERFACE
+      _SHORTFIN_USING_DYLIB
+      ${_usage_compile_definitions}
+    )
+    target_include_directories("${_RULE_NAME}" INTERFACE ${_usage_include_directories})
+    if(_RULE_LINUX_LD_SCRIPT)
+      target_link_options("${_RULE_NAME}" PRIVATE
+        "$<$<PLATFORM_ID:Linux>:-Wl,--version-script=${_RULE_LINUX_LD_SCRIPT}>"
+      )
+    endif()
     target_link_libraries(
-      "${_RULE_NAME}" PUBLIC ${_DYLIB_COMPONENTS}
+      "${_RULE_NAME}"
+      PRIVATE ${_DYLIB_COMPONENTS}
     )
     set_target_properties("${_RULE_NAME}" PROPERTIES
       VERSION ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}
@@ -101,7 +139,13 @@ function(shortfin_cc_component)
       VISIBILITY_INLINES_HIDDEN ON
     )
     target_compile_definitions(${_DYLIB_OBJECTS_NAME}
-      PRIVATE _SHORTFIN_BUILDING_DYLIB)
+      PRIVATE
+        _SHORTFIN_BUILDING_DYLIB
+        # Mate up with spdlog export settings since this is part of the
+        # library that is exporting these symbols.
+        SPDLOG_SHARED_LIB
+        spdlog_EXPORTS
+    )
     target_compile_definitions(${_DYLIB_OBJECTS_NAME} PUBLIC ${_RULE_DEFINES})
   endif()
 endfunction()
@@ -140,3 +184,29 @@ function(shortfin_gtest_test)
   )
   gtest_discover_tests(${_RULE_NAME})
 endfunction()
+
+
+# Make changes to the global compile flags and properties before including
+# bundled deps. This configures various options aimed at making the bundled
+# dependencies private.
+# The effect can be undone with shortfin_pop_bundled_lib_options().
+# After this call, additional changes can be made to CMAKE_CXX_FLAGS as desired.
+macro(shortfin_push_bundled_lib_options)
+  set(SHORTFIN_ORIG_CXX_VISIBILITY_PRESET "${CMAKE_CXX_VISIBILITY_PRESET}")
+  set(SHORTFIN_ORIG_C_VISIBILITY_PRESET "${CMAKE_C_VISIBILITY_PRESET}")
+  set(SHORTFIN_ORIG_VISIBILITY_INLINES_HIDDEN "${CMAKE_VISIBILITY_INLINES_HIDDEN}")
+  set(SHORTFIN_ORIG_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+
+  # Callers get a known state for visibility controls and can make changes from
+  # there.
+  set(CMAKE_C_VISIBILITY_PRESET "default")
+  set(CMAKE_CXX_VISIBILITY_PRESET "default")
+  set(CMAKE_VISIBILITY_INLINES_HIDDEN ON)
+endmacro()
+
+macro(shortfin_pop_bundled_lib_options)
+  set(CMAKE_CXX_VISIBILITY_PRESET ${SHORTFIN_ORIG_CXX_VISIBILITY_PRESET})
+  set(CMAKE_C_VISIBILITY_PRESET ${SHORTFIN_ORIG_C_VISIBILITY_PRESET})
+  set(CMAKE_VISIBILITY_INLINES_HIDDEN ${SHORTFIN_ORIG_VISIBILITY_INLINES_HIDDEN})
+  set(CMAKE_CXX_FLAGS "${SHORTFIN_ORIG_CXX_FLAGS}")
+endmacro()
