@@ -22,8 +22,8 @@ from .tensors import (
     register_quantized_layout,
     MetaDataValueType,
     QuantizedLayout,
-    _dtype_to_serialized_name,
-    _serialized_name_to_dtype,
+    dtype_to_serialized_name,
+    serialized_name_to_dtype,
 )
 
 from .layout_utils import (
@@ -96,7 +96,7 @@ class TensorScaledLayout(QuantizedLayout):
         m = planes.get("m")
         dtype_str = metadata.get("dtype")
         if dtype_str is not None:
-            dtype = _serialized_name_to_dtype(dtype_str)
+            dtype = serialized_name_to_dtype(dtype_str)
         else:
             # Backwards compat with old serialized. Emulate original behavior
             # before mixed precision.
@@ -106,7 +106,7 @@ class TensorScaledLayout(QuantizedLayout):
     @property
     def metadata(self) -> Optional[dict[str, MetaDataValueType]]:
         """Additional metadata needed to reconstruct a layout."""
-        return {"dtype": _dtype_to_serialized_name(self._dtype)}
+        return {"dtype": dtype_to_serialized_name(self._dtype)}
 
     @property
     def planes(self) -> dict[str, torch.Tensor]:
