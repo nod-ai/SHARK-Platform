@@ -1267,6 +1267,27 @@ environment variable is searched as a fallback in all cases. Multiple paths
 can be separated by semicolons on all platforms.
 )";
 
+static const char DOCSTRING_AMDGPU_SYSTEM_BUILDER_TRACING_LEVEL[] =
+    R"(Tracing level for AMDGPU device behavior.
+
+Controls the verbosity of tracing when Tracy instrumentation is enabled.
+The impact to benchmark timing becomes more severe as the verbosity
+increases, and thus should be only enabled when needed.
+
+This is the equivalent of the `--hip_tracing` IREE tools flag.
+Permissible values are:
+  * 0 : stream tracing disabled.
+  * 1 : coarse command buffer level tracing enabled.
+  * 2 : (default) fine-grained kernel level tracing enabled.
+
+The setting only has an effect if using a tracing enabled runtime (i.e.
+by running with `SHORTFIN_PY_RUNTIME=tracy` or equiv).
+
+The default value for this setting is available as a
+`amdgpu.SystemBuilder(amdgpu_tracing_level=2)` or (by default) from an
+environment variable `SHORTFIN_AMDGPU_TRACING_LEVEL`.
+)";
+
 static const char DOCSTRING_AMDGPU_SYSTEM_BUILDER_AVAILABLE_DEVICES[] =
     R"(List of available device ids on the system.
 
@@ -1343,6 +1364,15 @@ void BindAMDGPUSystem(py::module_ &global_m) {
           [](local::systems::AMDGPUSystemBuilder &self,
              std::vector<std::string> vs) { self.hip_lib_search_paths() = vs; },
           DOCSTRING_AMDGPU_SYSTEM_BUILDER_HIP_LIB_SEARCH_PATHS)
+      .def_prop_rw(
+          "tracing_level",
+          [](local::systems::AMDGPUSystemBuilder &self) -> int {
+            return self.tracing_level();
+          },
+          [](local::systems::AMDGPUSystemBuilder &self, int tracing_level) {
+            self.tracing_level() = tracing_level;
+          },
+          DOCSTRING_AMDGPU_SYSTEM_BUILDER_TRACING_LEVEL)
       .def_prop_rw(
           "visible_devices",
           [](local::systems::AMDGPUSystemBuilder &self)

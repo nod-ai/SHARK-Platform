@@ -57,6 +57,8 @@ class SHORTFIN_API AMDGPUSystemBuilder : public HostCPUSystemBuilder {
     return visible_devices_;
   };
 
+  int32_t &tracing_level() { return default_device_params_.stream_tracing; }
+
   // Gets all enumerated available device ids. This triggers enumeration, so
   // any settings required for that must already be set. This does no filtering
   // and will return all device ids.
