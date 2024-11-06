@@ -40,6 +40,7 @@ from ..utils.io import ShardedArchiveBuilder
 __all__ = [
     "AnyTensor",
     "DefaultPrimitiveTensor",
+    "dtype_to_serialized_name",
     "flatten_tensor_tree",
     "InferenceTensor",
     "MetaDataValueType",
@@ -49,6 +50,7 @@ __all__ = [
     "QuantizedTensor",
     "register_quantized_layout",
     "ReplicatedTensor",
+    "serialized_name_to_dtype",
     "ShardedTensor",
     "SplitPrimitiveTensor",
     "torch_tree_flatten",
@@ -1248,7 +1250,7 @@ def unbox_tensor(t: Any) -> Tensor:
 ########################################################################################
 
 
-def _dtype_to_serialized_name(dtype: torch.dtype) -> str:
+def dtype_to_serialized_name(dtype: torch.dtype) -> str:
     try:
         return _DTYPE_TO_NAME[dtype]
     except KeyError as e:
@@ -1257,7 +1259,7 @@ def _dtype_to_serialized_name(dtype: torch.dtype) -> str:
         ) from e
 
 
-def _serialized_name_to_dtype(dtype_name: str) -> torch.dtype:
+def serialized_name_to_dtype(dtype_name: str) -> torch.dtype:
     try:
         return _NAME_TO_DTYPE[dtype_name]
     except KeyError as e:
