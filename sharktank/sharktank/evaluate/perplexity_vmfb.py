@@ -74,7 +74,7 @@ class Perplexity:
         self.iree_hal_target_backends = iree_hal_target_backends
         self.kv_cache_type = kv_cache_type
         self.activation_dtype = torch.float32
-        self.attention_dtype = torch.float32
+        self.attention_dtype = torch.float16
         self.tensor_parallelism_size = tensor_parallelism_size
         self.attention_kernel = attention_kernel
 
@@ -166,6 +166,8 @@ class Perplexity:
             external_weight_path=self.weight_path_str,
         )
 
+        self.haldevice = self.runner.config.device
+
     @timeit
     def get_prompts(self):
         test_prompts = load_dataset("wikitext", "wikitext-2-raw-v1", split="test")[
@@ -189,40 +191,19 @@ class Perplexity:
 
     def prefill_vmfb(self, token_batch, i):
 
-        logger.debug(f"Prefill:")
-
-        logger.debug("Input:")
-        logger.debug(f"{self.generator.tokenizer.decode(token_batch)}")
-
-        token_batch, seq_lens_batch = self.generator.tokenizer.pad_tokens(
-            token_ids=token_batch.tolist(),
-            pad_to_multiple_of=self.generator.model.cache.pad_sequence_stride,
-        )
-
-        logger.debug(f"{token_batch}")
-
-        token_batch = torch.tensor(token_batch, device=self.torch_device)
-        self.seq_lens_batch = torch.tensor(seq_lens_batch, device=self.torch_device)
-
-        self.batch = self.generator.begin_eval_batch(
-            token_batch=token_batch,
-            seq_lens_batch=self.seq_lens_batch,
-            bs=self.bs,
-        )
-
         seq_block_ids = self.batch.pad_block_ids()
         prefill_logits = self.runner.ctx.modules.module[f"prefill_bs{self.bs}"](
             token_batch,
-            self.seq_lens_batch,
+            self.batch.seq_lens,
             seq_block_ids,
-            self.batch.cache_state[0].to(torch.float16),
+            self.cache_state,
         )
 
         prefill_logits = torch.tensor(prefill_logits[:, :, :])
 
         tokens = torch.tensor(
             self.generator.model.extract_tokens_from_logits(
-                prefill_logits, seq_lens_batch
+                prefill_logits, self.batch.seq_lens
             )
         ).unsqueeze(1)
         self.batch.add_result_token(tokens)
@@ -237,17 +218,17 @@ class Perplexity:
         logger.debug(f"{self.generator.tokenizer.decode(token_batch)}")
         logger.debug(f"{token_batch.tolist()}")
 
-        start_positions = self.seq_lens_batch.clone()
-        self.seq_lens_batch.add_(1)
+        start_positions = self.batch.seq_lens.clone()
+        self.batch.seq_lens.add_(1)
         self.batch.allocate_seq_block_ids()
         seq_block_ids = self.batch.pad_block_ids()
 
         decode_logits = self.runner.ctx.modules.module[f"decode_bs{self.bs}"](
             token_batch,
-            self.seq_lens_batch,
+            self.batch.seq_lens,
             start_positions,
             seq_block_ids,
-            self.batch.cache_state[0].to(torch.float16),
+            self.cache_state,
         )
 
         decode_logits = torch.tensor(decode_logits[:, :, :])
@@ -295,8 +276,35 @@ class Perplexity:
 
                 token_batch = self.token_ids[:, : i + 1]
 
+                logger.debug(f"Prefill:")
+
+                logger.debug("Input:")
+                logger.debug(f"{self.generator.tokenizer.decode(token_batch)}")
+
+                token_batch, seq_lens_batch = self.generator.tokenizer.pad_tokens(
+                    token_ids=token_batch.tolist(),
+                    pad_to_multiple_of=self.generator.model.cache.pad_sequence_stride,
+                )
+
+                logger.debug(f"{token_batch}")
+
+                token_batch = torch.tensor(token_batch, device=self.torch_device)
+                self.seq_lens_batch = torch.tensor(
+                    seq_lens_batch, device=self.torch_device
+                )
+
+                self.batch = self.generator.begin_eval_batch(
+                    token_batch=token_batch,
+                    seq_lens_batch=self.seq_lens_batch,
+                    bs=self.bs,
+                )
+
+                self.cache_state = ireert.asdevicearray(
+                    self.haldevice, self.batch.cache_state[0].to("cpu").numpy()
+                )
+
                 prefill_logits = self.prefill_vmfb(token_batch, i)
-                self.out_logits = prefill_logits[:, 0:1, :]
+                self.out_logits = prefill_logits[:, -1:, :]
 
                 is_first_token = False
 
