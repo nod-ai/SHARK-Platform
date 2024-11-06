@@ -1,6 +1,7 @@
 import json
 import requests
 import time
+import asyncio
 import base64
 import pytest
 import subprocess
@@ -8,6 +9,8 @@ import os
 import socket
 import sys
 import copy
+import math
+import tempfile
 from contextlib import closing
 
 from datetime import datetime as dt
@@ -30,58 +33,25 @@ sample_request = {
 }
 
 
-def sd_artifacts(target: str = "gfx942"):
-    return {
-        "model_config": "sdxl_config_i8.json",
-        "clip_vmfb": f"stable_diffusion_xl_base_1_0_bs1_64_fp16_text_encoder_{target}.vmfb",
-        "scheduler_vmfb": f"stable_diffusion_xl_base_1_0_EulerDiscreteScheduler_bs1_1024x1024_fp16_{target}.vmfb",
-        "unet_vmfb": f"stable_diffusion_xl_base_1_0_bs1_64_1024x1024_i8_punet_{target}.vmfb",
-        "vae_vmfb": f"stable_diffusion_xl_base_1_0_bs1_1024x1024_fp16_vae_{target}.vmfb",
-        "clip_params": "clip_splat_fp16.irpa",
-        "unet_params": "punet_splat_i8.irpa",
-        "vae_params": "vae_splat_fp16.irpa",
-    }
-
-
-cache = os.path.abspath("./tmp/sharktank/sd/")
-
-
 def start_server(fibers_per_device=1, isolation="per_fiber"):
-    # Download model if it doesn't exist
-    vmfbs_bucket = "https://sharkpublic.blob.core.windows.net/sharkpublic/sdxl/vmfbs/"
-    weights_bucket = (
-        "https://sharkpublic.blob.core.windows.net/sharkpublic/sdxl/weights/"
-    )
-    configs_bucket = (
-        "https://sharkpublic.blob.core.windows.net/sharkpublic/sdxl/configs/"
-    )
-    for artifact, path in sd_artifacts().items():
-        if "vmfb" in artifact:
-            bucket = vmfbs_bucket
-        elif "params" in artifact:
-            bucket = weights_bucket
-        else:
-            bucket = configs_bucket
-        address = bucket + path
-        local_file = os.path.join(cache, path)
-        if not os.path.exists(local_file):
-            print("Downloading artifact from " + address)
-            r = requests.get(address, allow_redirects=True)
-            with open(local_file, "wb") as lf:
-                lf.write(r.content)
     # Start the server
     srv_args = [
         "python",
         "-m",
         "shortfin_apps.sd.server",
     ]
-    for arg in sd_artifacts().keys():
-        artifact_arg = f"--{arg}={cache}/{sd_artifacts()[arg]}"
-        srv_args.extend([artifact_arg])
+    with open("sdxl_config_i8.json", "wb") as f:
+        r = requests.get(
+            "https://sharkpublic.blob.core.windows.net/sharkpublic/sdxl/11022024/configs/sdxl_config_i8.json",
+            allow_redirects=True,
+        )
+        f.write(r.content)
     srv_args.extend(
         [
+            f"--model_config=sdxl_config_i8.json",
             f"--fibers_per_device={fibers_per_device}",
             f"--isolation={isolation}",
+            f"--splat",
         ]
     )
     runner = ServerRunner(srv_args)
@@ -92,10 +62,6 @@ def start_server(fibers_per_device=1, isolation="per_fiber"):
 
 @pytest.fixture(scope="module")
 def sd_server_fpd1():
-    # Create necessary directories
-
-    os.makedirs(cache, exist_ok=True)
-
     runner = start_server(fibers_per_device=1)
 
     yield runner
@@ -106,10 +72,6 @@ def sd_server_fpd1():
 
 @pytest.fixture(scope="module")
 def sd_server_fpd1_per_call():
-    # Create necessary directories
-
-    os.makedirs(cache, exist_ok=True)
-
     runner = start_server(fibers_per_device=1, isolation="per_call")
 
     yield runner
@@ -120,10 +82,6 @@ def sd_server_fpd1_per_call():
 
 @pytest.fixture(scope="module")
 def sd_server_fpd2():
-    # Create necessary directories
-
-    os.makedirs(cache, exist_ok=True)
-
     runner = start_server(fibers_per_device=2)
 
     yield runner
@@ -134,10 +92,6 @@ def sd_server_fpd2():
 
 @pytest.fixture(scope="module")
 def sd_server_fpd8():
-    # Create necessary directories
-
-    os.makedirs(cache, exist_ok=True)
-
     runner = start_server(fibers_per_device=8)
 
     yield runner
@@ -178,6 +132,23 @@ def test_sd_server_bs4_dense_fpd2(sd_server_fpd2):
 def test_sd_server_bs8_dense_fpd8(sd_server_fpd8):
     imgs, status_code = send_json_file(sd_server_fpd8.url, num_copies=8)
     assert len(imgs) == 8
+    assert status_code == 200
+
+
+@pytest.mark.skip
+@pytest.mark.system("amdgpu")
+def test_sd_server_bs64_dense_fpd8(sd_server_fpd8):
+    imgs, status_code = send_json_file(sd_server_fpd8.url, num_copies=64)
+    assert len(imgs) == 64
+    assert status_code == 200
+
+
+@pytest.mark.skip
+@pytest.mark.xfail(reason="Unexpectedly large client batch.")
+@pytest.mark.system("amdgpu")
+def test_sd_server_bs512_dense_fpd8(sd_server_fpd8):
+    imgs, status_code = send_json_file(sd_server_fpd8.url, num_copies=512)
+    assert len(imgs) == 512
     assert status_code == 200
 
 

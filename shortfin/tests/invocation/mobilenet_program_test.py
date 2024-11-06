@@ -16,7 +16,7 @@ import shortfin.array as sfnp
 
 @pytest.fixture
 def lsys():
-    sc = sf.host.CPUSystemBuilder()
+    sc = sf.SystemBuilder()
     lsys = sc.create_system()
     yield lsys
     lsys.shutdown()
@@ -34,9 +34,9 @@ def device(fiber0):
 
 @pytest.fixture
 def mobilenet_program_function(
-    lsys, mobilenet_compiled_cpu_path
+    lsys, mobilenet_compiled_path
 ) -> tuple[sf.ProgramFunction]:
-    program_module = lsys.load_module(mobilenet_compiled_cpu_path)
+    program_module = lsys.load_module(mobilenet_compiled_path)
     program = sf.Program([program_module], devices=lsys.devices)
     main_function = program["module.torch-jit-export"]
     return main_function
@@ -44,9 +44,9 @@ def mobilenet_program_function(
 
 @pytest.fixture
 def mobilenet_program_function_per_call(
-    lsys, mobilenet_compiled_cpu_path
+    lsys, mobilenet_compiled_path
 ) -> tuple[sf.ProgramFunction]:
-    program_module = lsys.load_module(mobilenet_compiled_cpu_path)
+    program_module = lsys.load_module(mobilenet_compiled_path)
     program = sf.Program(
         [program_module], devices=lsys.devices, isolation=sf.ProgramIsolation.PER_CALL
     )
