@@ -70,8 +70,8 @@ jobs:
           # We could also pin to a known working or stable version.
           # This should eventually stabilize. Do the best we can for now.
           pip install -f https://iree.dev/pip-release-links.html --upgrade \
-            iree-compiler==20241104.1068 \
-            iree-runtime==20241104.1068 \
+            iree-compiler==20241106.1070 \
+            iree-runtime==20241106.1070 \
             "numpy<2.0"
 
       - name: Run llama tests
