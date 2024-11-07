@@ -32,7 +32,7 @@ class TorchGenerator:
 
     def __init__(
         self,
-        model: CausalLMModelABC,
+        model: BaseCausalLMModel,
         tokenizer: InferenceTokenizer,
         page_cache_size: int = 128,
         # Need to look at the model more for this.

@@ -16,123 +16,6 @@ from .base import (
 )
 
 
-class CausalLMModelABC(ABC):
-    """Interface for causal LM models."""
-
-    @abstractmethod
-    def generate_causal_context_mask(self) -> torch.Tensor:
-        raise NotImplementedError()
-
-    def input_mask(
-        self,
-        # [bs] of integers
-        seq_lens: torch.Tensor,
-        batch_seqlen: int,
-    ):
-        """Compute a boolean input mask for a batch of sequence lengths.
-
-        The mask will be [bs, batch_seqlen] with True at any position that is
-        masked.
-        """
-        raise NotImplementedError()
-
-    def decode_attention_mask(self, boolean_input_mask: torch.Tensor):
-        raise NotImplementedError()
-
-    def attention_mask(
-        self,
-        input_mask: torch.Tensor,
-        *,
-        causal_context_mask: Optional[torch.Tensor] = None,
-    ):
-        """Generates a causal attention mask of [1, 1, sl, sl] of activation dtype.
-
-        All masked positions are -inf and unmasked are 0.0.
-
-        The pre-initialized causal context mask can be passed in. If not, then
-        it will either be generated or use the initialization time buffer.
-        Since this is a bool tensor of context_length^2, different deployment
-        scenarios can benefit from managing this in different ways.
-        """
-        raise NotImplementedError()
-
-    def extract_tokens_from_logits(
-        self, logits: torch.Tensor, seq_lens: list[int]
-    ) -> list[int]:
-        """Extracts tokens from a batch of logits (B, S, D).
-
-        The length of seq_lens must be equal to the batch size.
-        Note that there are ways to code the indexing as tensor operations
-        but it just creates a bunch of weirdly shaped little work on the
-        accelerator. Statically looping like this is more efficient.
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def prefill(
-        self,
-        # [bs, batch_seq_len]
-        tokens: Union[torch.Tensor, ReplicatedTensor],
-        *,
-        # [1, 1, batch_seq_len, batch_seq_len]
-        attention_mask: Union[torch.Tensor, ReplicatedTensor],
-        # [bs, batch_seq_len // block_seq_stride]
-        seq_block_ids: Union[torch.Tensor, ReplicatedTensor],
-        cache_state: list[Union[torch.Tensor, SplitPrimitiveTensor]],
-    ):
-        raise NotImplementedError()
-
-    @abstractmethod
-    def prefill_from_seq_lens(
-        self,
-        # [bs, batch_seq_len]
-        tokens: torch.Tensor,
-        *,
-        # [bs]
-        seq_lens: torch.Tensor,
-        # [bs, batch_seq_len // block_seq_stride]
-        seq_block_ids: torch.Tensor,
-        cache_state: list[Union[torch.Tensor, SplitPrimitiveTensor]],
-    ):
-        """This prefill variant accepts seq_lens instead of an attention_mask.
-        It also does not support sharded arguments other than the cache state."""
-        raise NotImplementedError()
-
-    @abstractmethod
-    def decode(
-        self,
-        # [bs, 1]
-        tokens: Union[torch.Tensor, ReplicatedTensor],
-        *,
-        # [bs, 1, 1, batch_seq_len]
-        attention_mask: Union[torch.Tensor, ReplicatedTensor],
-        # [bs] of starting positions
-        start_positions: Union[torch.Tensor, ReplicatedTensor],
-        # [bs, batch_seq_len // block_seq_stride]
-        seq_block_ids: Union[torch.Tensor, ReplicatedTensor],
-        cache_state: list[Union[torch.Tensor, SplitPrimitiveTensor]],
-    ):
-        raise NotImplementedError()
-
-    @abstractmethod
-    def decode_from_seq_lens(
-        self,
-        # [bs, 1]
-        tokens: torch.Tensor,
-        *,
-        # [bs]
-        seq_lens: torch.Tensor,
-        # [bs] of starting positions
-        start_positions: torch.Tensor,
-        # [bs, batch_seq_len // block_seq_stride]
-        seq_block_ids: torch.Tensor,
-        cache_state: list[Union[torch.Tensor, SplitPrimitiveTensor]],
-    ):
-        """This decode variant accepts seq_lens instead of an attention_mask.
-        It also does not support sharded arguments other than the cache state."""
-        raise NotImplementedError()
-
-
 class BaseCausalLMModel(BaseLayer):
     """Base class for causal LM models.
 
@@ -267,6 +150,19 @@ class BaseCausalLMModel(BaseLayer):
             results.append(torch.argmax(step_logits))
         return results
 
+    def prefill(
+        self,
+        # [bs, batch_seq_len]
+        tokens: Union[torch.Tensor, ReplicatedTensor],
+        *,
+        # [1, 1, batch_seq_len, batch_seq_len]
+        attention_mask: Union[torch.Tensor, ReplicatedTensor],
+        # [bs, batch_seq_len // block_seq_stride]
+        seq_block_ids: Union[torch.Tensor, ReplicatedTensor],
+        cache_state: list[Union[torch.Tensor, SplitPrimitiveTensor]],
+    ):
+        raise NotImplementedError()
+
     def prefill_from_seq_lens(
         self,
         tokens: torch.Tensor,
@@ -297,6 +193,21 @@ class BaseCausalLMModel(BaseLayer):
             logits = ops.unshard(logits)
 
         return logits
+
+    def decode(
+        self,
+        # [bs, 1]
+        tokens: Union[torch.Tensor, ReplicatedTensor],
+        *,
+        # [bs, 1, 1, batch_seq_len]
+        attention_mask: Union[torch.Tensor, ReplicatedTensor],
+        # [bs] of starting positions
+        start_positions: Union[torch.Tensor, ReplicatedTensor],
+        # [bs, batch_seq_len // block_seq_stride]
+        seq_block_ids: Union[torch.Tensor, ReplicatedTensor],
+        cache_state: list[Union[torch.Tensor, SplitPrimitiveTensor]],
+    ):
+        raise NotImplementedError()
 
     def decode_from_seq_lens(
         self,

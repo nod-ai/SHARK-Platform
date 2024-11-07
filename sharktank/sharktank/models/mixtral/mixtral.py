@@ -28,7 +28,7 @@ __all__ = [
 ################################################################################
 
 
-class PagedMixtralModelV1(BaseCausalLMModel, CausalLMModelABC):
+class PagedMixtralModelV1(BaseCausalLMModel):
     """MixtralModel with a paged KV cache and supporting variable sequence
     length batched inference.
 
@@ -52,8 +52,7 @@ class PagedMixtralModelV1(BaseCausalLMModel, CausalLMModelABC):
 
     def __init__(self, theta: Theta, config: LlamaModelConfig):
         hp = config.hp
-        BaseCausalLMModel.__init__(
-            self,
+        super().__init__(
             context_length=config.hp.context_length,
             device=config.device,
             activation_dtype=config.activation_dtype,
