@@ -19,7 +19,10 @@ from .tokenizer import Tokenizer
 
 logger = logging.getLogger(__name__)
 
-PROG_ISOLATIONS = {isolation.name.lower(): isolation for isolation in sf.ProgramIsolation}
+PROG_ISOLATIONS = {
+    isolation.name.lower(): isolation for isolation in sf.ProgramIsolation
+}
+
 
 class GenerateService:
     """Top level service interface for generating text against a model."""
