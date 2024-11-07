@@ -58,7 +58,7 @@ void AMDGPUSystemBuilder::InitializeDefaultSettings() {
 
   // Override logical_devices_per_physical_device if present.
   auto logical_devices_per_physical_device = config_options().GetInt(
-      "amgdpu_logical_devices_per_physical_device", /*non_negative=*/true);
+      "amdgpu_logical_devices_per_physical_device", /*non_negative=*/true);
   if (logical_devices_per_physical_device) {
     logical_devices_per_physical_device_ = *logical_devices_per_physical_device;
   }

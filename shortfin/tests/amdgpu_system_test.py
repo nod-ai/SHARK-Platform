@@ -44,7 +44,7 @@ def test_create_amd_gpu_logical_devices_per_physical_device():
     assert sc.logical_devices_per_physical_device == 1
 
     # Override.
-    sc = sf.amdgpu.SystemBuilder(amgdpu_logical_devices_per_physical_device=2)
+    sc = sf.amdgpu.SystemBuilder(amdgpu_logical_devices_per_physical_device=2)
     assert sc.logical_devices_per_physical_device == 2
     sc.visible_devices = sc.available_devices[0:1]
     with sc.create_system() as ls:
