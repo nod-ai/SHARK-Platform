@@ -8,6 +8,7 @@
 
 #include <fmt/core.h>
 
+#include "iree/hal/utils/allocators.h"
 #include "shortfin/local/fiber.h"
 #include "shortfin/support/logging.h"
 
@@ -237,6 +238,44 @@ int64_t System::AllocateProcess(detail::BaseProcess *p) {
 void System::DeallocateProcess(int64_t pid) {
   iree::slim_mutex_lock_guard guard(lock_);
   processes_by_pid_.erase(pid);
+}
+
+// -------------------------------------------------------------------------- //
+// SystemBuilder
+// -------------------------------------------------------------------------- //
+
+void SystemBuilder::ConfigureAllocators(const std::vector<std::string> &specs,
+                                        iree_hal_device_t *device,
+                                        std::string_view device_debug_desc) {
+  if (specs.empty()) return;
+  std::vector<iree_string_view_t> spec_views;
+  spec_views.reserve(specs.size());
+  for (auto &spec : specs) {
+    spec_views.push_back(to_iree_string_view(spec));
+  }
+
+  logging::info("Configure allocator {} = [{}]", device_debug_desc,
+                fmt::join(specs, " ; "));
+
+  SHORTFIN_THROW_IF_ERROR(iree_hal_configure_allocator_from_specs(
+      spec_views.size(), spec_views.data(), device));
+}
+
+std::vector<std::string> SystemBuilder::GetConfigAllocatorSpecs(
+    std::optional<std::string_view> specific_config_key) {
+  std::optional<std::string_view> value;
+  if (specific_config_key) {
+    value = config_options().GetOption(*specific_config_key);
+  }
+  if (!value) {
+    value = config_options().GetOption("allocators");
+  }
+  if (!value) {
+    return {};
+  }
+
+  auto split_views = ConfigOptions::Split(*value, ';');
+  return std::vector<std::string>(split_views.begin(), split_views.end());
 }
 
 }  // namespace shortfin::local

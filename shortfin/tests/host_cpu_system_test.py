@@ -57,6 +57,13 @@ def test_create_host_cpu_system_env_vars():
         assert len(ls.devices) == 2
 
 
+def test_create_host_cpu_system_allocators():
+    sc = sf.host.CPUSystemBuilder(hostcpu_allocators="caching;debug")
+    assert sc.hostcpu_allocator_specs == ["caching", "debug"]
+    with sc.create_system() as ls:
+        pass
+
+
 def test_create_host_cpu_system_unsupported_option():
     sc = sf.host.CPUSystemBuilder(unsupported="foobar")
     with pytest.raises(
