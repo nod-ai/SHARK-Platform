@@ -19,6 +19,7 @@ from .tokenizer import Tokenizer
 
 logger = logging.getLogger(__name__)
 
+PROG_ISOLATIONS = {isolation.name.lower(): isolation for isolation in sf.ProgramIsolation}
 
 class GenerateService:
     """Top level service interface for generating text against a model."""
@@ -34,6 +35,7 @@ class GenerateService:
         sysman: SystemManager,
         tokenizer: Tokenizer,
         model_params: ModelParams,
+        program_isolation: str = "per_call",
     ):
         self.name = name
 
@@ -52,6 +54,8 @@ class GenerateService:
         self.page_cache = AttnPageCache(
             devices=self.main_fiber.devices_dict.values(), model_params=model_params
         )
+
+        self.program_isolation = PROG_ISOLATIONS[program_isolation]
 
     def load_inference_module(self, vmfb_path: Path):
         self.inference_modules.append(sf.ProgramModule.load(self.sysman.ls, vmfb_path))
@@ -75,6 +79,7 @@ class GenerateService:
             + self.inference_modules,
             devices=self.sysman.ls.devices,
             trace_execution=False,
+            isolation=self.program_isolation,
         )
         # Resolve prefill entrypoints.
         self.prefill_functions = {}

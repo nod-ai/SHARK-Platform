@@ -14,6 +14,7 @@ import sys
 import uvicorn.logging
 
 # Import first as it does dep checking and reporting.
+from shortfin import ProgramIsolation
 from shortfin.interop.fastapi import FastAPIResponder
 
 from contextlib import asynccontextmanager
@@ -82,7 +83,7 @@ def configure(args) -> SystemManager:
     tokenizer = Tokenizer.from_tokenizer_json_file(args.tokenizer_json)
     model_params = ModelParams.load_json(args.model_config)
     sm = GenerateService(
-        name="default", sysman=sysman, tokenizer=tokenizer, model_params=model_params
+        name="default", sysman=sysman, tokenizer=tokenizer, model_params=model_params, program_isolation=args.isolation
     )
     sm.load_inference_module(args.vmfb)
     sm.load_inference_parameters(*args.parameters, parameter_scope="model")
@@ -134,6 +135,13 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
         type=str,
         default="local-task",
         help="Device to serve on; e.g. local-task, hip. Same options as `iree-run-module --device` ",
+    )
+    parser.add_argument(
+        "--isolation",
+        type=str,
+        default="per_call",
+        choices=[isolation.name.lower() for isolation in ProgramIsolation],
+        help="Concurrency control -- How to isolate programs."
     )
     args = parser.parse_args(argv)
     global sysman
