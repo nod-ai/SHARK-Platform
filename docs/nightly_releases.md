@@ -69,11 +69,6 @@ source 3.11.venv/bin/activate
 # Install 'sharktank' package from nightly releases.
 python -m pip install sharktank -f https://github.com/nod-ai/SHARK-Platform/releases/expanded_assets/dev-wheels
 
-# Install iree-turbine from source
-# TODO(#294): publish newer iree-turbine package so this isn't necessary.
-python -m pip install -f https://iree.dev/pip-release-links.html --src deps \
-  -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
-
 # Test the installation.
 python -c "from sharktank import ops; print('Sanity check passed')"
 
@@ -85,8 +80,8 @@ deactivate
 
 ```bash
 # Set up a virtual environment to isolate packages from other envs.
-python3.12 -m venv 3.12.venv
-source 3.12.venv/bin/activate
+python3.11 -m venv 3.11.venv
+source 3.11.venv/bin/activate
 
 # Install 'shortfin' package from nightly releases.
 python -m pip install shortfin -f https://github.com/nod-ai/SHARK-Platform/releases/expanded_assets/dev-wheels
@@ -96,4 +91,29 @@ python -c "import shortfin as sf; print('Sanity check passed')"
 
 # Deactivate the virtual environment when done.
 deactivate
+```
+
+## Installing newer versions of dependencies
+
+To install the `iree-turbine` package from the latest source:
+
+```bash
+python -m pip install --src deps \
+  -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
+```
+
+To install the `iree-compiler` and `iree-runtime` packages from nightly
+releases:
+
+```bash
+python -m pip install -f https://iree.dev/pip-release-links.html --upgrade \
+  iree-compiler iree-runtime
+```
+
+To install all three packages together:
+
+```bash
+python -m pip install -f https://iree.dev/pip-release-links.html --upgrade \
+  iree-compiler iree-runtime --src deps \
+  -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
 ```

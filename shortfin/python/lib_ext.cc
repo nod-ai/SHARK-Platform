@@ -84,6 +84,24 @@ Args:
   **kwargs: Key/value arguments for controlling setup of the system.
 )";
 
+static const char DOCSTRING_HOSTCPU_SYSTEM_BUILDER_HOSTCPU_ALLOCATOR_SPECS[] =
+    R"(Allocator specs to apply to HOSTCPU devices configured by this builder.
+
+This uses syntax like::
+
+  some_allocator
+  some_allocator:key=value
+  some_allocator:key=value,key=value
+  some_allocator:key=value,key=value;other_allocator:key=value
+
+Typical values for `some_allocator` include `caching` and `debug`.
+
+This can be set via a keyword of `amdgpu_allocators`, which will only apply to
+HOSTCPU devices or `allocators` which will apply to all contained devices.
+Similarly, it is available on a `SHORTFIN_` prefixed env variable if environment
+lookup is not disabled.
+)";
+
 static const char DOCSTRING_PROGRAM_FUNCTION_INVOCATION[] =
     R"(Creates an invocation object targeting the function.
 
@@ -1214,7 +1232,17 @@ void BindHostSystem(py::module_ &global_m) {
           py::arg("cls") = py::none(), py::kw_only(),
           py::arg("env_prefix").none() = "SHORTFIN_",
           py::arg("validate_undef") = true, py::arg("kwargs"),
-          DOCSTRING_HOSTCPU_SYSTEM_BUILDER_CTOR);
+          DOCSTRING_HOSTCPU_SYSTEM_BUILDER_CTOR)
+      .def_prop_rw(
+          "hostcpu_allocator_specs",
+          [](local::systems::HostCPUSystemBuilder &self) {
+            return self.hostcpu_allocator_specs();
+          },
+          [](local::systems::HostCPUSystemBuilder &self,
+             std::vector<std::string> specs) {
+            self.hostcpu_allocator_specs() = std::move(specs);
+          },
+          DOCSTRING_HOSTCPU_SYSTEM_BUILDER_HOSTCPU_ALLOCATOR_SPECS);
   py::class_<local::systems::HostCPUDevice, local::Device>(m, "HostCPUDevice");
 }
 
@@ -1235,6 +1263,27 @@ Args:
     None to disable environment lookup.
   **kwargs: Key/value arguments for controlling setup of the system.
 )";
+
+static const char DOCSTRING_AMDGPU_SYSTEM_BUILDER_AMDGPU_ALLOCATOR_SPECS[] =
+    R"(Allocator specs to apply to AMDGPU devices configured by this builder.
+
+This uses syntax like::
+
+  some_allocator
+  some_allocator:key=value
+  some_allocator:key=value,key=value
+  some_allocator:key=value,key=value;other_allocator:key=value
+
+Typical values for `some_allocator` include `caching` and `debug`.
+
+This can be set via a keyword of `amdgpu_allocators`, which will only apply to
+AMDGPU devices or `allocators` which will apply to all contained devices.
+Similarly, it is available on a `SHORTFIN_` prefixed env variable if environment
+lookup is not disabled.
+)";
+
+static const char DOCSTRING_AMDGPU_SYSTEM_BUILDER_AMDGPU_ASYNC_ALLOCATIONS[] =
+    R"(Whether to use async allocations if supported (default true).)";
 
 static const char DOCSTRING_AMDGPU_SYSTEM_BUILDER_CPU_DEVICES_ENABLED[] =
     R"(Whether to create a heterogenous system with hostcpu and amdgpu devices.
@@ -1265,6 +1314,16 @@ This option can be set as an option keyword with the name
 construction). For compatibility with IREE tools, the "IREE_HIP_DYLIB_PATH"
 environment variable is searched as a fallback in all cases. Multiple paths
 can be separated by semicolons on all platforms.
+)";
+
+static const char
+    DOCSTRING_AMDGPU_SYSTEM_BUILDER_LOGICAL_DEVICES_PER_PHYSICAL_DEVICE[] =
+        R"(Number of logical devices to open per physical, visible device.
+
+This option can be set as an option keyword with the name
+"amgdpu_logical_devices_per_physical_device" or the environment variable
+"SHORTFIN_AMDGPU_LOGICAL_DEVICES_PER_PHYSICAL_DEVICE" (if `env_prefix` was not
+changed at construction).
 )";
 
 static const char DOCSTRING_AMDGPU_SYSTEM_BUILDER_TRACING_LEVEL[] =
@@ -1340,12 +1399,31 @@ void BindAMDGPUSystem(py::module_ &global_m) {
           py::arg("env_prefix").none() = "SHORTFIN_",
           py::arg("validate_undef") = true, py::arg("kwargs"),
           DOCSTRING_AMDGPU_SYSTEM_BUILDER_CTOR)
+      .def_prop_rw(
+          "amdgpu_allocator_specs",
+          [](local::systems::AMDGPUSystemBuilder &self) {
+            return self.amdgpu_allocator_specs();
+          },
+          [](local::systems::AMDGPUSystemBuilder &self,
+             std::vector<std::string> specs) {
+            self.amdgpu_allocator_specs() = std::move(specs);
+          },
+          DOCSTRING_AMDGPU_SYSTEM_BUILDER_AMDGPU_ALLOCATOR_SPECS)
       .def_prop_ro(
           "available_devices",
           [](local::systems::AMDGPUSystemBuilder &self) {
             return self.GetAvailableDeviceIds();
           },
           DOCSTRING_AMDGPU_SYSTEM_BUILDER_AVAILABLE_DEVICES)
+      .def_prop_rw(
+          "async_allocations",
+          [](local::systems::AMDGPUSystemBuilder &self) {
+            return self.async_allocations();
+          },
+          [](local::systems::AMDGPUSystemBuilder &self, bool value) {
+            self.async_allocations() = value;
+          },
+          DOCSTRING_AMDGPU_SYSTEM_BUILDER_AMDGPU_ASYNC_ALLOCATIONS)
       .def_prop_rw(
           "cpu_devices_enabled",
           [](local::systems::AMDGPUSystemBuilder &self) -> bool {
@@ -1373,6 +1451,15 @@ void BindAMDGPUSystem(py::module_ &global_m) {
             self.tracing_level() = tracing_level;
           },
           DOCSTRING_AMDGPU_SYSTEM_BUILDER_TRACING_LEVEL)
+      .def_prop_rw(
+          "logical_devices_per_physical_device",
+          [](local::systems::AMDGPUSystemBuilder &self) -> size_t {
+            return self.logical_devices_per_physical_device();
+          },
+          [](local::systems::AMDGPUSystemBuilder &self, size_t value) {
+            self.logical_devices_per_physical_device() = value;
+          },
+          DOCSTRING_AMDGPU_SYSTEM_BUILDER_LOGICAL_DEVICES_PER_PHYSICAL_DEVICE)
       .def_prop_rw(
           "visible_devices",
           [](local::systems::AMDGPUSystemBuilder &self)

@@ -144,7 +144,8 @@ def run_cli(home_dir: Path, argv):
         # Done.
         writer.close()
 
-    lsys = sf.host.CPUSystemBuilder().create_system()
+    sf.SystemBuilder.default_system_type = "hostcpu"
+    lsys = sf.SystemBuilder().create_system()
     main = Main(lsys, home_dir)
     lsys.init_worker.call_threadsafe(client)
     lsys.run(main.main())
