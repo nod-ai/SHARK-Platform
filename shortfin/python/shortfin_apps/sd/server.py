@@ -39,9 +39,9 @@ from .components.builders import sdxl
 
 from shortfin.support.logging_setup import configure_main_logger
 
-logger = configure_main_logger("server")
-
 THIS_DIR = Path(__file__).resolve().parent
+
+logger = configure_main_logger(__name__)
 
 
 @asynccontextmanager
@@ -119,6 +119,7 @@ def configure(args) -> SystemManager:
 
 
 def get_modules(args):
+    # TODO: Move this out of server entrypoint
     vmfbs = {"clip": [], "unet": [], "vae": [], "scheduler": []}
     params = {"clip": [], "unet": [], "vae": []}
     model_flags = copy.deepcopy(vmfbs)
@@ -153,9 +154,7 @@ def get_modules(args):
             f"--iree-hip-target={args.target}",
             f"--iree-compile-extra-args={" ".join(ireec_args)}",
         ]
-        print("BUILDER INPUT:\n", " \ \n  ".join(builder_args))
         output = subprocess.check_output(builder_args).decode()
-        print("OUTPUT:", output)
 
         output_paths = output.splitlines()
         filenames.extend(output_paths)
@@ -240,9 +239,6 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
         help="Concurrency control -- How to isolate programs.",
     )
     parser.add_argument(
-        "--log_level", type=str, default="error", choices=["info", "debug", "error"]
-    )
-    parser.add_argument(
         "--show_progress",
         action="store_true",
         help="enable tqdm progress for unet iterations.",
@@ -282,17 +278,13 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
         default="",
         help="Path to local artifacts cache.",
     )
-    log_levels = {
-        "info": logging.INFO,
-        "debug": logging.DEBUG,
-        "error": logging.ERROR,
-    }
 
     args = parser.parse_args(argv)
 
-    log_level = log_levels[args.log_level]
+    log_level = logging.INFO
+
     logger.setLevel(log_level)
-    logger.addHandler(logging.FileHandler("shortfin_sd.log"))
+    # logger.addHandler(logging.FileHandler("shortfin_sd.log"))
     global sysman
     sysman = configure(args)
     uvicorn.run(
@@ -311,6 +303,7 @@ if __name__ == "__main__":
         log_config={
             "version": 1,
             "disable_existing_loggers": False,
+            "log_level": "critical",
             "formatters": {},
             "handlers": {},
             "loggers": {},
