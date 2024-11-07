@@ -41,7 +41,7 @@ from shortfin.support.logging_setup import configure_main_logger
 
 THIS_DIR = Path(__file__).resolve().parent
 
-logger = configure_main_logger(__name__)
+logger = configure_main_logger("server")
 
 
 @asynccontextmanager
@@ -284,7 +284,7 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
     log_level = logging.INFO
 
     logger.setLevel(log_level)
-    # logger.addHandler(logging.FileHandler("shortfin_sd.log"))
+    logger.addHandler(logging.FileHandler("shortfin_sd.log"))
     global sysman
     sysman = configure(args)
     uvicorn.run(
@@ -303,7 +303,6 @@ if __name__ == "__main__":
         log_config={
             "version": 1,
             "disable_existing_loggers": False,
-            "log_level": "critical",
             "formatters": {},
             "handlers": {},
             "loggers": {},
