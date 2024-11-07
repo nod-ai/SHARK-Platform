@@ -129,8 +129,8 @@ class ClientGenerateBatchProcess(sf.Process):
                     self.gen_req,
                     index,
                     input_tokens.ids,
-                    self.gen_req.sampling_params.max_tokens,
-                    self.tokenizer.eos_id,
+                    max_output_tokens=self.gen_req.sampling_params.max_tokens,
+                    stop_token_id=self.tokenizer.eos_id,
                 )
                 gen_processes.append(gen_process)
                 gen_process.launch()
