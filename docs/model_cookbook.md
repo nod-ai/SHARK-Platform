@@ -165,18 +165,13 @@ tokenizer_config.json: 100%|█████████████████�
 
 Setup (from [README.md](../README.md)):
 
-* TODO: this could be replaced with `pip install iree-turbine` or
-  `pip install sharktank` at some point. For now these are dev packages.
-
 ```bash
 # Setup venv.
 python -m venv --prompt sharktank .venv
 source .venv/bin/activate
 
-# Install requirements.
+# (Optional) Install PyTorch for CPU only, to save on download time.
 pip install -r pytorch-cpu-requirements.txt
-pip install -f https://iree.dev/pip-release-links.html --src deps \
-  -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
 
 # Install local projects.
 pip install -r requirements.txt -e sharktank/ shortfin/

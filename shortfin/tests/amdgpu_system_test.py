@@ -29,6 +29,30 @@ def test_create_amd_gpu_tracing_level():
 
 
 @pytest.mark.system("amdgpu")
+def test_create_amd_gpu_allocator():
+    sc = sf.amdgpu.SystemBuilder(allocators="caching;debug")
+    assert sc.amdgpu_allocator_specs == ["caching", "debug"]
+    with sc.create_system() as ls:
+        # Nothing to verify
+        pass
+
+
+@pytest.mark.system("amdgpu")
+def test_create_amd_gpu_logical_devices_per_physical_device():
+    # Default.
+    sc = sf.amdgpu.SystemBuilder()
+    assert sc.logical_devices_per_physical_device == 1
+
+    # Override.
+    sc = sf.amdgpu.SystemBuilder(amdgpu_logical_devices_per_physical_device=2)
+    assert sc.logical_devices_per_physical_device == 2
+    sc.visible_devices = sc.available_devices[0:1]
+    with sc.create_system() as ls:
+        assert "amdgpu:0:0@0" in ls.device_names
+        assert "amdgpu:0:0@1" in ls.device_names
+
+
+@pytest.mark.system("amdgpu")
 def test_create_amd_gpu_system_defaults():
     sc = sf.amdgpu.SystemBuilder(amdgpu_cpu_devices_enabled=True)
     with sc.create_system() as ls:
