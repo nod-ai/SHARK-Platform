@@ -1,10 +1,15 @@
+iree-turbine
+
 # Runtime deps.
-gguf==0.6.0
-numpy==1.26.3
+gguf>=0.6.0
+numpy>=1.26.3
+
+# Needed for gguf (TODO: check why transitive dep is missing)
+sentencepiece>=0.1.98,<=0.2.0
 
 # Model deps.
-huggingface-hub==0.22.2
-transformers==4.40.0
+huggingface-hub>=0.22.2
+transformers>=4.40.0
 datasets
 
 # It is expected that you have installed a PyTorch version/variant specific
@@ -12,5 +17,5 @@ datasets
 torch>=2.3.0
 
 # Serving deps.
-fastapi==0.112.2
-uvicorn==0.30.6
+fastapi>=0.112.2
+uvicorn>=0.30.6

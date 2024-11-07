@@ -50,7 +50,15 @@ python -m sharktank.tools.dump_gguf --hf-dataset=open_llama_3b_v2_f16_gguf
 * To build wheels for Linux:
 
     ```bash
-    sudo ./build_tools/build_linux_package.sh
+    ./build_tools/build_linux_package.sh
+    ```
+
+    That should produce
+    `build_tools/wheelhouse/sharktank-3.0.0.dev0-py3-none-any.whl`, which can
+    then be installed with
+
+    ```bash
+    python3 -m pip install build_tools/wheelhouse/sharktank-3.0.0.dev0-py3-none-any.whl
     ```
 
 * To build a wheel for your host OS/arch manually:

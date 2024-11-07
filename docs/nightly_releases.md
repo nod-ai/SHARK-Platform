@@ -74,11 +74,6 @@ python -m pip install sharktank -f https://github.com/nod-ai/SHARK-Platform/rele
 python -m pip install -f https://iree.dev/pip-release-links.html --src deps \
   -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
 
-# Install some other dependencies.
-# TODO(#294): list these as "dependencies" in `pyproject.toml` or make optional?
-python -m pip install gguf numpy huggingface-hub transformers datasets \
-  sentencepiece
-
 # Test the installation.
 python -c "from sharktank import ops; print('Sanity check passed')"
 
