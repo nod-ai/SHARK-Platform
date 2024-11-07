@@ -70,9 +70,10 @@ def main():
     # previous backoff for fibonacci backoff
     prev_backoff = 0
     backoff = 1
-    while not health_ok:
+    while True:
         try:
-            health_ok = test_health()
+            test_health()
+            break
         except requests.exceptions.ConnectionError:
             print(
                 f"Health check failed. Waiting for {backoff} seconds before retrying."
