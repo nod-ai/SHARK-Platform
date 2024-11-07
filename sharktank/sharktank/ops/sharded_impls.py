@@ -41,7 +41,7 @@ def all_gather_split(
     shards = [
         cat(
             [
-                transfer_to_logical_device(shard, i)
+                shard if i == j else transfer_to_logical_device(shard, i)
                 for j, shard in enumerate(input.shards)
             ],
             dim=dim,
@@ -62,7 +62,7 @@ def all_reduce_split_or_unreduced(
         elementwise(
             torch.add,
             *[
-                transfer_to_logical_device(shard, i)
+                shard if i == j else transfer_to_logical_device(shard, i)
                 for j, shard in enumerate(input.shards)
             ],
         )
@@ -1173,7 +1173,10 @@ def unshard_split(input: SplitPrimitiveTensor) -> Tensor:
 @unshard.override(UnreducedTensor)
 def unshard_unreduced(input: UnreducedTensor) -> Tensor:
     shards = input.shards
-    shards = [transfer_to_logical_device(shard, 0) for i, shard in enumerate(shards)]
+    shards = [
+        shard if i == 0 else transfer_to_logical_device(shard, 0)
+        for i, shard in enumerate(shards)
+    ]
     return elementwise(torch.add, *shards)
 
 
