@@ -22,6 +22,7 @@ AMDGPUSystemBuilder::AMDGPUSystemBuilder(iree_allocator_t host_allocator,
       available_devices_(host_allocator) {
   iree_hal_hip_device_params_initialize(&default_device_params_);
   InitializeDefaultSettings();
+  config_options().ValidateUndef();
 }
 
 AMDGPUSystemBuilder::~AMDGPUSystemBuilder() = default;
@@ -41,6 +42,10 @@ void AMDGPUSystemBuilder::InitializeDefaultSettings() {
     }
   }
 
+  // Gets allocator specs from either "amdgpu_allocators" or the fallback
+  // "allocators".
+  amdgpu_allocator_specs_ = GetConfigAllocatorSpecs("amdgpu_allocators");
+
   // HIP options.
   // "amdgpu_tracing_level": Matches IREE flag --hip_tracing:
   // Permissible values are:
@@ -50,6 +55,13 @@ void AMDGPUSystemBuilder::InitializeDefaultSettings() {
   auto tracing_level =
       config_options().GetInt("amdgpu_tracing_level", /*non_negative=*/true);
   default_device_params_.stream_tracing = tracing_level ? *tracing_level : 2;
+
+  // Override logical_devices_per_physical_device if present.
+  auto logical_devices_per_physical_device = config_options().GetInt(
+      "amdgpu_logical_devices_per_physical_device", /*non_negative=*/true);
+  if (logical_devices_per_physical_device) {
+    logical_devices_per_physical_device_ = *logical_devices_per_physical_device;
+  }
 
   // CPU devices.
   cpu_devices_enabled_ = config_options().GetBool("amdgpu_cpu_devices_enabled");
@@ -176,21 +188,27 @@ SystemPtr AMDGPUSystemBuilder::CreateSystem() {
   for (size_t instance_ordinal = 0; instance_ordinal < used_device_ids.size();
        ++instance_ordinal) {
     iree_hal_device_id_t device_id = used_device_ids[instance_ordinal];
-    iree::hal_device_ptr device;
-    SHORTFIN_THROW_IF_ERROR(iree_hal_driver_create_device_by_id(
-        hip_hal_driver_, device_id, 0, nullptr, host_allocator(),
-        device.for_output()));
-    lsys->InitializeHalDevice(std::make_unique<AMDGPUDevice>(
-        DeviceAddress(
-            /*system_device_class=*/SYSTEM_DEVICE_CLASS,
-            /*logical_device_class=*/LOGICAL_DEVICE_CLASS,
-            /*hal_driver_prefix=*/HAL_DRIVER_PREFIX,
-            /*instance_ordinal=*/instance_ordinal,
-            /*queue_ordinal=*/0,
-            /*instance_topology_address=*/{0}),
-        /*hal_device=*/device,
-        /*node_affinity=*/0,
-        /*capabilities=*/static_cast<uint32_t>(Device::Capabilities::NONE)));
+    for (size_t logical_index = 0;
+         logical_index < logical_devices_per_physical_device_;
+         ++logical_index) {
+      iree::hal_device_ptr device;
+      SHORTFIN_THROW_IF_ERROR(iree_hal_driver_create_device_by_id(
+          hip_hal_driver_, device_id, 0, nullptr, host_allocator(),
+          device.for_output()));
+      DeviceAddress address(
+          /*system_device_class=*/SYSTEM_DEVICE_CLASS,
+          /*logical_device_class=*/LOGICAL_DEVICE_CLASS,
+          /*hal_driver_prefix=*/HAL_DRIVER_PREFIX,
+          /*instance_ordinal=*/instance_ordinal,
+          /*queue_ordinal=*/0,
+          /*instance_topology_address=*/{logical_index});
+      ConfigureAllocators(amdgpu_allocator_specs_, device, address.device_name);
+      lsys->InitializeHalDevice(std::make_unique<AMDGPUDevice>(
+          address,
+          /*hal_device=*/device,
+          /*node_affinity=*/0,
+          /*capabilities=*/static_cast<uint32_t>(Device::Capabilities::NONE)));
+    }
   }
 
   // Initialize CPU devices if requested.
