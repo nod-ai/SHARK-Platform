@@ -10,6 +10,8 @@ import pytest
 import requests
 import uuid
 
+from ..utils import AccuracyValidationException
+
 logger = logging.getLogger(__name__)
 
 CPU_SETTINGS = {
@@ -76,14 +78,16 @@ def do_generate(prompt, port):
     ],
     indirect=True,
 )
+@pytest.mark.xfail(raises=AccuracyValidationException)
 def test_llm_server(llm_server, available_port):
     # Here you would typically make requests to your server
     # and assert on the responses
     assert llm_server.poll() is None
     output = do_generate("1 2 3 4 5 ", available_port)
     logger.info(output)
-    # TODO: Remove when fixed: https://github.com/nod-ai/SHARK-Platform/issues/437
-    with pytest.xfail(
-        reason="Accuracy with Shortfin LLM Server is decreased from latest iree-compiler RC."
-    ):
-        assert output.startswith("6 7 8")
+    expected_output_prefix = "6 7 8"
+    # TODO(#437): Remove when accuracy issue from latest iree-compiler RC is resolved.
+    if not output.startswith(expected_output_prefix):
+        raise AccuracyValidationException(
+            f"Expected '{output}' to start with '{expected_output_prefix}'"
+        )
