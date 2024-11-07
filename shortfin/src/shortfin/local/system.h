@@ -249,6 +249,27 @@ class SHORTFIN_API SystemBuilder {
   // Construct a System
   virtual SystemPtr CreateSystem() = 0;
 
+ protected:
+  // Uses the iree_hal_configure_allocator_from_specs() API to configure
+  // allocators for a device. The specs are parsed from the given config_key
+  // if it exists and take the form:
+  //   some_allocator
+  //   some_allocator:key=value
+  //   some_allocator:key=value,key=value
+  //   some_allocator:key=value,key=value;other_allocator:key=value
+  void ConfigureAllocators(const std::vector<std::string> &specs,
+                           iree_hal_device_t *device,
+                           std::string_view device_debug_desc);
+
+  // Gets a list of allocator specs from the config. If `specific_config_key`
+  // is given, this will be consulted first and used if available. Otherwise,
+  // "allocators" will be used. For SystemBuilders that handle multiple
+  // device types, the specific key will be something like "amdgpu_allocators"
+  // or "hostcpu_allocators" and will be used to allow independently scoped
+  // allocator specs.
+  std::vector<std::string> GetConfigAllocatorSpecs(
+      std::optional<std::string_view> specific_config_key);
+
  private:
   const iree_allocator_t host_allocator_;
   ConfigOptions config_options_;

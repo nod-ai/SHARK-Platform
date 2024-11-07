@@ -42,6 +42,11 @@ class SHORTFIN_API HostCPUSystemBuilder : public HostSystemBuilder {
   // must wholly replace this method, using protected piece-wise components.
   SystemPtr CreateSystem() override;
 
+  // Allocator specs to apply to hostcpu devices in this builder.
+  std::vector<std::string>& hostcpu_allocator_specs() {
+    return hostcpu_allocator_specs_;
+  }
+
  protected:
   // Initializes any host-cpu defaults that have not been configured yet.
   void InitializeHostCPUDefaults();
@@ -63,6 +68,8 @@ class SHORTFIN_API HostCPUSystemBuilder : public HostSystemBuilder {
     iree_host_size_t loader_count = 0;
     iree_hal_allocator_t* device_allocator = nullptr;
   } host_cpu_deps_;
+
+  std::vector<std::string> hostcpu_allocator_specs_;
 
  private:
   std::vector<iree_host_size_t> queue_node_ids_;
