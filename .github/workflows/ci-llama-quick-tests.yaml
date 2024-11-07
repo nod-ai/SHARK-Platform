@@ -67,12 +67,10 @@ jobs:
             -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
           pip install --no-compile -r requirements.txt -r sharktank/requirements-tests.txt -e sharktank/
 
-          # Try with the latest nightly releases, not what iree-turbine pins.
-          # We could also pin to a known working or stable version.
-          # This should eventually stabilize. Do the best we can for now.
+          # Test with pinned nightly releases, not what iree-turbine uses.
           pip install -f https://iree.dev/pip-release-links.html --upgrade \
-            iree-compiler==20241106.1070 \
-            iree-runtime==20241106.1070 \
+            iree-base-compiler==2.9.0rc20241107 \
+            iree-base-runtime==2.9.0rc20241107 \
             "numpy<2.0"
 
       - name: Run llama 8b tests
