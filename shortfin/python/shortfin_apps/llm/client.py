@@ -12,7 +12,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Test LLM server")
     parser.add_argument("--text", default="1 2 3 4 5 ", help="Input text prompt")
     parser.add_argument(
-        "--max_tokens", type=int, default=50, help="Max tokens to generate"
+        "--max_completion_tokens", type=int, default=50, help="Max tokens to generate"
     )
     parser.add_argument(
         "--temperature", type=float, default=0.7, help="Sampling temperature"
@@ -25,7 +25,7 @@ def main() -> None:
     data = {
         "text": args.text,
         "sampling_params": {
-            "max_tokens": args.max_tokens,
+            "max_completion_tokens": args.max_completion_tokens,
             "temperature": args.temperature,
         },
         "rid": uuid.uuid4().hex,

@@ -36,7 +36,7 @@ class GenerateItemProcess(sf.Process):
         gen_req: GenerateReqInput,
         index: int,
         input_token_ids: list[int],
-        max_output_tokens: int,
+        max_completion_tokens: int,
         eos_token_id: int,
     ):
         super().__init__(fiber=client.fiber)
@@ -45,7 +45,7 @@ class GenerateItemProcess(sf.Process):
         self.index = index
         self.input_token_ids = input_token_ids
         self.result_token_ids: list[int] = []
-        self.max_output_tokens = max_output_tokens
+        self.max_completion_tokens = max_completion_tokens
         self.eos_token_id = eos_token_id
 
     async def run(self):
@@ -61,7 +61,7 @@ class GenerateItemProcess(sf.Process):
             self.append_token(token_int)
             # Decode loop.
             exec.start_position = len(self.input_token_ids) - 1
-            for i in range(self.max_output_tokens):
+            for i in range(self.max_completion_tokens):
                 exec.reset(InferencePhase.DECODE)
                 exec.input_token_ids = [token_int]
                 exec.start_position += 1
@@ -129,7 +129,9 @@ class ClientGenerateBatchProcess(sf.Process):
                     self.gen_req,
                     index,
                     input_tokens.ids,
-                    max_output_tokens=self.gen_req.sampling_params["max_tokens"],
+                    max_completion_tokens=self.gen_req.sampling_params[
+                        "max_completion_tokens"
+                    ],
                     eos_token_id=self.tokenizer.eos_token_id,
                 )
                 gen_processes.append(gen_process)
