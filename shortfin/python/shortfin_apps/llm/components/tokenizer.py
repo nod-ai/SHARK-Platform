@@ -17,11 +17,13 @@ Encoding = tokenizers.Encoding
 
 class Tokenizer:
     def __init__(
-        self, raw_tk: tokenizers.Tokenizer, pad_id: int = 0, eos_token: int = None
+        self, raw_tk: tokenizers.Tokenizer, pad_id: int = 0, eos_token: str = None
     ):
         self.pad_id = pad_id
         self.eos_token = eos_token
-        self.eos_id = raw_tk.token_to_id(eos_token) if eos_token is not None else None
+        self.eos_token_id = (
+            raw_tk.token_to_id(eos_token) if eos_token is not None else None
+        )
         self._raw = raw_tk
         self._raw.enable_padding(pad_id=pad_id)
 
@@ -31,8 +33,10 @@ class Tokenizer:
         return Tokenizer(raw_tk)
 
     @staticmethod
-    def from_tokenizer_json_file(json_path: Path | str):
-        return Tokenizer(tokenizers.Tokenizer.from_file(str(json_path)))
+    def from_tokenizer_json_file(json_path: Path | str, eos_token: str):
+        return Tokenizer(
+            tokenizers.Tokenizer.from_file(str(json_path)), eos_token=eos_token
+        )
 
     def encode(self, texts: list[str]) -> list[tokenizers.Encoding]:
         """Encodes a batch of texts, applying no padding."""
