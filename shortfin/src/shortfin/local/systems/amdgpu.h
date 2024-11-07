@@ -57,7 +57,25 @@ class SHORTFIN_API AMDGPUSystemBuilder : public HostCPUSystemBuilder {
     return visible_devices_;
   };
 
+  // Allocator specs to apply to amdgpu devices in this builder.
+  std::vector<std::string> &amdgpu_allocator_specs() {
+    return amdgpu_allocator_specs_;
+  }
+
+  // "amdgpu_tracing_level": Matches IREE flag --hip_tracing:
+  // Permissible values are:
+  //   0 : stream tracing disabled.
+  //   1 : coarse command buffer level tracing enabled.
+  //   2 : fine-grained kernel level tracing enabled.
   int32_t &tracing_level() { return default_device_params_.stream_tracing; }
+
+  // The number of logical HAL devices to create per physical, visible device.
+  // This form of topology can be useful in certain cases where we aim to have
+  // oversubscription emulating what would usually be achieved with process
+  // level isolation. Defaults to 1.
+  size_t &logical_devices_per_physical_device() {
+    return logical_devices_per_physical_device_;
+  }
 
   // Gets all enumerated available device ids. This triggers enumeration, so
   // any settings required for that must already be set. This does no filtering
@@ -77,6 +95,8 @@ class SHORTFIN_API AMDGPUSystemBuilder : public HostCPUSystemBuilder {
   bool cpu_devices_enabled_ = false;
   std::vector<std::string> hip_lib_search_paths_;
   std::optional<std::vector<std::string>> visible_devices_;
+  size_t logical_devices_per_physical_device_ = 1;
+  std::vector<std::string> amdgpu_allocator_specs_;
 
   // Valid post enumeration.
   iree::hal_driver_ptr hip_hal_driver_;
