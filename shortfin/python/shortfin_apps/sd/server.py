@@ -17,8 +17,6 @@ import subprocess
 
 from iree.build import *
 
-import uvicorn.logging
-
 # Import first as it does dep checking and reporting.
 from shortfin.interop.fastapi import FastAPIResponder
 
@@ -26,7 +24,6 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
 import uvicorn
-
 
 from .components.generate import ClientGenerateBatchProcess
 from .components.config_struct import ModelParams
@@ -36,12 +33,11 @@ from .components.service import GenerateService
 from .components.tokenizer import Tokenizer
 from .components.builders import sdxl
 
-
 from shortfin.support.logging_setup import configure_main_logger
 
-THIS_DIR = Path(__file__).resolve().parent
-
 logger = configure_main_logger("server")
+
+THIS_DIR = Path(__file__).resolve().parent
 
 
 @asynccontextmanager
