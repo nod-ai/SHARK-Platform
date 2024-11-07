@@ -539,10 +539,15 @@ class DefaultPrimitiveTensor(PrimitiveTensor):
     ) -> "InferenceTensor":
         return DefaultPrimitiveTensor(name=self.name, data=new_globals[self.name])
 
-    def __getitem__(self, key):
-        if isinstance(key, PrimitiveTensor):
-            key = unbox_tensor(key)
-        return self._data[key]
+    def __getitem__(self, keys):
+        if not isinstance(keys, list) and not isinstance(keys, tuple):
+            keys = [keys]
+
+        keys = [
+            unbox_tensor(key) if isinstance(key, PrimitiveTensor) else key
+            for key in keys
+        ]
+        return self._data[*keys]
 
     def __repr__(self):
         return f"PrimitiveTensor({self.name}, {self.shape}, {self._data.dtype})"
@@ -1026,7 +1031,9 @@ class SplitPrimitiveTensor(ShardedTensorBase):
         if len(key) <= self.shard_count:
             return key
         new_key = list(key)
-        new_key[self.shard_dim] = slice(None)
+
+        if self.shard_dim < len(new_key):
+            new_key[self.shard_dim] = slice(None)
         return new_key
 
     def __getitem__(self, key):
@@ -1039,10 +1046,16 @@ class SplitPrimitiveTensor(ShardedTensorBase):
                 f"Slicing of the split dimension {self.shard_dim} is not supported."
             )
         new_key = self._get_shard_slice(key)
-        shards = [shard[new_key] for shard in self.shards]
+
+        shards = []
+        for i, shard in enumerate(self.shards):
+            shard_keys = [
+                k.shards[i] if isinstance(k, ReplicatedTensor) else k for k in new_key
+            ]
+            shards.append(shard[*shard_keys])
 
         shard_dim = self.shard_dim
-        for i in range(shard_dim):
+        for i in range(min(shard_dim, len(key))):
             if isinstance(key[i], Number) and key[i] >= 0:
                 # Rank reduction dimension before the split dim.
                 shard_dim -= 1
@@ -1168,14 +1181,16 @@ class ReplicatedTensor(ShardedTensor):
             raise IOError(f"Missing component tensor '' in {raw_tensors.keys()}") from e
         return cls(name=name, ts=ts)
 
-    def __getitem__(self, key):
-        if isinstance(key, ReplicatedTensor):
-            assert key.shard_count == self.shard_count
-            shards = [
-                shard[key_shard] for shard, key_shard in zip(self.shards, key.shards)
+    def __getitem__(self, keys):
+        if not isinstance(keys, list) and not isinstance(keys, tuple):
+            keys = [keys]
+
+        shards = []
+        for i, shard in enumerate(self.shards):
+            shard_keys = [
+                k.shards[i] if isinstance(k, ReplicatedTensor) else k for k in keys
             ]
-        else:
-            shards = [shard[key] for shard in self.shards]
+            shards.append(shard[*shard_keys])
         return ReplicatedTensor(ts=shards)
 
     def __repr__(self):
