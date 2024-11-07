@@ -39,5 +39,11 @@ echo "Import onnx model"
 python -m iree.compiler.tools.import_onnx $onnx_upgrade_path -o $mlir_path
 
 echo "Compile onnx model"
-python -m iree.compiler.tools.scripts.ireec \
-    $mlir_path -o "$vmfb_path" --iree-input-type=onnx --iree-hal-target-backends=llvm-cpu
+if [ -z "$@" ]; then
+    compile_flags="--iree-hal-target-backends=llvm-cpu --iree-llvmcpu-target-cpu=host"
+else
+    compile_flags="$@"
+fi
+echo "Using compile flags: $compile_flags"
+python -m iree.compiler.tools.scripts.iree_compile \
+    $mlir_path -o "$vmfb_path" --iree-input-type=onnx $compile_flags

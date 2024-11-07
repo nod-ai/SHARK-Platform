@@ -516,7 +516,10 @@ class PagedKVCache(BaseKVCache):
         part_block_views = []
         subblock_ids_kv = []
         for index, partition in enumerate(cache_partitions):
-            part_block_view = partition.reshape(blocked_shape).flatten(0, 1)
+            part_block_view = partition.unflatten(
+                1, (block_seq_len, self.block_seq_stride)
+            )
+            part_block_view = part_block_view.flatten(0, 1)
             part_block_views.append(part_block_view)
 
             subblock_ids = (

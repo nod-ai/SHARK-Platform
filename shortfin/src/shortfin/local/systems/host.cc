@@ -62,7 +62,9 @@ HostCPUSystemBuilder::Deps::~Deps() {
 HostCPUSystemBuilder::HostCPUSystemBuilder(iree_allocator_t host_allocator,
                                            ConfigOptions config_options)
     : HostSystemBuilder(host_allocator, std::move(config_options)),
-      host_cpu_deps_(host_allocator) {}
+      host_cpu_deps_(host_allocator) {
+  hostcpu_allocator_specs_ = GetConfigAllocatorSpecs("hostcpu_allocators");
+}
 
 HostCPUSystemBuilder::~HostCPUSystemBuilder() = default;
 
@@ -199,16 +201,19 @@ void HostCPUSystemBuilder::InitializeHostCPUDevices(System &lsys,
   SHORTFIN_THROW_IF_ERROR(iree_hal_driver_create_device_by_id(
       driver, it->device_id, 0, nullptr, host_allocator(),
       device.for_output()));
+  ConfigureAllocators(hostcpu_allocator_specs_, device, "hostcpu");
+
   iree_host_size_t queue_index = 0;
   for (auto node_id : queue_node_ids_) {
+    DeviceAddress address(
+        /*system_device_class=*/SYSTEM_DEVICE_CLASS,
+        /*logical_device_class=*/LOGICAL_DEVICE_CLASS,
+        /*hal_driver_prefix=*/HAL_DRIVER_PREFIX,
+        /*instance_ordinal=*/0,
+        /*queue_ordinal=*/queue_index,
+        /*instance_topology_address=*/{queue_index});
     lsys.InitializeHalDevice(std::make_unique<HostCPUDevice>(
-        DeviceAddress(
-            /*system_device_class=*/SYSTEM_DEVICE_CLASS,
-            /*logical_device_class=*/LOGICAL_DEVICE_CLASS,
-            /*hal_driver_prefix=*/HAL_DRIVER_PREFIX,
-            /*instance_ordinal=*/0,
-            /*queue_ordinal=*/queue_index,
-            /*instance_topology_address=*/{queue_index}),
+        address,
         /*hal_device=*/device,
         /*node_affinity=*/node_id,
         /*capabilities=*/
