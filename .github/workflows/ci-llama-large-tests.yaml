@@ -8,10 +8,9 @@ name: Llama Benchmarking Tests
 
 on:
   workflow_dispatch:
-  pull_request:
   schedule:
-    # Weekdays at 5:00 AM UTC = 10:00 PM PST.
-    - cron: "0 5 * * 1-5"
+    # Weekdays at 6:00 AM UTC = 11:00 PM PST.
+    - cron: "0 6 * * 1-5"
 
 concurrency:
   # A PR number if a pull request and otherwise the commit hash. This cancels
@@ -22,7 +21,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test_llama:
+  test_llama_large:
     name: "Llama Benchmarking Tests"
     strategy:
       matrix:
@@ -71,18 +70,18 @@ jobs:
           # We could also pin to a known working or stable version.
           # This should eventually stabilize. Do the best we can for now.
           pip install -f https://iree.dev/pip-release-links.html --upgrade \
-            iree-compiler \
-            iree-runtime \
+            iree-compiler==20241106.1070 \
+            iree-runtime==20241106.1070 \
             "numpy<2.0"
 
-      - name: Run llama test
-        run: pytest sharktank/tests/models/llama/benchmark_amdgpu_test.py -v -s --longrun --iree-hip-target=gfx942 --html=out/index.html
+      - name: Run llama tests
+        run: pytest sharktank/tests/models/llama/benchmark_amdgpu_test.py -v -s --run-all-llama --iree-hip-target=gfx942 --html=out/index.html
 
-      # - name: Deploy to GitHub Pages
-      #   uses: peaceiris/actions-gh-pages@v3
-      #   with:
-      #     github_token: ${{ secrets.SHARK_PLATFORM_GH_TOKEN }}
-      #     publish_dir: ./out
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.SHARK_PLATFORM_GH_TOKEN }}
+          publish_dir: ./out
 
       - name: Upload llama executable files
         uses: actions/upload-artifact@v4

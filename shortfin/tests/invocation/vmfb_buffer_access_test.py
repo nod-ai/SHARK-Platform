@@ -11,8 +11,8 @@ import array
 import random
 
 
-@pytest.fixture(scope="session")
-def kvcache_compiled_cpu_path(tmp_path_factory):
+@pytest.fixture
+def kvcache_compiled_cpu_path(tmp_path_factory, compile_flags):
     try:
         import iree.compiler.tools as tools
     except ModuleNotFoundError:
@@ -100,8 +100,8 @@ def kvcache_compiled_cpu_path(tmp_path_factory):
     tools.compile_file(
         str(mlir_path),
         output_file=str(vmfb_path),
-        target_backends=["llvm-cpu"],
         input_type="AUTO",
+        extra_args=compile_flags,
     )
 
     return vmfb_path
@@ -109,7 +109,7 @@ def kvcache_compiled_cpu_path(tmp_path_factory):
 
 @pytest.fixture
 def lsys():
-    sc = sf.host.CPUSystemBuilder()
+    sc = sf.SystemBuilder()
     lsys = sc.create_system()
     yield lsys
     lsys.shutdown()

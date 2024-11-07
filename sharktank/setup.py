@@ -14,15 +14,22 @@ SETUPPY_DIR = os.path.realpath(os.path.dirname(__file__))
 
 # Setup and get version information.
 VERSION_INFO_FILE = os.path.join(SETUPPY_DIR, "version_info.json")
+VERSION_INFO_RC_FILE = os.path.join(SETUPPY_DIR, "version_info_rc.json")
 
 
-def load_version_info():
-    with open(VERSION_INFO_FILE, "rt") as f:
+def load_version_info(version_file):
+    with open(version_file, "rt") as f:
         return json.load(f)
 
 
-version_info = load_version_info()
-PACKAGE_VERSION = version_info["package-version"]
+try:
+    version_info = load_version_info(VERSION_INFO_RC_FILE)
+except FileNotFoundError:
+    print("version_info_rc.json not found. Default to dev build")
+    version_info = load_version_info(VERSION_INFO_FILE)
+
+PACKAGE_VERSION = version_info.get("package-version")
+print(f"Using PACKAGE_VERSION: '{PACKAGE_VERSION}'")
 
 setup(
     version=f"{PACKAGE_VERSION}",
