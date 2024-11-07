@@ -17,7 +17,7 @@ class SystemManager:
         if any(x in device for x in ["local-task", "cpu"]):
             self.ls = sf.host.CPUSystemBuilder().create_system()
         elif any(x in device for x in ["hip", "amdgpu"]):
-            sc_query = sf.amdgpu.SystemBuilder()
+            sc_query = sf.SystemBuilder(system_type="amdgpu")
             available = sc_query.available_devices
             selected = []
             if device_ids is not None:
@@ -34,7 +34,7 @@ class SystemManager:
                         raise ValueError(f"Device id {did} could not be parsed.")
             else:
                 selected = available
-            sb = sf.amdgpu.SystemBuilder(amdgpu_visible_devices=";".join(selected))
+            sb = sf.SystemBuilder(system_type="amdgpu")
             self.ls = sb.create_system()
         logger.info(f"Created local system with {self.ls.device_names} devices")
         # TODO: Come up with an easier bootstrap thing than manually
