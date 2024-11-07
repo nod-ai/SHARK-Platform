@@ -11,7 +11,7 @@ from ..types.theta import Theta
 from ..types.tensors import DefaultPrimitiveTensor, SplitPrimitiveTensor
 from ..utils.testing import make_rand_torch
 from ..utils.create_cache import create_kv_cache
-from ..layers import CausalLMModelABC, BaseCausalLMModel, LlamaModelConfig
+from ..layers import BaseCausalLMModel, LlamaModelConfig
 from ..utils.iree import (
     run_iree_module_function,
     prepare_iree_module_function_args,
@@ -55,8 +55,8 @@ def make_llama_attention_block_theta(
     )
 
 
-class CausalLMIreeModel(BaseCausalLMModel, CausalLMModelABC):
-    """Implements CausalLMModelABC where prefill_from_seq_lens and decode_from_seq_lens
+class CausalLMIreeModel(BaseCausalLMModel):
+    """Implements BaseCausalLMModel where prefill_from_seq_lens and decode_from_seq_lens
     are backed by an IREE module.
     This is meant only for testing. It may not be performant as it marshals tensors and
     uses the IREE Python bindings."""
@@ -70,13 +70,7 @@ class CausalLMIreeModel(BaseCausalLMModel, CausalLMModelABC):
         iree_module: iree.runtime.VmModule,
         iree_devices: list[iree.runtime.HalDevice],
     ):
-        # TODO: figure out why doing
-        # super(BaseCausalLMModel, self).__init__(...)
-        # instead spooks torch.nn.Module with
-        # TypeError: CausalLMIreeModel.__init__() got an unexpected keyword argument
-        # 'context_length'
-        BaseCausalLMModel.__init__(
-            self,
+        super().__init__(
             context_length=config.hp.context_length,
             device=config.device,
             activation_dtype=config.activation_dtype,
@@ -89,9 +83,6 @@ class CausalLMIreeModel(BaseCausalLMModel, CausalLMModelABC):
         self.iree_module = iree_module
         self.iree_devices = iree_devices
         self.batch_size = batch_size
-
-    def prefill(self, *args, **kwargs):
-        raise NotImplementedError()
 
     def prefill_from_seq_lens(
         self,
@@ -122,9 +113,6 @@ class CausalLMIreeModel(BaseCausalLMModel, CausalLMModelABC):
 
         iree_results = iree_to_torch(*iree_results)
         return iree_results[0]
-
-    def decode(self, *args, **kwargs):
-        raise NotImplementedError()
 
     def decode_from_seq_lens(
         self,
