@@ -1282,6 +1282,9 @@ Similarly, it is available on a `SHORTFIN_` prefixed env variable if environment
 lookup is not disabled.
 )";
 
+static const char DOCSTRING_AMDGPU_SYSTEM_BUILDER_AMDGPU_ASYNC_ALLOCATIONS[] =
+    R"(Whether to use async allocations if supported (default true).)";
+
 static const char DOCSTRING_AMDGPU_SYSTEM_BUILDER_CPU_DEVICES_ENABLED[] =
     R"(Whether to create a heterogenous system with hostcpu and amdgpu devices.
 
@@ -1412,6 +1415,15 @@ void BindAMDGPUSystem(py::module_ &global_m) {
             return self.GetAvailableDeviceIds();
           },
           DOCSTRING_AMDGPU_SYSTEM_BUILDER_AVAILABLE_DEVICES)
+      .def_prop_rw(
+          "async_allocations",
+          [](local::systems::AMDGPUSystemBuilder &self) {
+            return self.async_allocations();
+          },
+          [](local::systems::AMDGPUSystemBuilder &self, bool value) {
+            self.async_allocations() = value;
+          },
+          DOCSTRING_AMDGPU_SYSTEM_BUILDER_AMDGPU_ASYNC_ALLOCATIONS)
       .def_prop_rw(
           "cpu_devices_enabled",
           [](local::systems::AMDGPUSystemBuilder &self) -> bool {
