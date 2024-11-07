@@ -10,7 +10,11 @@ BASE_URL = "http://localhost:8000"
 def test_health():
     response = requests.get(f"{BASE_URL}/health")
     print(f"Health check status code: {response.status_code}")
-    response.raise_for_status()
+    if not response.ok:
+        print("Health check failed")
+        print("Response content:")
+        print(response.text)
+        response.raise_for_status()
 
 
 def test_generate(prompt_text):
@@ -63,7 +67,6 @@ def main():
 
     print(f"Testing shortfin llm server at {BASE_URL}")
 
-    health_ok = False
     # previous backoff for fibonacci backoff
     prev_backoff = 0
     backoff = 1
@@ -76,10 +79,13 @@ def main():
             )
             time.sleep(backoff)
             prev_backoff, backoff = backoff, prev_backoff + backoff
+            if backoff > 20:
+                print("Max backoff reached. Exiting.")
+                return
 
     generate_ok = test_generate(args.prompt)
 
-    if health_ok and generate_ok:
+    if generate_ok:
         print("\nAll tests passed successfully!")
     else:
         print("\nSome tests failed. Please check the output above for details.")

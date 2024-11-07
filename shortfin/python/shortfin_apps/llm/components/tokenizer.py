@@ -16,8 +16,12 @@ Encoding = tokenizers.Encoding
 
 
 class Tokenizer:
-    def __init__(self, raw_tk: tokenizers.Tokenizer, pad_id: int = 0):
+    def __init__(
+        self, raw_tk: tokenizers.Tokenizer, pad_id: int = 0, eos_token: int = None
+    ):
         self.pad_id = pad_id
+        self.eos_token = eos_token
+        self.eos_id = raw_tk.token_to_id(eos_token) if eos_token is not None else None
         self._raw = raw_tk
         self._raw.enable_padding(pad_id=pad_id)
 
