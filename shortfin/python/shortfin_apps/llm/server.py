@@ -74,12 +74,24 @@ app.post("/generate")(generate_request)
 app.put("/generate")(generate_request)
 
 
+def get_eos_from_tokenizer_config(json_path):
+    import json
+
+    with open(json_path, "rt") as f:
+        json_text = f.read()
+    config = json.loads(json_text)
+    return config["eos_token"]
+
+
 def configure(args) -> SystemManager:
     # Setup system (configure devices, etc).
     sysman = SystemManager(device=args.device)
 
     # Setup each service we are hosting.
-    tokenizer = Tokenizer.from_tokenizer_json_file(args.tokenizer_json)
+    eos_token = get_eos_from_tokenizer_config(args.tokenizer_config_json)
+    tokenizer = Tokenizer.from_tokenizer_json_file(
+        args.tokenizer_json, eos_token=eos_token
+    )
     model_params = ModelParams.load_json(args.model_config)
     sm = GenerateService(
         name="default", sysman=sysman, tokenizer=tokenizer, model_params=model_params
@@ -107,7 +119,13 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
         "--tokenizer_json",
         type=Path,
         required=True,
-        help="Path to a tokenizer config file",
+        help="Path to a tokenizer.json file",
+    )
+    parser.add_argument(
+        "--tokenizer_config_json",
+        type=Path,
+        required=False,
+        help="Path to a tokenizer_config json file",
     )
     parser.add_argument(
         "--model_config",
@@ -136,6 +154,15 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
         help="Device to serve on; e.g. local-task, hip. Same options as `iree-run-module --device` ",
     )
     args = parser.parse_args(argv)
+
+    if args.tokenizer_config_json is None:
+        # this is only used for the EOS token
+        logging.info("Argument `--tokenizer_config_json` is not provided")
+        logging.info("Inferring tokenizer config path from tokenizer path")
+        inferred_tokenizer_config_path = args.tokenizer_json.with_name(
+            args.tokenizer_json.stem + "_config.json"
+        )
+        args.tokenizer_config_json = inferred_tokenizer_config_path
     global sysman
     sysman = configure(args)
 
