@@ -73,7 +73,7 @@ class Perplexity:
         self.iree_hip_target = iree_hip_target
         self.iree_hal_target_backends = iree_hal_target_backends
         self.kv_cache_type = kv_cache_type
-        self.activation_dtype = torch.float32
+        self.activation_dtype = torch.float16
         self.attention_dtype = torch.float16
         self.tensor_parallelism_size = tensor_parallelism_size
         self.attention_kernel = attention_kernel
