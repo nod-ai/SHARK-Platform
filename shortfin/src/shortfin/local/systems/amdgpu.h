@@ -62,6 +62,11 @@ class SHORTFIN_API AMDGPUSystemBuilder : public HostCPUSystemBuilder {
     return amdgpu_allocator_specs_;
   }
 
+  // Whether to use async allocations if the device supports them (default
+  // true). There are various reasons to disable this in different usage
+  // scenarios.
+  bool &async_allocations() { return default_device_params_.async_allocations; }
+
   // "amdgpu_tracing_level": Matches IREE flag --hip_tracing:
   // Permissible values are:
   //   0 : stream tracing disabled.

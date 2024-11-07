@@ -46,6 +46,12 @@ void AMDGPUSystemBuilder::InitializeDefaultSettings() {
   // "allocators".
   amdgpu_allocator_specs_ = GetConfigAllocatorSpecs("amdgpu_allocators");
 
+  // Whether to use async allocations if the device supports them (default
+  // true). There are various reasons to disable this in different usage
+  // scenarios.
+  default_device_params_.async_allocations =
+      config_options().GetBool("amdgpu_async_allocations", true);
+
   // HIP options.
   // "amdgpu_tracing_level": Matches IREE flag --hip_tracing:
   // Permissible values are:
