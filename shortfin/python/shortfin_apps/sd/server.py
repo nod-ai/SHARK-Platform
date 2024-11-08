@@ -84,7 +84,7 @@ app.put("/generate")(generate_request)
 
 def configure(args) -> SystemManager:
     # Setup system (configure devices, etc).
-    sysman = SystemManager(args.device, args.device_ids)
+    sysman = SystemManager(args.device, args.device_ids, args.amdgpu_async_allocations)
 
     # Setup each service we are hosting.
     tokenizers = []
@@ -243,6 +243,11 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
         "--trace_execution",
         action="store_true",
         help="Enable tracing of program modules.",
+    )
+    parser.add_argument(
+        "--amdgpu_async_allocations",
+        action="store_true",
+        help="Enable asynchronous allocations for amdgpu device contexts.",
     )
     parser.add_argument(
         "--splat",

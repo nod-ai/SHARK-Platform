@@ -23,7 +23,6 @@ AMDGPUSystemBuilder::AMDGPUSystemBuilder(iree_allocator_t host_allocator,
   iree_hal_hip_device_params_initialize(&default_device_params_);
   InitializeDefaultSettings();
   config_options().ValidateUndef();
-  default_device_params_.async_allocations = false;
 }
 
 AMDGPUSystemBuilder::~AMDGPUSystemBuilder() = default;

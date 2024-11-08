@@ -11,30 +11,33 @@ import shortfin as sf
 
 logger = logging.getLogger(__name__)
 
+def get_selected_devices(sb: sf.SystemBuilder, device_ids=None):
+        available = sb.available_devices
+    selected = []
+    if device_ids is not None:
+        if len(device_ids) >= len(available):
+            raise ValueError(
+                f"Requested more device ids ({device_ids}) than available ({available})."
+            )
+        for did in device_ids:
+            if did in available:
+                selected.append(did)
+            elif isinstance(did, int):
+                selected.append(available[did])
+            else:
+                raise ValueError(f"Device id {did} could not be parsed.")
+    else:
+        selected = available
+    return selected
 
 class SystemManager:
-    def __init__(self, device="local-task", device_ids=None):
+    def __init__(self, device="local-task", device_ids=None, async_allocs=True):
         if any(x in device for x in ["local-task", "cpu"]):
             self.ls = sf.host.CPUSystemBuilder().create_system()
         elif any(x in device for x in ["hip", "amdgpu"]):
-            sc_query = sf.SystemBuilder(system_type="amdgpu")
-            available = sc_query.available_devices
-            selected = []
-            if device_ids is not None:
-                if len(device_ids) >= len(available):
-                    raise ValueError(
-                        f"Requested more device ids ({device_ids}) than available ({available})."
-                    )
-                for did in device_ids:
-                    if did in available:
-                        selected.append(did)
-                    elif isinstance(did, int):
-                        selected.append(available[did])
-                    else:
-                        raise ValueError(f"Device id {did} could not be parsed.")
-            else:
-                selected = available
-            sb = sf.SystemBuilder(system_type="amdgpu")
+            sb = sf.SystemBuilder(system_type="amdgpu", amdgpu_async_allocations=async_allocs)
+            selected = get_selected_devices(sb)
+            sb.visible_devices = selected
             self.ls = sb.create_system()
         logger.info(f"Created local system with {self.ls.device_names} devices")
         # TODO: Come up with an easier bootstrap thing than manually
