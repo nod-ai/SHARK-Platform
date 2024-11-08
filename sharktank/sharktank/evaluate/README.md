@@ -11,7 +11,7 @@ pip install -r sharktank/requirements-tests.txt
 
 Perplexity score measures the ability of a language model to predict the next token in a sequence. A lower score indicates that a model has higher certainty in it's predictions. Perplexity acts as an intrinsic evaluation metric that measures the model quality, independent of any downstream task.
 
-In SHARK-Platform, we use perplexity to track code regressions and quality loss across quantized models (with FP16 as baseline). We use 100 prompts from the Wikitext-2 test set and calculate the mean perplexities shown below. These numbers are neither comparable between models with different tokenizers nor with other projects due to varying implementations.
+In SHARK-Platform, we use perplexity to track code regressions and quality loss across quantized models (with FP16 as baseline). We use 100 prompts randomly selected from the Wikitext-2 test set and calculate the mean perplexities shown below. These numbers are neither comparable between models with different tokenizers nor with other projects due to varying implementations.
 
 * Test perplexity for Llama3.1 8B (FP16) model:
 
@@ -19,7 +19,7 @@ In SHARK-Platform, we use perplexity to track code regressions and quality loss 
 pytest sharktank/tests/evaluate/perplexity_test.py  --longrun
 ```
 
-* Calculate the perplexity for a new model:
+* Calculate perplexity for a new model:
 
 ```bash
 python -m  sharktank.evaluate.perplexity \
