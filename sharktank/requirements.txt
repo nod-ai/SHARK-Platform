@@ -4,7 +4,7 @@ iree-turbine
 gguf>=0.6.0
 numpy>=1.26.3
 
-# Needed for gguf (TODO: check why transitive dep is missing)
+# Needed for gguf (TODO: remove when gguf package includes this itself)
 sentencepiece>=0.1.98,<=0.2.0
 
 # Model deps.
