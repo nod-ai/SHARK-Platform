@@ -30,5 +30,6 @@ shortfin_public_library(
   USAGE_DEPS
     spdlog::spdlog
     fmt::fmt
+    xtensor
     iree_defs
 )
