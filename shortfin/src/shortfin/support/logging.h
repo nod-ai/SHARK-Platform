@@ -7,6 +7,7 @@
 #ifndef SHORTFIN_SUPPORT_LOGGING_H
 #define SHORTFIN_SUPPORT_LOGGING_H
 
+#include "iree/base/tracing.h"
 #include "shortfin/support/api.h"
 #include "spdlog/spdlog.h"
 
