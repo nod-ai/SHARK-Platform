@@ -12,7 +12,7 @@ import shortfin as sf
 logger = logging.getLogger(__name__)
 
 def get_selected_devices(sb: sf.SystemBuilder, device_ids=None):
-        available = sb.available_devices
+    available = sb.available_devices
     selected = []
     if device_ids is not None:
         if len(device_ids) >= len(available):
