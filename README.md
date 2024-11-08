@@ -69,7 +69,7 @@ We recommend setting up a virtual environment (venv). The project is configured
 to ignore `.venv` directories, and editors like VSCode pick them up by default.
 
 ```
-python -m venv --prompt sharktank .venv
+python -m venv .venv
 source .venv/bin/activate
 ```
 
@@ -94,12 +94,12 @@ pip install -r pytorch-rocm-requirements.txt
 ### Install development packages
 
 ```
-# Clone and install editable iree-turbine dep in deps/
-pip install -f https://iree.dev/pip-release-links.html --src deps \
-  -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
-
 # Install editable local projects.
 pip install -r requirements.txt -e sharktank/ shortfin/
+
+# Optionally clone and install editable iree-turbine dep in deps/
+pip install -f https://iree.dev/pip-release-links.html --src deps \
+  -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
 ```
 
 ### Running tests
