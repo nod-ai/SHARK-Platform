@@ -284,6 +284,10 @@ class PagedKVCache(BaseKVCache):
         """Unflattens the 2D page table to a 6D tensor."""
         assert len(state) == 1, f"Expected 1-element state. Got: {len(state)}"
         page_slab = state[0]
+
+        if len(page_slab.shape) == 6:
+            return page_slab
+
         if self.shard_count == 1:
             assert not isinstance(page_slab, SplitPrimitiveTensor)
             return page_slab.unflatten(1, self.sub_page_dims)

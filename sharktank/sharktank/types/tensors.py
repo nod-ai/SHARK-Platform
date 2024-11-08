@@ -485,7 +485,11 @@ class PrimitiveTensor(InferenceTensor):
         return self.as_torch().dtype
 
     def __setitem__(self, key, value: "AnyTensor"):
-        self.as_torch()[key] = unbox_tensor(value)
+        if not isinstance(key, list) and not isinstance(key, tuple):
+            key = (key,)
+
+        key = [unbox_tensor(k) if isinstance(k, PrimitiveTensor) else k for k in key]
+        self.as_torch()[*key] = unbox_tensor(value)
 
 
 @register_inference_tensor
@@ -1072,8 +1076,11 @@ class SplitPrimitiveTensor(ShardedTensorBase):
             raise NotImplementedError(
                 f"Slicing of the split dimension {self.shard_dim} is not supported."
             )
-        for shard, value_shard in zip(self.shards, value.shards):
-            shard[key] = unbox_tensor(value_shard)
+        for i, (shard, value_shard) in enumerate(zip(self.shards, value.shards)):
+            shard_keys = [
+                k.shards[i] if isinstance(k, ReplicatedTensor) else k for k in key
+            ]
+            shard[*shard_keys] = unbox_tensor(value_shard)
 
 
 @register_inference_tensor
