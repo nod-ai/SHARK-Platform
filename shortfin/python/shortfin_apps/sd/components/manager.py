@@ -21,6 +21,11 @@ def get_selected_devices(sb: sf.SystemBuilder, device_ids=None):
                 f"Requested more device ids ({device_ids}) than available ({available})."
             )
         for did in device_ids:
+            if isinstance(did, str):
+                try:
+                    did = int(did)
+                except ValueError:
+                    did = did  
             if did in available:
                 selected.append(did)
             elif isinstance(did, int):
@@ -37,11 +42,10 @@ class SystemManager:
         if any(x in device for x in ["local-task", "cpu"]):
             self.ls = sf.host.CPUSystemBuilder().create_system()
         elif any(x in device for x in ["hip", "amdgpu"]):
-            sb = sf.SystemBuilder(
-                system_type="amdgpu", amdgpu_async_allocations=async_allocs
-            )
-            selected = get_selected_devices(sb)
-            sb.visible_devices = selected
+            sb = sf.SystemBuilder(system_type="amdgpu", amdgpu_async_allocations=async_allocs)
+            if device_ids:
+                sb.visible_devices = sb.available_devices
+                sb.visible_devices = get_selected_devices(sb, device_ids)
             self.ls = sb.create_system()
         logger.info(f"Created local system with {self.ls.device_names} devices")
         # TODO: Come up with an easier bootstrap thing than manually

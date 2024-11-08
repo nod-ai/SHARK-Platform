@@ -194,7 +194,7 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
     )
     parser.add_argument(
         "--device_ids",
-        type=int,
+        type=str,
         nargs="*",
         default=None,
         help="Device IDs visible to the system builder. Defaults to None (full visibility). Can be an index or a sf device id like amdgpu:0:0@0",
@@ -282,8 +282,9 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
 
     args = parser.parse_args(argv)
 
-    log_level = logging.INFO
+    log_level = logging.DEBUG
 
+    logging.root.setLevel(log_level)
     logger.setLevel(log_level)
     logger.addHandler(logging.FileHandler("shortfin_sd.log"))
     global sysman
