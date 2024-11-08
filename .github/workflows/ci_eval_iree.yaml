@@ -64,12 +64,12 @@ jobs:
             -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
           pip install --no-compile -r requirements.txt -r sharktank/requirements-tests.txt -e sharktank/
 
-          # Try with the latest nightly releases, not what iree-turbine pins.
+          # Try with the latest nightly releases, not what iree-turbine uses.
           # We could also pin to a known working or stable version.
           # This should eventually stabilize. Do the best we can for now.
           pip install -f https://iree.dev/pip-release-links.html --upgrade \
-            iree-compiler \
-            iree-runtime \
+            iree-base-compiler \
+            iree-base-runtime \
             "numpy<2.0"
       - name: Run perplexity test with IREE
         run:  pytest -n 8 -v -s sharktank/tests/evaluate/perplexity_iree_test.py --longrun --iree-device='hip://7' --iree-hip-target=gfx942 --iree-hal-target-backends=rocm --llama3-8b-f16-model-path=/data/llama3.1/8b/llama8b_f16.irpa --llama3-8b-tokenizer-path=/data/llama3.1/8b/tokenizer_config.json

@@ -13,9 +13,14 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
   )
 endif()
 
+# Get version number from file
+file(READ ${CMAKE_CURRENT_SOURCE_DIR}/version_info.json VERSION_JSON_STRING)
+string(JSON PACKAGE_VERSION GET ${VERSION_JSON_STRING} package-version)
+string(REGEX MATCH "(0|[1-9][0-9]*)(\.(0|[1-9][0-9]*))*" BASE_VERSION ${PACKAGE_VERSION})
+
 project(
   "libshortfin"
-  VERSION 0.9
+  VERSION ${BASE_VERSION}
   LANGUAGES C CXX)
 
 include(CMakeDependentOption)
@@ -183,7 +188,7 @@ elseif (SHORTFIN_BUNDLE_DEPS)
   FetchContent_Declare(
     shortfin_iree
     GIT_REPOSITORY https://github.com/iree-org/iree.git
-    GIT_TAG candidate-20241106.1070
+    GIT_TAG iree-2.9.0rc20241108
     GIT_SUBMODULES ${IREE_SUBMODULES}
     GIT_SHALLOW TRUE
     SYSTEM

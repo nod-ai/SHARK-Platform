@@ -50,7 +50,7 @@ jobs:
           python -m pip install \
             --find-links https://iree.dev/pip-release-links.html \
             --upgrade \
-            iree-compiler iree-runtime
+            iree-base-compiler iree-base-runtime
 
       - name: Run tuner tests
         run: pytest tuner/
