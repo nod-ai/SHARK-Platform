@@ -27,7 +27,7 @@ python -m  sharktank.evaluate.perplexity \
   --tokenizer-config-json=tokenizer_config.json
 ```
 
-### LLaMA 3.1 Scoreboard
+### LLaMA 3.1 Perplexity Scoreboard
 
 | CPU            | GPU        |
 |:-------------: |:----------:|
