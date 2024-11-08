@@ -38,6 +38,17 @@ def test_create_amd_gpu_allocator():
 
 
 @pytest.mark.system("amdgpu")
+def test_create_amd_gpu_async_allocations():
+    sc = sf.amdgpu.SystemBuilder()
+    assert sc.async_allocations == True
+    sc = sf.amdgpu.SystemBuilder(amdgpu_async_allocations=False)
+    assert sc.async_allocations == False
+    with sc.create_system() as ls:
+        # Nothing to verify
+        pass
+
+
+@pytest.mark.system("amdgpu")
 def test_create_amd_gpu_logical_devices_per_physical_device():
     # Default.
     sc = sf.amdgpu.SystemBuilder()
