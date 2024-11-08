@@ -35,7 +35,8 @@ def test_sharded_rotary_table():
         max_seqlen=max_seqlen,
         rope_freq_base=rope_freq_base,
     )
-    oq, ok = default_layer(xq=xq, xk=xk, start_index=0)
+    oq = default_layer(xt=xq, start_index=0)
+    ok = default_layer(xt=xk, start_index=0)
 
     # Then we can shard the same inputs and layer
     xq = SplitPrimitiveTensor(ts=xq, shard_dim=2, shard_count=4)
@@ -46,7 +47,8 @@ def test_sharded_rotary_table():
         rope_freq_base=rope_freq_base,
         tensor_parallelism_size=4,
     )
-    sq, sk = shard_layer(xq=xq, xk=xk, start_index=0)
+    sq = shard_layer(xt=xq, start_index=0)
+    sk = shard_layer(xt=xk, start_index=0)
 
     # Gathering and unboxing should yield the same results
     sq = ops.unshard(sq)
