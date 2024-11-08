@@ -25,7 +25,7 @@ def get_selected_devices(sb: sf.SystemBuilder, device_ids=None):
                 try:
                     did = int(did)
                 except ValueError:
-                    did = did  
+                    did = did
             if did in available:
                 selected.append(did)
             elif isinstance(did, int):
@@ -42,7 +42,9 @@ class SystemManager:
         if any(x in device for x in ["local-task", "cpu"]):
             self.ls = sf.host.CPUSystemBuilder().create_system()
         elif any(x in device for x in ["hip", "amdgpu"]):
-            sb = sf.SystemBuilder(system_type="amdgpu", amdgpu_async_allocations=async_allocs)
+            sb = sf.SystemBuilder(
+                system_type="amdgpu", amdgpu_async_allocations=async_allocs
+            )
             if device_ids:
                 sb.visible_devices = sb.available_devices
                 sb.visible_devices = get_selected_devices(sb, device_ids)
