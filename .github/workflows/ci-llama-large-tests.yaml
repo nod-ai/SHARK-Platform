@@ -70,8 +70,8 @@ jobs:
 
           # Test with pinned nightly releases, not what iree-turbine uses.
           pip install -f https://iree.dev/pip-release-links.html --upgrade \
-            iree-compiler==20241106.1070 \
-            iree-runtime==20241106.1070 \
+            iree-base-compiler==2.9.0rc20241108 \
+            iree-base-runtime==2.9.0rc20241108 \
             "numpy<2.0"
 
       - name: Run llama tests

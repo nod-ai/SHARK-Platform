@@ -102,18 +102,18 @@ python -m pip install --src deps \
   -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
 ```
 
-To install the `iree-compiler` and `iree-runtime` packages from nightly
-releases:
+To install the `iree-base-compiler` and `iree-base-runtime` packages from
+nightly releases:
 
 ```bash
 python -m pip install -f https://iree.dev/pip-release-links.html --upgrade \
-  iree-compiler iree-runtime
+  iree-base-compiler iree-base-runtime
 ```
 
 To install all three packages together:
 
 ```bash
 python -m pip install -f https://iree.dev/pip-release-links.html --upgrade \
-  iree-compiler iree-runtime --src deps \
+  iree-base-compiler iree-base-runtime --src deps \
   -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
 ```

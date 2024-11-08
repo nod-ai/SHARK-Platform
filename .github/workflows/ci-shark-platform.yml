@@ -68,8 +68,8 @@ jobs:
           # We could also pin to a known working or stable version.
           # This should eventually stabilize. Do the best we can for now.
           pip install -f https://iree.dev/pip-release-links.html --upgrade \
-            iree-compiler \
-            iree-runtime \
+            iree-base-compiler \
+            iree-base-runtime \
             "numpy<2.0"
 
       - name: Run LLM Integration Tests
