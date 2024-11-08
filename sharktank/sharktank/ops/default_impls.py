@@ -25,6 +25,7 @@ from ..types.tensors import unbox_tensor, AnyTensor
 from ._registry import AllOfType, AllOfExprs, AllOfExprsVariadic, IsOfType
 from .signatures import *
 import iree.turbine.ops.iree
+from ..utils import debugging
 
 
 @cat.override(AllOfType(Tensor, PrimitiveTensor))
@@ -443,6 +444,13 @@ def softmax_default(
 @to.override(Tensor)
 def to_default(tensor: Tensor, *args, **kwargs):
     return unbox_tensor(tensor).to(*args, **kwargs)
+
+
+@trace_tensors.override(AllOfExprsVariadic(IsOfType(Tensor, InferenceTensor)))
+def trace_tensors(key: str, *tensors: tuple[AnyTensor]):
+    if len(tensors) != 1:
+        raise ValueError("Tracing more than one tensor at a time is not supported.")
+    iree.turbine.ops.iree.trace_tensor(key, unshard(tensors[0]))
 
 
 @transfer_to_logical_device.override(Tensor)

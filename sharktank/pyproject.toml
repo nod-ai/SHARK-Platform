@@ -23,7 +23,7 @@ dependencies = ["iree-turbine"]
 dynamic = ["version"]  # the version is set via the `setup.py`
 
 [project.optional-dependencies]
-testing = ["pytest"]
+testing = ["pytest", "safetensors"]
 
 [project.urls]
 Repository = "https://github.com/nod-ai/SHARK-Platform"
