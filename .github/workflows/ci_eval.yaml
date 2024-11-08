@@ -21,9 +21,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test_perplexity_vmfb:
+  test_perplexity_iree:
     timeout-minutes: 1000
-    name: "IREE/vmfb"
+    name: "Perplexity-IREE"
     strategy:
       matrix:
         version: [3.11]
@@ -74,12 +74,12 @@ jobs:
             iree-base-runtime \
             "numpy<2.0"
 
-      - name: Run perplexity test with vmfb
-        run:  pytest -n 8 -v -s sharktank/tests/evaluate/perplexity_vmfb_test.py --longrun --iree-device='hip://7' --iree-hip-target=gfx942 --iree-hal-target-backends=rocm --llama3-8b-f16-model-path=/data/llama3.1/8b/llama8b_f16.irpa --llama3-8b-tokenizer-path=/data/llama3.1/8b/tokenizer_config.json
+      - name: Run perplexity test with IREE
+        run:  pytest -n 8 -v -s sharktank/tests/evaluate/perplexity_iree_test.py --longrun --iree-device='hip://7' --iree-hip-target=gfx942 --iree-hal-target-backends=rocm --llama3-8b-f16-model-path=/data/llama3.1/8b/llama8b_f16.irpa --llama3-8b-tokenizer-path=/data/llama3.1/8b/tokenizer_config.json
 
   test_perplexity_torch:
     timeout-minutes: 1000
-    name: "Torch/eager mode"
+    name: "Perplexity-Torch"
     strategy:
       matrix:
         version: [3.11]
@@ -122,5 +122,5 @@ jobs:
           pip install --no-compile -f https://iree.dev/pip-release-links.html --src deps \
             -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
 
-      - name: Run perplexity test in eager mode
+      - name: Run perplexity test with Torch
         run:  pytest -n 8 -v -s sharktank/tests/evaluate/perplexity_torch_test.py --longrun --llama3-8b-f16-model-path=/data/llama3.1/8b/llama8b_f16.irpa --llama3-8b-tokenizer-path=/data/llama3.1/8b/tokenizer_config.json
