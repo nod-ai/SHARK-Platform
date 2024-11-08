@@ -282,10 +282,9 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
 
     args = parser.parse_args(argv)
 
-    log_level = logging.DEBUG
+    log_level = logging.INFO
 
     logging.root.setLevel(log_level)
-    logger.setLevel(log_level)
     logger.addHandler(logging.FileHandler("shortfin_sd.log"))
     global sysman
     sysman = configure(args)
