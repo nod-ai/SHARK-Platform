@@ -27,12 +27,13 @@ python -m  sharktank.evaluate.perplexity \
   --tokenizer-config-json=tokenizer_config.json
 ```
 
-### LLaMA 3.1 Perplexity Scoreboard
+### Perplexity Scoreboard
 
 | CPU            | GPU        |
 |:-------------: |:----------:|
 | AMD EPYC 9554  | MI300X     |
 
+#### LLaMA 3.1
 
 |Models   |Model size (GB) |Torch      |IREE       |
 |:--------|:---------------|:----------|:----------|
