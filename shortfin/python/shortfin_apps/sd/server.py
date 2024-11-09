@@ -151,7 +151,7 @@ def get_modules(args):
             f"--model={modelname}",
             f"--iree-hal-target-device={args.device}",
             f"--iree-hip-target={args.target}",
-            f"--iree-compile-extra-args={" ".join(ireec_args)}",
+            f"--iree-compile-extra-args={' '.join(ireec_args)}",
         ]
         print("BUILDER INPUT:\n", " \ \n  ".join(builder_args))
         output = subprocess.check_output(builder_args).decode()
