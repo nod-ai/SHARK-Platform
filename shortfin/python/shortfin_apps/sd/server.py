@@ -17,8 +17,6 @@ import subprocess
 
 from iree.build import *
 
-import uvicorn.logging
-
 # Import first as it does dep checking and reporting.
 from shortfin.interop.fastapi import FastAPIResponder
 
@@ -27,7 +25,6 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
 import uvicorn
 
-
 from .components.generate import ClientGenerateBatchProcess
 from .components.config_struct import ModelParams
 from .components.io_struct import GenerateReqInput
@@ -35,7 +32,6 @@ from .components.manager import SystemManager
 from .components.service import GenerateService
 from .components.tokenizer import Tokenizer
 from .components.builders import sdxl
-
 
 from shortfin.support.logging_setup import configure_main_logger
 
@@ -88,7 +84,7 @@ app.put("/generate")(generate_request)
 
 def configure(args) -> SystemManager:
     # Setup system (configure devices, etc).
-    sysman = SystemManager(args.device, args.device_ids)
+    sysman = SystemManager(args.device, args.device_ids, args.amdgpu_async_allocations)
 
     # Setup each service we are hosting.
     tokenizers = []
@@ -119,6 +115,7 @@ def configure(args) -> SystemManager:
 
 
 def get_modules(args):
+    # TODO: Move this out of server entrypoint
     vmfbs = {"clip": [], "unet": [], "vae": [], "scheduler": []}
     params = {"clip": [], "unet": [], "vae": []}
     model_flags = copy.deepcopy(vmfbs)
@@ -153,9 +150,7 @@ def get_modules(args):
             f"--iree-hip-target={args.target}",
             f"--iree-compile-extra-args={' '.join(ireec_args)}",
         ]
-        print("BUILDER INPUT:\n", " \ \n  ".join(builder_args))
         output = subprocess.check_output(builder_args).decode()
-        print("OUTPUT:", output)
 
         output_paths = output.splitlines()
         filenames.extend(output_paths)
@@ -199,7 +194,7 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
     )
     parser.add_argument(
         "--device_ids",
-        type=int,
+        type=str,
         nargs="*",
         default=None,
         help="Device IDs visible to the system builder. Defaults to None (full visibility). Can be an index or a sf device id like amdgpu:0:0@0",
@@ -240,9 +235,6 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
         help="Concurrency control -- How to isolate programs.",
     )
     parser.add_argument(
-        "--log_level", type=str, default="error", choices=["info", "debug", "error"]
-    )
-    parser.add_argument(
         "--show_progress",
         action="store_true",
         help="enable tqdm progress for unet iterations.",
@@ -251,6 +243,11 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
         "--trace_execution",
         action="store_true",
         help="Enable tracing of program modules.",
+    )
+    parser.add_argument(
+        "--amdgpu_async_allocations",
+        action="store_true",
+        help="Enable asynchronous allocations for amdgpu device contexts.",
     )
     parser.add_argument(
         "--splat",
@@ -282,16 +279,12 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
         default="",
         help="Path to local artifacts cache.",
     )
-    log_levels = {
-        "info": logging.INFO,
-        "debug": logging.DEBUG,
-        "error": logging.ERROR,
-    }
 
     args = parser.parse_args(argv)
 
-    log_level = log_levels[args.log_level]
-    logger.setLevel(log_level)
+    log_level = logging.INFO
+
+    logging.root.setLevel(log_level)
     logger.addHandler(logging.FileHandler("shortfin_sd.log"))
     global sysman
     sysman = configure(args)

@@ -159,9 +159,9 @@ def needs_file(filename, ctx, namespace=FileNamespace.GEN):
     if os.path.exists(out_file):
         needed = False
     else:
-        name_path = "bin" if namespace == FileNamespace.BIN else ""
-        if name_path:
-            filename = os.path.join(name_path, filename)
+        # name_path = "bin" if namespace == FileNamespace.BIN else ""
+        # if name_path:
+        #     filename = os.path.join(name_path, filename)
         filekey = os.path.join(ctx.path, filename)
         ctx.executor.all[filekey] = None
         needed = True
