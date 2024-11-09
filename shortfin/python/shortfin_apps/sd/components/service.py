@@ -24,7 +24,7 @@ from .tokenizer import Tokenizer
 from .metrics import measure
 
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("shortfin-sd.service")
 
 prog_isolations = {
     "none": sf.ProgramIsolation.NONE,

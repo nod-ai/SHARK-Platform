@@ -15,8 +15,6 @@ import io
 import copy
 import subprocess
 
-from iree.build import *
-
 # Import first as it does dep checking and reporting.
 from shortfin.interop.fastapi import FastAPIResponder
 
@@ -33,9 +31,13 @@ from .components.service import GenerateService
 from .components.tokenizer import Tokenizer
 from .components.builders import sdxl
 
-from shortfin.support.logging_setup import configure_main_logger
+from shortfin.support.logging_setup import native_handler, configure_main_logger
 
-logger = configure_main_logger("server")
+logger = logging.getLogger("shortfin-sd")
+logger.addHandler(native_handler)
+logger.setLevel(logging.INFO)
+logger.propagate = False
+logger.info("Logger setup.")
 
 THIS_DIR = Path(__file__).resolve().parent
 
@@ -282,10 +284,6 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
 
     args = parser.parse_args(argv)
 
-    log_level = logging.INFO
-
-    logging.root.setLevel(log_level)
-    logger.addHandler(logging.FileHandler("shortfin_sd.log"))
     global sysman
     sysman = configure(args)
     uvicorn.run(
@@ -304,8 +302,24 @@ if __name__ == "__main__":
         log_config={
             "version": 1,
             "disable_existing_loggers": False,
-            "formatters": {},
-            "handlers": {},
-            "loggers": {},
+            "formatters": {
+                "default": {
+                    "format": "%(asctime)s - %(levelname)s - %(message)s",
+                    "datefmt": "%Y-%m-%d %H:%M:%S",
+                },
+            },
+            "handlers": {
+                "console": {
+                    "class": "logging.StreamHandler",
+                    "formatter": "default",
+                },
+            },
+            "loggers": {
+                "uvicorn": {
+                    "handlers": ["console"],
+                    "level": "INFO",
+                    "propagate": False,
+                },
+            },
         },
     )

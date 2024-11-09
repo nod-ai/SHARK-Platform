@@ -9,7 +9,7 @@ import threading
 
 import shortfin as sf
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("shortfin-sd.manager")
 
 
 def get_selected_devices(sb: sf.SystemBuilder, device_ids=None):
@@ -49,7 +49,7 @@ class SystemManager:
                 sb.visible_devices = sb.available_devices
                 sb.visible_devices = get_selected_devices(sb, device_ids)
             self.ls = sb.create_system()
-        logger.info(f"Created local system with {self.ls.device_names} devices")
+        logging.info(f"Created local system with {self.ls.device_names} devices")
         # TODO: Come up with an easier bootstrap thing than manually
         # running a thread.
         self.t = threading.Thread(target=lambda: self.ls.run(self.run()))
