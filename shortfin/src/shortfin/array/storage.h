@@ -232,14 +232,14 @@ class typed_mapping {
   span_type span() { return span_type(data(), size()); }
   const_span_type span() const { return const_span_type(data(), size()); }
 
-  span_type::iterator begin() { return span().begin(); }
-  span_type::iterator end() { return span().end(); }
+  typename span_type::iterator begin() { return span().begin(); }
+  typename span_type::iterator end() { return span().end(); }
 
-  const_span_type::iterator begin() const { return span().begin(); }
-  const_span_type::iterator end() const { return span().end(); }
+  typename const_span_type::iterator begin() const { return span().begin(); }
+  typename const_span_type::iterator end() const { return span().end(); }
 
-  const_span_type::iterator cbegin() const { return span().begin(); }
-  const_span_type::iterator cend() const { return span().end(); }
+  typename const_span_type::iterator cbegin() const { return span().begin(); }
+  typename const_span_type::iterator cend() const { return span().end(); }
 
  private:
   mapping untyped_mapping_;
