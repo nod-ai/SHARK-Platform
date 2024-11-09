@@ -29,6 +29,7 @@ shortfin_cc_component(
     iree_task_task
 )
 list(APPEND _SYSTEM_COMPONENTS shortfin_systems_host)
+target_compile_definitions(shortfin_public_defs INTERFACE SHORTFIN_HAVE_HOSTCPU)
 
 if(SHORTFIN_SYSTEMS_AMDGPU)
   shortfin_cc_component(
@@ -47,6 +48,7 @@ if(SHORTFIN_SYSTEMS_AMDGPU)
       iree_hal_drivers_hip_hip
   )
   list(APPEND _SYSTEM_COMPONENTS shortfin_systems_amdgpu)
+  target_compile_definitions(shortfin_public_defs INTERFACE SHORTFIN_HAVE_AMDGPU)
 endif()
 
 shortfin_cc_component(
