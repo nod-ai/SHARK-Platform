@@ -9,7 +9,14 @@ import subprocess
 import time
 
 pytest.importorskip("transformers")
-from transformers import AutoTokenizer
+from .utils import (
+    download_huggingface_model,
+    download_tokenizer,
+    export_paged_llm_v1,
+    compile_model,
+    find_available_port,
+    start_llm_server,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -44,73 +51,21 @@ def model_test_dir(request, tmp_path_factory):
     try:
         # Download model if it doesn't exist
         model_path = hf_home / model_file
-        logger.info(f"Preparing model_path: {model_path}..")
-        if not os.path.exists(model_path):
-            logger.info(
-                f"Downloading model {repo_id} {model_file} from Hugging Face..."
-            )
-            subprocess.run(
-                f"huggingface-cli download --local-dir {hf_home} {repo_id} {model_file}",
-                shell=True,
-                check=True,
-            )
-            logger.info(f"Model downloaded to {model_path}")
-        else:
-            logger.info("Using cached model")
+        download_huggingface_model(hf_home, repo_id, model_file)
 
         # Set up tokenizer if it doesn't exist
-        tokenizer_path = hf_home / "tokenizer.json"
-        logger.info(f"Preparing tokenizer_path: {tokenizer_path}...")
-        if not os.path.exists(tokenizer_path):
-            logger.info(f"Downloading tokenizer {tokenizer_id} from Hugging Face...")
-            tokenizer = AutoTokenizer.from_pretrained(
-                tokenizer_id,
-            )
-            tokenizer.save_pretrained(hf_home)
-            logger.info(f"Tokenizer saved to {tokenizer_path}")
-        else:
-            logger.info("Using cached tokenizer")
+        download_tokenizer(hf_home, tokenizer_id)
 
         # Export model
         mlir_path = tmp_dir / "model.mlir"
         config_path = tmp_dir / "config.json"
-        bs_string = ",".join(map(str, batch_sizes))
-        logger.info(
-            "Exporting model with following settings:\n"
-            f"  MLIR Path: {mlir_path}\n"
-            f"  Config Path: {config_path}\n"
-            f"  Batch Sizes: {bs_string}"
-        )
-        subprocess.run(
-            [
-                "python",
-                "-m",
-                "sharktank.examples.export_paged_llm_v1",
-                f"--gguf-file={model_path}",
-                f"--output-mlir={mlir_path}",
-                f"--output-config={config_path}",
-                f"--bs={bs_string}",
-            ],
-            check=True,
-        )
-        logger.info(f"Model successfully exported to {mlir_path}")
+        export_paged_llm_v1(mlir_path, config_path, model_path, batch_sizes)
 
         # Compile model
         vmfb_path = tmp_dir / "model.vmfb"
-        logger.info(f"Compiling model to {vmfb_path}")
-        subprocess.run(
-            [
-                "iree-compile",
-                mlir_path,
-                "-o",
-                vmfb_path,
-            ]
-            + settings["device_flags"],
-            check=True,
-        )
-        logger.info(f"Model successfully compiled to {vmfb_path}")
+        compile_model(mlir_path, vmfb_path, settings)
 
-        # Write config if it doesn't exist
+        # Write config
         edited_config_path = tmp_dir / "edited_config.json"
         config = {
             "module_name": "module",
@@ -135,36 +90,7 @@ def model_test_dir(request, tmp_path_factory):
 
 @pytest.fixture(scope="module")
 def available_port(port=8000, max_port=8100):
-    import socket
-
-    logger.info(f"Finding available port in range {port}-{max_port}...")
-
-    starting_port = port
-
-    while port < max_port:
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.bind(("localhost", port))
-                s.close()
-                logger.info(f"Found available port: {port}")
-                return port
-        except socket.error:
-            port += 1
-
-    raise IOError(f"No available ports found within range {starting_port}-{max_port}")
-
-
-def wait_for_server(url, timeout=10):
-    logger.info(f"Waiting for server to start at {url}...")
-    start = time.time()
-    while time.time() - start < timeout:
-        try:
-            requests.get(f"{url}/health")
-            logger.info("Server successfully started")
-            return
-        except requests.exceptions.ConnectionError:
-            time.sleep(1)
-    raise TimeoutError(f"Server did not start within {timeout} seconds")
+    return find_available_port(port, max_port)
 
 
 @pytest.fixture(scope="module")
@@ -182,24 +108,24 @@ def llm_server(request, model_test_dir, available_port):
         subprocess.Popen: The server process that was started.
     """
     logger.info("Starting LLM server...")
-    # Start the server
     hf_home, tmp_dir = model_test_dir
     model_file = request.param["model_file"]
     settings = request.param["settings"]
-    server_process = subprocess.Popen(
-        [
-            "python",
-            "-m",
-            "shortfin_apps.llm.server",
-            f"--tokenizer_json={hf_home / 'tokenizer.json'}",
-            f"--model_config={tmp_dir / 'edited_config.json'}",
-            f"--vmfb={tmp_dir / 'model.vmfb'}",
-            f"--parameters={hf_home / model_file}",
-            f"--device={settings['device']}",
-        ]
+
+    tokenizer_path = hf_home / "tokenizer.json"
+    config_path = tmp_dir / "edited_config.json"
+    vmfb_path = tmp_dir / "model.vmfb"
+    parameters_path = hf_home / model_file
+
+    # Start llm server
+    server_process = start_llm_server(
+        available_port,
+        tokenizer_path,
+        config_path,
+        vmfb_path,
+        parameters_path,
+        settings,
     )
-    # Wait for server to start
-    wait_for_server(f"http://localhost:{available_port}")
     yield server_process
     # Teardown: kill the server
     server_process.terminate()

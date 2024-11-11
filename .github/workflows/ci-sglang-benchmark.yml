@@ -1,0 +1,101 @@
+# Copyright 2024 Advanced Micro Devices, Inc.
+#
+# Licensed under the Apache License v2.0 with LLVM Exceptions.
+# See https://llvm.org/LICENSE.txt for license information.
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+
+name: Llama Benchmarking Tests
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Weekdays at 4:00 AM UTC = 9:00 PM PST.
+    - cron: "0 4 * * 1-5"
+
+concurrency:
+  # A PR number if a pull request and otherwise the commit hash. This cancels
+  # queued and in-progress runs for the same PR (presubmit) or commit
+  # (postsubmit). The workflow name is prepended to avoid conflicts between
+  # different workflows.
+  group: ${{ github.workflow }}-${{ github.event.number || github.sha }}
+  cancel-in-progress: true
+
+env:
+  SGLANG_REPO_DIR: ${{ github.workspace }}/sglang/
+  LIBSHORTFIN_DIR: ${{ github.workspace }}/shortfin/
+
+jobs:
+  sglang_bench_serve:
+    name: "SGLang Serving Benchmark Tests"
+    strategy:
+      matrix:
+        version: [3.11]
+      fail-fast: false
+    runs-on: llama-mi300x-3
+    defaults:
+      run:
+        shell: bash
+    env:
+      PIP_CACHE_DIR: "${{ github.workspace }}/.pip-cache"
+      SHORTFIN_VENV_DIR: ${{ github.workspace }}/.shortfin_venv
+      SGLANG_VENV_DIR: ${{ github.workspace }}/.sglang_venv
+      # TODO: Remove when multi-device is fixed
+      ROCR_VISIBLE_DEVICES: 1
+    steps:
+      - name: Get Current Date
+        id: date
+        run: echo "::set-output name=date::$(date +'%Y-%m-%d')"
+
+      - name: "Setting up Python"
+        id: setup_python
+        uses: actions/setup-python@v3
+        with:
+          python-version: ${{matrix.version}}
+
+      - name: "Checkout Code"
+        uses: actions/checkout@v3
+
+      - name: Cache Pip Packages
+        uses: actions/cache@v4
+        id: cache-pip
+        with:
+          path: ${{ env.PIP_CACHE_DIR }}
+          key: pip-${{ steps.setup_python.outputs.python-version }}-${{ hashFiles('*requirements.txt') }}
+
+      - name: Install pip deps
+        run: |
+          python -m pip install --no-compile --upgrade pip
+          # Note: We install in three steps in order to satisfy requirements
+          # from non default locations first. Installing the PyTorch CPU
+          # wheels saves multiple minutes and a lot of bandwidth on runner setup.
+          pip install --no-compile -r pytorch-cpu-requirements.txt
+          pip install --no-compile -f https://iree.dev/pip-release-links.html --src deps \
+            -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
+          pip install --no-compile -r requirements.txt -r sharktank/requirements-tests.txt -e sharktank/
+
+          # Try with the latest nightly releases, not what iree-turbine pins.
+          # We could also pin to a known working or stable version.
+          # This should eventually stabilize. Do the best we can for now.
+          pip install -f https://iree.dev/pip-release-links.html --upgrade \
+            iree-compiler==20241106.1070 \
+            iree-runtime==20241106.1070 \
+            "numpy<2.0"
+
+      - name: Install SGLang
+        run: pip install "git+https://github.com/stbaione/sglang.git#subdirectory=python"
+
+      - name: Launch Shortfin Server
+        run: "pytest -v ./build_tools/benchmark_tests/llm/sglang_benchmark_test.py --log-cli-level=INFO --html=out/llm/sglang/index.html"
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.SHARK_PLATFORM_GH_TOKEN }}
+          publish_dir: ./out/llm/sglang
+          destinaion_dir: ./llm/sglang
+
+      - name: Upload llama executable files
+        uses: actions/upload-artifact@v4
+        with:
+          name: sglang-benchmark
+          path: ${{ github.workspace }}/${{ steps.date.outputs.date }}
