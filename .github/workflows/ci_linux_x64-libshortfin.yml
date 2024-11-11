@@ -71,7 +71,7 @@ jobs:
         git submodule update --init --depth 1 -- third_party/hip-build-deps/
 
     - name: Setup Python ${{ matrix.python-version }}
-      uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.3
+      uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
       with:
         python-version: ${{ matrix.python-version }}
         cache: "pip"
