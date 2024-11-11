@@ -124,11 +124,9 @@ Verify that you have the following in your specified directory ($WD):
 - model.vmfb
 
 ### Launch Server:
+
 #### Set the Target Device
-**NOTE: If your system has multiple GPUs, and the current GPU is in use, you can change the target device with `--device=hip://<device_numer>`**
-```bash
-export DEVICE=0
-```
+TODO: Add instructions on targeting different devices, when `--device=hip://$DEVICE` is supported
 
 #### Run the Shortfin Server
 Run the following command to launch the Shortfin LLM Server in the background:
@@ -138,7 +136,7 @@ python -m shortfin_apps.llm.server \
    --model_config=$EDITED_CONFIG_PATH \
    --vmfb=$VMFB_PATH \
    --parameters=$MODEL_PARAMS_PATH \
-   --device=hip://$DEVICE \
+   --device=hip \
    --port=$PORT > shortfin_llm_server.log 2>&1 &
 shortfin_process=$!
 ```
