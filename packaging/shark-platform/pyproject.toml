@@ -20,15 +20,8 @@ classifiers = [
   "Programming Language :: Python :: 3.13",
 ]
 requires-python = ">= 3.10"
-
-version = "2.9.0"
-dependencies = [
-  "iree-base-compiler==2.9.*",
-  "iree-base-runtime==2.9.*",
-  "iree-turbine==2.9.*",
-  "sharktank==2.9.*",
-  "shortfin==2.9.*",
-]
+# Version is set via the `setup.py` and requirements are set via files below.
+dynamic = ["version", "dependencies"]
 
 [project.urls]
 Repository = "https://github.com/nod-ai/SHARK-Platform"
@@ -40,3 +33,6 @@ onnx = [
 
 [tool.setuptools]
 packages = []
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
