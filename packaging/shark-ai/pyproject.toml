@@ -3,11 +3,11 @@ requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "shark-platform"
+name = "shark-ai"
 authors = [
   {name = "SHARK Authors"},
 ]
-description = "SHARK Platform meta package"
+description = "SHARK AI meta package"
 readme = "README.md"
 license = {text = "Apache-2.0"}
 classifiers = [

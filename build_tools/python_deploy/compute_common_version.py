@@ -38,7 +38,7 @@ REPO_ROOT = THIS_DIR.parent.parent
 
 VERSION_FILE_SHARKTANK = REPO_ROOT / "sharktank/version_info.json"
 VERSION_FILE_SHORTFIN = REPO_ROOT / "shortfin/version_info.json"
-VERSION_FILE_LOCAL = REPO_ROOT / "packaging/shark-platform/version_local.json"
+VERSION_FILE_LOCAL = REPO_ROOT / "packaging/shark-ai/version_local.json"
 
 
 def load_version_info(version_file):

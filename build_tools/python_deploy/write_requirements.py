@@ -5,8 +5,8 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-# This script writes the `packaging/shark-platform/requirements.txt` file
-# and pins the versions of the dependencies accordingly. For nighly releases,
+# This script writes the `packaging/shark-ai/requirements.txt` file and pins
+# the versions of the dependencies accordingly. For nighly releases,
 #  * sharktank
 #  * shortfin
 # get pinned to the corresponding nighly version. For stable releases,
@@ -27,8 +27,8 @@ from packaging.version import Version
 THIS_DIR = Path(__file__).parent.resolve()
 REPO_ROOT = THIS_DIR.parent.parent
 
-VERSION_FILE_LOCAL = REPO_ROOT / "packaging/shark-platform/version_local.json"
-REQUIREMENTS_TXT = REPO_ROOT / "packaging/shark-platform/requirements.txt"
+VERSION_FILE_LOCAL = REPO_ROOT / "packaging/shark-ai/version_local.json"
+REQUIREMENTS_TXT = REPO_ROOT / "packaging/shark-ai/requirements.txt"
 
 
 def load_version_info(version_file):
