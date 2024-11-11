@@ -257,6 +257,7 @@ def main():
     cli.add_input_dataset_options(parser)
     cli.add_tokenizer_options(parser)
     cli.add_quantization_options(parser)
+    cli.add_model_options(parser)
     args = cli.parse(parser)
 
     device = torch.device(args.device) if args.device else None
@@ -274,6 +275,7 @@ def main():
         device=device,
         activation_dtype=activation_dtype,
         attention_dtype=activation_dtype,
+        attention_kernel=args.attention_kernel,
         kv_cache_dtype=kv_cache_dtype,
         use_hf=args.use_hf,
         tensor_parallelism_size=args.tensor_parallelism_size,

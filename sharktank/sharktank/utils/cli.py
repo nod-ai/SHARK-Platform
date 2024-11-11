@@ -60,6 +60,18 @@ def add_output_dataset_options(parser: argparse.ArgumentParser):
         help="IRPA file to save dataset to",
     )
 
+
+def add_model_options(parser: argparse.ArgumentParser):
+    """Adds model config options not exclusive to export or eager
+    """
+    parser.add_argument(
+        "--attention-kernel",
+        type=str,
+        default="decomposed",
+        choices=["decomposed", "torch"],
+    )
+
+
 def add_quantization_options(parser: argparse.ArgumentParser):
     parser.add_argument("--fake-quant", action=argparse.BooleanOptionalAction, help="whether or not to run/export the model in fake quant mode. Note, running eagerly without fake quant is dependent on torch types supporting operations. YMMV")
     parser.add_argument("--kv-cache-dtype", type=str, help="float8_e4m3fnuz for quark models", default="float16")
