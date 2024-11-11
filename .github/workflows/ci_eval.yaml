@@ -72,7 +72,8 @@ jobs:
             iree-runtime \
             "numpy<2.0"
       - name: Run perplexity test with vmfb
-        run:  pytest -n 8 -v -s sharktank/tests/evaluate/perplexity_vmfb_test.py --longrun --iree-device='hip://7' --iree-hip-target=gfx942 --iree-hal-target-backends=rocm --llama3-8b-f16-model-path=/data/llama3.1/8b/llama8b_f16.irpa --llama3-8b-tokenizer-path=/data/llama3.1/8b/tokenizer_config.json
+        run:  pwd
+        #pytest -n 8 -v -s sharktank/tests/evaluate/perplexity_vmfb_test.py --longrun --iree-device='hip://7' --iree-hip-target=gfx942 --iree-hal-target-backends=rocm --llama3-8b-f16-model-path=/data/llama3.1/8b/llama8b_f16.irpa --llama3-8b-tokenizer-path=/data/llama3.1/8b/tokenizer_config.json
 
   test_perplexity_torch:
     timeout-minutes: 1000
@@ -80,7 +81,7 @@ jobs:
     strategy:
       matrix:
         version: [3.11]
-        runs-on: [llama-mi300x-3]
+        runs-on: [llama-mi300x-1]
       fail-fast: false
     runs-on: ${{matrix.runs-on}}
     defaults:
@@ -118,4 +119,7 @@ jobs:
           pip install --no-compile -r requirements.txt -r sharktank/requirements-tests.txt -e sharktank/
 
       - name: Run perplexity test in eager mode
-        run:  pytest -n 8 -v -s sharktank/tests/evaluate/perplexity_torch_test.py --longrun --llama3-8b-f16-model-path=/data/llama3.1/8b/llama8b_f16.irpa --llama3-8b-tokenizer-path=/data/llama3.1/8b/tokenizer_config.json
+        run:  |
+          pytest -n 8 -v -s sharktank/tests/evaluate/perplexity_torch_test.py --longrun --llama3-8b-f16-model-path=/data/llama-3.1/8b/llama8b_f8.irpa --llama3-8b-tokenizer-path=/data/llama-3.1/8b/tokenizer_config.json
+          pytest -n 8 -v -s sharktank/tests/evaluate/perplexity_torch_test.py --longrun --llama3-8b-f16-model-path=/data/llama-3.1/70b/llama70b_f8.irpa --llama3-70b-tokenizer-path=/data/llama-3.1/8b/tokenizer_config.json
+          pytest -n 8 -v -s sharktank/tests/evaluate/perplexity_torch_test.py --longrun --llama3-8b-f16-model-path=/data/llama-3.1/70b/llama405b_f8.irpa --llama3-405b-tokenizer-path=/data/llama-3.1/8b/tokenizer_config.json
