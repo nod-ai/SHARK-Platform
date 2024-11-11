@@ -53,49 +53,38 @@ class RotaryEmbeddingLayer(BaseLayer):
                 return self.static_rotary_embed_table
             return self._create_rotary_embed_table()
 
-        if self.tensor_parallelism_size == 1:
-            return None
-
-        nt = namedtuple("replicated_tensor", ["shards"])
-        return nt([None] * self.tensor_parallelism_size)
+        return None
 
     def forward(
         self,
         *,
-        xq: Union[torch.Tensor, SplitPrimitiveTensor],
-        xk: Union[torch.Tensor, SplitPrimitiveTensor],
+        xt: Union[torch.Tensor, SplitPrimitiveTensor],
         start_index: int,
     ):
-        if isinstance(xq, SplitPrimitiveTensor):
-            assert (
-                isinstance(xk, SplitPrimitiveTensor)
-                and xq.shard_count == xk.shard_count
-                and xk.shard_dim == xq.shard_dim
-            )
-            assert (
-                isinstance(self.rotary_embed_table, ReplicatedTensor)
-                and xq.shard_count == self.rotary_embed_table.shard_count
-            )
-            xqk_shards = [
+        if isinstance(xt, SplitPrimitiveTensor):
+            rotary_shards = [None] * xt.shard_count
+            if self.rotary_embed_table is not None:
+                assert (
+                    isinstance(self.rotary_embed_table, ReplicatedTensor)
+                    and xt.shard_count == self.rotary_embed_table.shard_count
+                )
+                rotary_shards = [
+                    unbox_tensor(shard) for shard in self.rotary_embed_table.shards
+                ]
+
+            xt_shards = [
                 self.forward_unsharded(
-                    xq=unbox_tensor(xq_shard),
-                    xk=unbox_tensor(xk_shard),
+                    xt=unbox_tensor(xt_shard),
                     start_index=start_index,
-                    rotary_embed_table=unbox_tensor(rotary_embed_table_shard),
+                    rotary_embed_table=rotary_shard,
                 )
-                for xq_shard, xk_shard, rotary_embed_table_shard in zip(
-                    xq.shards, xk.shards, self.rotary_embed_table.shards
-                )
+                for xt_shard, rotary_shard in zip(xt.shards, rotary_shards)
             ]
-            xq_shards = [xqk[0] for xqk in xqk_shards]
-            xk_shards = [xqk[1] for xqk in xqk_shards]
-            xq = SplitPrimitiveTensor(ts=xq_shards, shard_dim=xq.shard_dim)
-            xk = SplitPrimitiveTensor(ts=xk_shards, shard_dim=xk.shard_dim)
-            return xq, xk
+            xt = SplitPrimitiveTensor(ts=xt_shards, shard_dim=xt.shard_dim)
+            return xt
         else:
             return self.forward_unsharded(
-                xq=xq,
-                xk=xk,
+                xt=xt,
                 start_index=start_index,
                 rotary_embed_table=self.rotary_embed_table,
             )
@@ -103,8 +92,7 @@ class RotaryEmbeddingLayer(BaseLayer):
     def forward_unsharded(
         self,
         *,
-        xq: torch.Tensor,
-        xk: torch.Tensor,
+        xt: torch.Tensor,
         start_index: int,
         rotary_embed_table: Optional[torch.Tensor],
     ):
@@ -149,44 +137,39 @@ class RotaryEmbeddingLayer(BaseLayer):
             return order_tensor
 
         if self.use_hf:
-            xq = xq[..., create_interleaved_tensor(xq.shape[-1])]
-            xk = xk[..., create_interleaved_tensor(xq.shape[-1])]
-
-        xq_ = torch.view_as_complex(xq.unflatten(-1, (-1, 2)))
-        xk_ = torch.view_as_complex(xk.unflatten(-1, (-1, 2)))
-        _, sl, _, dim = xq_.shape
+            xt = xt[..., create_interleaved_tensor(xt.shape[-1])]
+        xt_ = xt.unflatten(-1, (-1, 2))
+        _, sl, _, dim, _ = xt_.shape
 
         # Offset the table based on starting position.
         if self.use_table:
-            freqs_cis = rotary_embed_table[start_index : start_index + sl, :]
+            freqs_cis = rotary_embed_table[:, start_index : start_index + sl, :]
         else:
-            freqs_cis = torch.arange(start_index, start_index + sl, device=xq.device)
+            freqs_cis = torch.arange(start_index, start_index + sl, device=xt.device)
             freqs_cis = self._compute_rotary_embed_table(freqs_cis)
-            freqs_cis = self._replicate(freqs_cis)
 
         assert freqs_cis.shape[-1] == dim
         assert (
-            freqs_cis.shape[0] >= sl
+            freqs_cis.shape[1] >= sl
         ), f"Sequence length longer than embedding table ({sl} vs {freqs_cis.shape[0]})"
 
-        broadcast_freqs_cis = freqs_cis[None, 0:sl, None, :]
+        broadcast_freqs_cis = freqs_cis[:, None, 0:sl, None, :]
+
+        cos = broadcast_freqs_cis[0]
+        sin = broadcast_freqs_cis[1]
+        xt_r = xt_[..., 0]
+        xt_i = xt_[..., 1]
+
+        xt_out_r = xt_r * cos - xt_i * sin
+        xt_out_i = xt_i * cos + xt_r * sin
+
+        xt_out = torch.concatenate((xt_out_r, xt_out_i), dim=-1)
 
         if self.use_hf:
-            xq_out = torch.view_as_real(
-                self.complex_multiply(xq_, broadcast_freqs_cis)
-            ).flatten(3)
-            xk_out = torch.view_as_real(
-                self.complex_multiply(xk_, broadcast_freqs_cis)
-            ).flatten(3)
+            xt_out = xt_out[..., create_ordering_tensor(xt_out.shape[-1])]
+            return xt_out.type_as(xt)
 
-            xq_out = xq_out[..., create_ordering_tensor(xq_out.shape[-1])]
-            xk_out = xk_out[..., create_ordering_tensor(xq_out.shape[-1])]
-
-            return xq_out.type_as(xq), xk_out.type_as(xk)
-
-        xq_out = torch.view_as_real(xq_ * broadcast_freqs_cis).flatten(3)
-        xk_out = torch.view_as_real(xk_ * broadcast_freqs_cis).flatten(3)
-        return xq_out.type_as(xq), xk_out.type_as(xk)
+        return xt_out.type_as(xt)
 
     def complex_multiply(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
         """Function for elementwise-multiplication of two complex torch tensors.
@@ -224,11 +207,11 @@ class RotaryEmbeddingLayer(BaseLayer):
         self.trace_tensor("rope.positions_seq", positions_seq)
 
         if self.use_table:
-            freqs_cis = self.rotary_embed_table[positions_seq]
+            freqs_cis = self.rotary_embed_table[:, positions_seq]
         else:
             shape = positions_seq.shape
             freqs_cis = self._compute_rotary_embed_table(positions_seq.flatten())
-            freqs_cis = freqs_cis.unflatten(0, shape)
+            freqs_cis = freqs_cis.unflatten(1, shape)
 
         # Unsqueeze a unit dim for attention heads.
         broadcast_freqs_cis = freqs_cis.unsqueeze(2)
@@ -237,41 +220,24 @@ class RotaryEmbeddingLayer(BaseLayer):
     def apply_batched_mask(
         self,
         *,
-        xq: Union[torch.Tensor, SplitPrimitiveTensor],
-        xk: Union[torch.Tensor, SplitPrimitiveTensor],
+        xt: Union[torch.Tensor, SplitPrimitiveTensor],
         mask: Union[torch.Tensor, ReplicatedTensor],
     ):
-        if isinstance(xq, SplitPrimitiveTensor):
-            assert (
-                isinstance(xk, SplitPrimitiveTensor)
-                and xq.shard_count == xk.shard_count
-                and xk.shard_dim == xq.shard_dim
-            )
-            assert (
-                isinstance(mask, ReplicatedTensor)
-                and mask.shard_count == xq.shard_count
-            )
-            xqk_shards = [
-                self.apply_batched_mask_unsharded(
-                    xq=unbox_tensor(xq_shard),
-                    xk=unbox_tensor(xk_shard),
-                    mask=unbox_tensor(mask_shard),
-                )
-                for xq_shard, xk_shard, mask_shard in zip(
-                    xq.shards, xk.shards, mask.shards
-                )
-            ]
-            xq_shards = [xqk[0] for xqk in xqk_shards]
-            xk_shards = [xqk[1] for xqk in xqk_shards]
-            xq = SplitPrimitiveTensor(ts=xq_shards, shard_dim=xq.shard_dim)
-            xk = SplitPrimitiveTensor(ts=xk_shards, shard_dim=xk.shard_dim)
-            return xq, xk
-        else:
-            return self.apply_batched_mask_unsharded(xq=xq, xk=xk, mask=mask)
+        if not isinstance(xt, SplitPrimitiveTensor):
+            return self.apply_batched_mask_unsharded(xt=xt, mask=mask)
 
-    def apply_batched_mask_unsharded(
-        self, *, xq: torch.Tensor, xk: torch.Tensor, mask: torch.Tensor
-    ):
+        assert isinstance(mask, ReplicatedTensor) and mask.shard_count == xt.shard_count
+        xt_shards = [
+            self.apply_batched_mask_unsharded(
+                xt=unbox_tensor(xt_shard),
+                mask=unbox_tensor(mask_shard),
+            )
+            for xt_shard, mask_shard in zip(xt.shards, mask.shards)
+        ]
+        xt = SplitPrimitiveTensor(ts=xt_shards, shard_dim=xt.shard_dim)
+        return xt
+
+    def apply_batched_mask_unsharded(self, *, xt: torch.Tensor, mask: torch.Tensor):
         """Applies the embedding to a ragged batch of queries and keys.
 
         This does a more complicated indexing operation for cases when the each
@@ -281,13 +247,17 @@ class RotaryEmbeddingLayer(BaseLayer):
         """
         # xq_, xk_ shape: bs, sl, _, dim
         # freqs_cis shape: max_sl, dim
-        xq_ = torch.view_as_complex(xq.unflatten(-1, (-1, 2)))
-        xk_ = torch.view_as_complex(xk.unflatten(-1, (-1, 2)))
-        _, sl, _, dim = xq_.shape
+        cos = mask[0]
+        sin = mask[1]
 
-        xq_out = torch.view_as_real(xq_ * mask).flatten(3)
-        xk_out = torch.view_as_real(xk_ * mask).flatten(3)
-        return xq_out.type_as(xq), xk_out.type_as(xk)
+        xt_ = xt.unflatten(-1, (-1, 2))
+        xt_r = xt_[..., 0]
+        xt_i = xt_[..., 1]
+
+        xt_out_r = xt_r * cos - xt_i * sin
+        xt_out_i = xt_r * sin + xt_i * cos
+        xt_out = torch.concatenate((xt_out_r, xt_out_i), dim=-1)
+        return xt_out.type_as(xt)
 
     def _compute_rotary_embed_table(self, t):
         dim = self.rope_dimension_count
@@ -297,13 +267,10 @@ class RotaryEmbeddingLayer(BaseLayer):
         )
         freqs = torch.outer(t, freqs).float()
 
-        freqs_cis = (
-            torch.complex(torch.cos(freqs), torch.sin(freqs))
-            if self.use_hf
-            else torch.polar(torch.ones_like(freqs), freqs)
-        )
+        cos = torch.cos(freqs).unsqueeze(0)
+        sin = torch.sin(freqs).unsqueeze(0)
 
-        return freqs_cis
+        return torch.concatenate((cos, sin), dim=0)
 
     def _create_rotary_embed_table(self):
         t = torch.arange(self.max_seqlen, device=self.device)
