@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "shark-platform"
+authors = [
+  {name = "SHARK Authors"},
+]
+description = "SHARK Platform meta package"
+readme = "README.md"
+license = {text = "Apache-2.0"}
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+]
+requires-python = ">= 3.10"
+
+version = "2.9.0"
+dependencies = [
+  "iree-base-compiler==2.9.*",
+  "iree-base-runtime==2.9.*",
+  "iree-turbine==2.9.*",
+  "sharktank==2.9.*",
+  "shortfin==2.9.*",
+]
+
+[project.urls]
+Repository = "https://github.com/nod-ai/SHARK-Platform"
+
+[project.optional-dependencies]
+onnx = [
+  "iree-base-compiler[onnx]",
+]
+
+[tool.setuptools]
+packages = []
