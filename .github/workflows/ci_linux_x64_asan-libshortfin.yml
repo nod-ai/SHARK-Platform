@@ -32,8 +32,8 @@ concurrency:
 
 env:
   PYENV_ROOT: ${{ github.workspace }}/pyenv
-  PYENV_REF: 9ecd803bffaffb949fbdd8c70cb086227f6a3202 # v2.4.10
-  PYTHON_VER: 3.12.3
+  PYENV_REF: 96b3fb2fc3bee85650cb22e2cb06c83c24509a6d # v2.4.17
+  PYTHON_VER: 3.12.7
   CACHE_ASAN_VER: 2
   CACHE_DEPS_VER: 1
   IREE_SOURCE_DIR: ${{ github.workspace }}/iree
