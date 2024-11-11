@@ -25,6 +25,7 @@ from .metrics import measure
 
 
 logger = logging.getLogger("shortfin-sd.service")
+logger.setLevel(logging.DEBUG)
 
 prog_isolations = {
     "none": sf.ProgramIsolation.NONE,
@@ -131,13 +132,17 @@ class GenerateService:
                 worker_devices = self.fibers[
                     worker_idx * (self.fibers_per_worker)
                 ].raw_devices
-
+                logger.info(
+                    f"Loading inference program: {component}, worker index: {worker_idx}, device: {worker_devices}"
+                )
                 self.inference_programs[worker_idx][component] = sf.Program(
                     modules=component_modules,
                     devices=worker_devices,
                     isolation=self.prog_isolation,
                     trace_execution=self.trace_execution,
                 )
+                logger.info("Program loaded.")
+
         for worker_idx, worker in enumerate(self.workers):
             self.inference_functions[worker_idx]["encode"] = {}
             for bs in self.model_params.clip_batch_sizes:
@@ -169,7 +174,6 @@ class GenerateService:
                 ] = self.inference_programs[worker_idx]["vae"][
                     f"{self.model_params.vae_module_name}.decode"
                 ]
-        # breakpoint()
         self.batcher.launch()
 
     def shutdown(self):
@@ -209,8 +213,8 @@ class BatcherProcess(sf.Process):
     into batches.
     """
 
-    STROBE_SHORT_DELAY = 0.1
-    STROBE_LONG_DELAY = 0.25
+    STROBE_SHORT_DELAY = 0.5
+    STROBE_LONG_DELAY = 1
 
     def __init__(self, service: GenerateService):
         super().__init__(fiber=service.fibers[0])
@@ -353,7 +357,6 @@ class InferenceExecutorProcess(sf.Process):
                         logger.error("Executor process recieved disjoint batch.")
                 phase = req.phase
             phases = self.exec_requests[0].phases
-
             req_count = len(self.exec_requests)
             device0 = self.service.fibers[self.fiber_index].device(0)
             if phases[InferencePhase.PREPARE]["required"]:
@@ -421,8 +424,12 @@ class InferenceExecutorProcess(sf.Process):
     async def _encode(self, device, requests):
         req_bs = len(requests)
         entrypoints = self.service.inference_functions[self.worker_index]["encode"]
+        if req_bs not in list(entrypoints.keys()):
+            for request in requests:
+                await self._encode(device, [request])
+            return
         for bs, fn in entrypoints.items():
-            if bs >= req_bs:
+            if bs == req_bs:
                 break
 
         # Prepare tokenized input ids for CLIP inference
@@ -459,6 +466,7 @@ class InferenceExecutorProcess(sf.Process):
             fn,
             "".join([f"\n  {i}: {ary.shape}" for i, ary in enumerate(clip_inputs)]),
         )
+        await device
         pe, te = await fn(*clip_inputs, fiber=self.fiber)
 
         for i in range(req_bs):
@@ -474,8 +482,12 @@ class InferenceExecutorProcess(sf.Process):
         cfg_mult = 2 if self.service.model_params.cfg_mode else 1
         # Produce denoised latents
         entrypoints = self.service.inference_functions[self.worker_index]["denoise"]
+        if req_bs not in list(entrypoints.keys()):
+            for request in requests:
+                await self._denoise(device, [request])
+            return
         for bs, fns in entrypoints.items():
-            if bs >= req_bs:
+            if bs == req_bs:
                 break
 
         # Get shape of batched latents.
@@ -610,8 +622,12 @@ class InferenceExecutorProcess(sf.Process):
         req_bs = len(requests)
         # Decode latents to images
         entrypoints = self.service.inference_functions[self.worker_index]["decode"]
+        if req_bs not in list(entrypoints.keys()):
+            for request in requests:
+                await self._decode(device, [request])
+            return
         for bs, fn in entrypoints.items():
-            if bs >= req_bs:
+            if bs == req_bs:
                 break
 
         latents_shape = [

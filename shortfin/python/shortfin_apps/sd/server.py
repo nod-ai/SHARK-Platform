@@ -295,6 +295,7 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
 
 
 if __name__ == "__main__":
+    logging.root.setLevel(logging.DEBUG)
     main(
         sys.argv[1:],
         # Make logging defer to the default shortfin logging config.
