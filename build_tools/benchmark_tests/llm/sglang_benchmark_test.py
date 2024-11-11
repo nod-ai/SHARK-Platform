@@ -86,7 +86,7 @@ def test_sglang_benchmark_server(tmp_path_factory):
     )
 
     # Run and collect SGLang Serving Benchmark
-    for i in range(1):
+    for i in range(6):
         benchmark_args = SGLangBenchmarkArgs(
             backend="shortfin",
             num_prompt=10,
@@ -132,6 +132,7 @@ def test_sglang_benchmark_server(tmp_path_factory):
             logger.info(
                 f"Benchmark run completed in {str(start - time.time())} seconds"
             )
+            print_jsonl_output(output_file)
             benchmark_process.terminate()
             benchmark_process.wait()
         except Exception as e:
