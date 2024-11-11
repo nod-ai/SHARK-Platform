@@ -39,8 +39,7 @@ def test_sglang_benchmark_server(tmp_path_factory):
     # TODO: Remove when multi-device is fixed
     os.environ["ROCR_VISIBLE_DEVICES"] = "1"
 
-    # tmp_dir = tmp_path_factory.mktemp("sglang_benchmark_test")
-    tmp_dir = Path("./sglang_benchmark_test")
+    tmp_dir = tmp_path_factory.mktemp("sglang_benchmark_test")
 
     if not os.path.exists(tmp_dir):
         os.mkdir(tmp_dir)

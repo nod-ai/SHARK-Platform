@@ -37,10 +37,6 @@ jobs:
         shell: bash
     env:
       PIP_CACHE_DIR: "${{ github.workspace }}/.pip-cache"
-      SHORTFIN_VENV_DIR: ${{ github.workspace }}/.shortfin_venv
-      SGLANG_VENV_DIR: ${{ github.workspace }}/.sglang_venv
-      # TODO: Remove when multi-device is fixed
-      ROCR_VISIBLE_DEVICES: 1
     steps:
       - name: Get Current Date
         id: date
