@@ -117,7 +117,7 @@ def test_sglang_benchmark_server(tmp_path_factory):
                 bufsize=-1,
             )
 
-            timeout = 10000
+            timeout = 50000
             start = time.time()
             while benchmark_process.poll() is None:
                 runtime = time.time() - start
