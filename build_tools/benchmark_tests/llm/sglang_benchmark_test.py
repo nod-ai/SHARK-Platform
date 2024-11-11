@@ -114,9 +114,7 @@ def test_sglang_benchmark_server(tmp_path_factory):
                     f"--request-rate={benchmark_args.request_rate}",
                     f"--output-file={output_file}",
                 ],
-                text=True,
                 bufsize=-1,
-                universal_newlines=True,
             )
 
             timeout = 10000
