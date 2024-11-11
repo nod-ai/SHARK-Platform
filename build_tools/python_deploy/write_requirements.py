@@ -5,7 +5,7 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-# This scripts writes the `packaging/shark-platform/requirements.txt` file
+# This script writes the `packaging/shark-platform/requirements.txt` file
 # and pins the versions of the dependencies accordingly. For nighly releases,
 #  * sharktank
 #  * shortfin

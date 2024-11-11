@@ -5,7 +5,7 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-# This scripts grabs the X.Y.Z[.dev]` version identifier from the
+# This scripts grabs the `X.Y.Z[.dev]` version identifier from the
 # sharktank and shortfin version files and computes the version
 # for the meta package.
 
@@ -61,15 +61,15 @@ SHORTFIN_PACKAGE_VERSION = shortfin_version.get("package-version")
 SHORTFIN_BASE_VERSION = Version(SHORTFIN_PACKAGE_VERSION).base_version
 
 if SHARKTANK_BASE_VERSION > SHORTFIN_BASE_VERSION:
-    CURRENT_VERSION = SHARKTANK_BASE_VERSION
+    COMMON_VERSION = SHARKTANK_BASE_VERSION
 else:
-    CURRENT_VERSION = SHORTFIN_BASE_VERSION
+    COMMON_VERSION = SHORTFIN_BASE_VERSION
 
 if args.nightly_release:
-    CURRENT_VERSION += "rc" + datetime.today().strftime("%Y%m%d")
+    COMMON_VERSION += "rc" + datetime.today().strftime("%Y%m%d")
 
 if args.write_json:
-    version_local = {"package-version": CURRENT_VERSION}
+    version_local = {"package-version": COMMON_VERSION}
     write_version_info()
 
-print(CURRENT_VERSION)
+print(COMMON_VERSION)
