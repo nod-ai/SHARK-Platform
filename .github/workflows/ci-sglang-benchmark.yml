@@ -93,9 +93,4 @@ jobs:
           github_token: ${{ secrets.SHARK_PLATFORM_GH_TOKEN }}
           publish_dir: ./out/llm/sglang
           destinaion_dir: ./llm/sglang
-
-      - name: Upload llama executable files
-        uses: actions/upload-artifact@v4
-        with:
-          name: sglang-benchmark
-          path: ${{ github.workspace }}/${{ steps.date.outputs.date }}
+          keep_files: true
