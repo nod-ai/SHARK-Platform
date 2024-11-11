@@ -37,7 +37,6 @@ logger = logging.getLogger("shortfin-sd")
 logger.addHandler(native_handler)
 logger.setLevel(logging.INFO)
 logger.propagate = False
-logger.info("Logger setup.")
 
 THIS_DIR = Path(__file__).resolve().parent
 

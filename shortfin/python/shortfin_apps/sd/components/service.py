@@ -119,8 +119,6 @@ class GenerateService:
 
     def start(self):
         # Initialize programs.
-        # This can work if we only initialize one set of programs per service, as our programs
-        # in SDXL are stateless and
         for component in self.inference_modules:
             component_modules = [
                 sf.ProgramModule.parameter_provider(
@@ -128,6 +126,7 @@ class GenerateService:
                 ),
                 *self.inference_modules[component],
             ]
+
             for worker_idx, worker in enumerate(self.workers):
                 worker_devices = self.fibers[
                     worker_idx * (self.fibers_per_worker)
