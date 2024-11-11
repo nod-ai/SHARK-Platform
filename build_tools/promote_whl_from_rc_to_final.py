@@ -6,9 +6,8 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-# This scripts takes a file like
-# 'iree_base_runtime-2.9.0rc20241107-cp311-cp311-manylinux_2_28_x86_64.whl'
-# with embedded version '2.9.0rc20241107' as input and then drops the
+# This scripts takes a file like 'sharktank-2.9.0rc20241110-py3-none-any.whl'
+# with embedded version '2.9.0rc20241110' as input and then drops the
 # 'rcYYYYMMDD' suffix from both the embedded version and file name.
 #
 # Typical usage:
