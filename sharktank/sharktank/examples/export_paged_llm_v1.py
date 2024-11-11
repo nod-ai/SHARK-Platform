@@ -214,6 +214,8 @@ def main():
 
                 cache_tensors = repack_cache(cs, cache_shard_dim)
 
+            cache_tensors = [model.cache.unflatten_page_table(cache_tensors)]
+
             logits = model.prefill(
                 tokens,
                 attention_mask=attention_mask,
@@ -299,6 +301,8 @@ def main():
                 seq_block_ids = ops.replicate(seq_block_ids, count=shard_count)
 
                 cache_state = repack_cache(cache_state, cache_shard_dim)
+
+            cache_state = [model.cache.unflatten_page_table(cache_state)]
 
             logits = model.decode(
                 tokens,

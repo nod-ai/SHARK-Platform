@@ -63,16 +63,16 @@ jobs:
           # from non default locations first. Installing the PyTorch CPU
           # wheels saves multiple minutes and a lot of bandwidth on runner setup.
           pip install --no-compile -r pytorch-cpu-requirements.txt
-          pip install --no-compile -f https://iree.dev/pip-release-links.html --src deps \
-            -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
           pip install --no-compile -r requirements.txt -r sharktank/requirements-tests.txt -e sharktank/
 
-          # Try with the latest nightly releases, not what iree-turbine pins.
-          # We could also pin to a known working or stable version.
-          # This should eventually stabilize. Do the best we can for now.
+          # Install latest iree-tubrine.
+          pip install --no-compile -f https://iree.dev/pip-release-links.html --src deps \
+            -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
+
+          # Test with pinned nightly releases, not what iree-turbine uses.
           pip install -f https://iree.dev/pip-release-links.html --upgrade \
-            iree-compiler==20241104.1068 \
-            iree-runtime==20241104.1068 \
+            iree-base-compiler==2.9.0rc20241108 \
+            iree-base-runtime==2.9.0rc20241108 \
             "numpy<2.0"
 
       - name: Run llama 8b tests

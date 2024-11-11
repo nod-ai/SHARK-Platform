@@ -19,11 +19,9 @@ classifiers = [
   "Programming Language :: Python :: 3.13",
 ]
 requires-python = ">= 3.11"
-dependencies = ["iree-turbine"]
-dynamic = ["version"]  # the version is set via the `setup.py`
 
-[project.optional-dependencies]
-testing = ["pytest"]
+# Version is set via the `setup.py` and requirements are set via files below.
+dynamic = ["version", "dependencies", "optional-dependencies"]
 
 [project.urls]
 Repository = "https://github.com/nod-ai/SHARK-Platform"
@@ -36,8 +34,11 @@ namespaces = true
 [tool.setuptools.package-data]
 sharktank = ["py.typed", "kernels/templates/*.mlir"]
 
-[tool.setuptools.dynamic]
-dependencies = {file = ["requirements.txt"]}
+[tool.setuptools.dynamic.dependencies]
+file = ["requirements.txt"]
+
+[tool.setuptools.dynamic.optional-dependencies]
+testing = {file = ["requirements-tests.txt"]}
 
 [tool.pytest.ini_options]
 addopts = [

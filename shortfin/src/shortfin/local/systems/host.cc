@@ -11,6 +11,7 @@
 #include "iree/hal/local/loaders/registration/init.h"
 #include "shortfin/support/iree_helpers.h"
 #include "shortfin/support/logging.h"
+#include "shortfin/support/sysconfig.h"
 
 namespace shortfin::local::systems {
 
@@ -62,7 +63,9 @@ HostCPUSystemBuilder::Deps::~Deps() {
 HostCPUSystemBuilder::HostCPUSystemBuilder(iree_allocator_t host_allocator,
                                            ConfigOptions config_options)
     : HostSystemBuilder(host_allocator, std::move(config_options)),
-      host_cpu_deps_(host_allocator) {}
+      host_cpu_deps_(host_allocator) {
+  hostcpu_allocator_specs_ = GetConfigAllocatorSpecs("hostcpu_allocators");
+}
 
 HostCPUSystemBuilder::~HostCPUSystemBuilder() = default;
 
@@ -147,6 +150,8 @@ iree_hal_driver_t *HostCPUSystemBuilder::InitializeHostCPUDriver(System &lsys) {
   }
 
   // Create one queue executor per node.
+  unsigned total_needed_file_handles = 512;
+  bool has_issued_limit_error = false;
   std::vector<iree::task_executor_ptr> queue_executors;
   queue_executors.reserve(selected_nodes.size());
   queue_node_ids_.reserve(selected_nodes.size());
@@ -160,6 +165,21 @@ iree_hal_driver_t *HostCPUSystemBuilder::InitializeHostCPUDriver(System &lsys) {
                    node_id, iree_task_topology_group_count(&topology.topology));
     queue_executors.push_back({});
     auto &executor = queue_executors.back();
+    // As of 2024-11-8, it took approximately 32 file handles per node-group.
+    // To be conservative because file handle limits are basically free, we
+    // round up to 64 and assume a floor of 512. This allows small, default
+    // 8 group, single node configs to require no limit increase for Linux
+    // 1024 default cases.
+    total_needed_file_handles += 64 * topology.topology.group_count;
+    if (!sysconfig::EnsureFileLimit(total_needed_file_handles) &&
+        !has_issued_limit_error) {
+      logging::error(
+          "Could not ensure sufficient file handles for minimum operations: "
+          "Suggest setting explicit limits with `ulimit -n` and system "
+          "settings");
+      has_issued_limit_error = true;
+    }
+
     SHORTFIN_THROW_IF_ERROR(iree_task_executor_create(
         host_cpu_deps_.task_executor_options, &topology.topology,
         host_allocator(), executor.for_output()));
@@ -199,16 +219,19 @@ void HostCPUSystemBuilder::InitializeHostCPUDevices(System &lsys,
   SHORTFIN_THROW_IF_ERROR(iree_hal_driver_create_device_by_id(
       driver, it->device_id, 0, nullptr, host_allocator(),
       device.for_output()));
+  ConfigureAllocators(hostcpu_allocator_specs_, device, "hostcpu");
+
   iree_host_size_t queue_index = 0;
   for (auto node_id : queue_node_ids_) {
+    DeviceAddress address(
+        /*system_device_class=*/SYSTEM_DEVICE_CLASS,
+        /*logical_device_class=*/LOGICAL_DEVICE_CLASS,
+        /*hal_driver_prefix=*/HAL_DRIVER_PREFIX,
+        /*instance_ordinal=*/0,
+        /*queue_ordinal=*/queue_index,
+        /*instance_topology_address=*/{queue_index});
     lsys.InitializeHalDevice(std::make_unique<HostCPUDevice>(
-        DeviceAddress(
-            /*system_device_class=*/SYSTEM_DEVICE_CLASS,
-            /*logical_device_class=*/LOGICAL_DEVICE_CLASS,
-            /*hal_driver_prefix=*/HAL_DRIVER_PREFIX,
-            /*instance_ordinal=*/0,
-            /*queue_ordinal=*/queue_index,
-            /*instance_topology_address=*/{queue_index}),
+        address,
         /*hal_device=*/device,
         /*node_affinity=*/node_id,
         /*capabilities=*/

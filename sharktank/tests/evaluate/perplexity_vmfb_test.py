@@ -22,7 +22,7 @@ longrun = pytest.mark.skipif("not config.getoption('longrun')")
 class PerplexityTest(unittest.TestCase):
     def setUp(self):
         self.current_perplexity_all = {}
-        self.delta = 10
+        self.delta = 5e-1
         self.tensor_parallelism_size = 8
         with open(self.baseline_perplexity_scores, "r") as f:
             self.baseline_perplexity = json.load(f)

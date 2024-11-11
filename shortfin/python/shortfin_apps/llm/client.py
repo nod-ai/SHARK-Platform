@@ -3,86 +3,73 @@ import json
 import uuid
 import argparse
 import time
+from typing import Dict, Any
 
 BASE_URL = "http://localhost:8000"
 
 
-def test_health():
-    response = requests.get(f"{BASE_URL}/health")
-    print(f"Health check status code: {response.status_code}")
-    response.raise_for_status()
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Test LLM server")
+    parser.add_argument("--text", default="1 2 3 4 5 ", help="Input text prompt")
+    parser.add_argument(
+        "--max_completion_tokens", type=int, default=50, help="Max tokens to generate"
+    )
+    parser.add_argument(
+        "--temperature", type=float, default=0.7, help="Sampling temperature"
+    )
+    parser.add_argument(
+        "--stream", action="store_true", help="Enable response streaming"
+    )
+    args = parser.parse_args()
 
-
-def test_generate(prompt_text):
-    headers = {"Content-Type": "application/json"}
-
-    # Create a GenerateReqInput-like structure
     data = {
-        "text": prompt_text,
-        "sampling_params": {"max_tokens": 50, "temperature": 0.7},
+        "text": args.text,
+        "sampling_params": {
+            "max_completion_tokens": args.max_completion_tokens,
+            "temperature": args.temperature,
+        },
         "rid": uuid.uuid4().hex,
         "return_logprob": False,
         "logprob_start_len": -1,
         "top_logprobs_num": 0,
         "return_text_in_logprobs": False,
-        "stream": False,
+        "stream": args.stream,
     }
 
-    print("Prompt text:")
-    print(data["text"])
+    print(f"Testing LLM server at {BASE_URL}")
 
-    response = requests.post(f"{BASE_URL}/generate", headers=headers, json=data)
-    print(f"Generate endpoint status code: {response.status_code}")
-
-    if response.status_code == 200:
-        print("Generated text:")
-        data = response.text
-        assert data.startswith("data: ")
-        data = data[6:]
-        assert data.endswith("\n\n")
-        data = data[:-2]
-        print(data)
-    else:
-        print("Failed to generate text")
-        print("Response content:")
-        print(response.text)
-
-    return response.status_code == 200
-
-
-def main():
-    parser = argparse.ArgumentParser(description="Test webapp with custom prompt")
-    parser.add_argument(
-        "--prompt",
-        type=str,
-        default="1 2 3 4 5 ",
-        help="The prompt text to send to the generate endpoint",
-    )
-
-    args = parser.parse_args()
-
-    print(f"Testing shortfin llm server at {BASE_URL}")
-
-    health_ok = False
-    # previous backoff for fibonacci backoff
-    prev_backoff = 0
+    # Health check with exponential backoff
     backoff = 1
-    while not health_ok:
+    while True:
         try:
-            health_ok = test_health()
-        except requests.exceptions.ConnectionError:
-            print(
-                f"Health check failed. Waiting for {backoff} seconds before retrying."
-            )
+            requests.get(f"{BASE_URL}/health").raise_for_status()
+            break
+        except requests.exceptions.RequestException as e:
+            if backoff > 16:
+                print("Health check failed, max retries exceeded")
+                return
+            print(f"Health check failed ({str(e)}), retrying in {backoff}s...")
             time.sleep(backoff)
-            prev_backoff, backoff = backoff, prev_backoff + backoff
+            backoff *= 2
 
-    generate_ok = test_generate(args.prompt)
+    # Generate request
+    try:
+        print("Prompt text:", data["text"])
+        headers = {"Content-Type": "application/json"}
+        response = requests.post(f"{BASE_URL}/generate", headers=headers, json=data)
+        response.raise_for_status()
 
-    if health_ok and generate_ok:
-        print("\nAll tests passed successfully!")
-    else:
-        print("\nSome tests failed. Please check the output above for details.")
+        if response.text.startswith("data: "):
+            text = response.text[6:].rstrip("\n")
+            print("Generated text:", text)
+            print("\nTest passed")
+        else:
+            print("\nTest failed: unexpected response format")
+
+    except requests.exceptions.RequestException as e:
+        print(f"\nTest failed: request error: {str(e)}")
+    except KeyboardInterrupt:
+        print("\nTest interrupted")
 
 
 if __name__ == "__main__":
