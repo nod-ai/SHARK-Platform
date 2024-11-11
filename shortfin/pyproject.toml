@@ -4,6 +4,7 @@ requires = [
     "setuptools>=61.0",
     "wheel",
     "ninja",
+    'typing-extensions ; python_version == "3.10" ',
 ]
 build-backend = "setuptools.build_meta"
 
