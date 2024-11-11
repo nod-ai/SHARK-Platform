@@ -132,6 +132,7 @@ def test_sglang_benchmark_server(tmp_path_factory):
             logger.info(
                 f"Benchmark run completed in {str(start - time.time())} seconds"
             )
+            logger.info("Test Results:")
             print_jsonl_output(output_file)
             benchmark_process.terminate()
             benchmark_process.wait()
