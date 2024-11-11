@@ -32,7 +32,7 @@ def print_jsonl_output(file_path):
     with open(file_path, "r") as file:
         for line in file:
             json_object = json.loads(line.strip())
-            logger.info(json.dump(json_object, indent=4))
+            logger.info(json.dumps(json_object, indent=4))
 
 
 def test_sglang_benchmark_server(tmp_path_factory):
