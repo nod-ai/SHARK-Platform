@@ -16,12 +16,14 @@ shortfin_cc_component(
     iree_concurrency.h
     logging.h
     stl_extras.h
+    sysconfig.h
   SRCS
     blocking_executor.cc
     config.cc
     globals.cc
     iree_helpers.cc
     logging.cc
+    sysconfig.cc
   DEPS
     iree_base_base
     # TODO: Maybe reclassify some of these low level, shared support entities

@@ -4,6 +4,10 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
+# Any definitions which must be reflected on the public library must be added
+# to this library.
+add_library(shortfin_public_defs INTERFACE)
+
 add_subdirectory(shortfin)
 
 # Common definitions exported from both static and dynamic libraries.
@@ -28,6 +32,7 @@ shortfin_public_library(
     shortfin_systems_factory
     ${_SHORTFIN_LIB_OPTIONAL_COMPONENTS}
   USAGE_DEPS
+    shortfin_public_defs
     spdlog::spdlog
     fmt::fmt
     xtensor
