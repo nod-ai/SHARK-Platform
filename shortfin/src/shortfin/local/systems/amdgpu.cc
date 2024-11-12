@@ -87,6 +87,7 @@ void AMDGPUSystemBuilder::InitializeDefaultSettings() {
 
 void AMDGPUSystemBuilder::Enumerate() {
   if (hip_hal_driver_) return;
+  SHORTFIN_TRACE_SCOPE_NAMED("AMDGPUSystemBuilder::Enumerate");
 
   iree_hal_hip_driver_options_t driver_options;
   iree_hal_hip_driver_options_initialize(&driver_options);
@@ -127,6 +128,7 @@ std::vector<std::string> AMDGPUSystemBuilder::GetAvailableDeviceIds() {
 }
 
 SystemPtr AMDGPUSystemBuilder::CreateSystem() {
+  SHORTFIN_TRACE_SCOPE_NAMED("AMDGPUSystemBuilder::CreateSystem");
   auto lsys = std::make_shared<System>(host_allocator());
   Enumerate();
 

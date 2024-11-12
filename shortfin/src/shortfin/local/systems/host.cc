@@ -125,6 +125,7 @@ HostCPUSystemBuilder::SelectHostCPUNodesFromOptions() {
 }
 
 SystemPtr HostCPUSystemBuilder::CreateSystem() {
+  SHORTFIN_TRACE_SCOPE_NAMED("HostCPUSystemBuilder::CreateSystem");
   auto lsys = std::make_shared<System>(host_allocator());
   // TODO: Real NUMA awareness.
   lsys->InitializeNodes(1);
@@ -136,6 +137,7 @@ SystemPtr HostCPUSystemBuilder::CreateSystem() {
 }
 
 iree_hal_driver_t *HostCPUSystemBuilder::InitializeHostCPUDriver(System &lsys) {
+  SHORTFIN_TRACE_SCOPE_NAMED("HostCPUSystemBuilder::InitializeHostCPUDriver");
   // TODO: Kill these flag variants in favor of settings on the config
   // object.
   SHORTFIN_THROW_IF_ERROR(iree_task_executor_options_initialize_from_flags(
@@ -206,6 +208,7 @@ iree_hal_driver_t *HostCPUSystemBuilder::InitializeHostCPUDriver(System &lsys) {
 
 void HostCPUSystemBuilder::InitializeHostCPUDevices(System &lsys,
                                                     iree_hal_driver_t *driver) {
+  SHORTFIN_TRACE_SCOPE_NAMED("HostCPUSystemBuilder::InitializeHostCPUDevices");
   iree_host_size_t device_info_count = 0;
   iree::allocated_ptr<iree_hal_device_info_t> device_infos(host_allocator());
   SHORTFIN_THROW_IF_ERROR(iree_hal_driver_query_available_devices(
