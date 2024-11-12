@@ -6,6 +6,16 @@
 
 We will use an example with `llama_8b_f16_decomposed` in order to describe the process of exporting a model for use in the shortfin llm server with an MI300 GPU.
 
+### Pre-Requisites
+- Python >= 3.11 is recommended for this flow
+    - You can check out [pyenv](https://github.com/pyenv/pyenv) as a good tool to be able to manage multiple versions of python on the same system.
+
+### Setting Up Environment
+Follow the `Development Getting Started` docs [here](https://github.com/nod-ai/SHARK-Platform/blob/main/README.md#development-getting-started) to setup
+your environment for development.
+
+We will use an example with `llama_8b_f16_decomposed` in order to describe the process of exporting a model for use in the shortfin llm server with an MI300 GPU.
+
 ### Define a directory for export files
 Create a new directory for us to export files like `model.mlir`, `model.vmfb`, etc.
 ```bash
@@ -45,6 +55,7 @@ def find_available_port(starting_port=8000, max_port=8100):
 
 find_available_port()
 ")
+echo $PORT
 ```
 
 #### General Env Vars
@@ -118,7 +129,11 @@ EOF
 
 We should now have all of the files that we need to run the shortfin LLM server.
 
-Verify that you have the following in your specified directory ($WD):
+Verify that you have the following in your specified directory ($EXPORT_DIR):
+
+```bash
+ls $EXPORT_DIR
+```
 
 - edited_config.json
 - model.vmfb
