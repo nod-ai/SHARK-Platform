@@ -36,6 +36,7 @@ device_settings = {
 MODEL_PATH = Path("/data/llama3.1/8b/llama8b_f16.irpa")
 TOKENIZER_DIR = Path("/data/llama3.1/8b/")
 
+
 @pytest.mark.parametrize("request_rate", [1, 2, 4, 8, 16, 32])
 @pytest.mark.parametrize(
     "pre_process_model",
