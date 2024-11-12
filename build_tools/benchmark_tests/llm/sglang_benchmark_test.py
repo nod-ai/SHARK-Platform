@@ -33,6 +33,7 @@ device_settings = {
     "device": "hip",
 }
 
+# TODO: Download on demand instead of assuming files exist at this path
 MODEL_PATH = Path("/data/llama3.1/8b/llama8b_f16.irpa")
 TOKENIZER_DIR = Path("/data/llama3.1/8b/")
 
@@ -82,7 +83,7 @@ def test_sglang_benchmark_server(request_rate, pre_process_model):
         request_rate=request_rate,
     )
     output_file = (
-        Path("/home/stbaione/repos/SHARK-Platform")
+        tmp_dir
         / f"{benchmark_args.backend}_{benchmark_args.num_prompt}_{benchmark_args.request_rate}.jsonl"
     )
     benchmark_args.output_file = output_file
