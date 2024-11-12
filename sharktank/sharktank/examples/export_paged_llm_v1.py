@@ -7,6 +7,7 @@
 """Export support for the PagedLLMV1 protocol of models."""
 
 import json
+from typing import Any, Dict
 import torch
 
 from iree.turbine.aot import *
@@ -88,7 +89,7 @@ def main():
 
     def generate_params_json(
         hp: LlamaHParams, prefill_bs: list[int], decode_bs: list[int]
-    ):
+    ) -> Dict[str, Any]:
         {
             "module_name": "module",
             "module_abi_version": 1,
