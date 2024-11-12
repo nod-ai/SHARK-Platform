@@ -117,22 +117,6 @@ def model_test_dir(request, tmp_path_factory):
         logger.info(f"Model successfully compiled to {vmfb_path}")
 
         # Write config if it doesn't exist
-        edited_config_path = tmp_dir / "edited_config.json"
-        config = {
-            "module_name": "module",
-            "module_abi_version": 1,
-            "max_seq_len": 2048,
-            "attn_head_count": 32,
-            "attn_head_dim": 100,
-            "prefill_batch_sizes": batch_sizes,
-            "decode_batch_sizes": batch_sizes,
-            "transformer_block_count": 26,
-            "paged_kv_cache": {"block_seq_stride": 16, "device_block_count": 256},
-        }
-        logger.info(f"Saving edited config to: {edited_config_path}\n")
-        logger.info(f"Config: {json.dumps(config, indent=2)}")
-        with open(edited_config_path, "w") as f:
-            json.dump(config, f)
         logger.info("Model artifacts setup successfully")
         yield hf_home, tmp_dir
     finally:
@@ -198,7 +182,7 @@ def llm_server(request, model_test_dir, available_port):
             "-m",
             "shortfin_apps.llm.server",
             f"--tokenizer_json={hf_home / 'tokenizer.json'}",
-            f"--model_config={tmp_dir / 'edited_config.json'}",
+            f"--model_config={tmp_dir / 'config.json'}",
             f"--vmfb={tmp_dir / 'model.vmfb'}",
             f"--parameters={hf_home / model_file}",
             f"--device={settings['device']}",
