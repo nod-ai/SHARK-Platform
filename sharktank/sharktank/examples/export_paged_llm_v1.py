@@ -90,11 +90,17 @@ def main():
     def generate_params_json(
         hp: LlamaHParams, prefill_bs: list[int], decode_bs: list[int]
     ) -> Dict[str, Any]:
+        """
+        Generate config.json for shortfin.
+
+
+        For shortfin, we only write attention_head_count_kv because that's all shortfin needs.
+        Note that this is different from hp.attn_head_count when grouped attention shares kvcache between heads.
+        """
         return {
             "module_name": "module",
             "module_abi_version": 1,
             "max_seq_len": hp.context_length,
-            # "attn_head_count": hp.attention_head_count, # we don't need the attention head count we just need the kvcache attention head count for shortfin
             "attn_head_dim": hp.attn_head_dim,
             "prefill_batch_sizes": prefill_bs,
             "decode_batch_sizes": decode_bs,
