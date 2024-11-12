@@ -37,8 +37,8 @@ jobs:
       - name: Generate release candidate versions
         id: version_rc
         run: |
-          sharktank_package_version=$(python3 build_tools/gen_version_info_rc.py sharktank)
-          shortfin_package_version=$(python3 build_tools/gen_version_info_rc.py shortfin)
+          sharktank_package_version=$(python3 build_tools/python_deploy/compute_local_version.py sharktank)
+          shortfin_package_version=$(python3 build_tools/python_deploy/compute_local_version.py shortfin)
       - name: Upload version_info_rc.json
         uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
         with:
