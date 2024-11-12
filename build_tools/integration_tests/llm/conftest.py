@@ -182,6 +182,7 @@ def llm_server(request, model_test_dir, available_port):
             "-m",
             "shortfin_apps.llm.server",
             f"--tokenizer_json={hf_home / 'tokenizer.json'}",
+            f"--tokenizer_config_json={hf_home / 'tokenizer_config.json'}",
             f"--model_config={tmp_dir / 'config.json'}",
             f"--vmfb={tmp_dir / 'model.vmfb'}",
             f"--parameters={hf_home / model_file}",
