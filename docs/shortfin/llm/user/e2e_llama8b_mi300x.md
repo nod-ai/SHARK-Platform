@@ -1,16 +1,22 @@
-# LLama 8b GPU Instructions on MI300X
+# LLama 8b GPU instructions on MI300X
 
 **NOTE: This was ran on the `mi300x-3` system**
 
 ## Setup
 
-We will use an example with `llama_8b_f16_decomposed` in order to describe the process of exporting a model for use in the shortfin llm server with an MI300 GPU.
+We will use an example with `llama_8b_f16_decomposed` in order to describe the
+process of exporting a model for use in the shortfin llm server with an
+MI300 GPU.
 
 ### Pre-Requisites
-- Python >= 3.11 is recommended for this flow
-    - You can check out [pyenv](https://github.com/pyenv/pyenv) as a good tool to be able to manage multiple versions of python on the same system.
 
-### Create Virtual Environment
+- Python >= 3.11 is recommended for this flow
+    - You can check out [pyenv](https://github.com/pyenv/pyenv)
+    as a good tool to be able to manage multiple versions of python
+    on the same system.
+
+### Create virtual environment
+
 To start, create a new virtual environment:
 
 ```bash
@@ -19,80 +25,83 @@ source .venv/bin/activate
 ```
 
 ### Install `shark-ai`
-You can install either the `latest stable` version of `shark-ai` or the `nightly` version:
+
+You can install either the `latest stable` version of `shark-ai`
+or the `nightly` version:
+
 #### Stable
+
 ```bash
 pip install shark-ai
 ```
 
 #### Nightly
+
 ```bash
 pip install sharktank -f https://github.com/nod-ai/SHARK-Platform/releases/expanded_assets/dev-wheels
 pip install shortfin -f https://github.com/nod-ai/SHARK-Platform/releases/expanded_assets/dev-wheels
 ```
 
 #### Install dataclasses-json
+
 TODO: This should be included in release:
+
 ```bash
 pip install dataclasses-json
 ```
 
 ### Define a directory for export files
-Create a new directory for us to export files like `model.mlir`, `model.vmfb`, etc.
+
+Create a new directory for us to export files like
+`model.mlir`, `model.vmfb`, etc.
+
 ```bash
 mkdir $PWD/export
 export EXPORT_DIR=$PWD/export
 ```
 
-### Define Environment Variables
-Define the following environment variables to make running this example a bit easier:
+### Define environment variables
 
-#### Model/Tokenizer Vars
-This example uses the `llama8b_f16.irpa` and `tokenizer.json` files that are pre-existing on the MI300X-3 system.
+Define the following environment variables to make running
+this example a bit easier:
+
+#### Model/Tokenizer vars
+
+This example uses the `llama8b_f16.irpa` and `tokenizer.json` files
+that are pre-existing on the MI300X-3 system.
 You may need to change the paths for your own system.
+
 ```bash
-export MODEL_PARAMS_PATH=/data/llama3.1/8b/llama8b_f16.irpa # Path to existing .irpa file, may need to change w/ system
-export TOKENIZER_PATH=/data/llama3.1/8b/tokenizer.json # Path to existing tokenizer.json, may need to change w/ system
+# Path to existing .irpa file, may need to change w/ system
+export MODEL_PARAMS_PATH=/data/llama3.1/8b/llama8b_f16.irpa
+# Path to existing tokenizer.json, may need to change w/ system
+export TOKENIZER_PATH=/data/llama3.1/8b/tokenizer.json
 ```
 
-#### Find Available Port
-You can use the following command to find an available port for your server, and save it as the `$PORT` env variable:
-```bash
-export PORT=$(python -c "
-import socket
+#### General env vars
 
-def find_available_port(starting_port=8000, max_port=8100):
-    port = starting_port
-    while port < max_port:
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.bind(('localhost', port))
-                s.close()
-                print(port)
-                return port
-        except socket.error:
-            port += 1
-    raise IOError(f'No available ports found within range {starting_port}-{max_port}')
-
-find_available_port()
-")
-echo $PORT
-```
-
-#### General Env Vars
 The following env vars can be copy + pasted directly:
 
 ```bash
-export MLIR_PATH=$EXPORT_DIR/model.mlir # Path to export model.mlir file
-export OUTPUT_CONFIG_PATH=$EXPORT_DIR/config.json # Path to export config.json file
-export EDITED_CONFIG_PATH=$EXPORT_DIR/edited_config.json # Path to export config.json file
-export VMFB_PATH=$EXPORT_DIR/model.vmfb # Path to export model.vmfb file
-export BS=1,4 # Batch size for kvcache
-export ROCR_VISIBLE_DEVICES=1 # NOTE: This is temporary, until multi-device is fixed
+# Path to export model.mlir file
+export MLIR_PATH=$EXPORT_DIR/model.mlir
+# Path to export config.json file
+export OUTPUT_CONFIG_PATH=$EXPORT_DIR/config.json
+# Path to export edited_config.json file
+export EDITED_CONFIG_PATH=$EXPORT_DIR/edited_config.json
+# Path to export model.vmfb file
+export VMFB_PATH=$EXPORT_DIR/model.vmfb
+# Batch size for kvcache
+export BS=1,4
+# NOTE: This is temporary, until multi-device is fixed
+export ROCR_VISIBLE_DEVICES=1
 ```
 
 ### Export to MLIR
-We will now use the `sharktank.examples.export_paged_llm_v1` script to export our model to `.mlir` format.
+
+We will now use the `sharktank.examples.export_paged_llm_v1` script
+to export our model to `.mlir` format.
+
 ```bash
 python -m sharktank.examples.export_paged_llm_v1 \
   --irpa-file=$MODEL_PARAMS_PATH \
@@ -103,12 +112,20 @@ python -m sharktank.examples.export_paged_llm_v1 \
 
 ## Compiling to `.vmfb`
 
-Now that we have generated a `model.mlir` file, we can compile it to `.vmfb` format, which is required for running the `shortfin` LLM server.
+Now that we have generated a `model.mlir` file,
+we can compile it to `.vmfb` format, which is required for running
+the `shortfin` LLM server.
 
-We will use the [iree-compile](https://iree.dev/developers/general/developer-overview/#iree-compile) tool for compiling our model.
+We will use the
+[iree-compile](https://iree.dev/developers/general/developer-overview/#iree-compile)
+tool for compiling our model.
 
-#### Compile for MI300
-**NOTE: This command is specific to MI300 GPUs. For other `--iree-hip-target` GPU options, look [here](https://iree.dev/guides/deployment-configurations/gpu-rocm/#compile-a-program)**
+### Compile for MI300
+
+**NOTE: This command is specific to MI300 GPUs.
+For other `--iree-hip-target` GPU options,
+look [here](https://iree.dev/guides/deployment-configurations/gpu-rocm/#compile-a-program)**
+
 ```bash
 iree-compile $MLIR_PATH \
  --iree-hal-target-backends=rocm \
@@ -116,12 +133,13 @@ iree-compile $MLIR_PATH \
  -o $VMFB_PATH
 ```
 
-## Write an Edited Config
+## Write an edited config
 
-We need to write a config for our model with a slightly edited structure to run with shortfin. This will work for the example in our docs.
+We need to write a config for our model with a slightly edited structure
+to run with shortfin. This will work for the example in our docs.
 You may need to modify some of the parameters for a specific model.
 
-### Write Edited Config
+### Write edited config
 
 ```bash
 cat > $EDITED_CONFIG_PATH << EOF
@@ -146,7 +164,7 @@ cat > $EDITED_CONFIG_PATH << EOF
 EOF
 ```
 
-## Running the `shortfin` LLM Server
+## Running the `shortfin` LLM server
 
 We should now have all of the files that we need to run the shortfin LLM server.
 
@@ -159,45 +177,67 @@ ls $EXPORT_DIR
 - edited_config.json
 - model.vmfb
 
-### Launch Server:
+### Launch server:
 
-#### Set the Target Device
-TODO: Add instructions on targeting different devices, when `--device=hip://$DEVICE` is supported
+#### Set the target device
 
-#### Run the Shortfin Server
+TODO: Add instructions on targeting different devices,
+when `--device=hip://$DEVICE` is supported
+
+#### Run the shortfin server
+
+Now that we are finished with setup, we can start the Shortfin LLM Server.
+
 Run the following command to launch the Shortfin LLM Server in the background:
-```
+
+> **Note**
+> By default, our server will start at `http://localhost:8000`.
+> You can specify the `--host` and/or `--port` arguments, to run at a different address.
+>
+> If you receive an error similar to the following:
+>
+> `[errno 98] address already in use`
+>
+> Then, you can confirm the port is in use with `ss -ntl | grep 8000`
+> and either kill the process running at that port,
+> or start the shortfin server at a different port.
+
+```bash
 python -m shortfin_apps.llm.server \
    --tokenizer_json=$TOKENIZER_PATH \
    --model_config=$EDITED_CONFIG_PATH \
    --vmfb=$VMFB_PATH \
    --parameters=$MODEL_PARAMS_PATH \
-   --device=hip \
-   --port=$PORT > shortfin_llm_server.log 2>&1 &
+   --device=hip > shortfin_llm_server.log 2>&1 &
 shortfin_process=$!
 ```
 
-You can verify your command has launched successfully when you see the following logs outputted to terminal:
+You can verify your command has launched successfully
+when you see the following logs outputted to terminal:
 
 ```bash
 cat shortfin_llm_server.log
 ```
 
-#### Expected Output
+#### Expected output
+
 ```text
 [2024-10-24 15:40:27.440] [info] [on.py:62] Application startup complete.
 [2024-10-24 15:40:27.444] [info] [server.py:214] Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
 ```
 
-## Verify Server
+## Verify server
+
 We can now verify our LLM server by sending a simple request:
 
-### Open Python shell
+### Open python shell
+
 ```bash
 python
 ```
 
-### Send Request
+### Send request
+
 ```python
 import requests
 
@@ -224,7 +264,9 @@ quit()
 ```
 
 ## Cleanup
+
 When done, you can kill the shortfin_llm_server by killing the process:
+
 ```bash
 kill -9 $shortfin_process
 ```
