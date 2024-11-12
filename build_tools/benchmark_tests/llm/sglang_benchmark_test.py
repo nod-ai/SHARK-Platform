@@ -36,14 +36,6 @@ device_settings = {
 MODEL_PATH = Path("/data/llama3.1/8b/llama8b_f16.irpa")
 TOKENIZER_DIR = Path("/data/llama3.1/8b/")
 
-
-def print_jsonl_output(file_path):
-    with open(file_path, "r") as file:
-        for line in file:
-            json_object = json.loads(line.strip())
-            logger.info(json.dumps(json_object, indent=4))
-
-
 @pytest.mark.parametrize("request_rate", [1, 2, 4, 8, 16, 32])
 @pytest.mark.parametrize(
     "pre_process_model",
