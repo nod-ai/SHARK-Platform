@@ -16,10 +16,3 @@ repos:
     rev: 'v18.1.4'
     hooks:
     -   id: clang-format
--   repo: https://github.com/igorshubovych/markdownlint-cli
-    rev: v0.41.0
-    hooks:
-      - id: markdownlint
-        name: Run markdownlint on .md files
-        args: ["--config", "docs/.markdownlint.yml"]
-        files: "docs/.*.md"
