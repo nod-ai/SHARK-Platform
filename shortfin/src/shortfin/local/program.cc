@@ -75,6 +75,7 @@ std::string_view ProgramFunction::calling_convention() const {
 
 ProgramInvocation::Ptr ProgramFunction::CreateInvocation(
     std::shared_ptr<Fiber> fiber, std::optional<ProgramIsolation> isolation) {
+  SHORTFIN_TRACE_SCOPE_NAMED("ProgramFunction::CreateInvocation");
   ProgramIsolation actual_isolation = isolation ? *isolation : isolation_;
   // Low-overhead NONE isolation handling (saves some ref-count twiddling).
   if (actual_isolation == ProgramIsolation::NONE) {
@@ -101,6 +102,7 @@ std::string ProgramFunction::to_s() const {
 ProgramModule ProgramModule::Load(System &system,
                                   const std::filesystem::path &path,
                                   bool mmap) {
+  SHORTFIN_TRACE_SCOPE_NAMED("ProgramModule::Load");
   iree::file_contents_ptr contents;
   iree_file_read_flags_t flags =
       mmap ? IREE_FILE_READ_FLAG_MMAP : IREE_FILE_READ_FLAG_PRELOAD;
@@ -171,6 +173,7 @@ std::vector<std::string> ProgramModule::exports() const {
 
 Program Program::Load(std::span<const ProgramModule> modules,
                       Options &&options) {
+  SHORTFIN_TRACE_SCOPE_NAMED("Program::Load");
   std::vector<iree_vm_module_t *> all_modules;
   std::vector<iree_hal_device_t *> raw_devices;
 
@@ -451,6 +454,7 @@ iree_status_t ProgramInvocation::FinalizeCallingConvention(
 
 ProgramInvocation::Future ProgramInvocation::Invoke(
     ProgramInvocation::Ptr invocation) {
+  SHORTFIN_TRACE_SCOPE_NAMED("ProgramInvocation::Invoke");
   invocation->CheckNotScheduled();
 
   Worker &worker = invocation->fiber_->worker();
@@ -462,9 +466,11 @@ ProgramInvocation::Future ProgramInvocation::Invoke(
                      iree_vm_function_t function,
                      ProgramInvocationModel invocation_model,
                      std::optional<ProgramInvocation::Future> failure_future) {
+    SHORTFIN_TRACE_SCOPE_NAMED("ProgramInvocation::InvokeAsync");
     auto complete_callback =
         [](void *user_data, iree_loop_t loop, iree_status_t status,
            iree_vm_list_t *outputs) noexcept -> iree_status_t {
+      SHORTFIN_TRACE_SCOPE_NAMED("ProgramInvocation::Complete");
       // Async invocation helpfully gives us a retained reference to the
       // outputs, but we already have one statically on the
       // ProgramInvocation. So release this one, which makes it safe to
@@ -620,6 +626,7 @@ StaticProgramParameters::StaticProgramParameters(
 
 void StaticProgramParameters::Load(std::filesystem::path file_path,
                                    LoadOptions options) {
+  SHORTFIN_TRACE_SCOPE_NAMED("StaticProgramParameters::Load");
   // Default format from extension.
   if (options.format.empty()) {
     options.format = file_path.extension().string();

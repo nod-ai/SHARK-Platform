@@ -104,11 +104,11 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         # Fast path to start_index based embedding lookup if available.
         # Falls back to a slower position based index lookup.
         if start_index is not None:
-            xq, xk = embedding.forward(xq=xq, xk=xk, start_index=start_index)
+            xq = embedding.forward(xt=xq, start_index=start_index)
+            xk = embedding.forward(xt=xk, start_index=start_index)
         else:
-            xq, xk = embedding.apply_batched_mask(
-                xq=xq, xk=xk, mask=embedding_batch_mask
-            )
+            xq = embedding.apply_batched_mask(xt=xq, mask=embedding_batch_mask)
+            xk = embedding.apply_batched_mask(xt=xk, mask=embedding_batch_mask)
 
         # Full sequence length.
         kv_seq_len = seq_block_ids.shape[1] * self.cache.block_seq_stride
