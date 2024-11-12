@@ -326,6 +326,12 @@ PYTHON_SOURCE_DIR = REL_SOURCE_DIR / "python"
 PYTHON_DEFAULT_BINARY_DIR = REL_CMAKE_DEFAULT_BUILD_DIR / "python"
 PYTHON_TRACY_BINARY_DIR = REL_CMAKE_TRACY_BUILD_DIR / "python"
 
+with open(
+    REL_SOURCE_DIR / "README.md",
+    "rt",
+) as f:
+    README = f.read()
+
 
 # We need some directories to exist before setup.
 def populate_built_package(abs_dir):
@@ -361,8 +367,25 @@ print(f"Found shortfin packages: {packages}")
 setup(
     name="shortfin",
     version=f"{PACKAGE_VERSION}",
-    description="Shortfin native library implementation",
     author="SHARK Authors",
+    description="shortfin - SHARK inference library and serving engine",
+    long_description=README,
+    long_description_content_type="text/markdown",
+    license="Apache-2.0",
+    classifiers=[
+        "Development Status :: 3 - Alpha",
+        "License :: OSI Approved :: Apache Software License",
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
+        "Programming Language :: Python :: 3.13",
+    ],
+    project_urls={
+        "repository": "https://github.com/nod-ai/SHARK-Platform",
+        "documentation": "https://shortfin.readthedocs.io/en/latest/",
+    },
+    python_requires=">=3.10",
     packages=packages,
     zip_safe=False,
     package_dir=combine_dicts(
