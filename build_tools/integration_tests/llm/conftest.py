@@ -20,6 +20,79 @@ from transformers import AutoTokenizer
 logger = logging.getLogger(__name__)
 
 
+@pytest.fixture(scope="session")
+def persistent_cache_dir(pytestconfig):
+    """Fixture to return the persistent cache directory."""
+    cache_dir = pytestconfig.cache.mkdir("llm_integration_test_cache")
+    return cache_dir
+
+
+import hashlib
+
+
+def compute_file_hash(file_path):
+    """Compute SHA256 hash of a file."""
+    sha256_hash = hashlib.sha256()
+    with open(file_path, "rb") as f:
+        for byte_block in iter(lambda: f.read(4096), b""):
+            sha256_hash.update(byte_block)
+    return sha256_hash.hexdigest()
+
+
+def download_and_verify_model(
+    repo_id, model_file, persistent_cache_dir, expected_hash=None
+):
+    """Download and verify a model file from Hugging Face.
+
+    Args:
+        repo_id (str): The Hugging Face repo ID
+        model_file (str): The model file to download
+        expected_hash (str): Expected SHA256 hash of the file
+        target_dir (Path): Directory to save the file
+
+    Returns:
+        Path: Path to the verified model file
+    """
+    target_dir = persistent_cache_dir
+    target_path = target_dir / model_file
+
+    # Check if file exists and verify hash
+    if target_path.exists():
+        if not expected_hash:
+            logging.info(
+                f"Using cached model at {target_path} (no hash verification because expected_hash is not provided)"
+            )
+            return target_path
+
+        current_hash = compute_file_hash(target_path)
+        if current_hash == expected_hash:
+            logging.info(f"Using cached model at {target_path} (hash verified)")
+            return target_path
+        else:
+            raise ValueError(
+                f"Hash mismatch for cached model at {target_path}. Expected: {expected_hash}, Got: {current_hash}. To disable hash verification, set expected_hash=None."
+            )
+
+    # Download file
+    logging.info(f"Downloading model {repo_id} {model_file} from Hugging Face...")
+    subprocess.run(
+        f"huggingface-cli download --local-dir {target_dir} {repo_id} {model_file}",
+        shell=True,
+        check=True,
+    )
+
+    # Verify downloaded file
+    downloaded_hash = compute_file_hash(target_path)
+    if downloaded_hash != expected_hash:
+        target_path.unlink()
+        raise ValueError(
+            f"Downloaded file hash mismatch. Expected: {expected_hash}, Got: {downloaded_hash}"
+        )
+
+    logging.info(f"Model downloaded and verified at {target_path}")
+    return target_path
+
+
 @pytest.fixture(scope="module")
 def model_test_dir(request, tmp_path_factory):
     """Prepare model artifacts for starting the LLM server.
@@ -49,20 +122,14 @@ def model_test_dir(request, tmp_path_factory):
     hf_home = Path(hf_home) if hf_home is not None else tmp_dir
     try:
         # Download model if it doesn't exist
-        model_path = hf_home / model_file
-        logger.info(f"Preparing model_path: {model_path}..")
-        if not os.path.exists(model_path):
-            logger.info(
-                f"Downloading model {repo_id} {model_file} from Hugging Face..."
-            )
-            subprocess.run(
-                f"huggingface-cli download --local-dir {hf_home} {repo_id} {model_file}",
-                shell=True,
-                check=True,
-            )
-            logger.info(f"Model downloaded to {model_path}")
-        else:
-            logger.info("Using cached model")
+
+        # sha256sum open-llama-3b-v2-f16.gguf
+        MODEL_SHA256 = (
+            "46978f4b19536f0d443ae75d2627fc4c15a8e1e85285f87b67710f8449633d63"
+        )
+        model_path = download_and_verify_model(
+            repo_id, model_file, hf_home, expected_hash=MODEL_SHA256
+        )
 
         # Set up tokenizer if it doesn't exist
         tokenizer_path = hf_home / "tokenizer.json"
