@@ -80,10 +80,15 @@ dataclasses_json.cfg.global_config.decoders[sfnp.DType] = _decode_dtype
 class PagedKVCacheParams:
     """Parameters for the paged KV cache."""
 
-    # Position stride per attention block
+    # Tokens per page.
     block_seq_stride: int
 
+    # Number of attention heads per block. This can be different from the model's
+    # attention head count due to sharing.
+    attention_head_count_kv: int
+
     # Size of the cache on each device.
+    # Default: 256
     device_block_count: int
 
     prefix_sharing_algorithm: str = "none"  # currently supporting none and trie
@@ -92,19 +97,26 @@ class PagedKVCacheParams:
 @dataclass_json(undefined=Undefined.RAISE)
 @dataclass
 class ModelParams:
-    """Parameters for a specific compiled model, sufficient to do cache planning and
-    invocations."""
+    """
+    Parameters for a specific compiled model, sufficient to do cache planning and
+    invocations.
+
+    Compatibility should be maintained with function generate_params_json in
+
+    sharktank/sharktank/examples/export_paged_llm_v1.py
+    """
 
     # Maximum length of a sequence including prompt and output.
     max_seq_len: int
 
-    # Number of transformer blocks.
+    # Number of transformer layers (aka attention blocks / transformer blocks).
     transformer_block_count: int
 
-    # Number of attention heads per block.
+    # Number of attention heads per transformer layer.
     attn_head_count: int
 
-    # Dimensionality of each attention head
+    # Dimensionality of each attention head. This is the dimensionality of the
+    # key and value vectors. AKA rope_dimension_count from the GGUF props.
     attn_head_dim: int
 
     # Batch sizes that the prefill stage is compiled for. These are expected to be

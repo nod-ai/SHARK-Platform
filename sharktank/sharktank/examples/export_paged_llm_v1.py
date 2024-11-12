@@ -86,8 +86,10 @@ def main():
     else:
         model = PagedLlamaModelV1(dataset.root_theta, llama_config)
 
-    def generate_params_json(hp, prefill_bs: list[int], decode_bs: list[int]):
-        return {
+    def generate_params_json(
+        hp: LlamaHParams, prefill_bs: list[int], decode_bs: list[int]
+    ):
+        {
             "module_name": "module",
             "module_abi_version": 1,
             "max_seq_len": hp.context_length,
@@ -96,7 +98,11 @@ def main():
             "prefill_batch_sizes": prefill_bs,
             "decode_batch_sizes": decode_bs,
             "transformer_block_count": hp.block_count,
-            "block_seq_stride": llama_config.block_seq_stride,
+            "paged_kv_cache": {
+                "attention_head_count_kv": hp.attention_head_count_kv,
+                "block_seq_stride": llama_config.block_seq_stride,
+                "device_block_count": 256,  # so that this makes its way into the config file & can be edited.
+            },
         }
 
     # Unrolling cache updates by batch row makes dynamo sad without an
