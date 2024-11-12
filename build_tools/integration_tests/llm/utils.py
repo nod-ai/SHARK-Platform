@@ -5,8 +5,10 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 import logging
+import multiprocessing
 import os
 import subprocess
+import sys
 import time
 
 import requests
@@ -120,6 +122,27 @@ def wait_for_server(url, timeout=10):
     raise TimeoutError(f"Server did not start within {timeout} seconds")
 
 
+def _start_llm_server_args(
+    tokenizer_path,
+    model_config_path,
+    vmfb_path,
+    parameters_path,
+    settings,
+    port,
+):
+    return [
+        sys.executable,
+        "-m",
+        "shortfin_apps.llm.server",
+        f"--tokenizer_json={tokenizer_path}",
+        f"--model_config={model_config_path}",
+        f"--vmfb={vmfb_path}",
+        f"--parameters={parameters_path}",
+        f"--device={settings['device']}",
+        f"--port={port}",
+    ]
+
+
 def start_llm_server(
     port,
     tokenizer_path,
@@ -128,22 +151,37 @@ def start_llm_server(
     parameters_path,
     settings,
     timeout=10,
+    multi=False,
 ):
     logger.info("Starting LLM server...")
-    # Start the server
-    server_process = subprocess.Popen(
-        [
-            "python",
-            "-m",
-            "shortfin_apps.llm.server",
-            f"--tokenizer_json={tokenizer_path}",
-            f"--model_config={model_config_path}",
-            f"--vmfb={vmfb_path}",
-            f"--parameters={parameters_path}",
-            f"--device={settings['device']}",
-            f"--port={port}",
-        ]
-    )
+    if multi:
+        server_process = multiprocessing.Process(
+            target=subprocess.Popen(
+                _start_llm_server_args(
+                    tokenizer_path,
+                    model_config_path,
+                    vmfb_path,
+                    parameters_path,
+                    settings,
+                    port,
+                ),
+            )
+        )
+        server_process.start()
+
+    else:
+        # Start the server
+        server_process = subprocess.Popen(
+            _start_llm_server_args(
+                tokenizer_path,
+                model_config_path,
+                vmfb_path,
+                parameters_path,
+                settings,
+                port,
+            )
+        )
+    logger.info("Process started... waiting for server")
     # Wait for server to start
     wait_for_server(f"http://localhost:{port}", timeout)
     return server_process

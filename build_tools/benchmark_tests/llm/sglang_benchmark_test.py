@@ -1,18 +1,24 @@
+# Copyright 2024 Advanced Micro Devices, Inc.
+#
+# Licensed under the Apache License v2.0 with LLVM Exceptions.
+# See https://llvm.org/LICENSE.txt for license information.
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+
 import json
 import logging
+import multiprocessing
 import os
 from pathlib import Path
 import pytest
-import subprocess
 import time
+from unittest.mock import patch
 
 pytest.importorskip("sglang")
+from sglang import bench_serving
 
 from utils import SGLangBenchmarkArgs
 
 from integration_tests.llm.utils import (
-    export_paged_llm_v1,
-    compile_model,
     find_available_port,
     start_llm_server,
 )
@@ -27,6 +33,9 @@ device_settings = {
     "device": "hip",
 }
 
+MODEL_PATH = Path("/data/llama3.1/8b/llama8b_f16.irpa")
+TOKENIZER_DIR = Path("/data/llama3.1/8b/")
+
 
 def print_jsonl_output(file_path):
     with open(file_path, "r") as file:
@@ -35,43 +44,29 @@ def print_jsonl_output(file_path):
             logger.info(json.dumps(json_object, indent=4))
 
 
-def test_sglang_benchmark_server(tmp_path_factory):
+@pytest.mark.parametrize("request_rate", [1, 2, 4, 8, 16, 32])
+@pytest.mark.parametrize(
+    "pre_process_model",
+    [
+        (
+            {
+                "model_path": MODEL_PATH,
+                "settings": device_settings,
+                "batch_sizes": [1, 4],
+            }
+        )
+    ],
+    indirect=True,
+)
+def test_sglang_benchmark_server(request_rate, pre_process_model):
     # TODO: Remove when multi-device is fixed
     os.environ["ROCR_VISIBLE_DEVICES"] = "1"
 
-    tmp_dir = tmp_path_factory.mktemp("sglang_benchmark_test")
+    tmp_dir = pre_process_model
 
-    if not os.path.exists(tmp_dir):
-        os.mkdir(tmp_dir)
-    model_path = Path("/data/llama3.1/8b/llama8b_f16.irpa")
-    mlir_path = tmp_dir / "model.mlir"
     config_path = tmp_dir / "config.json"
     vmfb_path = tmp_dir / "model.vmfb"
-    tokenizer_dir = Path("/data/llama3.1/8b/")
-    tokenizer_path = tokenizer_dir / "tokenizer.json"
-    batch_sizes = [1, 4]
-
-    # Export Llama 8b f16
-    if not os.path.exists(mlir_path):
-        export_paged_llm_v1(mlir_path, config_path, model_path, batch_sizes)
-
-    config = {
-        "module_name": "module",
-        "module_abi_version": 1,
-        "max_seq_len": 2048,
-        "attn_head_count": 8,
-        "attn_head_dim": 100,
-        "prefill_batch_sizes": batch_sizes,
-        "decode_batch_sizes": batch_sizes,
-        "transformer_block_count": 26,
-        "paged_kv_cache": {"block_seq_stride": 16, "device_block_count": 256},
-    }
-    with open(config_path, "w") as file:
-        json.dump(config, file)
-
-    # Compile Model
-    if not os.path.exists(vmfb_path):
-        compile_model(mlir_path, vmfb_path, device_settings)
+    tokenizer_path = TOKENIZER_DIR / "tokenizer.json"
 
     # Start shortfin llm server
     port = find_available_port()
@@ -80,62 +75,40 @@ def test_sglang_benchmark_server(tmp_path_factory):
         tokenizer_path,
         config_path,
         vmfb_path,
-        model_path,
+        MODEL_PATH,
         device_settings,
         timeout=30,
     )
 
     # Run and collect SGLang Serving Benchmark
-    for i in range(6):
-        benchmark_args = SGLangBenchmarkArgs(
-            backend="shortfin",
-            num_prompt=10,
-            base_url=f"http://localhost:{port}",
-            tokenizer=tokenizer_dir,
-            request_rate=2**i,
-        )
+    benchmark_args = SGLangBenchmarkArgs(
+        backend="shortfin",
+        num_prompt=10,
+        base_url=f"http://localhost:{port}",
+        tokenizer=TOKENIZER_DIR,
+        request_rate=request_rate,
+    )
+    output_file = (
+        Path("/home/stbaione/repos/SHARK-Platform")
+        / f"{benchmark_args.backend}_{benchmark_args.num_prompt}_{benchmark_args.request_rate}.jsonl"
+    )
+    benchmark_args.output_file = output_file
 
-        logger.info("Running SGLang Benchmark with the following args:")
-        logger.info(benchmark_args)
-        output_file = (
-            tmp_dir
-            / f"{benchmark_args.backend}_{benchmark_args.num_prompt}_{benchmark_args.request_rate}.jsonl"
-        )
-        try:
-            benchmark_process = subprocess.Popen(
-                [
-                    "python",
-                    "-m",
-                    "sglang.bench_serving",
-                    f"--backend={benchmark_args.backend}",
-                    f"--num-prompt={benchmark_args.num_prompt}",
-                    f"--base-url={benchmark_args.base_url}",
-                    f"--tokenizer={benchmark_args.tokenizer}",
-                    f"--request-rate={benchmark_args.request_rate}",
-                    f"--output-file={output_file}",
-                ],
-                bufsize=-1,
+    logger.info("Running SGLang Benchmark with the following args:")
+    logger.info(benchmark_args)
+    try:
+        start = time.time()
+        with patch.object(bench_serving, "print", side_effect=logger.info):
+            benchmark_process = multiprocessing.Process(
+                target=bench_serving.run_benchmark,
+                args=(benchmark_args.as_namespace(),),
             )
+            benchmark_process.start()
+            benchmark_process.join()
 
-            timeout = 50000
-            start = time.time()
-            while benchmark_process.poll() is None:
-                runtime = time.time() - start
-                if runtime >= timeout:
-                    benchmark_process.terminate()
-                    benchmark_process.wait()
-                    raise TimeoutError("SGLang Benchmark Timed Out")
-                time.sleep(60)
-
-            logger.info(
-                f"Benchmark run completed in {str(start - time.time())} seconds"
-            )
-            logger.info("Test Results:")
-            print_jsonl_output(output_file)
-            benchmark_process.terminate()
-            benchmark_process.wait()
-        except Exception as e:
-            logger.info(e)
+        logger.info(f"Benchmark run completed in {str(time.time() - start)} seconds")
+    except Exception as e:
+        logger.info(e)
 
     server_process.terminate()
     server_process.wait()
