@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # Copyright 2024 Advanced Micro Devices, Inc.
 #
 # Licensed under the Apache License v2.0 with LLVM Exceptions.
