@@ -76,6 +76,7 @@ def find_available_port(starting_port=8000, max_port=8100):
 
 find_available_port()
 ")
+echo $PORT
 ```
 
 #### General Env Vars
