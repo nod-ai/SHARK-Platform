@@ -66,14 +66,17 @@ def do_generate(prompt, port):
     "model_test_dir,llm_server",
     [
         (
-            {
+            {  # FixtureRequest for model_test_dir
                 "repo_id": "SlyEcho/open_llama_3b_v2_gguf",
                 "model_file": "open-llama-3b-v2-f16.gguf",
                 "tokenizer_id": "openlm-research/open_llama_3b_v2",
                 "settings": CPU_SETTINGS,
                 "batch_sizes": [1, 4],
             },
-            {"model_file": "open-llama-3b-v2-f16.gguf", "settings": CPU_SETTINGS},
+            {  # FixtureRequest for llm_server
+                "model_file": "open-llama-3b-v2-f16.gguf",
+                "settings": CPU_SETTINGS,
+            },
         )
     ],
     indirect=True,
