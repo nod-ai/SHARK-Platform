@@ -11,20 +11,20 @@ Parameters that are intrinsic to a specific model.
 In a typical transformer model, the KV cache is organized similar to (mapped to
 our parameter names below):
     k = tensor.empty(transformer_block_count, batch_size, seq,
-                    attn_head_count, attn_head_dim)
+                    attn_head_count_kv, attn_head_dim)
     v = ...
 
 For context, a popular model has parameters of:
     attn_dtype_size = 2  # (fp16)
     max_seq_len = 2048
     transformer_block_count = 32
-    attn_head_count = 32
+    attn_head_count_kv = 32
     attn_head_dim = 128   # (dim / head_count)
 
 If paging, then we primarily care about the organization of a single block, where
 a block represents a single position in the sequence for a single item in the batch.
 Therefore, it will be organized like:
-    block = torch.empty(transformer_block_count, 2, attn_head_count, attn_head_dim)
+    block = torch.empty(transformer_block_count, 2, attn_head_count_kv, attn_head_dim)
 
 In this scenario, we declare that one block holds the KV cache for all transformer
 block layers because it reduces the accounting. As such, for the above example,
@@ -111,9 +111,6 @@ class ModelParams:
 
     # Number of transformer layers (aka attention blocks / transformer blocks).
     transformer_block_count: int
-
-    # Number of attention heads per transformer layer.
-    attn_head_count: int
 
     # Dimensionality of each attention head. This is the dimensionality of the
     # key and value vectors. AKA rope_dimension_count from the GGUF props.
