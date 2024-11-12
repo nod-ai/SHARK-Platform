@@ -50,7 +50,7 @@ def model_params():
         "decode_batch_sizes": [4],
         "transformer_block_count": 26,
         "paged_kv_cache": {
-            "attn_head_count_kv": 32,
+            "attention_head_count_kv": 32,
             "block_seq_stride": 16,
             "device_block_count": 256,
         },
