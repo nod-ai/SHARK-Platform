@@ -95,6 +95,7 @@ void BindArrayHostOps(py::module_ &m) {
       "argmax",
       [](device_array &input, int axis, std::optional<device_array> out,
          bool keepdims, bool device_visible) {
+        SHORTFIN_TRACE_SCOPE_NAMED("PyHostOp::argmax");
         if (axis < 0) axis += input.shape().size();
         if (axis < 0 || axis >= input.shape().size()) {
           throw std::invalid_argument(
@@ -139,6 +140,7 @@ void BindArrayHostOps(py::module_ &m) {
   m.def(
       "fill_randn",
       [](device_array out, std::optional<PyRandomGenerator *> gen) {
+        SHORTFIN_TRACE_SCOPE_NAMED("PyHostOp::fill_randn");
         if (!gen) gen = &PyRandomGenerator::get_default();
         auto compute = [&]<typename EltTy>() {
           auto result = xt::random::randn(out.shape_container(), /*mean=*/0.0,

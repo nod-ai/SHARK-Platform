@@ -173,6 +173,7 @@ class PyWorkerExtension : public local::Worker::Extension {
   py::handle loop() { return loop_; }
 
   void OnThreadStart() noexcept override {
+    SHORTFIN_TRACE_SCOPE_NAMED("PyWorker::OnThreadStart");
     // Python threading initialization.
     // If our own thread, teach Python about it. Not done for donated.
     if (worker().options().owned_thread) {
@@ -187,6 +188,7 @@ class PyWorkerExtension : public local::Worker::Extension {
   }
 
   void OnThreadStop() noexcept override {
+    SHORTFIN_TRACE_SCOPE_NAMED("PyWorker::OnThreadStop");
     {
       // Do Python level thread cleanup.
       py::gil_scoped_acquire g;
@@ -253,6 +255,7 @@ class PyProcess : public local::detail::BaseProcess {
         std::bind(&PyProcess::RunOnWorker, self_object));
   }
   static void RunOnWorker(py::handle self_handle) {
+    SHORTFIN_TRACE_SCOPE_NAMED("PyProcess:RunOnWorker");
     py::gil_scoped_acquire g;
     // Steal the reference back from ScheduleOnWorker. Important: this is
     // very likely the last reference to the process. So self must not be
@@ -342,6 +345,7 @@ py::object PyRehydrateRef(local::ProgramInvocation *inv,
 
 py::object RunInForeground(std::shared_ptr<Refs> refs, local::System &self,
                            py::object coro) {
+  SHORTFIN_TRACE_SCOPE_NAMED("CoroRunInForeground");
   bool is_main_thread =
       refs->threading_current_thread().is(refs->threading_main_thread());
 
@@ -936,6 +940,7 @@ void BindLocal(py::module_ &m) {
              callable.inc_ref();  // Stolen within the callback.
              auto thunk = +[](void *user_data, iree_loop_t loop,
                               iree_status_t status) noexcept -> iree_status_t {
+               SHORTFIN_TRACE_SCOPE_NAMED("PyWorker::Callback");
                py::gil_scoped_acquire g;
                py::object user_callable =
                    py::steal(static_cast<PyObject *>(user_data));
@@ -955,6 +960,7 @@ void BindLocal(py::module_ &m) {
              callable.inc_ref();  // Stolen within the callback.
              auto thunk = +[](void *user_data, iree_loop_t loop,
                               iree_status_t status) noexcept -> iree_status_t {
+               SHORTFIN_TRACE_SCOPE_NAMED("PyWorker::DelayCallback");
                py::gil_scoped_acquire g;
                py::object user_callable =
                    py::steal(static_cast<PyObject *>(user_data));
@@ -1030,6 +1036,7 @@ void BindLocal(py::module_ &m) {
   py::class_<local::CompletionEvent>(m, "CompletionEvent")
       .def(py::init<>())
       .def("__await__", [](py::handle self_obj) {
+        SHORTFIN_TRACE_SCOPE_NAMED("PyCompletionEvent::__await__");
         auto &worker_ext = PyWorkerExtension::GetCurrent();
         auto &self = py::cast<local::CompletionEvent &>(self_obj);
         py::object future = worker_ext.loop().attr("create_future")();
@@ -1051,6 +1058,7 @@ void BindLocal(py::module_ &m) {
             self, iree_infinite_timeout(),
             +[](void *future_vp, iree_loop_t loop,
                 iree_status_t status) noexcept -> iree_status_t {
+              SHORTFIN_TRACE_SCOPE_NAMED("PyCompletionEvent::OnComplete");
               py::gil_scoped_acquire g;
               py::object future = py::steal(static_cast<PyObject *>(future_vp));
               try {
@@ -1145,6 +1153,7 @@ void BindLocal(py::module_ &m) {
              return py::none();
            })
       .def("__await__", [](py::handle self_obj) {
+        SHORTFIN_TRACE_SCOPE_NAMED("PyFuture::__await__");
         // TODO: We should make our C++ future able to be used directly
         // vs needing to bridge it like this.
         auto &worker_ext = PyWorkerExtension::GetCurrent();
@@ -1166,6 +1175,7 @@ void BindLocal(py::module_ &m) {
         self.AddCallback(
             [py_future_vp = static_cast<void *>(future.release().ptr())](
                 local::Future &sf_future) {
+              SHORTFIN_TRACE_SCOPE_NAMED("PyFuture::OnComplete");
               py::gil_scoped_acquire g;
               py::object py_future =
                   py::steal(static_cast<PyObject *>(py_future_vp));
