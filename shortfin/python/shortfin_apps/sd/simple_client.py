@@ -12,6 +12,7 @@ import time
 import asyncio
 import aiohttp
 import sys
+import os
 
 from datetime import datetime as dt
 from PIL import Image
@@ -31,40 +32,16 @@ sample_request = {
 }
 
 
-def bytes_to_img(bytes, idx=0, width=1024, height=1024):
+def bytes_to_img(bytes, idx=0, width=1024, height=1024, outputdir="./gen_imgs"):
     timestamp = dt.now().strftime("%Y-%m-%d_%H-%M-%S")
     image = Image.frombytes(
         mode="RGB", size=(width, height), data=base64.b64decode(bytes)
     )
-    image.save(f"shortfin_sd_output_{timestamp}_{idx}.png")
-    print(f"Saved to shortfin_sd_output_{timestamp}_{idx}.png")
-
-
-async def send_json_file(args):
-    async for rep in range(args.reps):
-        # Send the data to the /generate endpoint
-        try:
-            time.sleep(1)
-            start = time.time()
-            print("Sending request batch #", rep)
-            response = requests.post("http://0.0.0.0:8000/generate", json=data)
-            response.raise_for_status()  # Raise an error for bad responses
-            timestamp = dt.now().strftime("%Y-%m-%d_%H-%M-%S")
-            request = json.loads(response.request.body.decode("utf-8"))
-            end = time.time()
-            for idx, item in enumerate(response.json()["images"]):
-                width = get_batched(request, "width", idx)
-                height = get_batched(request, "height", idx)
-                if args.save:
-                    print("Saving response as image...")
-                    bytes_to_img(item.encode("utf-8"), idx, width, height)
-            latency = end - start
-            print(f"Latency (" + str(len(data["prompt"])) + "samples) :")
-            print(latency)
-            print("Responses processed.")
-
-        except requests.exceptions.RequestException as e:
-            print(f"Error sending the request: {e}")
+    if not os.path.isdir(outputdir):
+        os.mkdir(outputdir)
+    im_path = os.path.join(outputdir, f"shortfin_sd_output_{timestamp}_{idx}.png")
+    image.save(im_path)
+    print(f"Saved to {im_path}")
 
 
 def get_batched(request, arg, idx):
@@ -95,7 +72,9 @@ async def send_request(session, rep, args, data):
                         width = get_batched(data, "width", idx)
                         height = get_batched(data, "height", idx)
                         print("Saving response as image...")
-                        bytes_to_img(item.encode("utf-8"), idx, width, height)
+                        bytes_to_img(
+                            item.encode("utf-8"), idx, width, height, args.outputdir
+                        )
                 latency = end - start
                 print(f"Latency (" + str(len(data["prompt"])) + "samples) :")
                 print(latency)
@@ -202,11 +181,12 @@ async def async_range(count):
         await asyncio.sleep(0.0)
 
 
-if __name__ == "__main__":
+def main(argv):
     p = argparse.ArgumentParser()
     p.add_argument("--file", type=str, default="default")
     p.add_argument("--reps", type=int, default=1)
     p.add_argument("--save", action="store_true", help="save images")
+    p.add_argument("--outputdir", type=str, default="gen_imgs")
     p.add_argument("--port", type=str, default="8000")
     p.add_argument("--steps", type=int, default="20")
     p.add_argument(
@@ -218,4 +198,8 @@ if __name__ == "__main__":
     if args.interactive:
         asyncio.run(interactive(args))
     else:
-        asyncio.run(main(args))
+        asyncio.run(static(args))
+
+
+if __name__ == "__main__":
+    main(sys.argv)
