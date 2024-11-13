@@ -44,7 +44,7 @@ pip install shortfin -f https://github.com/nod-ai/SHARK-Platform/releases/expand
 
 #### Install dataclasses-json
 
-TODO: This should be included in release:
+<!-- TODO: This should be included in release: -->
 
 ```bash
 pip install dataclasses-json
@@ -60,6 +60,15 @@ mkdir $PWD/export
 export EXPORT_DIR=$PWD/export
 ```
 
+### Download llama3_8b_fp16.gguf
+
+We will use the `hf_datasets` module in `sharktank` to download a
+LLama3.1 8b f16 model.
+
+```bash
+python -m sharktank.utils.hf_datasets amd-shark/llama3.1-8B --local-dir $EXPORT_DIR
+```
+
 ### Define environment variables
 
 Define the following environment variables to make running
@@ -72,10 +81,8 @@ that are pre-existing on the MI300X-3 system.
 You may need to change the paths for your own system.
 
 ```bash
-# Path to existing .irpa file, may need to change w/ system
-export MODEL_PARAMS_PATH=/data/llama3.1/8b/llama8b_f16.irpa
-# Path to existing tokenizer.json, may need to change w/ system
-export TOKENIZER_PATH=/data/llama3.1/8b/tokenizer.json
+export MODEL_PARAMS_PATH=$EXPORT_DIR/llama3.1-8b/llama8b_f16.gguf
+export TOKENIZER_PATH=$EXPORT_DIR/llama3.1-8b/tokenizer.json
 ```
 
 #### General env vars
@@ -97,7 +104,7 @@ export BS=1,4
 export ROCR_VISIBLE_DEVICES=1
 ```
 
-### Export to MLIR
+## Export to MLIR
 
 We will now use the `sharktank.examples.export_paged_llm_v1` script
 to export our model to `.mlir` format.
@@ -179,10 +186,10 @@ ls $EXPORT_DIR
 
 ### Launch server:
 
-#### Set the target device
+<!-- #### Set the target device
 
 TODO: Add instructions on targeting different devices,
-when `--device=hip://$DEVICE` is supported
+when `--device=hip://$DEVICE` is supported -->
 
 #### Run the shortfin server
 
@@ -243,7 +250,9 @@ import requests
 
 import os
 
-generate_url = f"http://localhost:{os.environ['PORT']}/generate"
+port = 8000 # Change if running on a different port
+
+generate_url = f"http://localhost:{port}/generate"
 
 def generation_request():
     payload = {"text": "What is the capital of the United States?", "sampling_params": {"max_completion_tokens": 50}}

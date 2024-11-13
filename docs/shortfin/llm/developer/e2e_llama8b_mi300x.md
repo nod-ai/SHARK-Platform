@@ -141,8 +141,8 @@ ls $EXPORT_DIR
 
 #### Set the target device
 
-TODO: Add instructions on targeting different devices,
-when `--device=hip://$DEVICE` is supported
+<!-- TODO: Add instructions on targeting different devices,
+when `--device=hip://$DEVICE` is supported -->
 
 #### Run the shortfin server
 
@@ -166,8 +166,7 @@ python -m shortfin_apps.llm.server \
    --model_config=$EDITED_CONFIG_PATH \
    --vmfb=$VMFB_PATH \
    --parameters=$MODEL_PARAMS_PATH \
-   --device=hip \
-   --port=$PORT > shortfin_llm_server.log 2>&1 &
+   --device=hip > shortfin_llm_server.log 2>&1 &
 shortfin_process=$!
 ```
 
@@ -192,7 +191,7 @@ cat shortfin_llm_server.log
 We can test the LLM server, by running our client script:
 
 ```bash
-python shortfin/python/shortfin_apps/llm/client.py --port $PORT
+python shortfin/python/shortfin_apps/llm/client.py --port 8000
 ```
 
 ### Simple request
@@ -212,7 +211,9 @@ import requests
 
 import os
 
-generate_url = f"http://localhost:{os.environ['PORT']}/generate"
+port = 8000 # Change if running at a different port
+
+generate_url = f"http://localhost:{port}/generate"
 
 def generation_request():
     payload = {"text": "What is the capital of the United States?", "sampling_params": {"max_completion_tokens": 50}}
