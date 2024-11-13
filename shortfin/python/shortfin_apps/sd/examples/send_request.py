@@ -54,7 +54,7 @@ def send_json_file(args):
     )
     # Send the data to the /generate endpoint
     try:
-        response = requests.post("http://0.0.0.0:8000/generate", json=data)
+        response = requests.post(f"http://0.0.0.0:{args.port}/generate", json=data)
         response.raise_for_status()  # Raise an error for bad responses
         timestamp = dt.now().strftime("%Y-%m-%d_%H-%M-%S")
         request = json.loads(response.request.body.decode("utf-8"))
@@ -86,5 +86,6 @@ if __name__ == "__main__":
     p.add_argument("--file", type=str, default="default")
     p.add_argument("--reps", type=int, default=1)
     p.add_argument("--save", type=argparse.BooleanOptionalAction, help="save images")
+    p.add_argument("--port", type=int, default=8000)
     args = p.parse_args()
     send_json_file(args)
