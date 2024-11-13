@@ -76,8 +76,6 @@ async def send_request(session, rep, args, data):
                             item.encode("utf-8"), idx, width, height, args.outputdir
                         )
                 latency = end - start
-                print(f"Latency (" + str(len(data["prompt"])) + "samples) :")
-                print(latency)
                 print("Responses processed.")
                 return latency, len(data["prompt"])
             else:
@@ -148,11 +146,12 @@ async def interactive(args):
         data["prompt"] = (
             [data["prompt"]] if isinstance(data["prompt"], str) else data["prompt"]
         )
-        print("Sending request with prompt: ", data["prompt"])
         while True:
             prompt = await ainput("Enter a prompt: ")
             data["prompt"] = [prompt]
             data["steps"] = [args.steps]
+            print("Sending request with prompt: ", data["prompt"])
+
             async for i in async_range(args.reps):
                 pending.append(
                     asyncio.create_task(send_request(session, i, args, data))
@@ -183,16 +182,41 @@ async def async_range(count):
 
 def main(argv):
     p = argparse.ArgumentParser()
-    p.add_argument("--file", type=str, default="default")
-    p.add_argument("--reps", type=int, default=1)
-    p.add_argument("--save", action="store_true", help="save images")
-    p.add_argument("--outputdir", type=str, default="gen_imgs")
-    p.add_argument("--port", type=str, default="8000")
-    p.add_argument("--steps", type=int, default="20")
+    p.add_argument(
+        "--file",
+        type=str,
+        default="default",
+        help="A non-default request to send to the server.",
+    )
+    p.add_argument(
+        "--reps",
+        type=int,
+        default=1,
+        help="Number of times to duplicate each request in one second intervals.",
+    )
+    p.add_argument(
+        "--save",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Save images. To disable, use --no-save",
+    )
+    p.add_argument(
+        "--outputdir",
+        type=str,
+        default="gen_imgs",
+        help="Directory to which images get saved.",
+    )
+    p.add_argument("--port", type=str, default="8000", help="Server port")
+    p.add_argument(
+        "--steps",
+        type=int,
+        default="20",
+        help="Number of inference steps. More steps usually means a better image. Interactive only.",
+    )
     p.add_argument(
         "--interactive",
         action="store_true",
-        help="Start as an example client instead of sending static requests.",
+        help="Start as an example CLI client instead of sending static requests.",
     )
     args = p.parse_args()
     if args.interactive:

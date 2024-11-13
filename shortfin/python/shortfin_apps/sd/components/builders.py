@@ -51,7 +51,9 @@ def get_mlir_filenames(model_params: ModelParams, model=None):
     return filter_by_model(mlir_filenames, model)
 
 
-def get_vmfb_filenames(model_params: ModelParams, model=None, target: str = "gfx942"):
+def get_vmfb_filenames(
+    model_params: ModelParams, model=None, target: str = "amdgpu-gfx942"
+):
     vmfb_filenames = []
     file_stems = get_file_stems(model_params)
     for stem in file_stems:
@@ -216,6 +218,8 @@ def sdxl(
 
     mlir_bucket = SDXL_BUCKET + "mlir/"
     vmfb_bucket = SDXL_BUCKET + "vmfbs/"
+    if "gfx" in target:
+        target = "amdgpu-" + target
 
     mlir_filenames = get_mlir_filenames(model_params, model)
     mlir_urls = get_url_map(mlir_filenames, mlir_bucket)
