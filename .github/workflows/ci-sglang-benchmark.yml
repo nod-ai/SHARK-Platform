@@ -74,7 +74,7 @@ jobs:
             "numpy<2.0"
 
       - name: Install SGLang
-        run: pip install "git+https://github.com/stbaione/sglang.git#subdirectory=python"
+        run: pip install "git+https://github.com/nod-ai/sglang.git#subdirectory=python"
 
       - name: Launch Shortfin Server
         run: "pytest -v app_tests/benchmark_tests/llm/sglang_benchmark_test.py --log-cli-level=INFO --html=out/llm/sglang/index.html"
