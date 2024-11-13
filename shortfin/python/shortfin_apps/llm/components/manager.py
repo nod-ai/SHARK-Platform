@@ -8,16 +8,23 @@ import logging
 import threading
 
 import shortfin as sf
+from shortfin.interop.support.device_setup import get_selected_devices
 
 logger = logging.getLogger(__name__)
 
 
 class SystemManager:
-    def __init__(self, device="local-task"):
-        if device == "local-task":
+    def __init__(self, device="local-task", device_ids=None, async_allocs=True):
+        if any(x in device for x in ["local-task", "cpu"]):
             self.ls = sf.host.CPUSystemBuilder().create_system()
-        elif device == "hip":
-            self.ls = sf.amdgpu.SystemBuilder().create_system()
+        elif any(x in device for x in ["hip", "amdgpu"]):
+            sb = sf.SystemBuilder(
+                system_type="amdgpu", amdgpu_async_allocations=async_allocs
+            )
+            if device_ids:
+                sb.visible_devices = sb.available_devices
+                sb.visible_devices = get_selected_devices(sb, device_ids)
+            self.ls = sb.create_system()
         logger.info(f"Created local system with {self.ls.device_names} devices")
         # TODO: Come up with an easier bootstrap thing than manually
         # running a thread.
