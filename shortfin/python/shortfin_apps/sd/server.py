@@ -133,7 +133,8 @@ def get_modules(args):
             else:
                 model_flags[flagged_model].extend([elem])
     if args.tuning_spec:
-        model_flags["unet"].extend([f"--iree-codegen-transform-dialect-library={args.tuning_spec}"])
+        spec_path = os.path.abspath(args.tuning_spec)
+        model_flags["unet"].extend([f"--iree-codegen-transform-dialect-library={spec_path}"])
 
     filenames = []
     for modelname in vmfbs.keys():
