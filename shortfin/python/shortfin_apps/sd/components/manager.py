@@ -8,33 +8,9 @@ import logging
 import threading
 
 import shortfin as sf
+from shortfin.interop.support.device_setup import get_selected_devices
 
-logger = logging.getLogger(__name__)
-
-
-def get_selected_devices(sb: sf.SystemBuilder, device_ids=None):
-    available = sb.available_devices
-    selected = []
-    if device_ids is not None:
-        if len(device_ids) >= len(available):
-            raise ValueError(
-                f"Requested more device ids ({device_ids}) than available ({available})."
-            )
-        for did in device_ids:
-            if isinstance(did, str):
-                try:
-                    did = int(did)
-                except ValueError:
-                    did = did
-            if did in available:
-                selected.append(did)
-            elif isinstance(did, int):
-                selected.append(available[did])
-            else:
-                raise ValueError(f"Device id {did} could not be parsed.")
-    else:
-        selected = available
-    return selected
+logger = logging.getLogger("shortfin-sd.manager")
 
 
 class SystemManager:
@@ -49,7 +25,7 @@ class SystemManager:
                 sb.visible_devices = sb.available_devices
                 sb.visible_devices = get_selected_devices(sb, device_ids)
             self.ls = sb.create_system()
-        logger.info(f"Created local system with {self.ls.device_names} devices")
+        logging.info(f"Created local system with {self.ls.device_names} devices")
         # TODO: Come up with an easier bootstrap thing than manually
         # running a thread.
         self.t = threading.Thread(target=lambda: self.ls.run(self.run()))

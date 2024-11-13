@@ -14,7 +14,7 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
 endif()
 
 # Get version number from file
-file(READ ${CMAKE_CURRENT_SOURCE_DIR}/version_info.json VERSION_JSON_STRING)
+file(READ ${CMAKE_CURRENT_SOURCE_DIR}/version.json VERSION_JSON_STRING)
 string(JSON PACKAGE_VERSION GET ${VERSION_JSON_STRING} package-version)
 string(REGEX MATCH "(0|[1-9][0-9]*)(\.(0|[1-9][0-9]*))*" BASE_VERSION ${PACKAGE_VERSION})
 
