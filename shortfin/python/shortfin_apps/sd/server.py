@@ -123,6 +123,7 @@ def get_configs(args):
     topology_config = None
     tuning_spec = None
     flagfile = args.flagfile if args.flagfile else None
+    topology_inp = args.topology if args.topology else "spx_single"
     cfg_builder_args = [
         sys.executable,
         "-m",
@@ -131,7 +132,7 @@ def get_configs(args):
         f"--target={args.target}",
         f"--output-dir={args.artifacts_dir}",
         f"--model={modelname}",
-        f"--topology={args.topology}",
+        f"--topology={topology_inp}",
     ]
     outs = subprocess.check_output(cfg_builder_args).decode()
     outs_paths = outs.splitlines()
@@ -356,7 +357,7 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
         "--topology",
         type=str,
         default=None,
-        choices=[None, "spx_single", "cpx_single", "spx_multi", "cpx_multi"],
+        choices=["spx_single", "cpx_single", "spx_multi", "cpx_multi"],
         help="Use one of four known performant preconfigured device/fiber topologies.",
     )
     parser.add_argument(
