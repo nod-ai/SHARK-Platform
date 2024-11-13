@@ -24,12 +24,18 @@ python -m pip install shortfin
 
 ## Developer guides
 
-### Install local packages
+### Quick start: install local packages and run tests
 
 After cloning this repository, from the `shortfin/` directory:
 
 ```bash
-python -m pip install .
+python -m pip install -e .
+```
+
+Install test requirements:
+
+```bash
+python -m pip install -r requirements-tests.txt
 ```
 
 Run tests:
@@ -39,6 +45,8 @@ python -m pytest -s tests/
 ```
 
 ### Simple dev setup
+
+We recommend this development setup for core contributors:
 
 1. Check out this repository as a sibling to [IREE](https://github.com/iree-org/iree)
    if you already have an IREE source checkout. Otherwise, a pinned version will
@@ -84,12 +92,6 @@ cmake --build build --target all
 If Python bindings are enabled in this mode (`-DSHORTFIN_BUILD_PYTHON_BINDINGS=ON`),
 then `pip install -e build/` will install from the build dir (and support
 build/continue).
-
-#### Local Python release builds
-
-```bash
-pip install -v -e .
-```
 
 #### Package Python release builds
 
@@ -196,18 +198,18 @@ recommended:
 ### Free-threaded Python
 
 Support for free-threaded Python builds (aka. "nogil") is in progress. It
-is currently being tested via dev builds of CPython 3.13 with the
-`--disable-gil` option set. There are multiple ways to acquire such an
-environment. If using `pyenv`, here is a way:
+is currently being tested via CPython 3.13 with the `--disable-gil` option set.
+There are multiple ways to acquire such an environment:
 
-```bash
-# Build a free-threaded 3.13 version.
-pyenv install --debug 3.13t-dev
+* Generally, see the documentation at
+  <https://py-free-threading.github.io/installing_cpython/>
+* If using `pyenv`:
 
-# Test (should print "False").
-pyenv shell 3.13t-dev
-python -c 'import sys; print(sys._is_gil_enabled())'
-```
+    ```bash
+    # Install a free-threaded 3.13 version.
+    pyenv install 3.13t
 
-Further ways of installing a free-threaded CPython interpreter are documented at
-[py-free-threading.github.io](https://py-free-threading.github.io/installing_cpython/).
+    # Test (should print "False").
+    pyenv shell 3.13
+    python -c 'import sys; print(sys._is_gil_enabled())'
+    ```
