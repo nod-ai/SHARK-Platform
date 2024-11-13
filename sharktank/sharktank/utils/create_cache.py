@@ -9,8 +9,6 @@ from ..layers import *
 
 def create_kv_cache(config: LlamaModelConfig) -> BaseKVCache:
     hp = config.hp
-    print("KV CACHE DTYPE:")
-    print(config.kv_cache_dtype)
     if config.kv_cache_type == "direct":
         return DirectKVCache(
             block_seq_stride=config.block_seq_stride,
@@ -19,7 +17,7 @@ def create_kv_cache(config: LlamaModelConfig) -> BaseKVCache:
             attn_head_dim=hp.attn_head_dim,
             seq_length=hp.context_length,
             device=config.device,
-            dtype=config.kv_cache_dtype,
+            dtype=config.attention_dtype,
         )
     elif config.kv_cache_type == "paged":
         return PagedKVCache(
@@ -29,7 +27,7 @@ def create_kv_cache(config: LlamaModelConfig) -> BaseKVCache:
             cache_partition_count=2,  # One for each of K/V.
             block_seq_stride=config.block_seq_stride,
             device=config.device,
-            dtype=config.kv_cache_dtype,
+            dtype=config.attention_dtype,
             shard_count=config.tensor_parallelism_size,
         )
     else:

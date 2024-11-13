@@ -309,7 +309,7 @@ class AttentionFFNBlock(ThetaLayer):
         head_count_kv: int,
         rms_epsilon: float,
         attention_kernel: str = "decomposed",
-        fake_quant: bool,
+        fake_quant: bool = True,
     ):
         super().__init__(theta)
         self.add_module(

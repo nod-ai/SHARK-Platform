@@ -82,12 +82,6 @@ class QuantizerTensor(InferenceTensor):
         """Performs a quantizing transformation on t, returning a QuantizeTensor."""
         ...
 
-    @abstractmethod
-    def dequantize_raw_tensor(
-        self, t: torch.Tensor, to: torch.dtype, *, name: str
-    ) -> torch.Tensor:
-        """Uses the reciprocal scale and other information from the quantizer to dequantize an input"""
-        ...
 
 
 @register_inference_tensor

@@ -477,6 +477,7 @@ class PagedKVCache(BaseKVCache):
 
         page_ids = page_ids.flatten(0, 1)
         part_block_view = part_block_view.flatten(0, 1)
+        part_block_view = ops.to(part_block_view, page_table.dtype)
 
         page_table.index_put_(
             (

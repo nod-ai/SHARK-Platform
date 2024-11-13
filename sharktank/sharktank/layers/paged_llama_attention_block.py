@@ -129,7 +129,7 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         kv_seq_len = seq_block_ids.shape[1] * self.cache.block_seq_stride
 
         # Used by fp8_e4m3fnuz model
-        if self.cache_quantizer:
+        if self.cache_quantizer is not None:
             # For fake quant, store the fp16 qdq value in the cache
             if self.fake_quant:
                 xk = (
@@ -151,6 +151,9 @@ class PagedLlamaAttentionBlock(ThetaLayer):
                 xk = self.cache_quantizer.quantize(xk).unpack().qs
                 xv = self.cache_quantizer.quantize(xv).unpack().qs
 
+        print(xk.dtype)
+        print(xv.dtype)
+        print(self.cache.dtype)
         xk, xv = self.transact_cache(
             xk_cache_update=xk,
             xv_cache_update=xv,

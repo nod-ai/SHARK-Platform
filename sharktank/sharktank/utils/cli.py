@@ -77,12 +77,6 @@ def add_quantization_options(parser: argparse.ArgumentParser):
         action=argparse.BooleanOptionalAction,
         help="whether or not to run/export the model in fake quant mode. Note, running eagerly without fake quant is dependent on torch types supporting operations. YMMV",
     )
-    parser.add_argument(
-        "--kv-cache-dtype",
-        type=str,
-        help="float8_e4m3fnuz for quark models",
-        default="float16",
-    )
 
 
 def add_tokenizer_options(parser: argparse.ArgumentParser):
