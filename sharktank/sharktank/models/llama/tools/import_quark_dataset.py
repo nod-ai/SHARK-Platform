@@ -112,7 +112,7 @@ def apply_per_layer_quant(
     weight = layer_theta.tensor("weight").as_torch()
 
     # It looks dumb but, this step is required for numerical correctness against quark.
-    #weight = weight.view(torch.float8_e4m3fn)
+    # weight = weight.view(torch.float8_e4m3fn)
     weight = (weight.to(torch.float64) * weight_quant_scale).to(torch.float16)
 
     weight_quant_zero_point = layer_theta.optional_tensor("weight_zero_point")
@@ -120,12 +120,8 @@ def apply_per_layer_quant(
         weight_quant_zero_point = torch.zeros(1, dtype=torch.float32)
     else:
         weight_quant_zero_point = weight_quant_zero_point.as_torch()
-    input_quant_scale = as_torch_or_none(
-        layer_theta.optional_tensor("input_scale")
-    )
-    output_quant_scale = as_torch_or_none(
-        layer_theta.optional_tensor("output_scale")
-    )
+    input_quant_scale = as_torch_or_none(layer_theta.optional_tensor("input_scale"))
+    output_quant_scale = as_torch_or_none(layer_theta.optional_tensor("output_scale"))
 
     if weight_quant_scale is None:
         print("weight quant scale not found for layer ", layer_name)
@@ -216,8 +212,8 @@ def apply_per_layer_quant(
         if input_quant_scale is not None:
             updated_tensors[new_layer_name + ".q_input"] = StaticScaledQuantizer(
                 name=new_layer_name + ".q_input",
-                scale=1.0 / (input_quant_scale*2.0),
-                reciprocal_scale=input_quant_scale*2.0,
+                scale=1.0 / (input_quant_scale * 2.0),
+                reciprocal_scale=input_quant_scale * 2.0,
                 dtype=torch.float8_e4m3fnuz,
             )
         if output_quant_scale is not None:
@@ -261,15 +257,13 @@ def update_norm_layer(
         sub_name = layer_name + "." + sub
         new_name = hf_to_gguf(sub_name) + ".weight"
         single_replace(quant_theta, sub_name, new_name, updated_tensors)
-    kv_cache_scale = (
-        quant_theta(layer_name, "self_attn").tensor("kv_scale").as_torch()
-    )
+    kv_cache_scale = quant_theta(layer_name, "self_attn").tensor("kv_scale").as_torch()
     layer_idx = layer_name.split(".")[-1]
     new_name = f"blk.{layer_idx}.kv_cache"
     updated_tensors[new_name] = StaticScaledQuantizer(
-        name=new_name+".quantizer",
-        scale=1.0 / (kv_cache_scale*2.0),
-        reciprocal_scale=kv_cache_scale*2.0,
+        name=new_name + ".quantizer",
+        scale=1.0 / (kv_cache_scale * 2.0),
+        reciprocal_scale=kv_cache_scale * 2.0,
         dtype=torch.float8_e4m3fnuz,
     )
 

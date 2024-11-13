@@ -44,7 +44,7 @@ class LlamaHParams:
 
     @staticmethod
     def from_gguf_props(p: dict[str, Any]):
-        name_prefix = p.get("general.architecture", "llama") 
+        name_prefix = p.get("general.architecture", "llama")
         default_expert_count = 0
         default_expert_used_count = 0
         default_rope_freq_base = 10000.0
@@ -134,7 +134,6 @@ def _optional_int_prop(p: dict[str, Any], name: str, default_value: int) -> int:
         return int(value)
     except ValueError as e:
         raise ValueError(f"Property '{name}' expected to be an int and was not") from e
-
 
 
 @dataclass

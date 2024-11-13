@@ -15,7 +15,7 @@ from ..types import (
     QuantizerTensor,
     StaticScaledQuantizer,
     TensorScaledLayout,
-    PlanarQuantizedTensor
+    PlanarQuantizedTensor,
 )
 
 __all__ = [
@@ -78,10 +78,10 @@ class LinearLayer(ThetaLayer):
         # the QuantizedTensor escape.
         if isinstance(y, QuantizedTensor) and not self.fake_quant:
             y = y.unpack().dequant()
-        # Note that f8_e4m3fnuz types on AMD GPUs accumulate to fp32. 
+        # Note that f8_e4m3fnuz types on AMD GPUs accumulate to fp32.
         # We can truncate to fp16 in iree, so we do a cast here
         # to account for this in the IR.
-        if not self.fake_quant and y.dtype==torch.float8_e4m3fnuz:
+        if not self.fake_quant and y.dtype == torch.float8_e4m3fnuz:
             y = ops.to(y, torch.float16)
             return y
         if qdq_output is not None:

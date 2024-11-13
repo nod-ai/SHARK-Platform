@@ -57,13 +57,23 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         self.add_module(
             "attn_norm", RMSNormLayer(theta("attn_norm"), epsilon=rms_epsilon)
         )
-        self.add_module("attn_q", LinearLayer(theta("attn_q"), fake_quant=self.fake_quant))
-        self.add_module("attn_k", LinearLayer(theta("attn_k"), fake_quant=self.fake_quant))
-        self.add_module("attn_v", LinearLayer(theta("attn_v"), fake_quant=self.fake_quant))
-        self.add_module("attn_output", LinearLayer(theta("attn_output"), fake_quant=self.fake_quant))
+        self.add_module(
+            "attn_q", LinearLayer(theta("attn_q"), fake_quant=self.fake_quant)
+        )
+        self.add_module(
+            "attn_k", LinearLayer(theta("attn_k"), fake_quant=self.fake_quant)
+        )
+        self.add_module(
+            "attn_v", LinearLayer(theta("attn_v"), fake_quant=self.fake_quant)
+        )
+        self.add_module(
+            "attn_output", LinearLayer(theta("attn_output"), fake_quant=self.fake_quant)
+        )
         self.cache_quantizer = None
         if "kv_cache" in theta.keys:
-            self.cache_quantizer: Optional[QuantizerTensor] = theta.optional_tensor("kv_cache.quantizer")
+            self.cache_quantizer: Optional[QuantizerTensor] = theta.optional_tensor(
+                "kv_cache.quantizer"
+            )
 
         if theta.optional_tensor("attn_output_norm") is None:
             self.add_module(
@@ -122,8 +132,18 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         if self.cache_quantizer:
             # For fake quant, store the fp16 qdq value in the cache
             if self.fake_quant:
-                xk = self.cache_quantizer.quantize(xk).unpack().dequant().to(torch.float16)
-                xv = self.cache_quantizer.quantize(xv).unpack().dequant().to(torch.float16)
+                xk = (
+                    self.cache_quantizer.quantize(xk)
+                    .unpack()
+                    .dequant()
+                    .to(torch.float16)
+                )
+                xv = (
+                    self.cache_quantizer.quantize(xv)
+                    .unpack()
+                    .dequant()
+                    .to(torch.float16)
+                )
             # For real quant, store the quantized fp8 value in the cache
             else:
                 # TODO: this seems like a bastardization of our quantized tensor api
@@ -156,10 +176,14 @@ class PagedLlamaAttentionBlock(ThetaLayer):
             xk = repeat_kv(xk)
             xv = repeat_kv(xv)
 
-        # Fake quant is already dequantized when stored in the cache. 
+        # Fake quant is already dequantized when stored in the cache.
         if self.cache_quantizer and not self.fake_quant:
-            xk = self.cache_quantizer.dequantize_raw_tensor(xk, torch.float16, name="xk_deq")
-            xv = self.cache_quantizer.dequantize_raw_tensor(xv, torch.float16, name="xv_deq")
+            xk = self.cache_quantizer.dequantize_raw_tensor(
+                xk, torch.float16, name="xk_deq"
+            )
+            xv = self.cache_quantizer.dequantize_raw_tensor(
+                xv, torch.float16, name="xv_deq"
+            )
         # Transpose into [bs, heads, sl, dim]
         xq = xq.transpose(1, 2)
         keys = xk.transpose(1, 2)

@@ -75,7 +75,6 @@ class PagedLlamaAttentionBlockTest(unittest.TestCase):
             attention_kernel="decomposed",
         )
 
-
         seq_block_ids = torch.arange(self.batch_size * self.block_seqlen).view(
             self.batch_size, -1
         )
