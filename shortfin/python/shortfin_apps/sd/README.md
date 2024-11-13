@@ -38,13 +38,10 @@ cd shortfin/
 The server will prepare runtime artifacts for you.
 
 ```
-python -m shortfin_apps.sd.server --model_config=./python/shortfin_apps/sd/examples/sdxl_config_i8.json --device=amdgpu --device_ids=0 --flagfile=./python/shortfin_apps/sd/examples/sdxl_flags_gfx942.txt --build_preference=compile
+python -m shortfin_apps.sd.server --device=amdgpu --device_ids=0 --build_preference=compile
 ```
- - Run with splat(empty) weights:
+
+ - Run a CLI client in a separate shell:
 ```
-python -m shortfin_apps.sd.server --model_config=./python/shortfin_apps/sd/examples/sdxl_config_i8.json --device=amdgpu --device_ids=0 --splat --flagfile=./python/shortfin_apps/sd/examples/sdxl_flags_gfx942.txt --build_preference=compile
-```
- - Run a request in a separate shell:
-```
-python shortfin/python/shortfin_apps/sd/examples/send_request.py --file=shortfin/python/shortfin_apps/sd/examples/sdxl_request.json
+python -m shortfin_apps.sd.simple_client --interactive --save
 ```
