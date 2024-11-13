@@ -127,13 +127,14 @@ async def main(args):
         pending = []
         latencies = []
         sample_counts = []
+        start = time.time()
+
         async for i in async_range(args.reps):
             pending.append(asyncio.create_task(send_request(session, i, args)))
             await asyncio.sleep(1)  # Wait for 1 second before sending the next request
-        start = time.time()
         while pending:
             done, pending = await asyncio.wait(
-                pending, return_when=asyncio.FIRST_COMPLETED
+                pending, return_when=asyncio.ALL_COMPLETED
             )
             for task in done:
                 latency, num_samples = await task

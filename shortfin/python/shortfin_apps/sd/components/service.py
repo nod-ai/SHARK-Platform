@@ -186,21 +186,26 @@ class GenerateService:
         params = [
             f"     {key} : {value}" for key, value in self.inference_parameters.items()
         ]
+        mod_string = '\n'.join(modules)
+        params_string = '\n'.join(params)
         return (
-            f"ServiceManager("
-            f"\n  INFERENCE DEVICES : \n"
-            f"     {self.sysman.ls.devices}\n"
-            f"\n  MODEL PARAMS : \n"
-            f"{self.model_params}"
-            f"\n  SERVICE PARAMS : \n"
-            f"     fibers per device : {self.fibers_per_device}\n"
-            f"     program isolation mode : {self.prog_isolation}\n"
-            f"\n  INFERENCE MODULES : \n"
-            f"{'\n'.join(modules)}\n"
-            f"\n  INFERENCE PARAMETERS : \n"
-            f"{'\n'.join(params)}\n"
-            f")"
+            f"ServiceManager(" +
+            "\n  INFERENCE DEVICES : \n" +
+            f"     {self.sysman.ls.devices}\n" +
+            "\n  MODEL PARAMS : \n" +
+            f"{self.model_params}" +
+            "\n  SERVICE PARAMS : \n" +
+            f"     fibers per device : {self.fibers_per_device}" +
+            "\n" +
+            f"    program isolation mode : {self.prog_isolation}" +
+            "\n" +
+            "\n  INFERENCE MODULES : \n" +
+            mod_string +
+            "\n  INFERENCE PARAMETERS : \n" +
+            params_string +
+            ")"
         )
+
 
 
 ########################################################################################

@@ -132,6 +132,8 @@ def get_modules(args):
                 flagged_model = elem
             else:
                 model_flags[flagged_model].extend([elem])
+    if args.tuning_spec:
+        model_flags["unet"].extend([f"--iree-codegen-transform-dialect-library={args.tuning_spec}"])
 
     filenames = []
     for modelname in vmfbs.keys():
@@ -279,6 +281,12 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
         type=str,
         default="",
         help="Path to local artifacts cache.",
+    )
+    parser.add_argument(
+        "--tuning_spec",
+        type=str,
+        default="",
+        help="Path to transform dialect spec if compiling an executable with tunings."
     )
 
     args = parser.parse_args(argv)
