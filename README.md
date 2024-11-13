@@ -105,10 +105,14 @@ different variant, run one of these commands first:
 # Install editable local projects.
 pip install -r requirements.txt -e sharktank/ shortfin/
 
-# Optionally clone and install editable iree-turbine dep in deps/
-pip install -f https://iree.dev/pip-release-links.html --src deps \
+# Optionally clone and install the latest editable iree-turbine dep in deps/,
+# along with nightly versions of iree-base-compiler and iree-base-runtime.
+pip install -f https://iree.dev/pip-release-links.html --upgrade --pre \
+  iree-base-compiler iree-base-runtime --src deps \
   -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
 ```
+
+See also: [`docs/nightly_releases.md`](./docs/nightly_releases.md).
 
 ### Running tests
 
