@@ -1,20 +1,38 @@
-# shortfin - SHARK C++ inference library
+# shortfin - SHARK inference library and serving engine
 
-## Simple User Installation
+The shortfin project is SHARK's open source, high performance inference library
+and serving engine. Shortfin consists of these major components:
 
-Install:
+* The "libshortfin" inference library written in C/C++ and built on
+  [IREE](https://github.com/iree-org/iree)
+* Python bindings for the underlying inference library
+* Example applications 'shortfin_apps' built using the python bindings
 
+## Simple user installation
+
+Install the latest stable version:
+
+```bash
+python -m pip install shortfin
 ```
+
+## Developer guides
+
+### Install local packages
+
+After cloning this repository, from the `shortfin/` directory:
+
+```bash
 python -m pip install .
 ```
 
 Run tests:
 
-```
+```bash
 python -m pytest -s tests/
 ```
 
-## Simple Dev Setup
+### Simple dev setup
 
 1. Check out this repository as a sibling to [IREE](https://github.com/iree-org/iree)
    if you already have an IREE source checkout. Otherwise, a pinned version will
@@ -36,7 +54,7 @@ python -m pytest -s tests/
 
 Refer to the advanced build options below for other scenarios.
 
-## Advanced Build Options
+### Advanced build options
 
 1. Native C++ build
 2. Local Python release build
@@ -48,7 +66,7 @@ Prerequisites
 * A modern C/C++ compiler, such as clang 18 or gcc 12
 * A modern Python, such as Python 3.12
 
-### Native C++ Builds
+#### Native C++ builds
 
 ```bash
 cmake -GNinja -S. -Bbuild \
@@ -61,13 +79,13 @@ If Python bindings are enabled in this mode (`-DSHORTFIN_BUILD_PYTHON_BINDINGS=O
 then `pip install -e build/` will install from the build dir (and support
 build/continue).
 
-### Local Python Release Builds
+#### Local Python release builds
 
 ```bash
 pip install -v -e .
 ```
 
-### Package Python Release Builds
+#### Package Python release builds
 
 * To build wheels for Linux using a manylinux Docker container:
 
@@ -86,7 +104,7 @@ pip install -v -e .
     python3 -m pip install dist/*.whl
     ```
 
-### Python Dev Builds
+#### Python dev builds
 
 ```bash
 # Install build system pre-reqs (since we are building in dev mode, this
@@ -124,7 +142,7 @@ Several optional environment variables can be used with setup.py:
 * `SHORTFIN_RUN_CTESTS=ON` : Runs `ctest` as part of the build. Useful for CI
   as it uses the version of ctest installed in the pip venv.
 
-### Running Tests
+#### Running tests
 
 The project uses a combination of ctest for native C++ tests and pytest. Much
 of the functionality is only tested via the Python tests, using the
@@ -139,7 +157,7 @@ does mean that the C++ core of the library must always be built with the
 Python bindings to test the most behavior. Given the target of the project,
 this is not considered to be a significant issue.
 
-#### Python tests
+##### Python tests
 
 Run platform independent tests only:
 
@@ -156,7 +174,7 @@ pytest tests/ --system amdgpu \
     --compile-flags="--iree-hal-target-backends=rocm --iree-hip-target=gfx1100"
 ```
 
-# Production Library Building
+## Production library building
 
 In order to build a production library, additional build steps are typically
 recommended:
@@ -167,16 +185,16 @@ recommended:
 * Enable LTO builds of libshortfin
 * Set flags to enable symbol versioning
 
-# Miscellaneous Build Topics
+## Miscellaneous build topics
 
-## Free-threaded Python
+### Free-threaded Python
 
 Support for free-threaded Python builds (aka. "nogil") is in progress. It
 is currently being tested via dev builds of CPython 3.13 with the
 `--disable-gil` option set. There are multiple ways to acquire such an
 environment. If using `pyenv`, here is a way:
 
-```
+```bash
 # Build a free-threaded 3.13 version.
 pyenv install --debug 3.13t-dev
 
