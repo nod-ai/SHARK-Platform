@@ -13,13 +13,12 @@ with that model.
 
 ### Install sglang inside of virtual environment
 
-<!-- TODO: Update link when sglang repo is created in nod-ai -->
-Currently, we have our SGLang integration located at this [forked repo](https://github.com/stbaione/sglang).
+Currently, we have our SGLang integration located at this [forked repo](https://github.com/nod-ai/sglang).
 We can use pip to install it in the same virtual environment that we used
 to start our Shortfin LLM Server.
 
 ```bash
-pip install "git+https://github.com/stbaione/sglang.git#subdirectory=python"
+pip install "git+https://github.com/nod-ai/sglang.git#subdirectory=python"
 ```
 
 ## Getting started
@@ -48,7 +47,7 @@ You can copy and paste the following example into your interpreter:
 ```python
 import sglang as sgl
 
-backend = sgl.Shortfin(base_url="http://localhost:8000") # Change base_url if running at different address
+backend = sgl.Shortfin(base_url="http://localhost:8001") # Change base_url if running at different address
 
 sgl.set_default_backend(backend)
 
