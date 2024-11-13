@@ -77,7 +77,7 @@ jobs:
         run: pip install "git+https://github.com/stbaione/sglang.git#subdirectory=python"
 
       - name: Launch Shortfin Server
-        run: "pytest -v ./build_tools/benchmark_tests/llm/sglang_benchmark_test.py --log-cli-level=INFO --html=out/llm/sglang/index.html"
+        run: "pytest -v app_tests/benchmark_tests/llm/sglang_benchmark_test.py --log-cli-level=INFO --html=out/llm/sglang/index.html"
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@4f9cc6602d3f66b9c108549d475ec49e8ef4d45e # v4.0.0

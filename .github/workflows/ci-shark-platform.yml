@@ -73,4 +73,4 @@ jobs:
             "numpy<2.0"
 
       - name: Run LLM Integration Tests
-        run: pytest -v build_tools/integration_tests/llm --log-cli-level=INFO
+        run: pytest -v app_tests/integration_tests/llm --log-cli-level=INFO
