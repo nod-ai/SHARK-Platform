@@ -85,6 +85,7 @@ app.put("/generate")(generate_request)
 
 def configure(args) -> SystemManager:
     # Setup system (configure devices, etc).
+    model_config, topology_config, flagfile, tuning_spec, args = get_configs(args)
     sysman = SystemManager(args.device, args.device_ids, args.amdgpu_async_allocations)
 
     # Setup each service we are hosting.
@@ -93,7 +94,9 @@ def configure(args) -> SystemManager:
         subfolder = f"tokenizer_{idx + 1}" if idx > 0 else "tokenizer"
         tokenizers.append(Tokenizer.from_pretrained(tok_name, subfolder))
 
-    model_params = ModelParams.load_json(args.model_config)
+    model_params = ModelParams.load_json(model_config)
+    vmfbs, params = get_modules(args, model_config, flagfile, tuning_spec)
+
     sm = GenerateService(
         name="sd",
         sysman=sysman,
@@ -105,7 +108,6 @@ def configure(args) -> SystemManager:
         show_progress=args.show_progress,
         trace_execution=args.trace_execution,
     )
-    vmfbs, params = get_modules(args)
     for key, vmfblist in vmfbs.items():
         for vmfb in vmfblist:
             sm.load_inference_module(vmfb, component=key)
@@ -114,16 +116,79 @@ def configure(args) -> SystemManager:
     services[sm.name] = sm
     return sysman
 
+def get_configs(args):
+    # Returns one set of config artifacts.
+    modelname = "sdxl"
+    model_config = args.model_config if args.model_config else None
+    topology_config = None
+    tuning_spec = None
+    flagfile = args.flagfile if args.flagfile else None
+    cfg_builder_args = [
+        sys.executable,
+        "-m",
+        "iree.build",
+        os.path.join(THIS_DIR, "components", "config_artifacts.py"),
+        f"--target={args.target}",
+        f"--output-dir={args.artifacts_dir}",
+        f"--model={modelname}",
+        f"--topology={args.topology}",
+    ]
+    outs = subprocess.check_output(cfg_builder_args).decode()
+    outs_paths = outs.splitlines()
+    for i in outs_paths:
+        if "sdxl_config" in i and not args.model_config:
+            model_config = i
+        elif "topology" in i and args.topology:
+            topology_config = i
+        elif "flagfile" in i and not args.flagfile:
+            flagfile = i
+        elif "attention_and_matmul_spec" in i and args.use_tuned:
+            tuning_spec = i
+    
+    if args.use_tuned and args.tuning_spec:
+        tuning_spec = os.path.abspath(args.tuning_spec)
 
-def get_modules(args):
+    if topology_config:
+        with open(topology_config, "r") as f:
+            contents = [line.rstrip() for line in f]
+        for spec in contents:
+            if "--" in spec:
+                arglist = spec.strip("--").split("=")
+                arg = arglist[0]
+                if len(arglist) > 2:
+                    value = arglist[1:]
+                    for val in value:
+                        try:
+                            val = int(val)
+                        except ValueError:
+                            continue
+                elif len(arglist) == 2:
+                    value = arglist[-1]
+                    try:
+                        value = int(value)
+                    except ValueError:
+                        continue
+                else:
+                    # It's a boolean arg.
+                    value = True
+                setattr(args, arg, value)
+            else:
+                # It's an env var.
+                arglist = spec.split("=")
+                os.environ[arglist[0]] = arglist[1]
+    
+    return model_config, topology_config, flagfile, tuning_spec, args
+    
+
+def get_modules(args, model_config, flagfile, td_spec):
     # TODO: Move this out of server entrypoint
     vmfbs = {"clip": [], "unet": [], "vae": [], "scheduler": []}
     params = {"clip": [], "unet": [], "vae": []}
     model_flags = copy.deepcopy(vmfbs)
     model_flags["all"] = args.compile_flags
 
-    if args.flagfile:
-        with open(args.flagfile, "r") as f:
+    if flagfile:
+        with open(flagfile, "r") as f:
             contents = [line.rstrip() for line in f]
         flagged_model = "all"
         for elem in contents:
@@ -132,9 +197,8 @@ def get_modules(args):
                 flagged_model = elem
             else:
                 model_flags[flagged_model].extend([elem])
-    if args.tuning_spec:
-        spec_path = os.path.abspath(args.tuning_spec)
-        model_flags["unet"].extend([f"--iree-codegen-transform-dialect-library={spec_path}"])
+    if td_spec:
+        model_flags["unet"].extend([f"--iree-codegen-transform-dialect-library={td_spec}"])
 
     filenames = []
     for modelname in vmfbs.keys():
@@ -144,7 +208,7 @@ def get_modules(args):
             "-m",
             "iree.build",
             os.path.join(THIS_DIR, "components", "builders.py"),
-            f"--model-json={args.model_config}",
+            f"--model-json={model_config}",
             f"--target={args.target}",
             f"--splat={args.splat}",
             f"--build-preference={args.build_preference}",
@@ -216,8 +280,7 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
     parser.add_argument(
         "--model_config",
         type=Path,
-        required=True,
-        help="Path to the model config file",
+        help="Path to the model config file. If None, defaults to i8 punet, batch size 1",
     )
     parser.add_argument(
         "--workers_per_device",
@@ -288,6 +351,19 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
         type=str,
         default="",
         help="Path to transform dialect spec if compiling an executable with tunings."
+    )
+    parser.add_argument(
+        "--topology",
+        type=str,
+        default=None,
+        choices=[None, "spx_single", "cpx_single", "spx_multi", "cpx_multi"],
+        help="Use one of four known performant preconfigured device/fiber topologies.",
+    )
+    parser.add_argument(
+        "--use_tuned",
+        type=int,
+        default=1,
+        help="Use tunings for attention and matmul ops. 0 to disable.",
     )
 
     args = parser.parse_args(argv)

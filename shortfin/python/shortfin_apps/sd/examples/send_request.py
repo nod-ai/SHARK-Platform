@@ -11,6 +11,7 @@ import base64
 import time
 import asyncio
 import aiohttp
+import sys
 
 from datetime import datetime as dt
 from PIL import Image
@@ -77,21 +78,8 @@ def get_batched(request, arg, idx):
     return indexed
 
 
-async def send_request(session, rep, args):
+async def send_request(session, rep, args, data):
     try:
-        # Read the JSON file
-        try:
-            if args.file == "default":
-                data = sample_request
-            else:
-                with open(args.file, "r") as json_file:
-                    data = json.load(json_file)
-        except Exception as e:
-            print(f"Error reading the JSON file: {e}")
-            return
-        data["prompt"] = (
-            [data["prompt"]] if isinstance(data["prompt"], str) else data["prompt"]
-        )
         print("Sending request batch #", rep)
         url = f"http://0.0.0.0:{args.port}/generate"
         start = time.time()
@@ -127,10 +115,23 @@ async def main(args):
         pending = []
         latencies = []
         sample_counts = []
+        # Read the JSON file if supplied. Otherwise, get user input.
+        try:
+            if args.file == "default":
+                data = sample_request
+            else:
+                with open(args.file, "r") as json_file:
+                    data = json.load(json_file)
+        except Exception as e:
+            print(f"Error reading the JSON file: {e}")
+            return
+        data["prompt"] = (
+            [data["prompt"]] if isinstance(data["prompt"], str) else data["prompt"]
+        )
         start = time.time()
 
         async for i in async_range(args.reps):
-            pending.append(asyncio.create_task(send_request(session, i, args)))
+            pending.append(asyncio.create_task(send_request(session, i, args, data)))
             await asyncio.sleep(1)  # Wait for 1 second before sending the next request
         while pending:
             done, pending = await asyncio.wait(
@@ -148,6 +149,46 @@ async def main(args):
         else:
             raise ValueError("Received error response from server.")
 
+async def interactive(args):
+    # Create an aiohttp session for sending requests
+    async with aiohttp.ClientSession() as session:
+        pending = []
+        latencies = []
+        sample_counts = []
+        # Read the JSON file if supplied. Otherwise, get user input.
+        try:
+            if args.file == "default":
+                data = sample_request
+            else:
+                with open(args.file, "r") as json_file:
+                    data = json.load(json_file)
+        except Exception as e:
+            print(f"Error reading the JSON file: {e}")
+            return
+        data["prompt"] = (
+            [data["prompt"]] if isinstance(data["prompt"], str) else data["prompt"]
+        )
+        print("Sending request with prompt: ", data["prompt"])
+        while True:
+            prompt = await ainput('Enter a prompt: ')
+            data["prompt"] = [prompt]
+            data["steps"] = [args.steps]
+            async for i in async_range(args.reps):
+                pending.append(asyncio.create_task(send_request(session, i, args, data)))
+                await asyncio.sleep(1)  # Wait for 1 second before sending the next request
+            while pending:
+                done, pending = await asyncio.wait(
+                    pending, return_when=asyncio.ALL_COMPLETED
+                )
+                for task in done:
+                    latency, num_samples = await task
+            pending = []
+            if any([i is None for i in [latencies, sample_counts]]):
+                raise ValueError("Received error response from server.")
+
+async def ainput(prompt: str) -> str:
+    return await asyncio.to_thread(input, f'{prompt} ')
+
 
 async def async_range(count):
     for i in range(count):
@@ -159,7 +200,12 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument("--file", type=str, default="default")
     p.add_argument("--reps", type=int, default=1)
-    p.add_argument("--save", type=argparse.BooleanOptionalAction, help="save images")
+    p.add_argument("--save", action="store_true", help="save images")
     p.add_argument("--port", type=str, default="8000")
+    p.add_argument("--steps", type=int, default="20")
+    p.add_argument("--interactive", action="store_true", help="Start as an example client instead of sending static requests.")
     args = p.parse_args()
-    asyncio.run(main(args))
+    if args.interactive:
+        asyncio.run(interactive(args))
+    else:
+        asyncio.run(main(args))
