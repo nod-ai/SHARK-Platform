@@ -13,7 +13,7 @@ import shortfin.array as sfnp
 
 from .io_struct import GenerateReqInput
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("shortfin-sd.messages")
 
 
 class InferencePhase(Enum):
