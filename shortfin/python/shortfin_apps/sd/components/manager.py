@@ -8,7 +8,6 @@ import logging
 import threading
 
 import shortfin as sf
-
 from shortfin.interop.support.device_setup import get_selected_devices
 
 logger = logging.getLogger(__name__)
