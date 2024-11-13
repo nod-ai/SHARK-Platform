@@ -86,7 +86,11 @@ def get_eos_from_tokenizer_config(json_path):
 
 def configure(args) -> SystemManager:
     # Setup system (configure devices, etc).
-    sysman = SystemManager(device=args.device)
+    sysman = SystemManager(
+        device=args.device,
+        device_ids=args.device_ids,
+        async_allocs=args.amdgpu_async_allocations,
+    )
 
     # Setup each service we are hosting.
     eos_token = get_eos_from_tokenizer_config(args.tokenizer_config_json)
@@ -155,8 +159,16 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
     parser.add_argument(
         "--device",
         type=str,
-        default="local-task",
+        required=True,
+        choices=["local-task", "hip", "amdgpu"],
         help="Device to serve on; e.g. local-task, hip. Same options as `iree-run-module --device` ",
+    )
+    parser.add_argument(
+        "--device_ids",
+        type=str,
+        nargs="*",
+        default=None,
+        help="Device IDs visible to the system builder. Defaults to None (full visibility). Can be an index or a sf device id like amdgpu:0:0@0",
     )
     parser.add_argument(
         "--isolation",
@@ -164,6 +176,11 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
         default="per_call",
         choices=[isolation.name.lower() for isolation in ProgramIsolation],
         help="Concurrency control -- How to isolate programs.",
+    )
+    parser.add_argument(
+        "--amdgpu_async_allocations",
+        action="store_true",
+        help="Enable asynchronous allocations for amdgpu device contexts.",
     )
     args = parser.parse_args(argv)
 
