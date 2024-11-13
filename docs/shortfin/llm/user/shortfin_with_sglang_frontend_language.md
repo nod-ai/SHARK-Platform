@@ -4,8 +4,7 @@ This doc includes basic steps for hooking up sglang with a running Shortfin serv
 
 ## Install/Start `shortfin` LLM server
 
-<!-- TODO: Update link when user/developer docs are landed in nod-ai -->
-Follow the steps [here](https://github.com/stbaione/SHARK-Platform/blob/shortfin-llm-docs/docs/shortfin/llm/user/e2e_llama8b_mi300x.md)
+Follow the steps [here](https://github.com/nod-ai/SHARK-Platform/blob/main/docs/shortfin/llm/user/e2e_llama8b_mi300x.md)
 to export a model with `sharktank` and start a `shortfin` LLM server
 with that model.
 
