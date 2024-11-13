@@ -38,7 +38,7 @@ cd shortfin/
 The server will prepare runtime artifacts for you.
 
 ```
-python -m shortfin_apps.sd.server --device=amdgpu --device_ids=0 --build_preference=compile --topology="spx_single"
+python -m shortfin_apps.sd.server --device=amdgpu --device_ids=0 --build_preference=precompiled --topology="spx_single"
 ```
 
  - Run a CLI client in a separate shell:
