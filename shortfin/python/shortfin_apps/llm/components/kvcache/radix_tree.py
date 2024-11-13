@@ -117,6 +117,36 @@ class PagePool:
         with self._lock:
             self.attn_page_free.extend(pages)
 
+    def copy_page(self, src_page: PageInfo) -> PageInfo:
+        """
+        Copy a page's contents to a new page.
+
+        Args:
+            src_page: Source page to copy from
+            token_count: Optional number of tokens to copy. If None, copies all tokens.
+
+        Returns:
+            New PageInfo containing the copied data
+        """
+        with self._lock:
+            # Allocate new page
+            (dst_page,) = self.acquire_free_pages(1)
+
+            # Copy the data on each device
+            for page_table in self.page_tables:
+                # View of source and destination pages
+                src_view = page_table.view((src_page.page_index,))
+                dst_view = page_table.view((dst_page.page_index,))
+
+                # Copy the data
+                dst_view.copy_from(src_view)
+
+            # Setup destination page metadata
+            dst_page.in_use = True
+            dst_page.token_offset = 0  # Always start at beginning of new page
+
+            return dst_page
+
     def __repr__(self):
         # No need to lock for repr (list is internally synchronized).
         free_pages = len(self.attn_page_free)
@@ -214,20 +244,62 @@ class RadixTree:
 
     def _split_node(self, node: RadixNode, split_pos: int) -> RadixNode:
         """Split a node at given position, return new intermediate node"""
+        # Calculate which page contains the split point
+        current_pos = 0
+        split_page_idx = 0
+        tokens_in_split_page = 0
+
+        for idx, page in enumerate(node.pages):
+            if current_pos + page.token_count > split_pos:
+                # This page contains our split point
+                split_page_idx = idx
+                tokens_in_split_page = split_pos - current_pos
+                break
+            current_pos += page.token_count
+
+        # Handle the page containing split point
+        split_page = node.pages[split_page_idx]
+        if tokens_in_split_page > 0 and tokens_in_split_page < split_page.token_count:
+            # Need to copy-on-write this page
+            new_page = self.page_pool.copy_page(
+                split_page, token_count=tokens_in_split_page
+            )
+
+            # Adjust original page
+            split_page.token_offset += tokens_in_split_page
+            split_page.token_count -= tokens_in_split_page
+
+            # Build new pages list with the copy
+            new_pages = (
+                node.pages[:split_page_idx]
+                + [new_page]  # Full pages before split
+                + node.pages[  # Copied partial page
+                    split_page_idx + 1 :
+                ]  # Any remaining full pages
+            )
+        else:
+            # Split aligned with page boundary
+            new_pages = node.pages[:split_pos]
+
+        # Create new node
         new_node = RadixNode(
             children={},
             parent=node.parent,
             key=node.key[:split_pos],
-            pages=node.pages[:split_pos],
+            pages=new_pages,
             ref_count=node.ref_count,
         )
 
         # Update the original node
         node.parent.children[node.key[0]] = new_node
         node.key = node.key[split_pos:]
-        node.pages = node.pages[split_pos:]
+        node.pages = node.pages[split_page_idx:]  # Keep remaining pages
         node.parent = new_node
         new_node.children[node.key[0]] = node
+
+        # Increment ref counts for shared pages
+        for page in new_pages[:-1]:  # All but last page are shared
+            page.ref_count += 1
 
         return new_node
 
