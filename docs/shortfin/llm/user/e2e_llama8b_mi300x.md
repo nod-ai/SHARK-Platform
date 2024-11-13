@@ -76,9 +76,8 @@ this example a bit easier:
 
 #### Model/Tokenizer vars
 
-This example uses the `llama8b_f16.irpa` and `tokenizer.json` files
-that are pre-existing on the MI300X-3 system.
-You may need to change the paths for your own system.
+This example uses the `llama8b_f16.gguf` and `tokenizer.json` files
+that were downloaded in the previous step.
 
 ```bash
 export MODEL_PARAMS_PATH=$EXPORT_DIR/llama3.1-8b/llama8b_f16.gguf
