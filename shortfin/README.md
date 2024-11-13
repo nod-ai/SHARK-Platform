@@ -1,6 +1,42 @@
 # shortfin - SHARK C++ inference library
 
-Build options
+## Simple User Installation
+
+Install:
+
+```
+python -m pip install .
+```
+
+Run tests:
+
+```
+python -m pytest -s tests/
+```
+
+## Simple Dev Setup
+
+1. Check out this repository as a sibling to [IREE](https://github.com/iree-org/iree)
+   if you already have an IREE source checkout. Otherwise, a pinned version will
+   be downloaded for you
+2. Ensure that `python --version` reads 3.11 or higher (3.12 preferred).
+3. Run `./dev_me.py` to build and install the `shortfin` Python package with both
+   a tracing-enabled and default build. Run it again to do an incremental build
+   and delete the `build/` directory to start over
+4. Run tests with `python -m pytest -s tests/`
+5. Test optional features:
+   * `pip install iree-base-compiler` to run a small suite of model tests intended
+     to exercise the runtime (or use a [source build of IREE](https://iree.dev/building-from-source/getting-started/#using-the-python-bindings)).
+   * `pip install onnx` to run some more model tests that depend on downloading
+     ONNX models
+   * Run tests on devices other than the CPU with flags like:
+     `--system amdgpu --compile-flags="--iree-hal-target-backends=rocm --iree-hip-target=gfx1100"`
+   * Use the tracy instrumented runtime to collect execution traces:
+     `export SHORTFIN_PY_RUNTIME=tracy`
+
+Refer to the advanced build options below for other scenarios.
+
+## Advanced Build Options
 
 1. Native C++ build
 2. Local Python release build
@@ -12,7 +48,7 @@ Prerequisites
 * A modern C/C++ compiler, such as clang 18 or gcc 12
 * A modern Python, such as Python 3.12
 
-## Native C++ Builds
+### Native C++ Builds
 
 ```bash
 cmake -GNinja -S. -Bbuild \
@@ -25,13 +61,13 @@ If Python bindings are enabled in this mode (`-DSHORTFIN_BUILD_PYTHON_BINDINGS=O
 then `pip install -e build/` will install from the build dir (and support
 build/continue).
 
-## Local Python Release Builds
+### Local Python Release Builds
 
 ```bash
 pip install -v -e .
 ```
 
-## Package Python Release Builds
+### Package Python Release Builds
 
 * To build wheels for Linux using a manylinux Docker container:
 
@@ -50,7 +86,7 @@ pip install -v -e .
     python3 -m pip install dist/*.whl
     ```
 
-## Python Dev Builds
+### Python Dev Builds
 
 ```bash
 # Install build system pre-reqs (since we are building in dev mode, this
@@ -88,7 +124,7 @@ Several optional environment variables can be used with setup.py:
 * `SHORTFIN_RUN_CTESTS=ON` : Runs `ctest` as part of the build. Useful for CI
   as it uses the version of ctest installed in the pip venv.
 
-## Running Tests
+### Running Tests
 
 The project uses a combination of ctest for native C++ tests and pytest. Much
 of the functionality is only tested via the Python tests, using the
@@ -103,7 +139,7 @@ does mean that the C++ core of the library must always be built with the
 Python bindings to test the most behavior. Given the target of the project,
 this is not considered to be a significant issue.
 
-### Python tests
+#### Python tests
 
 Run platform independent tests only:
 
@@ -111,10 +147,13 @@ Run platform independent tests only:
 pytest tests/
 ```
 
-Run tests including for a specific platform:
+Run tests including for a specific platform (in this example, a gfx1100 AMDGPU):
+
+(note that not all tests are system aware yet and some may only run on the CPU)
 
 ```bash
-pytest tests/ --system amdgpu
+pytest tests/ --system amdgpu \
+    --compile-flags="--iree-hal-target-backends=rocm --iree-hip-target=gfx1100"
 ```
 
 # Production Library Building

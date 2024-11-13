@@ -141,7 +141,7 @@ class DirectKVCache(BaseKVCache):
         self,
         state: list[Union[torch.Tensor, SplitPrimitiveTensor]],
         *,
-        read_into_partitions: list[Union[torch.Tensor, SplitPrimitiveTensor]],
+        dest_partitions: list[Union[torch.Tensor, SplitPrimitiveTensor]],
         transformer_block_index: int,
         seq_len: int,
         page_ids: Optional[Union[torch.Tensor, ReplicatedTensor]] = None,
@@ -150,7 +150,7 @@ class DirectKVCache(BaseKVCache):
 
         Args:
         state: State struct as returned from allocate().
-        read_into_partitions: List of cache partitions to read into in-place.
+        dest_partitions: List of cache partitions to read into in-place.
         transformer_block_index: The index of the transformer block accessing
             the cache.
         page_ids: Tensor of [bs, max_seqlen // block_pos_stride] of page ids
@@ -161,7 +161,7 @@ class DirectKVCache(BaseKVCache):
         materializing linearly may not be terribly efficient unless if the
         compiler can fuse the gather.
         """
-        read_count = len(read_into_partitions)
+        read_count = len(dest_partitions)
         reads = []
         for i in range(read_count):
             reads.append(
@@ -284,6 +284,10 @@ class PagedKVCache(BaseKVCache):
         """Unflattens the 2D page table to a 6D tensor."""
         assert len(state) == 1, f"Expected 1-element state. Got: {len(state)}"
         page_slab = state[0]
+
+        if len(page_slab.shape) == 6:
+            return page_slab
+
         if self.shard_count == 1:
             assert not isinstance(page_slab, SplitPrimitiveTensor)
             return page_slab.unflatten(1, self.sub_page_dims)
@@ -352,7 +356,7 @@ class PagedKVCache(BaseKVCache):
         self,
         state: list[Union[torch.Tensor, SplitPrimitiveTensor]],
         *,
-        read_into_partitions: list[Union[torch.Tensor, SplitPrimitiveTensor]],
+        dest_partitions: list[Union[torch.Tensor, SplitPrimitiveTensor]],
         transformer_block_index: int,
         seq_len: int,
         page_ids: Union[torch.Tensor, ReplicatedTensor],
@@ -361,7 +365,7 @@ class PagedKVCache(BaseKVCache):
 
         Args:
         state: State struct as returned from allocate().
-        read_into_partitions: List of cache partitions to read into in-place.
+        dest_partitions: List of cache partitions to read into in-place.
         transformer_block_index: The index of the transformer block accessing
             the cache.
         page_ids: Tensor of [bs, max_seqlen // block_pos_stride] of page ids
@@ -374,36 +378,9 @@ class PagedKVCache(BaseKVCache):
         """
         page_table = self.unflatten_page_table(state)  # 6D
 
-        bs, block_seq_len, *_ = page_ids.shape
-        # Blocks dim 1,2 according to the configured block stride.
-        blocked_shape = [
-            bs,
-            block_seq_len,
-            self.block_seq_stride,
-            self.attn_head_count // self.shard_count,
-            self.attn_head_dim,
-        ]
-
-        # Reshape the page cache into sub-blocks so that we can index at the
-        # granularity of the transformer_block and cache partition.
-        # This requires us to recompute indices to the sub-block reference
-        # frame.
-        # The subblock slab is organized as:
-        #   [page, attn_layer, cache_partition]
-        # Where the cache line can be 0 (k) or 1 (v).
-        subblock_table = page_table.flatten(start_dim=0, end_dim=2)
-        page_stride = self.transformer_block_count * self.cache_partition_count
-        transformer_block_stride = self.cache_partition_count
-        base_subblock_ids = page_ids * page_stride + (
-            transformer_block_index * transformer_block_stride
-        )
-
-        def read_cache_partition(
-            index: int, into_partition: Union[torch.Tensor, SplitPrimitiveTensor]
+        def read_cache_partitions(
+            into_partitions: List[Union[torch.Tensor, SplitPrimitiveTensor]]
         ):
-            subblock_ids = (
-                (base_subblock_ids + index) if index > 0 else base_subblock_ids
-            )
             # TODO: Potentially clamp all page 0 indices to the mask value.
             # Or even better, require that the ids are replicated such that access is
             # legal.
@@ -412,18 +389,16 @@ class PagedKVCache(BaseKVCache):
             # copy of the sub-blocks by collapsing the first two dims so we have
             # a linear list.
             # TODO: Can be rewritten into inplace with out= on index_select.
-            selected = (
-                ops.index_select(subblock_table, 0, subblock_ids.flatten(0, 1))
-                .unflatten(0, blocked_shape[0:2])
-                .flatten(1, 2)
-            )
-            # trace_tensor("kv.selected", selected)
-            into_partition[...] = selected
 
-        for index, read_into_partition in enumerate(read_into_partitions):
-            read_cache_partition(index, read_into_partition)
+            for i, into_partition in enumerate(into_partitions):
+                selected = page_table[
+                    page_ids.flatten(0, 1), transformer_block_index, i
+                ]
+                selected = selected.unflatten(0, page_ids.shape).flatten(1, 2)
+                into_partition[...] = selected
 
-        return tuple([p[:, :seq_len, :] for p in read_into_partitions])
+        read_cache_partitions(dest_partitions)
+        return tuple([p[:, :seq_len, :] for p in dest_partitions])
 
     def write_timestep(
         self,
@@ -488,43 +463,25 @@ class PagedKVCache(BaseKVCache):
         in-place scatter cannot be fused.
         """
         page_table = self.unflatten_page_table(state)  # 6D
-
-        bs, block_seq_len, *_ = page_ids.shape
-        # Blocks dim 1,2 according to the configured block stride.
-        blocked_shape = [
-            bs,
-            block_seq_len,
-            self.block_seq_stride,
-            self.attn_head_count,
-            self.attn_head_dim,
-        ]
-
-        # Reshape the page cache into sub-blocks so that we can index at the
-        # granularity of the transformer_block and cache partition.
-        # This requires us to recompute indices to the sub-block reference
-        # frame.
-        # The subblock slab is organized as:
-        #   [page, attn_layer, cache_partition]
-        # Where the cache line can be 0 (k) or 1 (v).
-        subblock_table = page_table.flatten(start_dim=0, end_dim=2)
-        page_stride = self.transformer_block_count * self.cache_partition_count
-        transformer_block_stride = self.cache_partition_count
-        base_subblock_ids = page_ids * page_stride + (
-            transformer_block_index * transformer_block_stride
-        )
+        _, block_seq_len, *_ = page_ids.shape
 
         part_block_views = []
-        subblock_ids_kv = []
-        for index, partition in enumerate(cache_partitions):
-            part_block_view = partition.reshape(blocked_shape).flatten(0, 1)
+        for partition in cache_partitions:
+            part_block_view = partition.unflatten(
+                1, (block_seq_len, self.block_seq_stride)
+            )
+            part_block_view = part_block_view.unsqueeze(2)
             part_block_views.append(part_block_view)
 
-            subblock_ids = (
-                (base_subblock_ids + index) if index > 0 else base_subblock_ids
-            ).flatten(0, 1)
-            subblock_ids_kv.append(subblock_ids)
+        part_block_view = ops.cat(part_block_views, dim=2)
 
-        subblock_ids = ops.cat(subblock_ids_kv)
-        part_block_view = ops.cat(part_block_views, dim=0)
+        page_ids = page_ids.flatten(0, 1)
+        part_block_view = part_block_view.flatten(0, 1)
 
-        subblock_table.index_copy_(0, subblock_ids, part_block_view)
+        page_table.index_put_(
+            (
+                page_ids,
+                torch.full(page_ids.shape, transformer_block_index, dtype=torch.int64),
+            ),
+            part_block_view,
+        )

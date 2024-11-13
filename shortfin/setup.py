@@ -141,8 +141,8 @@ class NoopBuildExtension(_build_ext):
 
 
 # Setup and get version information.
-VERSION_INFO_FILE = os.path.join(REL_SOURCE_DIR, "version_info.json")
-VERSION_INFO_RC_FILE = os.path.join(REL_SOURCE_DIR, "version_info_rc.json")
+VERSION_FILE = os.path.join(REL_SOURCE_DIR, "version.json")
+VERSION_FILE_LOCAL = os.path.join(REL_SOURCE_DIR, "version_local.json")
 
 
 def load_version_info(version_file):
@@ -151,10 +151,10 @@ def load_version_info(version_file):
 
 
 try:
-    version_info = load_version_info(VERSION_INFO_RC_FILE)
+    version_info = load_version_info(VERSION_FILE_LOCAL)
 except FileNotFoundError:
-    print("version_info_rc.json not found. Default to dev build")
-    version_info = load_version_info(VERSION_INFO_FILE)
+    print("version_local.json not found. Default to dev build")
+    version_info = load_version_info(VERSION_FILE)
 
 PACKAGE_VERSION = version_info.get("package-version")
 print(f"Using PACKAGE_VERSION: '{PACKAGE_VERSION}'")
@@ -207,6 +207,7 @@ def build_cmake_configuration(CMAKE_BUILD_DIR: Path, extra_cmake_args=[]):
     print(f"CMake build dir: {CMAKE_BUILD_DIR}")
     cmake_args = [
         "-GNinja",
+        "-Wno-dev",
         "--log-level=VERBOSE",
         "-DSHORTFIN_BUNDLE_DEPS=ON",
         f"-DCMAKE_BUILD_TYPE={cfg}",
@@ -221,6 +222,7 @@ def build_cmake_configuration(CMAKE_BUILD_DIR: Path, extra_cmake_args=[]):
             cmake_args.append("-DCMAKE_CXX_COMPILER=clang++")
         add_env_cmake_setting(cmake_args, "CMAKE_LINKER_TYPE", default_value="LLD")
 
+    add_env_cmake_setting(cmake_args, "SHORTFIN_ENABLE_LTO", default_value="ON")
     add_env_cmake_setting(cmake_args, "SHORTFIN_IREE_SOURCE_DIR")
     add_env_cmake_setting(cmake_args, "SHORTFIN_ENABLE_ASAN")
 

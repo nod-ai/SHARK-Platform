@@ -19,6 +19,10 @@ from .tokenizer import Tokenizer
 
 logger = logging.getLogger(__name__)
 
+PROG_ISOLATIONS = {
+    isolation.name.lower(): isolation for isolation in sf.ProgramIsolation
+}
+
 
 class GenerateService:
     """Top level service interface for generating text against a model."""
@@ -34,6 +38,7 @@ class GenerateService:
         sysman: SystemManager,
         tokenizer: Tokenizer,
         model_params: ModelParams,
+        program_isolation: str = "per_call",
     ):
         self.name = name
 
@@ -52,6 +57,8 @@ class GenerateService:
         self.page_cache = AttnPageCache(
             devices=self.main_fiber.devices_dict.values(), model_params=model_params
         )
+
+        self.program_isolation = PROG_ISOLATIONS[program_isolation]
 
     def load_inference_module(self, vmfb_path: Path):
         self.inference_modules.append(sf.ProgramModule.load(self.sysman.ls, vmfb_path))
@@ -75,6 +82,7 @@ class GenerateService:
             + self.inference_modules,
             devices=self.sysman.ls.devices,
             trace_execution=False,
+            isolation=self.program_isolation,
         )
         # Resolve prefill entrypoints.
         self.prefill_functions = {}
@@ -240,8 +248,10 @@ class BatcherProcess(sf.Process):
             assert decode_request.phase == InferencePhase.DECODE
             if len(exec_process.exec_requests) >= self.ideal_batch_size:
                 break
+            incoming_token_count = len(decode_request.input_token_ids)
             needed_pages = math.ceil(
-                len(decode_request.input_token_ids) / self.page_seq_stride
+                (decode_request.start_position + incoming_token_count)
+                / self.page_seq_stride
             )
             if needed_pages > len(decode_request.locked_pages):
                 pages = cache.acquire_free_pages(needed_pages)
@@ -307,7 +317,13 @@ class InferenceExecutorProcess(sf.Process):
 
             # Compute block sequence length as maximum sequence length, rounded
             # up to the seq_stride.
-            bsl = max(len(r.input_token_ids) for r in self.exec_requests)
+            if self.phase == InferencePhase.PREFILL:
+                for r in self.exec_requests:
+                    assert r.start_position == 0
+
+            bsl = max(
+                (r.start_position + len(r.input_token_ids)) for r in self.exec_requests
+            )
             bsl = int(math.ceil(bsl / seq_stride) * seq_stride)
             block_count = bsl // seq_stride
             req_count = len(self.exec_requests)
@@ -358,7 +374,10 @@ class InferenceExecutorProcess(sf.Process):
                 seq_lens_host = seq_lens.for_transfer()
                 with seq_lens_host.map(discard=True) as m:
                     m.fill(0)
-                    m.items = [req.start_position + 1 for req in self.exec_requests]
+                    m.items = [
+                        req.start_position + len(req.input_token_ids)
+                        for req in self.exec_requests
+                    ]
                 seq_lens_host.copy_to(seq_lens)
 
             # Populate cache pages.

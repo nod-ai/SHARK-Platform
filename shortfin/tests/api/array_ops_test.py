@@ -14,6 +14,9 @@ import shortfin.array as sfnp
 
 @pytest.fixture
 def lsys():
+    # TODO: Port this test to use memory type independent access. It currently
+    # presumes unified memory.
+    # sc = sf.SystemBuilder()
     sc = sf.host.CPUSystemBuilder()
     lsys = sc.create_system()
     yield lsys
@@ -164,3 +167,104 @@ def test_fill_randn_explicit_generator(device, dtype):
         assert contents1 == contents2
         # And not be zero.
         assert contents1 != bytes(mz)
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        sfnp.uint8,
+        sfnp.uint16,
+        sfnp.uint32,
+        sfnp.uint64,
+        sfnp.int8,
+        sfnp.int16,
+        sfnp.int32,
+        sfnp.int64,
+        sfnp.float16,
+        sfnp.float32,
+        sfnp.float64,
+    ],
+)
+def test_convert(device, dtype):
+    input_array = sfnp.device_array(device, [2, 3], dtype=sfnp.int32)
+    with input_array.map(write=True) as m:
+        m.fill(16)
+    intermediate = sfnp.convert(input_array, dtype=dtype)
+    with input_array.map(write=True) as m:
+        m.fill(0)
+    sfnp.convert(intermediate, out=input_array)
+    assert list(input_array.items) == 6 * [16]
+
+
+def round_half_up(n):
+    return math.floor(n + 0.5)
+
+
+def round_half_away_from_zero(n):
+    rounded_abs = round_half_up(abs(n))
+    return math.copysign(rounded_abs, n)
+
+
+@pytest.mark.parametrize(
+    "dtype,sfnp_func,ref_round_func",
+    [
+        (sfnp.float16, sfnp.round, round_half_away_from_zero),
+        (sfnp.float32, sfnp.round, round_half_away_from_zero),
+        (sfnp.float16, sfnp.ceil, math.ceil),
+        (sfnp.float32, sfnp.ceil, math.ceil),
+        (sfnp.float16, sfnp.floor, math.floor),
+        (sfnp.float32, sfnp.floor, math.floor),
+        (sfnp.float16, sfnp.trunc, math.trunc),
+        (sfnp.float32, sfnp.trunc, math.trunc),
+    ],
+)
+def test_nearest_int_no_conversion(device, dtype, sfnp_func, ref_round_func):
+    input = sfnp.device_array(device, [2, 3], dtype=dtype)
+    sfnp.fill_randn(input)
+    ref_rounded = [
+        ref_round_func(n) for n in sfnp.convert(input, dtype=sfnp.float32).items
+    ]
+    output = sfnp_func(input)
+    assert output.dtype == dtype
+    output_items = sfnp.convert(output, dtype=sfnp.float32).items
+    print(output_items)
+    for ref, actual in zip(ref_rounded, output_items):
+        assert ref == pytest.approx(actual)
+
+
+@pytest.mark.parametrize(
+    "dtype,out_dtype,sfnp_func,ref_round_func",
+    [
+        # Round
+        (sfnp.float16, sfnp.int8, sfnp.round, round_half_away_from_zero),
+        (sfnp.float32, sfnp.int8, sfnp.round, round_half_away_from_zero),
+        (sfnp.float32, sfnp.int16, sfnp.round, round_half_away_from_zero),
+        (sfnp.float32, sfnp.int32, sfnp.round, round_half_away_from_zero),
+        # Note that we do not test unsigned conversion with random data.
+        # Ceil
+        (sfnp.float16, sfnp.int8, sfnp.ceil, math.ceil),
+        (sfnp.float32, sfnp.int8, sfnp.ceil, math.ceil),
+        (sfnp.float32, sfnp.int16, sfnp.ceil, math.ceil),
+        (sfnp.float32, sfnp.int32, sfnp.ceil, math.ceil),
+        # Floor
+        (sfnp.float16, sfnp.int8, sfnp.floor, math.floor),
+        (sfnp.float32, sfnp.int8, sfnp.floor, math.floor),
+        (sfnp.float32, sfnp.int16, sfnp.floor, math.floor),
+        (sfnp.float32, sfnp.int32, sfnp.floor, math.floor),
+        # Trunc
+        (sfnp.float16, sfnp.int8, sfnp.trunc, math.trunc),
+        (sfnp.float32, sfnp.int8, sfnp.trunc, math.trunc),
+        (sfnp.float32, sfnp.int16, sfnp.trunc, math.trunc),
+        (sfnp.float32, sfnp.int32, sfnp.trunc, math.trunc),
+    ],
+)
+def test_nearest_int_conversion(device, dtype, out_dtype, sfnp_func, ref_round_func):
+    input = sfnp.device_array(device, [2, 3], dtype=dtype)
+    sfnp.fill_randn(input)
+    ref_rounded = [
+        int(ref_round_func(n)) for n in sfnp.convert(input, dtype=sfnp.float32).items
+    ]
+    output = sfnp_func(input, dtype=out_dtype)
+    assert output.dtype == out_dtype
+    for ref, actual in zip(ref_rounded, output.items):
+        assert ref == int(actual)

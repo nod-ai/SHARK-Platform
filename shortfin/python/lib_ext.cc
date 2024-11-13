@@ -34,6 +34,32 @@ SystemBuilder classes. This API is a shorthand for creating a SystemBuilder
 and calling create_system() on it.
 )";
 
+static const char DOCSTRING_SYSTEM_BUILDER_CTOR[] =
+    R"(Constructs a system with environment dependent configuration.
+
+Most configuration is done by way of key/value arguments. Arguments are meant
+to be derived from flags or config files and are expected to be simple strings
+or integer values:
+
+  * "system_type": A supported system type, corresponding to a subclass of
+    SystemBuilder. Typically available values include "hostcpu", "amdgpu", etc.
+  * Other keywords are passed to the concrete SystemBuilder subclass.
+
+Resolution for the `system_type` is special and is checked in three steps, with
+the first defined winning:
+
+1. `kwargs["system_type"]`
+2. Environment `SHORTFIN_SYSTEM_TYPE` variable (or as controlled by `env_prefix`)
+3. `SystemBuilder.default_system_type` as a process-wide default.
+
+Args:
+  env_prefix: Controls how options are looked up in the environment. By default,
+    the prefix is "SHORTFIN_" and upper-cased options are appended to it. Any
+    option not explicitly specified but in the environment will be used. Pass
+    None to disable environment lookup.
+  **kwargs: Key/value arguments for controlling setup of the system.
+)";
+
 static const char DOCSTRING_HOSTCPU_SYSTEM_BUILDER_CTOR[] =
     R"(Constructs a system with CPU based devices.
 
@@ -56,6 +82,24 @@ Args:
     option not explicitly specified but in the environment will be used. Pass
     None to disable environment lookup.
   **kwargs: Key/value arguments for controlling setup of the system.
+)";
+
+static const char DOCSTRING_HOSTCPU_SYSTEM_BUILDER_HOSTCPU_ALLOCATOR_SPECS[] =
+    R"(Allocator specs to apply to HOSTCPU devices configured by this builder.
+
+This uses syntax like::
+
+  some_allocator
+  some_allocator:key=value
+  some_allocator:key=value,key=value
+  some_allocator:key=value,key=value;other_allocator:key=value
+
+Typical values for `some_allocator` include `caching` and `debug`.
+
+This can be set via a keyword of `amdgpu_allocators`, which will only apply to
+HOSTCPU devices or `allocators` which will apply to all contained devices.
+Similarly, it is available on a `SHORTFIN_` prefixed env variable if environment
+lookup is not disabled.
 )";
 
 static const char DOCSTRING_PROGRAM_FUNCTION_INVOCATION[] =
@@ -90,8 +134,19 @@ class Refs {
     return lazy_PyWorkerEventLoop_;
   }
 
+  std::optional<std::string> default_system_type() {
+    iree::slim_mutex_lock_guard g(mu_);
+    return default_system_type_;
+  }
+  void set_default_system_type(std::optional<std::string> st) {
+    iree::slim_mutex_lock_guard g(mu_);
+    default_system_type_ = st;
+  }
+
  private:
+  iree::slim_mutex mu_;
   py::object lazy_PyWorkerEventLoop_;
+  std::optional<std::string> default_system_type_;
 };
 
 // We need a fair bit of accounting additions in order to make Workers usable
@@ -118,6 +173,7 @@ class PyWorkerExtension : public local::Worker::Extension {
   py::handle loop() { return loop_; }
 
   void OnThreadStart() noexcept override {
+    SHORTFIN_TRACE_SCOPE_NAMED("PyWorker::OnThreadStart");
     // Python threading initialization.
     // If our own thread, teach Python about it. Not done for donated.
     if (worker().options().owned_thread) {
@@ -132,6 +188,7 @@ class PyWorkerExtension : public local::Worker::Extension {
   }
 
   void OnThreadStop() noexcept override {
+    SHORTFIN_TRACE_SCOPE_NAMED("PyWorker::OnThreadStop");
     {
       // Do Python level thread cleanup.
       py::gil_scoped_acquire g;
@@ -198,6 +255,7 @@ class PyProcess : public local::detail::BaseProcess {
         std::bind(&PyProcess::RunOnWorker, self_object));
   }
   static void RunOnWorker(py::handle self_handle) {
+    SHORTFIN_TRACE_SCOPE_NAMED("PyProcess:RunOnWorker");
     py::gil_scoped_acquire g;
     // Steal the reference back from ScheduleOnWorker. Important: this is
     // very likely the last reference to the process. So self must not be
@@ -287,6 +345,7 @@ py::object PyRehydrateRef(local::ProgramInvocation *inv,
 
 py::object RunInForeground(std::shared_ptr<Refs> refs, local::System &self,
                            py::object coro) {
+  SHORTFIN_TRACE_SCOPE_NAMED("CoroRunInForeground");
   bool is_main_thread =
       refs->threading_current_thread().is(refs->threading_main_thread());
 
@@ -453,6 +512,44 @@ void BindLocal(py::module_ &m) {
       .export_values();
 
   py::class_<local::SystemBuilder>(m, "SystemBuilder")
+      .def("__init__", [](py::args, py::kwargs) {})
+      .def_static(
+          "__new__",
+          [refs](py::handle cls, std::optional<std::string> env_prefix,
+                 bool validate_undef, py::kwargs kwargs) {
+            auto options =
+                CreateConfigOptions(env_prefix, kwargs, validate_undef);
+            std::optional<std::string_view> system_type =
+                options.GetOption("system_type");
+            std::optional<std::string> default_system_type;
+            if (!system_type) {
+              default_system_type = refs->default_system_type();
+              if (!default_system_type) {
+                throw std::invalid_argument(
+                    "In order to construct a generic SystemBuilder, a "
+                    "`system_type=` keyword (or appropriate environment "
+                    "variable) must be specified. Alternatively, a default can "
+                    "be set process wide via "
+                    "`SystemBuilder.default_system_type =`");
+              }
+              system_type = *default_system_type;
+            }
+            return local::SystemBuilder::ForSystem(
+                iree_allocator_system(), *system_type, std::move(options));
+          },
+          // Note that for some reason, no-arg construction passes no arguments
+          // to __new__. We allow the single positional argument to be none,
+          // which satisfies this case in practice.
+          py::arg("cls") = py::none(), py::kw_only(),
+          py::arg("env_prefix").none() = "SHORTFIN_",
+          py::arg("validate_undef") = true, py::arg("kwargs"),
+          DOCSTRING_SYSTEM_BUILDER_CTOR)
+      .def_prop_rw_static(
+          "default_system_type",
+          [refs](py::handle /*unused*/) { return refs->default_system_type(); },
+          [refs](py::handle /*unused*/, std::optional<std::string> st) {
+            refs->set_default_system_type(std::move(st));
+          })
       .def("create_system", [live_system_refs,
                              worker_initializer](local::SystemBuilder &self) {
         auto system_ptr = self.CreateSystem();
@@ -843,6 +940,7 @@ void BindLocal(py::module_ &m) {
              callable.inc_ref();  // Stolen within the callback.
              auto thunk = +[](void *user_data, iree_loop_t loop,
                               iree_status_t status) noexcept -> iree_status_t {
+               SHORTFIN_TRACE_SCOPE_NAMED("PyWorker::Callback");
                py::gil_scoped_acquire g;
                py::object user_callable =
                    py::steal(static_cast<PyObject *>(user_data));
@@ -862,6 +960,7 @@ void BindLocal(py::module_ &m) {
              callable.inc_ref();  // Stolen within the callback.
              auto thunk = +[](void *user_data, iree_loop_t loop,
                               iree_status_t status) noexcept -> iree_status_t {
+               SHORTFIN_TRACE_SCOPE_NAMED("PyWorker::DelayCallback");
                py::gil_scoped_acquire g;
                py::object user_callable =
                    py::steal(static_cast<PyObject *>(user_data));
@@ -937,6 +1036,7 @@ void BindLocal(py::module_ &m) {
   py::class_<local::CompletionEvent>(m, "CompletionEvent")
       .def(py::init<>())
       .def("__await__", [](py::handle self_obj) {
+        SHORTFIN_TRACE_SCOPE_NAMED("PyCompletionEvent::__await__");
         auto &worker_ext = PyWorkerExtension::GetCurrent();
         auto &self = py::cast<local::CompletionEvent &>(self_obj);
         py::object future = worker_ext.loop().attr("create_future")();
@@ -958,6 +1058,7 @@ void BindLocal(py::module_ &m) {
             self, iree_infinite_timeout(),
             +[](void *future_vp, iree_loop_t loop,
                 iree_status_t status) noexcept -> iree_status_t {
+              SHORTFIN_TRACE_SCOPE_NAMED("PyCompletionEvent::OnComplete");
               py::gil_scoped_acquire g;
               py::object future = py::steal(static_cast<PyObject *>(future_vp));
               try {
@@ -1052,6 +1153,7 @@ void BindLocal(py::module_ &m) {
              return py::none();
            })
       .def("__await__", [](py::handle self_obj) {
+        SHORTFIN_TRACE_SCOPE_NAMED("PyFuture::__await__");
         // TODO: We should make our C++ future able to be used directly
         // vs needing to bridge it like this.
         auto &worker_ext = PyWorkerExtension::GetCurrent();
@@ -1073,6 +1175,7 @@ void BindLocal(py::module_ &m) {
         self.AddCallback(
             [py_future_vp = static_cast<void *>(future.release().ptr())](
                 local::Future &sf_future) {
+              SHORTFIN_TRACE_SCOPE_NAMED("PyFuture::OnComplete");
               py::gil_scoped_acquire g;
               py::object py_future =
                   py::steal(static_cast<PyObject *>(py_future_vp));
@@ -1123,19 +1226,33 @@ void BindHostSystem(py::module_ &global_m) {
       m, "SystemBuilder");
   py::class_<local::systems::HostCPUSystemBuilder,
              local::systems::HostSystemBuilder>(m, "CPUSystemBuilder")
-      .def(
-          "__init__",
-          [](local::systems::HostCPUSystemBuilder *self,
-             std::optional<std::string> env_prefix, bool validate_undef,
-             py::kwargs kwargs) {
+      .def("__init__", [](py::args, py::kwargs) {})
+      .def_static(
+          "__new__",
+          [](py::handle cls, std::optional<std::string> env_prefix,
+             bool validate_undef, py::kwargs kwargs) {
             auto options =
                 CreateConfigOptions(env_prefix, kwargs, validate_undef);
-            new (self) local::systems::HostCPUSystemBuilder(
+            return std::make_unique<local::systems::HostCPUSystemBuilder>(
                 iree_allocator_system(), std::move(options));
           },
-          py::kw_only(), py::arg("env_prefix").none() = "SHORTFIN_",
+          // Note that for some reason, no-arg construction passes no arguments
+          // to __new__. We allow the single positional argument to be none,
+          // which satisfies this case in practice.
+          py::arg("cls") = py::none(), py::kw_only(),
+          py::arg("env_prefix").none() = "SHORTFIN_",
           py::arg("validate_undef") = true, py::arg("kwargs"),
-          DOCSTRING_HOSTCPU_SYSTEM_BUILDER_CTOR);
+          DOCSTRING_HOSTCPU_SYSTEM_BUILDER_CTOR)
+      .def_prop_rw(
+          "hostcpu_allocator_specs",
+          [](local::systems::HostCPUSystemBuilder &self) {
+            return self.hostcpu_allocator_specs();
+          },
+          [](local::systems::HostCPUSystemBuilder &self,
+             std::vector<std::string> specs) {
+            self.hostcpu_allocator_specs() = std::move(specs);
+          },
+          DOCSTRING_HOSTCPU_SYSTEM_BUILDER_HOSTCPU_ALLOCATOR_SPECS);
   py::class_<local::systems::HostCPUDevice, local::Device>(m, "HostCPUDevice");
 }
 
@@ -1156,6 +1273,27 @@ Args:
     None to disable environment lookup.
   **kwargs: Key/value arguments for controlling setup of the system.
 )";
+
+static const char DOCSTRING_AMDGPU_SYSTEM_BUILDER_AMDGPU_ALLOCATOR_SPECS[] =
+    R"(Allocator specs to apply to AMDGPU devices configured by this builder.
+
+This uses syntax like::
+
+  some_allocator
+  some_allocator:key=value
+  some_allocator:key=value,key=value
+  some_allocator:key=value,key=value;other_allocator:key=value
+
+Typical values for `some_allocator` include `caching` and `debug`.
+
+This can be set via a keyword of `amdgpu_allocators`, which will only apply to
+AMDGPU devices or `allocators` which will apply to all contained devices.
+Similarly, it is available on a `SHORTFIN_` prefixed env variable if environment
+lookup is not disabled.
+)";
+
+static const char DOCSTRING_AMDGPU_SYSTEM_BUILDER_AMDGPU_ASYNC_ALLOCATIONS[] =
+    R"(Whether to use async allocations if supported (default true).)";
 
 static const char DOCSTRING_AMDGPU_SYSTEM_BUILDER_CPU_DEVICES_ENABLED[] =
     R"(Whether to create a heterogenous system with hostcpu and amdgpu devices.
@@ -1186,6 +1324,37 @@ This option can be set as an option keyword with the name
 construction). For compatibility with IREE tools, the "IREE_HIP_DYLIB_PATH"
 environment variable is searched as a fallback in all cases. Multiple paths
 can be separated by semicolons on all platforms.
+)";
+
+static const char
+    DOCSTRING_AMDGPU_SYSTEM_BUILDER_LOGICAL_DEVICES_PER_PHYSICAL_DEVICE[] =
+        R"(Number of logical devices to open per physical, visible device.
+
+This option can be set as an option keyword with the name
+"amgdpu_logical_devices_per_physical_device" or the environment variable
+"SHORTFIN_AMDGPU_LOGICAL_DEVICES_PER_PHYSICAL_DEVICE" (if `env_prefix` was not
+changed at construction).
+)";
+
+static const char DOCSTRING_AMDGPU_SYSTEM_BUILDER_TRACING_LEVEL[] =
+    R"(Tracing level for AMDGPU device behavior.
+
+Controls the verbosity of tracing when Tracy instrumentation is enabled.
+The impact to benchmark timing becomes more severe as the verbosity
+increases, and thus should be only enabled when needed.
+
+This is the equivalent of the `--hip_tracing` IREE tools flag.
+Permissible values are:
+  * 0 : stream tracing disabled.
+  * 1 : coarse command buffer level tracing enabled.
+  * 2 : (default) fine-grained kernel level tracing enabled.
+
+The setting only has an effect if using a tracing enabled runtime (i.e.
+by running with `SHORTFIN_PY_RUNTIME=tracy` or equiv).
+
+The default value for this setting is available as a
+`amdgpu.SystemBuilder(amdgpu_tracing_level=2)` or (by default) from an
+environment variable `SHORTFIN_AMDGPU_TRACING_LEVEL`.
 )";
 
 static const char DOCSTRING_AMDGPU_SYSTEM_BUILDER_AVAILABLE_DEVICES[] =
@@ -1223,25 +1392,48 @@ void BindAMDGPUSystem(py::module_ &global_m) {
   auto m = global_m.def_submodule("amdgpu", "AMDGPU system config");
   py::class_<local::systems::AMDGPUSystemBuilder,
              local::systems::HostCPUSystemBuilder>(m, "SystemBuilder")
-      .def(
-          "__init__",
-          [](local::systems::AMDGPUSystemBuilder *self,
-             std::optional<std::string> env_prefix, bool validate_undef,
-             py::kwargs kwargs) {
+      .def("__init__", [](py::args, py::kwargs) {})
+      .def_static(
+          "__new__",
+          [](py::handle cls, std::optional<std::string> env_prefix,
+             bool validate_undef, py::kwargs kwargs) {
             auto options =
                 CreateConfigOptions(env_prefix, kwargs, validate_undef);
-            new (self) local::systems::AMDGPUSystemBuilder(
+            return std::make_unique<local::systems::AMDGPUSystemBuilder>(
                 iree_allocator_system(), std::move(options));
           },
-          py::kw_only(), py::arg("env_prefix").none() = "SHORTFIN_",
+          // Note that for some reason, no-arg construction passes no arguments
+          // to __new__. We allow the single positional argument to be none,
+          // which satisfies this case in practice.
+          py::arg("cls") = py::none(), py::kw_only(),
+          py::arg("env_prefix").none() = "SHORTFIN_",
           py::arg("validate_undef") = true, py::arg("kwargs"),
           DOCSTRING_AMDGPU_SYSTEM_BUILDER_CTOR)
+      .def_prop_rw(
+          "amdgpu_allocator_specs",
+          [](local::systems::AMDGPUSystemBuilder &self) {
+            return self.amdgpu_allocator_specs();
+          },
+          [](local::systems::AMDGPUSystemBuilder &self,
+             std::vector<std::string> specs) {
+            self.amdgpu_allocator_specs() = std::move(specs);
+          },
+          DOCSTRING_AMDGPU_SYSTEM_BUILDER_AMDGPU_ALLOCATOR_SPECS)
       .def_prop_ro(
           "available_devices",
           [](local::systems::AMDGPUSystemBuilder &self) {
             return self.GetAvailableDeviceIds();
           },
           DOCSTRING_AMDGPU_SYSTEM_BUILDER_AVAILABLE_DEVICES)
+      .def_prop_rw(
+          "async_allocations",
+          [](local::systems::AMDGPUSystemBuilder &self) {
+            return self.async_allocations();
+          },
+          [](local::systems::AMDGPUSystemBuilder &self, bool value) {
+            self.async_allocations() = value;
+          },
+          DOCSTRING_AMDGPU_SYSTEM_BUILDER_AMDGPU_ASYNC_ALLOCATIONS)
       .def_prop_rw(
           "cpu_devices_enabled",
           [](local::systems::AMDGPUSystemBuilder &self) -> bool {
@@ -1260,6 +1452,24 @@ void BindAMDGPUSystem(py::module_ &global_m) {
           [](local::systems::AMDGPUSystemBuilder &self,
              std::vector<std::string> vs) { self.hip_lib_search_paths() = vs; },
           DOCSTRING_AMDGPU_SYSTEM_BUILDER_HIP_LIB_SEARCH_PATHS)
+      .def_prop_rw(
+          "tracing_level",
+          [](local::systems::AMDGPUSystemBuilder &self) -> int {
+            return self.tracing_level();
+          },
+          [](local::systems::AMDGPUSystemBuilder &self, int tracing_level) {
+            self.tracing_level() = tracing_level;
+          },
+          DOCSTRING_AMDGPU_SYSTEM_BUILDER_TRACING_LEVEL)
+      .def_prop_rw(
+          "logical_devices_per_physical_device",
+          [](local::systems::AMDGPUSystemBuilder &self) -> size_t {
+            return self.logical_devices_per_physical_device();
+          },
+          [](local::systems::AMDGPUSystemBuilder &self, size_t value) {
+            self.logical_devices_per_physical_device() = value;
+          },
+          DOCSTRING_AMDGPU_SYSTEM_BUILDER_LOGICAL_DEVICES_PER_PHYSICAL_DEVICE)
       .def_prop_rw(
           "visible_devices",
           [](local::systems::AMDGPUSystemBuilder &self)

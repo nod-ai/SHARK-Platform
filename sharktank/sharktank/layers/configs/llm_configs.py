@@ -80,6 +80,27 @@ class LlamaHParams:
             ),
         )
 
+    def to_gguf_props(self) -> dict[str, Any]:
+        res = {
+            "general.architecture": self.model_arch,
+            f"{self.model_arch}.context_length": self.context_length,
+            f"{self.model_arch}.embedding_length": self.embedding_length,
+            f"{self.model_arch}.block_count": self.block_count,
+            f"{self.model_arch}.feed_forward_length": self.feed_forward_length,
+            f"{self.model_arch}.attention.head_count": self.attention_head_count,
+            f"{self.model_arch}.attention.layer_norm_rms_epsilon": self.attention_layer_norm_rms_epsilon,
+            f"{self.model_arch}.attention.head_count_kv": self.attention_head_count_kv,
+        }
+        if self.rope_dimension_count is not None:
+            res[f"{self.model_arch}.rope.dimension_count"] = self.rope_dimension_count
+        if self.rope_freq_base is not None:
+            res[f"{self.model_arch}.rope.freq_base"] = self.rope_freq_base
+        if self.expert_count is not None:
+            res[f"{self.model_arch}.expert_count"] = self.expert_count
+        if self.expert_used_count is not None:
+            res[f"{self.model_arch}.expert_used_count"] = self.expert_used_count
+        return res
+
 
 def _float_prop(p: dict[str, Any], name: str) -> float:
     try:

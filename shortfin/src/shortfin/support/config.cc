@@ -24,8 +24,8 @@ const std::optional<std::string_view> ConfigOptions::GetOption(
     std::string_view key) const {
   // Get explicit option.
   auto found_it = options_.find(key);
+  consumed_keys_.insert(key);
   if (found_it != options_.end()) {
-    consumed_keys_.insert(key);
     return found_it->second;
   }
 
@@ -138,8 +138,9 @@ void ConfigOptions::ValidateUndef() const {
     }
   }
   if (!unused_options.empty()) {
-    std::string message = fmt::format("Specified options were not used: {}",
-                                      fmt::join(unused_options, ", "));
+    std::string message = fmt::format(
+        "Specified options were not used: {} (available: {})",
+        fmt::join(unused_options, ", "), fmt::join(consumed_keys_, ", "));
     switch (validation_) {
       case ValidationLevel::UNDEF_DEBUG:
         logging::debug("{}", message);

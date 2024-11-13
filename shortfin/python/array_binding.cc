@@ -7,6 +7,7 @@
 #include "./lib_ext.h"
 #include "./utils.h"
 #include "shortfin/array/api.h"
+#include "shortfin/support/logging.h"
 
 using namespace shortfin::array;
 
@@ -223,6 +224,7 @@ class PyMapping {
   }
 
   void FillFromScalar(Refs *refs, py::handle value) {
+    SHORTFIN_TRACE_SCOPE_NAMED("PyMapping::FillFromScalar");
     if (!dtype()) {
       throw std::invalid_argument(
           "The `fill` method is only valid for typed mappings but "
@@ -242,6 +244,7 @@ class PyMapping {
   }
 
   void FillFromBuffer(py::handle buffer) {
+    SHORTFIN_TRACE_SCOPE_NAMED("PyMapping::FillFromBuffer");
     Py_buffer py_view;
     int flags = PyBUF_FORMAT | PyBUF_ND;  // C-Contiguous ND.
     if (PyObject_GetBuffer(buffer.ptr(), &py_view, flags) != 0) {
@@ -286,6 +289,7 @@ class PyMapping {
   }
 
   py::object GetItems(py::handle self_obj, Refs *refs) {
+    SHORTFIN_TRACE_SCOPE_NAMED("PyMapping::GetItems");
     if (!dtype()) {
       throw std::invalid_argument(
           "The `items` property is only valid for typed mappings but "
@@ -306,6 +310,7 @@ class PyMapping {
   }
 
   void SetItems(Refs *refs, py::handle initializer) {
+    SHORTFIN_TRACE_SCOPE_NAMED("PyMapping::SetItems");
     if (!dtype()) {
       throw std::invalid_argument(
           "The `items` property is only valid for typed mappings but "
@@ -410,6 +415,7 @@ void BindArray(py::module_ &m) {
       .def(
           "map",
           [](storage &self, bool read, bool write, bool discard) {
+            SHORTFIN_TRACE_SCOPE_NAMED("PyStorage::map");
             int access = 0;
             if (read) access |= IREE_HAL_MEMORY_ACCESS_READ;
             if (write || discard) access |= IREE_HAL_MEMORY_ACCESS_WRITE;
@@ -428,6 +434,7 @@ void BindArray(py::module_ &m) {
           py::kw_only(), py::arg("read") = false, py::arg("write") = false,
           py::arg("discard") = false, DOCSTRING_STORAGE_MAP)
       .def(py::self == py::self)
+      .def("__len__", &storage::byte_length)
       .def("__repr__", &storage::to_s);
 
   // mapping
@@ -564,6 +571,7 @@ void BindArray(py::module_ &m) {
       .def(
           "map",
           [](device_array &self, bool read, bool write, bool discard) {
+            SHORTFIN_TRACE_SCOPE_NAMED("PyArray::map");
             int access = 0;
             if (read) access |= IREE_HAL_MEMORY_ACCESS_READ;
             if (write || discard) access |= IREE_HAL_MEMORY_ACCESS_WRITE;
@@ -585,6 +593,7 @@ void BindArray(py::module_ &m) {
       .def_prop_rw(
           "items",
           [refs](device_array &self) {
+            SHORTFIN_TRACE_SCOPE_NAMED("PyArray::items");
             PyMapping *mapping;
             py::object mapping_obj = CreateMappingObject(&mapping);
             mapping->set_dtype(self.dtype());
@@ -605,6 +614,7 @@ void BindArray(py::module_ &m) {
       .def_prop_ro(
           "__array_interface__",
           [refs](device_array &self) {
+            SHORTFIN_TRACE_SCOPE_NAMED("PyArray::__array_interface__");
             py::dict interface;
             interface["version"] = 3;
             interface["strides"] = py::none();

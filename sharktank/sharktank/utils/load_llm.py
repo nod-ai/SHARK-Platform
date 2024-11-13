@@ -31,9 +31,9 @@ class TorchGenerator:
         self.tokenizer = tokenizer
         if model.cache.is_paged:
             self.shared_cache_state = model.cache.paged.allocate(page_cache_size)
+            self.free_pages = list(range(1, page_cache_size))
         else:
             self.shared_cache_state = None
-        self.free_pages = list(range(1, 8192))
         self.end_token = end_token
 
     @property

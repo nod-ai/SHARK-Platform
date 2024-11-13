@@ -340,7 +340,7 @@ class GenerateState(BatchGenerateState):
 
         # Perform h2d transfers.
         cb.end()
-        work_queue.execute_sequential([cb])
+        work_queue.execute_sequential(cb)
 
         # Inputs:
         #   token_ids
@@ -468,7 +468,7 @@ class GenerateState(BatchGenerateState):
 
         # Perform h2d transfers.
         cb.end()
-        work_queue.execute_sequential([cb])
+        work_queue.execute_sequential(cb)
 
         # Inputs:
         #   token_ids

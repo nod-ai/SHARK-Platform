@@ -69,7 +69,23 @@ def pytest_addoption(parser):
         action="store_true",
         dest="longrun",
         default=False,
-        help="Enable long and slow tests",
+        help="Enable long tests",
+    )
+
+    parser.addoption(
+        "--run-8b-llama",
+        action="store_true",
+        dest="run-8b-llama",
+        default=False,
+        help="Enable llama 8b benchmarking tests",
+    )
+
+    parser.addoption(
+        "--run-all-llama",
+        action="store_true",
+        dest="run-all-llama",
+        default=False,
+        help="Enable all llama benchmarking tests",
     )
 
     # TODO: Remove all hardcoded paths in CI tests
@@ -258,10 +274,12 @@ def get_iree_flags(request: FixtureRequest):
 
 
 # The following three functions allow us to add a "XFail Reason" column to the html reports for each test
+@pytest.hookimpl(optionalhook=True)
 def pytest_html_results_table_header(cells):
     cells.insert(2, "<th>XFail Reason</th>")
 
 
+@pytest.hookimpl(optionalhook=True)
 def pytest_html_results_table_row(report, cells):
     if hasattr(report, "wasxfail"):
         cells.insert(2, f"<td>{report.wasxfail}</td>")

@@ -1,3 +1,9 @@
+# Copyright 2024 Advanced Micro Devices, Inc.
+#
+# Licensed under the Apache License v2.0 with LLVM Exceptions.
+# See https://llvm.org/LICENSE.txt for license information.
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+
 """Configuration objects.
 
 Parameters that are intrinsic to a specific model.
@@ -43,8 +49,14 @@ class ModelParams:
     # Same for VAE.
     vae_batch_sizes: list[int]
 
+    # Same for scheduler.
+    scheduler_batch_sizes: list[int]
+
     # Height and Width, respectively, for which Unet and VAE are compiled. e.g. [[512, 512], [1024, 1024]]
     dims: list[list[int]]
+
+    # Scheduler id.
+    scheduler_id: str = "EulerDiscrete"
 
     base_model_name: str = "SDXL"
     # Name of the IREE module for each submodel.
@@ -59,10 +71,12 @@ class ModelParams:
     # Classifer free guidance mode. If set to false, only positive prompts will matter.
     cfg_mode = True
 
-    # DTypes (basically defaults):
+    # DTypes (not necessarily weights precision):
     clip_dtype: sfnp.DType = sfnp.float16
     unet_dtype: sfnp.DType = sfnp.float16
     vae_dtype: sfnp.DType = sfnp.float16
+
+    use_i8_punet: bool = False
 
     # ABI of the module.
     module_abi_version: int = 1
