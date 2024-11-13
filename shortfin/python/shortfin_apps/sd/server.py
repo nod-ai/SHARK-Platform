@@ -116,6 +116,7 @@ def configure(args) -> SystemManager:
     services[sm.name] = sm
     return sysman
 
+
 def get_configs(args):
     # Returns one set of config artifacts.
     modelname = "sdxl"
@@ -145,7 +146,7 @@ def get_configs(args):
             flagfile = i
         elif "attention_and_matmul_spec" in i and args.use_tuned:
             tuning_spec = i
-    
+
     if args.use_tuned and args.tuning_spec:
         tuning_spec = os.path.abspath(args.tuning_spec)
 
@@ -177,9 +178,9 @@ def get_configs(args):
                 # It's an env var.
                 arglist = spec.split("=")
                 os.environ[arglist[0]] = arglist[1]
-    
+
     return model_config, topology_config, flagfile, tuning_spec, args
-    
+
 
 def get_modules(args, model_config, flagfile, td_spec):
     # TODO: Move this out of server entrypoint
@@ -199,7 +200,9 @@ def get_modules(args, model_config, flagfile, td_spec):
             else:
                 model_flags[flagged_model].extend([elem])
     if td_spec:
-        model_flags["unet"].extend([f"--iree-codegen-transform-dialect-library={td_spec}"])
+        model_flags["unet"].extend(
+            [f"--iree-codegen-transform-dialect-library={td_spec}"]
+        )
 
     filenames = []
     for modelname in vmfbs.keys():
@@ -351,7 +354,7 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
         "--tuning_spec",
         type=str,
         default="",
-        help="Path to transform dialect spec if compiling an executable with tunings."
+        help="Path to transform dialect spec if compiling an executable with tunings.",
     )
     parser.add_argument(
         "--topology",

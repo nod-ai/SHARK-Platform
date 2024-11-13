@@ -149,6 +149,7 @@ async def main(args):
         else:
             raise ValueError("Received error response from server.")
 
+
 async def interactive(args):
     # Create an aiohttp session for sending requests
     async with aiohttp.ClientSession() as session:
@@ -170,12 +171,16 @@ async def interactive(args):
         )
         print("Sending request with prompt: ", data["prompt"])
         while True:
-            prompt = await ainput('Enter a prompt: ')
+            prompt = await ainput("Enter a prompt: ")
             data["prompt"] = [prompt]
             data["steps"] = [args.steps]
             async for i in async_range(args.reps):
-                pending.append(asyncio.create_task(send_request(session, i, args, data)))
-                await asyncio.sleep(1)  # Wait for 1 second before sending the next request
+                pending.append(
+                    asyncio.create_task(send_request(session, i, args, data))
+                )
+                await asyncio.sleep(
+                    1
+                )  # Wait for 1 second before sending the next request
             while pending:
                 done, pending = await asyncio.wait(
                     pending, return_when=asyncio.ALL_COMPLETED
@@ -186,8 +191,9 @@ async def interactive(args):
             if any([i is None for i in [latencies, sample_counts]]):
                 raise ValueError("Received error response from server.")
 
+
 async def ainput(prompt: str) -> str:
-    return await asyncio.to_thread(input, f'{prompt} ')
+    return await asyncio.to_thread(input, f"{prompt} ")
 
 
 async def async_range(count):
@@ -203,7 +209,11 @@ if __name__ == "__main__":
     p.add_argument("--save", action="store_true", help="save images")
     p.add_argument("--port", type=str, default="8000")
     p.add_argument("--steps", type=int, default="20")
-    p.add_argument("--interactive", action="store_true", help="Start as an example client instead of sending static requests.")
+    p.add_argument(
+        "--interactive",
+        action="store_true",
+        help="Start as an example client instead of sending static requests.",
+    )
     args = p.parse_args()
     if args.interactive:
         asyncio.run(interactive(args))

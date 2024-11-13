@@ -24,9 +24,7 @@ dtype_to_filetag = {
 }
 
 ARTIFACT_VERSION = "11132024"
-SDXL_CONFIG_BUCKET = (
-    f"https://sharkpublic.blob.core.windows.net/sharkpublic/sdxl/{ARTIFACT_VERSION}/configs/"
-)
+SDXL_CONFIG_BUCKET = f"https://sharkpublic.blob.core.windows.net/sharkpublic/sdxl/{ARTIFACT_VERSION}/configs/"
 
 
 def get_url_map(filenames: list[str], bucket: str):
@@ -64,6 +62,7 @@ def needs_file(filename, ctx, namespace=FileNamespace.GEN):
         needed = True
     return needed
 
+
 @entrypoint(description="Retreives a set of SDXL configuration files.")
 def sdxlconfig(
     target=cl_arg(
@@ -72,7 +71,12 @@ def sdxlconfig(
         help="IREE target architecture.",
     ),
     model=cl_arg("model", type=str, default="sdxl", help="Model architecture"),
-    topology=cl_arg("topology", type=str, default="spx_single", help="System topology configfile keyword"),
+    topology=cl_arg(
+        "topology",
+        type=str,
+        default="spx_single",
+        help="System topology configfile keyword",
+    ),
 ):
     ctx = executor.BuildContext.current()
     update = needs_update(ctx)
@@ -90,7 +94,7 @@ def sdxlconfig(
         out_file = os.path.join(ctx.executor.output_dir, f)
         if update or needs_file(f, ctx):
             fetch_http(name=f, url=url)
-    
+
     flagfile_filenames = [f"{model}_flagfile_{target}.txt"]
     flagfile_urls = get_url_map(flagfile_filenames, SDXL_CONFIG_BUCKET)
     for f, url in flagfile_urls.items():
@@ -98,13 +102,20 @@ def sdxlconfig(
         if update or needs_file(f, ctx):
             fetch_http(name=f, url=url)
 
-    tuning_filenames = [f"attention_and_matmul_spec_{target}.mlir"] if target == "gfx942" else []
+    tuning_filenames = (
+        [f"attention_and_matmul_spec_{target}.mlir"] if target == "gfx942" else []
+    )
     tuning_urls = get_url_map(tuning_filenames, SDXL_CONFIG_BUCKET)
     for f, url in tuning_urls.items():
         out_file = os.path.join(ctx.executor.output_dir, f)
         if update or needs_file(f, ctx):
             fetch_http(name=f, url=url)
-    filenames = [*model_config_filenames, *topology_config_filenames, *flagfile_filenames, *tuning_filenames]
+    filenames = [
+        *model_config_filenames,
+        *topology_config_filenames,
+        *flagfile_filenames,
+        *tuning_filenames,
+    ]
     return filenames
 
 
