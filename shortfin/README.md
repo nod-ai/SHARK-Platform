@@ -6,7 +6,13 @@ and serving engine. Shortfin consists of these major components:
 * The "libshortfin" inference library written in C/C++ and built on
   [IREE](https://github.com/iree-org/iree)
 * Python bindings for the underlying inference library
-* Example applications 'shortfin_apps' built using the python bindings
+* Example applications in
+  ['shortfin_apps'](https://github.com/nod-ai/SHARK-Platform/tree/main/shortfin/python/shortfin_apps)
+  built using the python bindings
+
+## Prerequisites
+
+* Python 3.11+
 
 ## Simple user installation
 
