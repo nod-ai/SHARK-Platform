@@ -237,6 +237,8 @@ def get_modules(args, model_config, flagfile, td_spec):
 
 
 def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
+    from pathlib import Path
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", type=str, default=None)
     parser.add_argument("--port", type=int, default=8000)
@@ -346,8 +348,8 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
     )
     parser.add_argument(
         "--artifacts_dir",
-        type=str,
-        default="",
+        type=Path,
+        default=None,
         help="Path to local artifacts cache.",
     )
     parser.add_argument(
@@ -371,6 +373,10 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
     )
 
     args = parser.parse_args(argv)
+    if not args.artifacts_dir:
+        home = Path.home()
+        artdir = home / ".cache" / "shark"
+        args.artifacts_dir = str(artdir)
 
     global sysman
     sysman = configure(args)
