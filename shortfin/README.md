@@ -142,7 +142,7 @@ Several optional environment variables can be used with setup.py:
 * `SHORTFIN_RUN_CTESTS=ON` : Runs `ctest` as part of the build. Useful for CI
   as it uses the version of ctest installed in the pip venv.
 
-#### Running tests
+### Running tests
 
 The project uses a combination of ctest for native C++ tests and pytest. Much
 of the functionality is only tested via the Python tests, using the
@@ -157,7 +157,7 @@ does mean that the C++ core of the library must always be built with the
 Python bindings to test the most behavior. Given the target of the project,
 this is not considered to be a significant issue.
 
-##### Python tests
+#### Python tests
 
 Run platform independent tests only:
 
