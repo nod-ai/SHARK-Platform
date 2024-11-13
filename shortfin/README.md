@@ -1,4 +1,4 @@
-# shortfin - SHARK C++ inference library
+# shortfin - SHARK inference library and serving engine
 
 ## Simple User Installation
 

@@ -359,10 +359,7 @@ packages = find_namespace_packages(
 print(f"Found shortfin packages: {packages}")
 
 setup(
-    name="shortfin",
     version=f"{PACKAGE_VERSION}",
-    description="Shortfin native library implementation",
-    author="SHARK Authors",
     packages=packages,
     zip_safe=False,
     package_dir=combine_dicts(
