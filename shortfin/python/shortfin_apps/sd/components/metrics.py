@@ -10,7 +10,7 @@ import asyncio
 from typing import Callable, Any
 import functools
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("shortfin-sd.metrics")
 
 
 def measure(fn=None, type="exec", task=None, num_items=None, freq=1, label="items"):
