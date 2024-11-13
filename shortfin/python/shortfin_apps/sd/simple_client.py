@@ -88,7 +88,7 @@ async def send_request(session, rep, args, data):
         raise Exception
 
 
-async def main(args):
+async def static(args):
     # Create an aiohttp session for sending requests
     async with aiohttp.ClientSession() as session:
         pending = []
