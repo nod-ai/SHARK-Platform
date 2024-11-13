@@ -183,6 +183,8 @@ class GenerateService:
         params = [
             f"     {key} : {value}" for key, value in self.inference_parameters.items()
         ]
+        # For python 3.11 since we can't have \ in the f"" expression.
+        new_line = "\n"
         return (
             f"ServiceManager("
             f"\n  INFERENCE DEVICES : \n"
@@ -193,9 +195,9 @@ class GenerateService:
             f"     fibers per device : {self.fibers_per_device}\n"
             f"     program isolation mode : {self.prog_isolation}\n"
             f"\n  INFERENCE MODULES : \n"
-            f"{'\n'.join(modules)}\n"
+            f"{new_line.join(modules)}\n"
             f"\n  INFERENCE PARAMETERS : \n"
-            f"{'\n'.join(params)}\n"
+            f"{new_line.join(params)}\n"
             f")"
         )
 
