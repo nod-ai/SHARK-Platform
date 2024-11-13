@@ -23,6 +23,14 @@
 #define SHORTFIN_SCHED_LOG(...)
 #endif
 
+// Tracing macros. These are currently just aliases of the underlying IREE
+// macros, but we maintain the ability to redirect them in the future (i.e.
+// for certain kinds of library builds, etc).
+#define SHORTFIN_TRACE_SCOPE IREE_TRACE_SCOPE
+#define SHORTFIN_TRACE_SCOPE_NAMED(name_literal) \
+  IREE_TRACE_SCOPE_NAMED(name_literal)
+#define SHORTFIN_TRACE_SCOPE_ID IREE_TRACE_SCOPE_ID
+
 namespace shortfin::logging {
 
 SHORTFIN_API void InitializeFromEnv();
