@@ -69,15 +69,15 @@ jobs:
           # We could also pin to a known working or stable version.
           # This should eventually stabilize. Do the best we can for now.
           pip install -f https://iree.dev/pip-release-links.html --upgrade \
-            iree-compiler==20241106.1070 \
-            iree-runtime==20241106.1070 \
+            iree-base-compiler==2.9.0rc20241108 \
+            iree-base-runtime==2.9.0rc20241108 \
             "numpy<2.0"
 
       - name: Install SGLang
         run: pip install "git+https://github.com/nod-ai/sglang.git#subdirectory=python"
 
       - name: Launch Shortfin Server
-        run: "pytest -v app_tests/benchmark_tests/llm/sglang_benchmark_test.py --log-cli-level=INFO --html=out/llm/sglang/index.html"
+        run: pytest -v app_tests/benchmark_tests/llm/sglang_benchmark_test.py --log-cli-level=INFO --html=out/llm/sglang/index.html
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@4f9cc6602d3f66b9c108549d475ec49e8ef4d45e # v4.0.0
