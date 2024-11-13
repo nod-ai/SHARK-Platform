@@ -247,7 +247,7 @@ def sdxl(
     params_urls = get_url_map(params_filenames, SDXL_WEIGHTS_BUCKET)
     for f, url in params_urls.items():
         out_file = os.path.join(ctx.executor.output_dir, f)
-        if update or needs_file(f, ctx):
+        if needs_file(f, ctx):
             fetch_http(name=f, url=url)
     filenames = [*vmfb_filenames, *params_filenames, *mlir_filenames]
     return filenames
