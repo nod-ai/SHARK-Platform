@@ -1,10 +1,8 @@
 # LLama 8b GPU instructions on MI300X
 
-**NOTE: This was ran on the `mi300x-3` system**
-
 ## Setup
 
-We will use an example with `llama_8b_f16_decomposed` in order to describe the
+We will use an example with `llama_8b_f16` in order to describe the
 process of exporting a model for use in the shortfin llm server with an
 MI300 GPU.
 
