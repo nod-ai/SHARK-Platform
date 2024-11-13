@@ -47,7 +47,7 @@ You can copy and paste the following example into your interpreter:
 ```python
 import sglang as sgl
 
-backend = sgl.Shortfin(base_url="http://localhost:8001") # Change base_url if running at different address
+backend = sgl.Shortfin(base_url="http://localhost:8000") # Change base_url if running at different address
 
 sgl.set_default_backend(backend)
 
