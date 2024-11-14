@@ -10,41 +10,25 @@ In your shortfin environment,
 pip install transformers
 pip install dataclasses-json
 pip install pillow
+pip install shark-ai
 
 ```
 ```
 python -m shortfin_apps.sd.server --help
 ```
 
-## Run tests
-
- - From SHARK-Platform/shortfin:
- ```
- pytest --system=amdgpu -k "sd"
- ```
- The tests run with splat weights.
-
-
-## Run on MI300x
-
- - Follow quick start
-
- - Navigate to shortfin/ (only necessary if you're using following CLI exactly.)
-```
-cd shortfin/
-```
- - Run CLI server interface (you can find `sdxl_config_i8.json` in shortfin_apps/sd/examples):
-
+# Run on MI300x
 The server will prepare runtime artifacts for you.
 
+By default, the port is set to 8000. If you would like to change this, use `--port` in each of the following commands.
+
+You can check if this (or any) port is in use on Linux with `ss -ntl | grep 8000`.
+
 ```
-python -m shortfin_apps.sd.server --model_config=./python/shortfin_apps/sd/examples/sdxl_config_i8.json --device=amdgpu --device_ids=0 --flagfile=./python/shortfin_apps/sd/examples/sdxl_flags_gfx942.txt --build_preference=compile
+python -m shortfin_apps.sd.server --device=amdgpu --device_ids=0 --build_preference=precompiled --topology="spx_single"
 ```
- - Run with splat(empty) weights:
+
+ - Run a CLI client in a separate shell:
 ```
-python -m shortfin_apps.sd.server --model_config=./python/shortfin_apps/sd/examples/sdxl_config_i8.json --device=amdgpu --device_ids=0 --splat --flagfile=./python/shortfin_apps/sd/examples/sdxl_flags_gfx942.txt --build_preference=compile
-```
- - Run a request in a separate shell:
-```
-python shortfin/python/shortfin_apps/sd/examples/send_request.py --file=shortfin/python/shortfin_apps/sd/examples/sdxl_request.json
+python -m shortfin_apps.sd.simple_client --interactive
 ```

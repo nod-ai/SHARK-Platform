@@ -24,7 +24,7 @@ dtype_to_filetag = {
     sfnp.bfloat16: "bf16",
 }
 
-ARTIFACT_VERSION = "11022024"
+ARTIFACT_VERSION = "11132024"
 SDXL_BUCKET = (
     f"https://sharkpublic.blob.core.windows.net/sharkpublic/sdxl/{ARTIFACT_VERSION}/"
 )
@@ -51,7 +51,9 @@ def get_mlir_filenames(model_params: ModelParams, model=None):
     return filter_by_model(mlir_filenames, model)
 
 
-def get_vmfb_filenames(model_params: ModelParams, model=None, target: str = "gfx942"):
+def get_vmfb_filenames(
+    model_params: ModelParams, model=None, target: str = "amdgpu-gfx942"
+):
     vmfb_filenames = []
     file_stems = get_file_stems(model_params)
     for stem in file_stems:
@@ -216,6 +218,8 @@ def sdxl(
 
     mlir_bucket = SDXL_BUCKET + "mlir/"
     vmfb_bucket = SDXL_BUCKET + "vmfbs/"
+    if "gfx" in target:
+        target = "amdgpu-" + target
 
     mlir_filenames = get_mlir_filenames(model_params, model)
     mlir_urls = get_url_map(mlir_filenames, mlir_bucket)
@@ -247,7 +251,7 @@ def sdxl(
     params_urls = get_url_map(params_filenames, SDXL_WEIGHTS_BUCKET)
     for f, url in params_urls.items():
         out_file = os.path.join(ctx.executor.output_dir, f)
-        if update or needs_file(f, ctx):
+        if needs_file(f, ctx):
             fetch_http(name=f, url=url)
     filenames = [*vmfb_filenames, *params_filenames, *mlir_filenames]
     return filenames
