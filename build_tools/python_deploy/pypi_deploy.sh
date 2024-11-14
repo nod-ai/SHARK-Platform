@@ -13,6 +13,13 @@
 #     https://packaging.python.org/en/latest/tutorials/packaging-projects/#uploading-the-distribution-archives
 #   * Install requirements, e.g. in a Python virtual environment (venv):
 #     `pip install -r requirements-pypi-deploy.txt`
+#   * Install python3.13t and install pip. On Ubuntu:
+#     ```bash
+#     sudo add-apt-repository ppa:deadsnakes
+#     sudo apt-get update
+#     sudo apt-get install python3.13-nogil
+#     python3.13t -m ensurepip --upgrade
+#     ```
 #   * Choose a release candidate to promote from
 #     https://github.com/nod-ai/SHARK-Platform/releases/tag/dev-wheels
 #
@@ -24,6 +31,7 @@ set -euo pipefail
 RELEASE="$1"
 
 SCRIPT_DIR="$(dirname -- "$( readlink -f -- "$0"; )")";
+REPO_ROOT="$(cd "$SCRIPT_DIR"/../../ && pwd)"
 TMPDIR="$(mktemp --directory --tmpdir shark_platform_pypi_wheels.XXXXX)"
 ASSETS_PAGE="https://github.com/nod-ai/SHARK-Platform/releases/expanded_assets/dev-wheels"
 
@@ -46,7 +54,13 @@ function download_wheels() {
     --no-deps --python-version 3.13 -f ${ASSETS_PAGE}
   python -m pip download shortfin==${RELEASE} \
     --no-deps --python-version 3.13 -f ${ASSETS_PAGE}
-  # TODO: 3.13t somehow
+  # TODO: fetch 3.13t using the same `python` somehow
+  #   * https://pip.pypa.io/en/stable/cli/pip_download/
+  #   * https://py-free-threading.github.io/installing_cpython/
+  #   * https://pip.pypa.io/en/stable/installation/
+  python3.13t -m pip download shortfin==${RELEASE} --no-deps -f ${ASSETS_PAGE}
+
+  # TODO: shark-ai meta package when it exists
 
   echo ""
   echo "Downloaded wheels:"
@@ -71,14 +85,22 @@ function upload_wheels() {
   twine upload --verbose *
 }
 
+function build_shark_ai_meta_package() {
+  echo ""
+  echo "Computing common version for shark-ai meta package..."
+  ${SCRIPT_DIR}/compute_common_version.py --stable-release --write-json
+  ${REPO_ROOT}/shark-ai/build_tools/build_linux_package.sh
+}
+
 function main() {
   echo "Changing into ${TMPDIR}"
   cd "${TMPDIR}"
   # TODO: check_requirements (using pip)
 
   download_wheels
-  # edit_release_versions
-  # upload_wheels
+  edit_release_versions
+  build_shark_ai_meta_package
+  upload_wheels
 }
 
 main
