@@ -106,14 +106,14 @@ To install the `iree-base-compiler` and `iree-base-runtime` packages from
 nightly releases:
 
 ```bash
-python -m pip install -f https://iree.dev/pip-release-links.html --upgrade \
+python -m pip install -f https://iree.dev/pip-release-links.html --upgrade --pre \
   iree-base-compiler iree-base-runtime
 ```
 
 To install all three packages together:
 
 ```bash
-python -m pip install -f https://iree.dev/pip-release-links.html --upgrade \
+python -m pip install -f https://iree.dev/pip-release-links.html --upgrade --pre \
   iree-base-compiler iree-base-runtime --src deps \
   -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
 ```

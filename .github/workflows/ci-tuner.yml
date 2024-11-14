@@ -49,7 +49,7 @@ jobs:
           pip install -r tuner/requirements-tuner.txt
           python -m pip install \
             --find-links https://iree.dev/pip-release-links.html \
-            --upgrade \
+            --upgrade --pre \
             iree-base-compiler iree-base-runtime
 
       - name: Run tuner tests
