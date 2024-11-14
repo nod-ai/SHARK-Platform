@@ -242,8 +242,8 @@ class RotaryEmbeddingLayer(BaseLayer):
         )
         freqs = torch.outer(t, freqs).float()
 
-        cos = torch.cos(freqs).to(torch.float16)
-        sin = torch.sin(freqs).to(torch.float16)
+        cos = torch.cos(freqs)
+        sin = torch.sin(freqs)
         complex = torch.complex(cos, sin)
         return complex
 
