@@ -170,7 +170,9 @@ class PagedLlamaAttentionBlock(ThetaLayer):
                 attn_weights, values
             )  # (bs, heads, slen, head_dim)
         else:
-            is_causal = attention_mask is None and batch_seq_len == 1
+            # Use the builtin attention mask when not decomposed
+            is_causal = True
+            attention_mask = None
             attn_output = ops.scaled_dot_product_attention(
                 q=xq,  # [bs, ..., sl, dim]
                 k=keys,  # [bs, ..., sl, dim]
