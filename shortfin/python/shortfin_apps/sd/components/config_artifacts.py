@@ -11,18 +11,6 @@ import os
 import shortfin.array as sfnp
 import copy
 
-from shortfin_apps.sd.components.config_struct import ModelParams
-
-this_dir = os.path.dirname(os.path.abspath(__file__))
-parent = os.path.dirname(this_dir)
-
-dtype_to_filetag = {
-    sfnp.float16: "fp16",
-    sfnp.float32: "fp32",
-    sfnp.int8: "i8",
-    sfnp.bfloat16: "bf16",
-}
-
 ARTIFACT_VERSION = "11132024"
 SDXL_CONFIG_BUCKET = f"https://sharkpublic.blob.core.windows.net/sharkpublic/sdxl/{ARTIFACT_VERSION}/configs/"
 

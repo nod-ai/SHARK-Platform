@@ -1,29 +1,15 @@
 # SHARK Modeling and Serving Libraries
 
-**WARNING: This is an early preview that is in progress. It is not ready for
-general use.**
+> [!IMPORTANT]
+> Development is still in progress for several project components. See the
+> notes below for which workflows are best supported.
 
 ![GitHub License](https://img.shields.io/github/license/nod-ai/SHARK-Platform)
- [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
+[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
 
 <!-- TODO: high level overview, features when components are used together -->
 
 ## Sub-projects
-
-### [`sharktank/`](./sharktank/)
-
-[![PyPI version](https://badge.fury.io/py/sharktank.svg)](https://badge.fury.io/py/sharktank) [![CI - sharktank](https://github.com/nod-ai/SHARK-Platform/actions/workflows/ci-sharktank.yml/badge.svg?event=push)](https://github.com/nod-ai/SHARK-Platform/actions/workflows/ci-sharktank.yml?query=event%3Apush)
-
-The SHARK Tank sub-project contains a collection of model recipes and
-conversion tools to produce inference-optimized programs.
-
-<!-- TODO: features list here? -->
-
-* See the [SHARK Tank Programming Guide](./docs/programming_guide.md) for
-  information about core concepts, the development model, dataset management,
-  and more.
-* See [Direct Quantization with SHARK Tank](./docs/quantization.md)
-  for information about quantization support.
 
 ### [`shortfin/`](./shortfin/)
 
@@ -36,6 +22,26 @@ serving engine.
 
 * API documentation for shortfin is available on
   [readthedocs](https://shortfin.readthedocs.io/en/latest/).
+
+### [`sharktank/`](./sharktank/)
+
+[![PyPI version](https://badge.fury.io/py/sharktank.svg)](https://badge.fury.io/py/sharktank) [![CI - sharktank](https://github.com/nod-ai/SHARK-Platform/actions/workflows/ci-sharktank.yml/badge.svg?event=push)](https://github.com/nod-ai/SHARK-Platform/actions/workflows/ci-sharktank.yml?query=event%3Apush)
+
+The SHARK Tank sub-project contains a collection of model recipes and
+conversion tools to produce inference-optimized programs.
+
+> [!WARNING]
+> SHARK Tank is still under development. Experienced users may want to try it
+> out, but we currently recommend most users download pre-exported or
+> pre-compiled model files for serving with shortfin.
+
+<!-- TODO: features list here? -->
+
+* See the [SHARK Tank Programming Guide](./docs/programming_guide.md) for
+  information about core concepts, the development model, dataset management,
+  and more.
+* See [Direct Quantization with SHARK Tank](./docs/quantization.md)
+  for information about quantization support.
 
 ### [`tuner/`](./tuner/)
 
@@ -55,20 +61,19 @@ Model name | Model recipes | Serving apps
 SDXL       | [`sharktank/sharktank/models/punet/`](https://github.com/nod-ai/SHARK-Platform/tree/main/sharktank/sharktank/models/punet) | [`shortfin/python/shortfin_apps/sd/`](https://github.com/nod-ai/SHARK-Platform/tree/main/shortfin/python/shortfin_apps/sd)
 llama      | [`sharktank/sharktank/models/llama/`](https://github.com/nod-ai/SHARK-Platform/tree/main/sharktank/sharktank/models/llama) | [`shortfin/python/shortfin_apps/llm/`](https://github.com/nod-ai/SHARK-Platform/tree/main/shortfin/python/shortfin_apps/llm)
 
-## Development getting started
+## Development tips
 
-<!-- TODO: Remove or update this section. Common setup for all projects? -->
-
-Use this as a guide to get started developing the project using pinned,
-pre-release dependencies. You are welcome to deviate as you see fit, but
-these canonical directions mirror what the CI does.
+Each sub-project has its own developer guide. If you would like to work across
+projects, these instructions should help you get started:
 
 ### Setup a venv
 
-We recommend setting up a virtual environment (venv). The project is configured
-to ignore `.venv` directories, and editors like VSCode pick them up by default.
+We recommend setting up a Python
+[virtual environment (venv)](https://docs.python.org/3/library/venv.html).
+The project is configured to ignore `.venv` directories, and editors like
+VSCode pick them up by default.
 
-```
+```bash
 python -m venv .venv
 source .venv/bin/activate
 ```
@@ -76,35 +81,42 @@ source .venv/bin/activate
 ### Install PyTorch for your system
 
 If no explicit action is taken, the default PyTorch version will be installed.
-This will give you a current CUDA-based version. Install a different variant
-by doing so explicitly first:
+This will give you a current CUDA-based version, which takes longer to download
+and includes other dependencies that SHARK does not require. To install a
+different variant, run one of these commands first:
 
-*CPU:*
+* *CPU:*
 
-```
-pip install -r pytorch-cpu-requirements.txt
-```
+  ```bash
+  pip install -r pytorch-cpu-requirements.txt
+  ```
 
-*ROCM:*
+* *ROCM:*
 
-```
-pip install -r pytorch-rocm-requirements.txt
-```
+  ```bash
+  pip install -r pytorch-rocm-requirements.txt
+  ```
+
+* *Other:* see instructions at <https://pytorch.org/get-started/locally/>.
 
 ### Install development packages
 
-```
+```bash
 # Install editable local projects.
 pip install -r requirements.txt -e sharktank/ shortfin/
 
-# Optionally clone and install editable iree-turbine dep in deps/
-pip install -f https://iree.dev/pip-release-links.html --src deps \
+# Optionally clone and install the latest editable iree-turbine dep in deps/,
+# along with nightly versions of iree-base-compiler and iree-base-runtime.
+pip install -f https://iree.dev/pip-release-links.html --upgrade --pre \
+  iree-base-compiler iree-base-runtime --src deps \
   -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
 ```
 
+See also: [`docs/nightly_releases.md`](./docs/nightly_releases.md).
+
 ### Running tests
 
-```
+```bash
 pytest sharktank
 pytest shortfin
 ```
