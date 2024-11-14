@@ -4,14 +4,13 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-name: CI - shark-platform
+name: SGLang Llama Benchmarking Tests
 
 on:
   workflow_dispatch:
-  pull_request:
-  push:
-    branches:
-      - main
+  schedule:
+    # Weekdays at 4:00 AM UTC = 9:00 PM PST.
+    - cron: "0 4 * * 1-5"
 
 concurrency:
   # A PR number if a pull request and otherwise the commit hash. This cancels
@@ -22,19 +21,23 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test_shortfin_llm_server:
-    name: "Integration Tests - Shortfin LLM Server"
+  sglang_bench_serve:
+    name: "SGLang Serving Benchmark Tests"
     strategy:
       matrix:
         version: [3.11]
       fail-fast: false
-    runs-on: nodai-amdgpu-mi250-x86-64
+    runs-on: llama-mi300x-3
     defaults:
       run:
         shell: bash
     env:
       PIP_CACHE_DIR: "${{ github.workspace }}/.pip-cache"
     steps:
+      - name: Get Current Date
+        id: date
+        run: echo "::set-output name=date::$(date +'%Y-%m-%d')"
+
       - name: "Setting up Python"
         id: setup_python
         uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
@@ -58,18 +61,28 @@ jobs:
           # from non default locations first. Installing the PyTorch CPU
           # wheels saves multiple minutes and a lot of bandwidth on runner setup.
           pip install --no-compile -r pytorch-cpu-requirements.txt
-          pip install --no-compile -r requirements.txt -e sharktank/ shortfin/
-
-          # Install latest iree-tubrine.
           pip install --no-compile -f https://iree.dev/pip-release-links.html --src deps \
             -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
+          pip install --no-compile -r requirements.txt -e sharktank/ shortfin/
 
-          # Try with the latest IREE nightly releases, not what iree-turbine pins.
+          # Try with the latest nightly releases, not what iree-turbine pins.
           # We could also pin to a known working or stable version.
           # This should eventually stabilize. Do the best we can for now.
-          pip install -f https://iree.dev/pip-release-links.html --upgrade --pre \
-            iree-base-compiler \
-            iree-base-runtime
+          pip install -f https://iree.dev/pip-release-links.html --upgrade \
+            iree-base-compiler==2.9.0rc20241108 \
+            iree-base-runtime==2.9.0rc20241108 \
+            "numpy<2.0"
 
-      - name: Run LLM Integration Tests
-        run: pytest -v app_tests/integration_tests/llm --log-cli-level=INFO
+      - name: Install SGLang
+        run: pip install "git+https://github.com/nod-ai/sglang.git#subdirectory=python"
+
+      - name: Launch Shortfin Server
+        run: pytest -v app_tests/benchmark_tests/llm/sglang_benchmark_test.py --log-cli-level=INFO --html=out/llm/sglang/index.html
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@4f9cc6602d3f66b9c108549d475ec49e8ef4d45e # v4.0.0
+        with:
+          github_token: ${{ secrets.SHARK_PLATFORM_GH_TOKEN }}
+          publish_dir: ./out/llm/sglang
+          destination_dir: ./llm/sglang
+          keep_files: true
