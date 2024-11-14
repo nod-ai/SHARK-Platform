@@ -11,8 +11,11 @@ Usage: python -m pytest candidate_gen_test.py
 import pytest
 from . import candidate_gen
 
+from iree.compiler import ir  # type: ignore
+from iree.compiler.dialects import func  # type: ignore
 
-def test_get_shaped_type_element_bitwidth():
+
+def test_get_shaped_type_element_bitwidth() -> None:
     assert (
         candidate_gen.ShapedType([1024, 2048], candidate_gen.ElementType.i8).bitwidth
         == 8
@@ -31,7 +34,7 @@ def test_get_shaped_type_element_bitwidth():
     )
 
 
-def test_get_shaped_type_to_str():
+def test_get_shaped_type_to_str() -> None:
     assert (
         str(candidate_gen.ShapedType([1024, 2048], candidate_gen.ElementType.i8))
         == "1024x2048xi8"
@@ -50,7 +53,7 @@ def test_get_shaped_type_to_str():
     )
 
 
-def test_parse_tensor_type():
+def test_parse_tensor_type() -> None:
     assert candidate_gen.parse_tensor_type(
         "tensor<1x2x3xf32>"
     ) == candidate_gen.ShapedType([1, 2, 3], candidate_gen.ElementType.f32)
@@ -59,11 +62,11 @@ def test_parse_tensor_type():
     ) == candidate_gen.ShapedType([123], candidate_gen.ElementType.i8)
 
 
-def test_get_mmt_tile_sizes():
+def test_get_mmt_tile_sizes() -> None:
     config = candidate_gen.Configuration(
         subgroup_size=0,
         workgroup_size=[],
-        intrinsic="",
+        intrinsic=candidate_gen.MfmaIntrinsic.mfma_f32_16x16x16_f16(),
         tile_sizes=[128, 320, 32],
         subgroup_m_count=0,
         subgroup_n_count=0,
@@ -73,11 +76,11 @@ def test_get_mmt_tile_sizes():
     assert candidate_gen.get_mmt_tile_sizes(config) == [128, 320, 32]
 
 
-def test_get_conv_tile_sizes():
+def test_get_conv_tile_sizes() -> None:
     config = candidate_gen.Configuration(
         subgroup_size=64,
         workgroup_size=[256, 1, 1],
-        intrinsic="#iree_gpu.mma_layout<MFMA_F32_16x16x16_F16>",
+        intrinsic=candidate_gen.MfmaIntrinsic.mfma_f32_16x16x16_f16(),
         tile_sizes=[464, 320, 16],
         subgroup_m_count=1,
         subgroup_n_count=4,
@@ -95,7 +98,7 @@ def test_get_conv_tile_sizes():
     ]
 
 
-def test_gpu_pipeline_options():
+def test_gpu_pipeline_options() -> None:
     options = candidate_gen.GpuPipelineOptions()
     assert options.all_default()
     assert str(options) == "#iree_gpu.pipeline_options<>"
@@ -121,32 +124,32 @@ def test_gpu_pipeline_options():
     )
 
 
-def test_get_contract_tile_sizes():
+def test_get_contract_tile_sizes() -> None:
     config = candidate_gen.Configuration(
         subgroup_size=32,
         workgroup_size=[16, 16, 1],
-        intrinsic="",
+        intrinsic=candidate_gen.MfmaIntrinsic.mfma_f32_16x16x16_f16(),
         tile_sizes=[4, 8, 16],
         subgroup_m_count=1,
         subgroup_n_count=1,
         gpu_pipeline_options=candidate_gen.GpuPipelineOptions(),
         waves_per_eu=2,
     )
-    assert candidate_gen.get_contract_tile_sizes(config, ["m", "n", "k"]) == [4, 8, 16]
-    assert candidate_gen.get_contract_tile_sizes(config, ["n", "m", "k"]) == [8, 4, 16]
-    assert candidate_gen.get_contract_tile_sizes(config, ["k", "n", "m"]) == [16, 8, 4]
-    assert candidate_gen.get_contract_tile_sizes(config, ["k", "k", "k"]) == [
+    assert candidate_gen.get_contract_tile_sizes(config, "mnk") == [4, 8, 16]
+    assert candidate_gen.get_contract_tile_sizes(config, "nmk") == [8, 4, 16]
+    assert candidate_gen.get_contract_tile_sizes(config, "knm") == [16, 8, 4]
+    assert candidate_gen.get_contract_tile_sizes(config, "kkk") == [
         16,
         16,
         16,
     ]
 
 
-def test_get_pipeline_config():
+def test_get_pipeline_config() -> None:
     config = candidate_gen.Configuration(
         subgroup_size=32,
         workgroup_size=[16, 16, 1],
-        intrinsic="",
+        intrinsic=candidate_gen.MfmaIntrinsic.mfma_f32_16x16x16_f16(),
         tile_sizes=[4, 8, 16],
         subgroup_m_count=1,
         subgroup_n_count=1,
@@ -168,7 +171,7 @@ def test_get_pipeline_config():
     )
 
 
-def test_get_shapes_mmt():
+def test_get_shapes_mmt() -> None:
     template = [
         r"%18 = tensor.empty() : tensor<2048x1280xf32>",
         r"%19 = linalg.fill {lowering_config = #iree_codegen.lowering_config<tile_sizes = [[64, 128, 64]]>} ins(%cst : f32) outs(%18 : tensor<2048x1280xf32>) -> tensor<2048x1280xf32>",
@@ -184,7 +187,7 @@ def test_get_shapes_mmt():
     )
 
 
-def test_get_shapes_conv():
+def test_get_shapes_conv() -> None:
     template = [
         r"%7 = linalg.fill {lowering_config = #iree_codegen.lowering_config<tile_sizes = [[1, 1, 32, 256, 1, 1, 32]]>} ins(%cst : f32) outs(%4 : tensor<1x1x32x256xf32>) -> tensor<1x1x32x256xf32>",
         r"%8 = linalg.conv_2d_nhwc_hwcf {dilations = dense<1> : vector<2xi64>, lowering_config = #iree_codegen.lowering_config<tile_sizes = [[1, 1, 32, 256, 1, 1, 32]]>, strides = dense<1> : vector<2xi64>} ins(%5, %6 : tensor<1x3x34x1280xf16>, tensor<3x3x1280x256xf16>) outs(%7 : tensor<1x1x32x256xf32>) -> tensor<1x1x32x256xf32>",
@@ -199,7 +202,7 @@ def test_get_shapes_conv():
     )
 
 
-def test_get_shapes_contract():
+def test_get_shapes_contract() -> None:
     template = [
         r"%18 = tensor.empty() : tensor<2048x1280xf32>",
         r"%19 = linalg.fill {lowering_config = #iree_codegen.lowering_config<tile_sizes = [[64, 128, 64]]>} ins(%cst : f32) outs(%18 : tensor<2048x1280xf32>) -> tensor<2048x1280xf32>",
@@ -217,7 +220,7 @@ def test_get_shapes_contract():
     )
 
 
-def test_get_shapes_batch_matmul():
+def test_get_shapes_batch_matmul() -> None:
     template = [
         "%10 = linalg.fill ins(%cst : f32) outs(%7 : tensor<1x32x32xf32>) -> tensor<1x32x32xf32>",
         "%11 = linalg.batch_matmul ins(%8, %9 : tensor<1x32x1024xf32>, tensor<1x1024x32xf32>) outs(%10 : tensor<1x32x32xf32>) -> tensor<1x32x32xf32>",
@@ -234,7 +237,7 @@ def test_get_shapes_batch_matmul():
     )
 
 
-def test_get_shapes_batch_mmt():
+def test_get_shapes_batch_mmt() -> None:
     template = [
         r"%19 = linalg.fill {lowering_config = #iree_codegen.lowering_config<tile_sizes = [[1, 64, 128, 128]]>} ins(%c0_i32 : i32) outs(%18 : tensor<2x4096x640xi32>) -> tensor<2x4096x640xi32>",
         r'%20 = linalg.generic {indexing_maps = [affine_map<(d0, d1, d2, d3) -> (d0, d1, d3)>, affine_map<(d0, d1, d2, d3) -> (d0, d2, d3)>, affine_map<(d0, d1, d2, d3) -> (d0, d1, d2)>], iterator_types = ["parallel", "parallel", "parallel", "reduction"]} ins(%11, %12 : tensor<2x4096x640xi8>, tensor<2x640x640xi8>) outs(%19 : tensor<2x4096x640xi32>) attrs =  {lowering_config = #iree_codegen.lowering_config<tile_sizes = [[1, 64, 128, 128]]>} {',
@@ -251,7 +254,7 @@ def test_get_shapes_batch_mmt():
     )
 
 
-def test_mfma_intrinsic_to_str():
+def test_mfma_intrinsic_to_str() -> None:
     assert (
         str(candidate_gen.MfmaIntrinsic.mfma_f32_16x16x16_f16())
         == "MFMA_F32_16x16x16_F16"
@@ -262,7 +265,7 @@ def test_mfma_intrinsic_to_str():
     )
 
 
-def test_get_compatible_mfma_intrinsics():
+def test_get_compatible_mfma_intrinsics() -> None:
     assert candidate_gen.get_compatible_mfma_intrinsics(
         candidate_gen.ProblemSize(
             candidate_gen.MatmulSize(2048, 1280, 1280),
@@ -303,7 +306,7 @@ def test_get_compatible_mfma_intrinsics():
     ]
 
 
-def test_generate_solutions():
+def test_generate_solutions() -> None:
     matmul_size = candidate_gen.MatmulSize(2048, 3840, 1280)
     lhs_type = candidate_gen.ShapedType([2048, 1280], candidate_gen.ElementType.f16)
     rhs_type = candidate_gen.ShapedType([3840, 1280], candidate_gen.ElementType.f16)
@@ -315,7 +318,7 @@ def test_generate_solutions():
     assert configs is not None
 
 
-def test_calculate_shared_memory_usage_in_bytes():
+def test_calculate_shared_memory_usage_in_bytes() -> None:
     matmul_size = candidate_gen.MatmulSize(1024, 1024, 1024)
     lhs_type = candidate_gen.ShapedType([1024, 1024], candidate_gen.ElementType.f16)
     rhs_type = candidate_gen.ShapedType([1024, 1024], candidate_gen.ElementType.f16)
@@ -347,7 +350,7 @@ def test_calculate_shared_memory_usage_in_bytes():
     )
 
 
-def test_generate_constraints_valid_input():
+def test_generate_constraints_valid_input() -> None:
     matmul_size = candidate_gen.MatmulSize(1024, 1024, 1024)
     lhs_type = candidate_gen.ShapedType([1024, 1024], candidate_gen.ElementType.f16)
     rhs_type = candidate_gen.ShapedType([1024, 1024], candidate_gen.ElementType.f16)
@@ -392,7 +395,7 @@ def test_generate_constraints_valid_input():
     assert solver.check() == candidate_gen.z3.sat
 
 
-def test_generate_constraints_invalid_input():
+def test_generate_constraints_invalid_input() -> None:
     # Define input parameters that should lead to unsatisfiable constraints
     matmul_size = candidate_gen.MatmulSize(1024, 1024, 1024)
     lhs_type = candidate_gen.ShapedType([1024, 1024], candidate_gen.ElementType.f16)
@@ -444,7 +447,7 @@ def remove_comments(mlir: str) -> str:
     )
 
 
-def test_apply_params_mmt():
+def test_apply_params_mmt() -> None:
     mlir_template = [
         "<intrinsic = #iree_gpu.mma_layout<MFMA_F32_32x32x8_F16>, subgroup_m_count = 16, subgroup_n_count = 16>",
         "<LLVMGPUVectorDistribute workgroup_size = [16, 16] subgroup_size = 16,",
@@ -499,7 +502,7 @@ def test_apply_params_mmt():
     assert '{llvm_func_attrs = {"amdgpu-waves-per-eu" = "8"}' in modified
 
 
-def test_apply_params_conv():
+def test_apply_params_conv() -> None:
     mlir_template = [
         "<intrinsic = #iree_gpu.mma_layout<MFMA_F32_16x16x16_F16>, subgroup_m_count = 16, subgroup_n_count = 16>",
         "<LLVMGPUVectorDistribute workgroup_size = [256, 1, 1] subgroup_size = 64,",
@@ -558,7 +561,7 @@ def test_apply_params_conv():
     assert '{llvm_func_attrs = {"amdgpu-waves-per-eu" = "2"}' in modified
 
 
-def test_apply_params_contract():
+def test_apply_params_contract() -> None:
     mlir_template = [
         "<intrinsic = #iree_gpu.mma_layout<MFMA_F32_16x16x16_F16>, subgroup_m_count = 2, subgroup_n_count = 2>}>",
         "<LLVMGPUVectorDistribute workgroup_size = [128, 2, 1] subgroup_size = 64,",
@@ -605,7 +608,7 @@ def test_apply_params_contract():
     assert '{llvm_func_attrs = {"amdgpu-waves-per-eu" = "2"}' in new_mlir
 
 
-def test_apply_params_batch_matmul():
+def test_apply_params_batch_matmul() -> None:
     mlir_template = [
         "<intrinsic = #iree_gpu.mma_layout<MFMA_F32_16x16x16_F16>, subgroup_m_count = 4, subgroup_n_count = 1>}>",
         "<LLVMGPUVectorDistribute workgroup_size = [64, 4, 1] subgroup_size = 64,",
@@ -656,7 +659,7 @@ def test_apply_params_batch_matmul():
     assert '{llvm_func_attrs = {"amdgpu-waves-per-eu" = "2"}' in modified
 
 
-def test_apply_params_batch_mmt_float():
+def test_apply_params_batch_mmt_float() -> None:
     mlir_template = [
         "<intrinsic = #iree_gpu.mma_layout<MFMA_F32_16x16x16_F16>, subgroup_m_count = 4, subgroup_n_count = 1>}>",
         "<LLVMGPUVectorDistribute workgroup_size = [64, 4, 1] subgroup_size = 64,",
@@ -704,7 +707,7 @@ def test_apply_params_batch_mmt_float():
     assert '{llvm_func_attrs = {"amdgpu-waves-per-eu" = "2"}' in modified
 
 
-def test_apply_params_batch_mmt_int():
+def test_apply_params_batch_mmt_int() -> None:
     mlir_template = [
         "<intrinsic = #iree_gpu.mma_layout<MFMA_I32_16x16x32_I8>, subgroup_m_count = 4, subgroup_n_count = 1>}>",
         "<LLVMGPUVectorDistribute workgroup_size = [64, 4, 1] subgroup_size = 64,",
@@ -775,7 +778,7 @@ def test_apply_params_batch_mmt_int():
     assert "workgroup_size = [128, 2, 1] subgroup_size = 64" in embeddable
 
 
-def test_apply_params_broadcast_rhs_mmt():
+def test_apply_params_broadcast_rhs_mmt() -> None:
     mlir_template = [
         "<intrinsic = #iree_gpu.mma_layout<MFMA_I32_16x16x32_I8>, subgroup_m_count = 4, subgroup_n_count = 1>}>",
         "<LLVMGPUVectorDistribute workgroup_size = [64, 4, 1] subgroup_size = 64,",
@@ -850,7 +853,7 @@ def test_apply_params_broadcast_rhs_mmt():
     assert "workgroup_size = [128, 2, 1] subgroup_size = 64" in embeddable
 
 
-def test_detect_broadcast_rhs_mmt():
+def test_detect_broadcast_rhs_mmt() -> None:
     mlir_lines = [
         r"%18 = tensor.empty() : tensor<2x1024x10240xi32>",
         r"%19 = linalg.fill {lowering_config = #iree_codegen.lowering_config<tile_sizes = [[1, 64, 128, 128]]>} ins(%c0_i32 : i32) outs(%18 : tensor<2x1024x10240xi32>) -> tensor<2x1024x10240xi32>",
@@ -861,18 +864,17 @@ def test_detect_broadcast_rhs_mmt():
     )
 
 
-def test_parse_mlir():
-    mlir_str = r"""
-    builtin.module  {
-      func.func @simple_mul(%arg0: tensor<4xf32>, %arg1: tensor<4xf32>) -> tensor<4xf32> {
-        %0 = arith.mulf %arg0, %arg1 : tensor<4xf32>
-        return %0 : tensor<4xf32>
-      }
-    }
-  """
-    mlir_module = candidate_gen.parse_mlir(mlir_str)
-    assert mlir_module != None
-    assert isinstance(mlir_module, candidate_gen.ireec._mlir_libs._mlir.ir.Module)
-    assert isinstance(
-        mlir_module.body.operations[0], candidate_gen.ireec.dialects.func.FuncOp
-    )
+def test_parse_mlir() -> None:
+    with ir.Context() as ctx:
+        mlir_str = r"""
+        builtin.module  {
+        func.func @simple_mul(%arg0: tensor<4xf32>, %arg1: tensor<4xf32>) -> tensor<4xf32> {
+            %0 = arith.mulf %arg0, %arg1 : tensor<4xf32>
+            return %0 : tensor<4xf32>
+        }
+        }
+    """
+        mlir_module = candidate_gen.parse_mlir(mlir_str, ctx)
+        assert mlir_module is not None
+        assert isinstance(mlir_module, ir.Module)
+        assert isinstance(mlir_module.body.operations[0], func.FuncOp)

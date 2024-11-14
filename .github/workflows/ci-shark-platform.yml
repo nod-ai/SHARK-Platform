@@ -67,10 +67,9 @@ jobs:
           # Try with the latest IREE nightly releases, not what iree-turbine pins.
           # We could also pin to a known working or stable version.
           # This should eventually stabilize. Do the best we can for now.
-          pip install -f https://iree.dev/pip-release-links.html --upgrade \
+          pip install -f https://iree.dev/pip-release-links.html --upgrade --pre \
             iree-base-compiler \
-            iree-base-runtime \
-            "numpy<2.0"
+            iree-base-runtime
 
       - name: Run LLM Integration Tests
         run: pytest -v build_tools/integration_tests/llm --log-cli-level=INFO
