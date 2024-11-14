@@ -30,6 +30,9 @@ Repository = "https://github.com/nod-ai/SHARK-Platform"
 onnx = [
   "iree-base-compiler[onnx]",
 ]
+apps = [
+  "shortfin[apps]",
+]
 
 [tool.setuptools]
 packages = []
