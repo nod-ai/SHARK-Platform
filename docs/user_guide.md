@@ -15,7 +15,7 @@ Our current user guide requires that you have:
 
 ## Set up Environment
 
-You will need a recent version of Python. We recommend also setting up a Python environment.
+This section will help you install Python and set up a Python environment with venv.
 
 Officially we support Python versions: 3.11, 3.12, 3.13, 3.13t
 
@@ -33,7 +33,7 @@ which python3.11
 
 ### Create a Python Environment
 
-This guide assumes you'll be using pyenv. Setup your pyenv with the following commands:
+Setup your Python environment with the following commands:
 
 ```bash
 # Set up a virtual environment to isolate packages from other envs.
@@ -44,10 +44,7 @@ source 3.11.venv/bin/activate
 ## Install SHARK and its dependencies
 
 ```bash
-pip install transformers
-pip install dataclasses-json
-pip install pillow
-pip install shark-ai
+pip install shark-ai[apps]
 ```
 
 Temporarily, you may need an update to your `shortfin` install.
@@ -64,11 +61,11 @@ python -m shortfin_apps.sd.server --help
 
 ## Quickstart
 
-### Run the SD Server
+### Run the SDXL Server
 
-Run the [SD Server](../shortfin/python/shortfin_apps/sd/README.md#Start SD Server)
+Run the [SDXL Server](../shortfin/python/shortfin_apps/sd/README.md#Start-SDXL-Server)
 
-### Run the SD Client
+### Run the SDXL Client
 
 ```
 python -m shortfin_apps.sd.simple_client --interactive

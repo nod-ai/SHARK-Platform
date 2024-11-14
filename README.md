@@ -64,8 +64,8 @@ llama      | [`sharktank/sharktank/models/llama/`](https://github.com/nod-ai/SHA
 
 ## SHARK Users
 
-If you're looking to use SHARK check out our [User Guide](docs/README.md).
+If you're looking to use SHARK check out our [User Guide](docs/user_guide.md).
 
 ## SHARK Developers
 
-If you're looking to develop SHARK, check out our [Developer Guide](docs/developer.md).
+If you're looking to develop SHARK, check out our [Developer Guide](docs/developer_guide.md).
