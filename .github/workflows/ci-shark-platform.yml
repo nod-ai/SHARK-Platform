@@ -80,6 +80,8 @@ jobs:
           cd .. && git clone --depth 1 --branch "iree-${IREE_VERSION}" https://github.com/iree-org/iree.git
           cd SHARK-Platform
 
+      - name: Install CMake
+        uses: ssrobins/install-cmake@v1 # this action installs cmake into the action workspace
 
       - name: Install shortfin via dev_me.py
         run: cd shortfin && python dev_me.py
