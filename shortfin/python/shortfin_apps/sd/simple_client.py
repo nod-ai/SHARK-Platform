@@ -119,7 +119,9 @@ async def static(args):
         if not any([i is None for i in [latencies, sample_counts]]):
             total_num_samples = sum(sample_counts)
             sps = str(total_num_samples / (end - start))
-            print(f"Average throughput: {sps} samples per second")
+            # Until we have better measurements, don't report the throughput that includes saving images.
+            if not args.save:
+                print(f"Average throughput: {sps} samples per second")
         else:
             raise ValueError("Received error response from server.")
 
