@@ -92,8 +92,8 @@ def model_test_dir(request, tmp_path_factory):
 
 
 @pytest.fixture(scope="module")
-def available_port(port=8000, max_port=8100):
-    return find_available_port(port, max_port)
+def available_port():
+    return find_available_port()
 
 
 @pytest.fixture(scope="module")

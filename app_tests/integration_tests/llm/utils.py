@@ -89,24 +89,17 @@ def compile_model(mlir_path, vmfb_path, device_settings):
     logger.info(f"Model successfully compiled to {vmfb_path}")
 
 
-def find_available_port(port=8000, max_port=8100):
+def find_available_port():
     import socket
+    from contextlib import closing
 
-    logger.info(f"Finding available port in range {port}-{max_port}...")
-
-    starting_port = port
-
-    while port < max_port:
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.bind(("localhost", port))
-                s.close()
-                logger.info(f"Found available port: {port}")
-                return port
-        except socket.error:
-            port += 1
-
-    raise IOError(f"No available ports found within range {starting_port}-{max_port}")
+    logger.info(f"Finding available port...")
+    with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
+        s.bind(("", 0))
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        port = s.getsockname()[1]
+        logger.info(f"Found available port: {port}")
+        return port
 
 
 def wait_for_server(url, timeout=10):
