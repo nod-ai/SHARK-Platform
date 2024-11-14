@@ -355,7 +355,7 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
     parser.add_argument(
         "--tuning_spec",
         type=str,
-        default="",
+        default=None,
         help="Path to transform dialect spec if compiling an executable with tunings.",
     )
     parser.add_argument(

@@ -32,7 +32,7 @@ sample_request = {
 }
 
 
-def bytes_to_img(bytes, idx=0, width=1024, height=1024, outputdir="./gen_imgs"):
+def bytes_to_img(bytes, outputdir, idx=0, width=1024, height=1024):
     timestamp = dt.now().strftime("%Y-%m-%d_%H-%M-%S")
     image = Image.frombytes(
         mode="RGB", size=(width, height), data=base64.b64decode(bytes)
@@ -46,6 +46,7 @@ def bytes_to_img(bytes, idx=0, width=1024, height=1024, outputdir="./gen_imgs"):
 
 def get_batched(request, arg, idx):
     if isinstance(request[arg], list):
+        # some args are broadcasted to each prompt, hence overriding idx for single-item entries
         if len(request[arg]) == 1:
             indexed = request[arg][0]
         else:
@@ -56,34 +57,30 @@ def get_batched(request, arg, idx):
 
 
 async def send_request(session, rep, args, data):
-    try:
-        print("Sending request batch #", rep)
-        url = f"http://0.0.0.0:{args.port}/generate"
-        start = time.time()
-        async with session.post(url, json=data) as response:
-            end = time.time()
-            # Check if the response was successful
-            if response.status == 200:
-                response.raise_for_status()  # Raise an error for bad responses
-                timestamp = dt.now().strftime("%Y-%m-%d_%H-%M-%S")
-                res_json = await response.json(content_type=None)
-                if args.save:
-                    for idx, item in enumerate(res_json["images"]):
-                        width = get_batched(data, "width", idx)
-                        height = get_batched(data, "height", idx)
-                        print("Saving response as image...")
-                        bytes_to_img(
-                            item.encode("utf-8"), idx, width, height, args.outputdir
-                        )
-                latency = end - start
-                print("Responses processed.")
-                return latency, len(data["prompt"])
-            else:
-                print(f"Error: Received {response.status} from server")
-                raise Exception
-    except Exception as e:
-        print(f"Request failed: {e}")
-        raise Exception
+    print("Sending request batch #", rep)
+    url = f"http://0.0.0.0:{args.port}/generate"
+    start = time.time()
+    async with session.post(url, json=data) as response:
+        end = time.time()
+        # Check if the response was successful
+        if response.status == 200:
+            response.raise_for_status()  # Raise an error for bad responses
+            timestamp = dt.now().strftime("%Y-%m-%d_%H-%M-%S")
+            res_json = await response.json(content_type=None)
+            if args.save:
+                for idx, item in enumerate(res_json["images"]):
+                    width = get_batched(data, "width", idx)
+                    height = get_batched(data, "height", idx)
+                    print("Saving response as image...")
+                    bytes_to_img(
+                        item.encode("utf-8"), args.outputdir, idx, width, height
+                    )
+            latency = end - start
+            print("Responses processed.")
+            return latency, len(data["prompt"])
+        else:
+            print(f"Error: Received {response.status} from server")
+            raise Exception
 
 
 async def static(args):
@@ -94,7 +91,7 @@ async def static(args):
         sample_counts = []
         # Read the JSON file if supplied. Otherwise, get user input.
         try:
-            if args.file == "default":
+            if not args.file:
                 data = sample_request
             else:
                 with open(args.file, "r") as json_file:
@@ -135,7 +132,7 @@ async def interactive(args):
         sample_counts = []
         # Read the JSON file if supplied. Otherwise, get user input.
         try:
-            if args.file == "default":
+            if not args.file:
                 data = sample_request
             else:
                 with open(args.file, "r") as json_file:
@@ -185,7 +182,7 @@ def main(argv):
     p.add_argument(
         "--file",
         type=str,
-        default="default",
+        default=None,
         help="A non-default request to send to the server.",
     )
     p.add_argument(
