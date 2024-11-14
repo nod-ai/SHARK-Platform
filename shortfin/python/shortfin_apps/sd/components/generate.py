@@ -20,7 +20,7 @@ from .messages import InferenceExecRequest, InferencePhase
 from .service import GenerateService
 from .metrics import measure
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("shortfin-sd.generate")
 
 
 class GenerateImageProcess(sf.Process):
