@@ -80,17 +80,34 @@ function edit_release_versions() {
 }
 
 function upload_wheels() {
+  # TODO: list packages that would be uploaded, pause, prompt to continue
   echo ""
-  echo "Uploading wheels..."
+  echo "Uploading wheels:"
+  ls
   twine upload --verbose *
 }
 
 function build_shark_ai_meta_package() {
   # TODO: download meta package from nightly releases instead of this
   echo ""
+
+  # TODO: rework `write_requirements.py` to use the versions from the downloaded whls?
+  echo "Computing local versions for sharktank and shortfin..."
+  ${SCRIPT_DIR}/compute_local_version.py ${REPO_ROOT}/sharktank
+  ${SCRIPT_DIR}/compute_local_version.py ${REPO_ROOT}/shortfin
+
   echo "Computing common version for shark-ai meta package..."
   ${SCRIPT_DIR}/compute_common_version.py --stable-release --write-json
+
+  echo "Writing requirements for shark-ai meta package..."
+  ${SCRIPT_DIR}/write_requirements.py
+
+  echo "Building shark-ai meta package..."
   ${REPO_ROOT}/shark-ai/build_tools/build_linux_package.sh
+
+  # TODO: This is error-prone. We only want to publish the whl for this release.
+  #   copy instead? specify exact file name? clear directory before building?
+  mv ${REPO_ROOT}/shark-ai/build_tools/wheelhouse/* .
 }
 
 function main() {
