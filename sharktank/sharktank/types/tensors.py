@@ -398,6 +398,11 @@ class InferenceTensor(ABC):
 
         return unsqueeze(self, dim)
 
+    def squeeze(self, dim: Optional[int] = None) -> "AnyTensor":
+        from ..ops import squeeze
+
+        return squeeze(self, dim)
+
     def view(self, *args: Union[List[List[int]], List[int]]) -> "AnyTensor":
         from ..ops import view
 
