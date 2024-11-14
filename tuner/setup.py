@@ -6,7 +6,6 @@
 
 import json
 import os
-from pathlib import Path
 
 from setuptools import setup
 

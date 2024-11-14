@@ -62,8 +62,8 @@ jobs:
           pip install --no-compile -r requirements.txt -r sharktank/requirements-tests.txt -e sharktank/
 
           # Update to the latest iree packages.
-          pip install -f https://iree.dev/pip-release-links.html --upgrade \
-            iree-compiler iree-runtime --src deps \
+          pip install -f https://iree.dev/pip-release-links.html --upgrade --pre \
+            iree-base-compiler iree-base-runtime --src deps \
             -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
 
       - name: Run sharktank tests

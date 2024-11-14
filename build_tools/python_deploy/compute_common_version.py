@@ -36,8 +36,8 @@ if not (args.stable_release or args.nightly_release):
 THIS_DIR = Path(__file__).parent.resolve()
 REPO_ROOT = THIS_DIR.parent.parent
 
-VERSION_FILE_SHARKTANK = REPO_ROOT / "sharktank/version_info.json"
-VERSION_FILE_SHORTFIN = REPO_ROOT / "shortfin/version_info.json"
+VERSION_FILE_SHARKTANK = REPO_ROOT / "sharktank/version.json"
+VERSION_FILE_SHORTFIN = REPO_ROOT / "shortfin/version.json"
 VERSION_FILE_LOCAL = REPO_ROOT / "shark-ai/version_local.json"
 
 

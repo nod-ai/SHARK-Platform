@@ -1,19 +1,9 @@
-[build-system]
-requires = [
-    "cmake>=3.29",
-    "setuptools>=61.0",
-    "wheel",
-    "ninja",
-    'typing-extensions ; python_version == "3.10" ',
-]
-build-backend = "setuptools.build_meta"
-
 [project]
-name = "shortfin"
+name = "SHARK Tuner"
 authors = [
   {name = "SHARK Authors"},
 ]
-description = "SHARK inference library and serving engine"
+description = "IREE Dispatch Tuner"
 readme = "README.md"
 license = {text = "Apache-2.0"}
 classifiers = [
@@ -32,20 +22,3 @@ dynamic = ["version"]
 
 [project.urls]
 Repository = "https://github.com/nod-ai/SHARK-Platform"
-Documentation = "https://shortfin.readthedocs.io/en/latest/"
-
-[project.optional-dependencies]
-apps = [
-  "transformers",
-  "dataclasses-json",
-  "pillow",
-]
-
-[tool.pytest.ini_options]
-addopts = [
-    "-ra",
-    "--import-mode=importlib",
-]
-testpaths = [
-    "tests",
-]
