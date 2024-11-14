@@ -485,7 +485,11 @@ class PrimitiveTensor(InferenceTensor):
         return self.as_torch().dtype
 
     def __setitem__(self, key, value: "AnyTensor"):
-        self.as_torch()[key] = unbox_tensor(value)
+        if not isinstance(key, list) and not isinstance(key, tuple):
+            key = (key,)
+
+        key = [unbox_tensor(k) if isinstance(k, PrimitiveTensor) else k for k in key]
+        self.as_torch()[*key] = unbox_tensor(value)
 
 
 @register_inference_tensor
@@ -540,9 +544,15 @@ class DefaultPrimitiveTensor(PrimitiveTensor):
         return DefaultPrimitiveTensor(name=self.name, data=new_globals[self.name])
 
     def __getitem__(self, key):
-        if isinstance(key, PrimitiveTensor):
-            key = unbox_tensor(key)
-        return self._data[key]
+        keys = [key]
+        if isinstance(key, tuple) or isinstance(key, list):
+            keys = key
+
+        keys = [
+            unbox_tensor(key) if isinstance(key, PrimitiveTensor) else key
+            for key in keys
+        ]
+        return self._data[*keys]
 
     def __repr__(self):
         return f"PrimitiveTensor({self.name}, {self.shape}, {self._data.dtype})"
@@ -1026,7 +1036,9 @@ class SplitPrimitiveTensor(ShardedTensorBase):
         if len(key) <= self.shard_count:
             return key
         new_key = list(key)
-        new_key[self.shard_dim] = slice(None)
+
+        if self.shard_dim < len(new_key):
+            new_key[self.shard_dim] = slice(None)
         return new_key
 
     def __getitem__(self, key):
@@ -1039,10 +1051,16 @@ class SplitPrimitiveTensor(ShardedTensorBase):
                 f"Slicing of the split dimension {self.shard_dim} is not supported."
             )
         new_key = self._get_shard_slice(key)
-        shards = [shard[new_key] for shard in self.shards]
+
+        shards = []
+        for i, shard in enumerate(self.shards):
+            shard_keys = [
+                k.shards[i] if isinstance(k, ReplicatedTensor) else k for k in new_key
+            ]
+            shards.append(shard[*shard_keys])
 
         shard_dim = self.shard_dim
-        for i in range(shard_dim):
+        for i in range(min(shard_dim, len(key))):
             if isinstance(key[i], Number) and key[i] >= 0:
                 # Rank reduction dimension before the split dim.
                 shard_dim -= 1
@@ -1059,8 +1077,11 @@ class SplitPrimitiveTensor(ShardedTensorBase):
             raise NotImplementedError(
                 f"Slicing of the split dimension {self.shard_dim} is not supported."
             )
-        for shard, value_shard in zip(self.shards, value.shards):
-            shard[key] = unbox_tensor(value_shard)
+        for i, (shard, value_shard) in enumerate(zip(self.shards, value.shards)):
+            shard_keys = [
+                k.shards[i] if isinstance(k, ReplicatedTensor) else k for k in key
+            ]
+            shard[*shard_keys] = unbox_tensor(value_shard)
 
 
 @register_inference_tensor
@@ -1169,13 +1190,19 @@ class ReplicatedTensor(ShardedTensor):
         return cls(name=name, ts=ts)
 
     def __getitem__(self, key):
-        if isinstance(key, ReplicatedTensor):
-            assert key.shard_count == self.shard_count
-            shards = [
-                shard[key_shard] for shard, key_shard in zip(self.shards, key.shards)
-            ]
-        else:
-            shards = [shard[key] for shard in self.shards]
+        keys = [key]
+        if isinstance(keys, tuple) or isinstance(keys, list):
+            keys = key
+
+        shards = []
+        for i, shard in enumerate(self.shards):
+            shard_keys = []
+            for k in keys:
+                if isinstance(k, ReplicatedTensor):
+                    shard_keys.append(k.shards[i])
+                else:
+                    shard_keys.append(k)
+            shards.append(shard[*shard_keys])
         return ReplicatedTensor(ts=shards)
 
     def __repr__(self):
