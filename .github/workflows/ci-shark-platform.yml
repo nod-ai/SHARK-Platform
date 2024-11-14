@@ -70,6 +70,17 @@ jobs:
           pip install -f https://iree.dev/pip-release-links.html --upgrade --pre \
             iree-base-compiler \
             iree-base-runtime
+
+      - name: Clone IREE with matching version
+        run: |
+          # Get IREE version and extract the version number
+          IREE_VERSION=$(pip show iree-base-compiler | grep Version: | cut -d' ' -f2)
+          echo "Found IREE version: ${IREE_VERSION}"
+          # Clone IREE repository at the parent directory level. Git clone --branch supports tags.
+          cd .. && git clone --depth 1 --branch "iree-${IREE_VERSION}" https://github.com/iree-org/iree.git
+          cd SHARK-Platform
+
+
       - name: Install shortfin via dev_me.py
         run: cd shortfin && python dev_me.py
 
