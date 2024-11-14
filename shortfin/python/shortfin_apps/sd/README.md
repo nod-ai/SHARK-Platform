@@ -13,6 +13,14 @@ pip install pillow
 pip install shark-ai
 
 ```
+
+Temporarily, you may need an update to your `shortfin` install.
+Choose the latest pre-release from https://github.com/nod-ai/SHARK-Platform/releases/tag/dev-wheels, and install with:
+```
+pip uninstall shortfin -y
+pip install https://<pre-release>.whl
+```
+
 ```
 python -m shortfin_apps.sd.server --help
 ```
