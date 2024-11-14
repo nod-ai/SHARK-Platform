@@ -243,12 +243,6 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
     parser.add_argument("--host", type=str, default=None)
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument(
-        "--root-path",
-        type=str,
-        default=None,
-        help="Root path to use for installing behind path based proxy.",
-    )
-    parser.add_argument(
         "--timeout-keep-alive", type=int, default=5, help="Keep alive timeout"
     )
     parser.add_argument(
