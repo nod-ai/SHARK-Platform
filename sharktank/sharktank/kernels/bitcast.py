@@ -11,6 +11,7 @@ import torch
 from iree.turbine.support.ir_imports import (
     ComplexType,
     F16Type,
+    F32Type,
     RankedTensorType,
     ShapedType,
     Value,
@@ -29,6 +30,22 @@ __all__ = [
     "bitcast_to_real",
 ]
 
+_ftype_to_ctype_table = {
+    torch.float16 : torch.complex32,
+    torch.float32 : torch.complex64,
+}
+
+_ctype_to_ftype_table = {
+    torch.complex32 : torch.float16,
+    torch.complex64 : torch.float32,
+}
+
+_type_to_irtype_table = {
+    torch.float16 : lambda : F16Type.get(),
+    torch.float32 : lambda : F32Type.get(),
+    torch.complex32 : lambda : ComplexType.get(F16Type.get()),
+    torch.complex64 : lambda : ComplexType.get(F32Type.get()),
+}
 
 @CustomOp.register(library=LIBRARY)
 class bitcast_to_complex(CustomOp):
@@ -38,13 +55,14 @@ class bitcast_to_complex(CustomOp):
     def select(self, ksel: KernelSelection):
         ta = ksel.arg_tensor(0)
 
-        torch._check(ta.t.dtype == torch.float16)
+        torch._check(ta.t.dtype in _ftype_to_ctype_table)
         torch._check(isinstance(ta.t.shape[-1], int))
 
         new_shape = [i for i in ta.t.shape]
         new_shape[-1] = new_shape[-1] // 2
 
-        ret = ksel.return_new_tensor(new_shape, dtype=torch.complex32)
+        ctype = _ftype_to_ctype_table[ta.t.dtype]
+        ret = ksel.return_new_tensor(new_shape, dtype=ctype)
         specialize_all_known_dims(ta)
         specialize_all_known_dims(ret)
 
@@ -62,7 +80,7 @@ class bitcast_to_complex(CustomOp):
         dynamic_dims: list[Value] = []
         _append_dynamic_dims(kb, dynamic_dims, t)
 
-        c64 = ComplexType.get(F16Type.get())
+        c64 = _type_to_irtype_table[result_desc.t.dtype]()
         rtt = RankedTensorType.get(result_shape, c64)
         result = flow_d.TensorBitCastOp(rtt, t, dynamic_dims, dynamic_dims).result
         kb.yield_results(result)
@@ -76,13 +94,14 @@ class bitcast_to_real(CustomOp):
     def select(self, ksel: KernelSelection):
         ta = ksel.arg_tensor(0)
 
-        torch._check(ta.t.dtype == torch.complex32)
+        torch._check(ta.t.dtype in _ctype_to_ftype_table)
         torch._check(isinstance(ta.t.shape[-1], int))
 
         new_shape = [i for i in ta.t.shape]
         new_shape[-1] = new_shape[-1] * 2
 
-        ret = ksel.return_new_tensor(new_shape, dtype=torch.float16)
+        ftype = _ctype_to_ftype_table[ta.t.dtype]
+        ret = ksel.return_new_tensor(new_shape, dtype=ftype)
         specialize_all_known_dims(ta)
         specialize_all_known_dims(ret)
 
@@ -100,8 +119,8 @@ class bitcast_to_real(CustomOp):
         dynamic_dims: list[Value] = []
         _append_dynamic_dims(kb, dynamic_dims, t)
 
-        f16 = F16Type.get()
-        rtt = RankedTensorType.get(result_shape, f16)
+        ftype = _type_to_irtype_table[result_desc.t.dtype]()
+        rtt = RankedTensorType.get(result_shape, ftype)
         result = flow_d.TensorBitCastOp(rtt, t, dynamic_dims, dynamic_dims).result
         kb.yield_results(result)
 
