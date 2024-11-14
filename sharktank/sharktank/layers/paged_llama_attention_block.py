@@ -241,7 +241,7 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         # Restore from the cache.
         xk, xv = cache.read(
             cache_state,
-            dest_partitions=[
+            read_into_partitions=[
                 xk_temp[:, 0:kv_seq_len, ...],
                 xv_temp[:, 0:kv_seq_len, ...],
             ],
