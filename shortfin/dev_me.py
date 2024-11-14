@@ -105,12 +105,10 @@ class EnvInfo:
             clang_exe = shutil.which("clang")
             if not clang_exe:
                 return None, None
-            try:
-                clang_output = subprocess.check_output(
-                    [clang_exe, "--version"]
-                ).decode()
-            except:
-                return None, None
+        try:
+            clang_output = subprocess.check_output([clang_exe, "--version"]).decode()
+        except:
+            return None, None
         if m := re.search(r"clang version ([0-9\.]+)", clang_output):
             return clang_exe, Version(m.group(1))
         return None, None
@@ -244,7 +242,7 @@ def configure_mode(env_info: EnvInfo, args):
         "-e",
         str(env_info.this_dir),
     ]
-    print(f"{' '.join('='.join(kv) for kv in env_vars.items())} \\")
+    print(f"{' '.join('='.join(str(kv)) for kv in env_vars.items())} \\")
     print(f"  {' '.join(setup_args)}")
     actual_env_vars = dict(os.environ)
     actual_env_vars.update(env_vars)
