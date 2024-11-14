@@ -60,7 +60,7 @@ function download_wheels() {
   #   * https://pip.pypa.io/en/stable/installation/
   python3.13t -m pip download shortfin==${RELEASE} --no-deps -f ${ASSETS_PAGE}
 
-  # TODO: shark-ai meta package when it exists
+  # TODO: shark-ai meta package when it is published to nightlies
 
   echo ""
   echo "Downloaded wheels:"
@@ -86,6 +86,7 @@ function upload_wheels() {
 }
 
 function build_shark_ai_meta_package() {
+  # TODO: download meta package from nightly releases instead of this
   echo ""
   echo "Computing common version for shark-ai meta package..."
   ${SCRIPT_DIR}/compute_common_version.py --stable-release --write-json
