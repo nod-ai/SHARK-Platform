@@ -51,25 +51,59 @@ jobs:
           path: ${{ env.PIP_CACHE_DIR }}
           key: pip-${{ steps.setup_python.outputs.python-version }}-${{ hashFiles('*requirements.txt') }}
 
-      - name: Install pip deps
+      - name: Upgrade pip
+        id: upgrade_pip
         run: |
+          echo "::group::Upgrade pip"
           python -m pip install --no-compile --upgrade pip
-          # Note: We install in three steps in order to satisfy requirements
-          # from non default locations first. Installing the PyTorch CPU
-          # wheels saves multiple minutes and a lot of bandwidth on runner setup.
-          pip install --no-compile -r pytorch-cpu-requirements.txt
-          pip install --no-compile -r requirements.txt -e sharktank/ shortfin/
+          echo "::endgroup::"
 
-          # Install latest iree-tubrine.
+      - name: Install PyTorch CPU
+        id: install_pytorch
+        run: |
+          echo "::group::Install PyTorch CPU requirements"
+          pip install --no-compile -r pytorch-cpu-requirements.txt
+          echo "::endgroup::"
+
+      - name: Install IREE Turbine
+        id: install_iree_turbine
+        run: |
+          echo "::group::Install IREE Turbine"
           pip install --no-compile -f https://iree.dev/pip-release-links.html --src deps \
             -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
+          echo "::endgroup::"
 
-          # Try with the latest IREE nightly releases, not what iree-turbine pins.
-          # We could also pin to a known working or stable version.
-          # This should eventually stabilize. Do the best we can for now.
-          pip install -f https://iree.dev/pip-release-links.html --upgrade --pre \
+      - name: Install IREE Dependencies
+        id: install_iree_deps
+        run: |
+          echo "::group::Install IREE dependencies"
+          pip install -f https://iree.dev/pip-release-links.html --upgrade \
             iree-base-compiler \
-            iree-base-runtime
+            iree-base-runtime \
+            "numpy<2.0"
+          echo "::endgroup::"
+
+
+      - name: Install Main Requirements
+        id: install_main_reqs
+        run: |
+          echo "::group::Install main requirements"
+          pip install --no-compile -r requirements.txt
+          echo "::endgroup::"
+
+      - name: Install Sharktank
+        id: install_sharktank
+        run: |
+          echo "::group::Install Sharktank"
+          pip install --no-compile -e sharktank/
+          echo "::endgroup::"
+
+      - name: Install Shortfin
+        id: install_shortfin
+        run: |
+          echo "::group::Install Shortfin"
+          pip install --no-compile -e shortfin/
+          echo "::endgroup::"
 
       - name: Run LLM Integration Tests
         run: pytest -v build_tools/integration_tests/llm --log-cli-level=INFO
