@@ -61,13 +61,14 @@ SHORTFIN_PACKAGE_VERSION = shortfin_version.get("package-version")
 stable_packages_list = ["iree-base-compiler", "iree-base-runtime", "iree-turbine"]
 
 if Version(PACKAGE_VERSION).is_prerelease:
-    requirements = (
-        "sharktank=="
-        + Version(SHARKTANK_PACKAGE_VERSION).base_version
-        + "rc"
-        + args.version_suffix
-        + "\n"
-    )
+    # TODO: Include sharktank as a dependencies of future releases
+    # requirements = (
+    #     "sharktank=="
+    #     + Version(SHARKTANK_PACKAGE_VERSION).base_version
+    #     + "rc"
+    #     + args.version_suffix
+    #     + "\n"
+    # )
     requirements += (
         "shortfin=="
         + Version(SHORTFIN_PACKAGE_VERSION).base_version
@@ -86,9 +87,10 @@ else:
     requirements = ""
     for package in stable_packages_list:
         requirements += package + "==" + STABLE_VERSION_TO_PIN + "\n"
-    requirements += (
-        "sharktank==" + Version(SHARKTANK_PACKAGE_VERSION).base_version + "\n"
-    )
+    # TODO: Include sharktank as a dependencies of future releases
+    # requirements += (
+    #     "sharktank==" + Version(SHARKTANK_PACKAGE_VERSION).base_version + "\n"
+    # )
     requirements += "shortfin==" + Version(SHORTFIN_PACKAGE_VERSION).base_version
 
     write_requirements(requirements)
