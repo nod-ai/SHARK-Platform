@@ -31,21 +31,22 @@ __all__ = [
 ]
 
 _ftype_to_ctype_table = {
-    torch.float16 : torch.complex32,
-    torch.float32 : torch.complex64,
+    torch.float16: torch.complex32,
+    torch.float32: torch.complex64,
 }
 
 _ctype_to_ftype_table = {
-    torch.complex32 : torch.float16,
-    torch.complex64 : torch.float32,
+    torch.complex32: torch.float16,
+    torch.complex64: torch.float32,
 }
 
 _type_to_irtype_table = {
-    torch.float16 : lambda : F16Type.get(),
-    torch.float32 : lambda : F32Type.get(),
-    torch.complex32 : lambda : ComplexType.get(F16Type.get()),
-    torch.complex64 : lambda : ComplexType.get(F32Type.get()),
+    torch.float16: lambda: F16Type.get(),
+    torch.float32: lambda: F32Type.get(),
+    torch.complex32: lambda: ComplexType.get(F16Type.get()),
+    torch.complex64: lambda: ComplexType.get(F32Type.get()),
 }
+
 
 @CustomOp.register(library=LIBRARY)
 class bitcast_to_complex(CustomOp):
