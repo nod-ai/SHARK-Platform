@@ -12,7 +12,7 @@ import pytest
 from . import candidate_gen
 
 from iree.compiler import ir  # type: ignore
-from iree.compiler.dialects import func, iree_codegen, iree_gpu  # type: ignore
+from iree.compiler.dialects import func # type: ignore
 
 
 def test_get_shaped_type_element_bitwidth() -> None:

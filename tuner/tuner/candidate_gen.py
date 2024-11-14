@@ -32,7 +32,6 @@ from textwrap import indent
 from abc import ABC, abstractmethod
 
 from iree.compiler import ir  # type: ignore
-from iree.compiler.dialects import iree_codegen, iree_gpu  # type: ignore
 
 tune_logger = logging.getLogger("tune")
 
