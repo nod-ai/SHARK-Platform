@@ -45,12 +45,15 @@ def model_params():
         "module_name": "module",
         "module_abi_version": 1,
         "max_seq_len": 2048,
-        "attn_head_count": 32,
         "attn_head_dim": 100,
         "prefill_batch_sizes": [4],
         "decode_batch_sizes": [4],
         "transformer_block_count": 26,
-        "paged_kv_cache": {"block_seq_stride": 16, "device_block_count": 256},
+        "paged_kv_cache": {
+            "attention_head_count_kv": 32,
+            "block_seq_stride": 16,
+            "device_block_count": 256,
+        },
     }
 
     # Create a temporary file to store the JSON
