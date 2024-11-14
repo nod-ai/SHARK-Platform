@@ -19,7 +19,7 @@ and serving engine. Shortfin consists of these major components:
 Install the latest stable version:
 
 ```bash
-python -m pip install shortfin
+pip install shortfin
 ```
 
 ## Developer guides
@@ -29,19 +29,19 @@ python -m pip install shortfin
 After cloning this repository, from the `shortfin/` directory:
 
 ```bash
-python -m pip install -e .
+pip install -e .
 ```
 
 Install test requirements:
 
 ```bash
-python -m pip install -r requirements-tests.txt
+pip install -r requirements-tests.txt
 ```
 
 Run tests:
 
 ```bash
-python -m pytest -s tests/
+pytest -s tests/
 ```
 
 ### Simple dev setup
@@ -210,6 +210,6 @@ There are multiple ways to acquire such an environment:
     pyenv install 3.13t
 
     # Test (should print "False").
-    pyenv shell 3.13
+    pyenv shell 3.13t
     python -c 'import sys; print(sys._is_gil_enabled())'
     ```
