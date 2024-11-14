@@ -153,8 +153,6 @@ class LlamaModelConfig:
     # Dtype to use for general FP activations not otherwise configured.
     activation_dtype: torch.dtype = torch.float16
 
-    kv_cache_dtype: torch.dtype = torch.float16
-
     # Dtype to use for attention.
     attention_dtype: torch.dtype = torch.float16
 

@@ -151,9 +151,6 @@ class PagedLlamaAttentionBlock(ThetaLayer):
                 xk = self.cache_quantizer.quantize(xk).unpack().qs
                 xv = self.cache_quantizer.quantize(xv).unpack().qs
 
-        print(xk.dtype)
-        print(xv.dtype)
-        print(self.cache.dtype)
         xk, xv = self.transact_cache(
             xk_cache_update=xk,
             xv_cache_update=xv,

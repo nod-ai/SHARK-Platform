@@ -55,6 +55,8 @@ def qlinear_tensor_scaled(
             return matmul(x_layout.qs, weight_layout.qs, transpose_rhs=True).to(
                 torch.float16
             )
+        else:
+            return NotImplemented
 
     # Bias.
     quantized_bias_accum = False

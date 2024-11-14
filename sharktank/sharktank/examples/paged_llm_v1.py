@@ -253,15 +253,12 @@ def main():
     cli.add_quantization_options(parser)
     cli.add_model_options(parser)
     args = cli.parse(parser)
-
     device = torch.device(args.device) if args.device else None
     activation_dtype = getattr(torch, args.activation_dtype)
     assert isinstance(activation_dtype, torch.dtype)
-    kv_cache_dtype = getattr(torch, args.kv_cache_dtype)
     dataset = cli.get_input_dataset(args)
     tokenizer = cli.get_tokenizer(args)
     prompts = args.prompt
-
     config = LlamaModelConfig(
         hp=configs.LlamaHParams.from_gguf_props(dataset.properties),
         block_seq_stride=16,
@@ -270,7 +267,6 @@ def main():
         activation_dtype=activation_dtype,
         attention_dtype=activation_dtype,
         attention_kernel=args.attention_kernel,
-        kv_cache_dtype=kv_cache_dtype,
         use_hf=args.use_hf,
         tensor_parallelism_size=args.tensor_parallelism_size,
         fake_quant=args.fake_quant,

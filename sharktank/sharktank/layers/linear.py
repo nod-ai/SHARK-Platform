@@ -30,6 +30,10 @@ class LinearLayer(ThetaLayer):
     if premul_input is not None:
       x = x * premul_input
     matmul(x, weight.T) + bias
+
+    fake_quant exists to allow export without adding dequant ops.
+    when fake_quant is True, the op will in quant dequant fashion.
+    When false, it will keep quantized types.
     ```
     """
 
@@ -70,21 +74,21 @@ class LinearLayer(ThetaLayer):
             x = q_input.quantize(x)
             if self.fake_quant:
                 x = x.unpack().dequant()
+        elif qdq_input is not None and self.fake_quant:
+            x = qdq_input.quantize(x).unpack().dequant()
 
         y = ops.linear(x, weight, bias)
 
         # Unconditionally dequantize.
-        # TODO: Support a q_output specifier that signals the layer to let
-        # the QuantizedTensor escape.
         if isinstance(y, QuantizedTensor) and not self.fake_quant:
             y = y.unpack().dequant()
         # Note that f8_e4m3fnuz types on AMD GPUs accumulate to fp32.
         # We can truncate to fp16 in iree, so we do a cast here
-        # to account for this in the IR.
+        # to account for this in the IR. This is may not be the right
+        # level to do this, but for now its here.
         if not self.fake_quant and y.dtype == torch.float8_e4m3fnuz:
             y = ops.to(y, torch.float16)
             return y
-        if qdq_output is not None:
-            # TODO: same as above.
+        if qdq_output is not None and self.fake_quant:
             y = qdq_output.quantize(y).unpack().dequant()
         return y

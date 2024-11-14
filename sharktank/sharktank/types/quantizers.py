@@ -83,7 +83,6 @@ class QuantizerTensor(InferenceTensor):
         ...
 
 
-
 @register_inference_tensor
 class StaticScaledQuantizer(QuantizerTensor):
     """Quantizes to a `TensorScaledLayout` (per-tensor) or (TBD) for per-axis.
