@@ -34,6 +34,13 @@ dynamic = ["version"]
 Repository = "https://github.com/nod-ai/SHARK-Platform"
 Documentation = "https://shortfin.readthedocs.io/en/latest/"
 
+[project.optional-dependencies]
+apps = [
+  "transformers",
+  "dataclasses-json",
+  "pillow",
+]
+
 [tool.pytest.ini_options]
 addopts = [
     "-ra",
