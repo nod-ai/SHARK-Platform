@@ -138,54 +138,29 @@ class RotaryEmbeddingLayer(BaseLayer):
 
         if self.use_hf:
             xt = xt[..., create_interleaved_tensor(xt.shape[-1])]
-        xt_ = xt.unflatten(-1, (-1, 2))
-        _, sl, _, dim, _ = xt_.shape
+        xt_ = xt
+        _, sl, _, _ = xt_.shape
 
         # Offset the table based on starting position.
         if self.use_table:
-            freqs_cis = rotary_embed_table[:, start_index : start_index + sl, :]
+            freqs_cis = rotary_embed_table[start_index : start_index + sl, :]
+            freqs_cis = freqs_cis[None, 0:sl, None, :]
         else:
-            freqs_cis = torch.arange(start_index, start_index + sl, device=xt.device)
-            freqs_cis = self._compute_rotary_embed_table(freqs_cis)
+            freqs_cis = torch.arange(sl, device=xt.device) + start_index
+            freqs_cis = self._compute_rotary_embed_table(freqs_cis)[None, :, None, :]
 
-        assert freqs_cis.shape[-1] == dim
         assert (
             freqs_cis.shape[1] >= sl
         ), f"Sequence length longer than embedding table ({sl} vs {freqs_cis.shape[0]})"
 
-        broadcast_freqs_cis = freqs_cis[:, None, 0:sl, None, :]
-
-        cos = broadcast_freqs_cis[0]
-        sin = broadcast_freqs_cis[1]
-        xt_r = xt_[..., 0]
-        xt_i = xt_[..., 1]
-
-        xt_out_r = xt_r * cos - xt_i * sin
-        xt_out_i = xt_i * cos + xt_r * sin
-
-        xt_out = torch.concatenate((xt_out_r, xt_out_i), dim=-1)
+        xt_ = ops.view_as_complex(xt_)
+        xt_ = xt_ * freqs_cis
+        xt_out = ops.view_as_real(xt_)
 
         if self.use_hf:
             xt_out = xt_out[..., create_ordering_tensor(xt_out.shape[-1])]
-            return xt_out.type_as(xt)
 
-        return xt_out.type_as(xt)
-
-    def complex_multiply(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
-        """Function for elementwise-multiplication of two complex torch tensors.
-        Functionally similar to a*b, but numerically accurate for HuggingFace
-        LLaMa implementation.
-
-        Args:
-          a: First torch tensor operand
-          b: Second torch tensor operand
-        Returns:
-          Tensor of same size to a, b whose elements is product of corresponding
-          elements in a, b
-        """
-        return torch.complex(
-            a.real * b.real - a.imag * b.imag, a.real * b.imag + a.imag * b.real
-        )
+        return ops.to(xt_out, xt.dtype)
 
     def compute_batch_mask(
         self, start_positions: Union[torch.Tensor, ReplicatedTensor], batch_seq_len: int
@@ -207,11 +182,18 @@ class RotaryEmbeddingLayer(BaseLayer):
         self.trace_tensor("rope.positions_seq", positions_seq)
 
         if self.use_table:
-            freqs_cis = self.rotary_embed_table[:, positions_seq]
+            freqs_cis = self.rotary_embed_table[positions_seq]
         else:
             shape = positions_seq.shape
-            freqs_cis = self._compute_rotary_embed_table(positions_seq.flatten())
-            freqs_cis = freqs_cis.unflatten(1, shape)
+            if isinstance(positions_seq, ReplicatedTensor):
+                ts = [
+                    self._compute_rotary_embed_table(s.flatten()).unflatten(0, shape)
+                    for s in positions_seq.shards
+                ]
+                freqs_cis = ReplicatedTensor(ts=ts)
+            else:
+                freqs_cis = self._compute_rotary_embed_table(positions_seq.flatten())
+                freqs_cis = freqs_cis.unflatten(0, shape)
 
         # Unsqueeze a unit dim for attention heads.
         broadcast_freqs_cis = freqs_cis.unsqueeze(2)
@@ -247,30 +229,23 @@ class RotaryEmbeddingLayer(BaseLayer):
         """
         # xq_, xk_ shape: bs, sl, _, dim
         # freqs_cis shape: max_sl, dim
-        cos = mask[0]
-        sin = mask[1]
+        xt_ = ops.view_as_complex(xt)
+        xt_ = xt_ * mask
+        xt_out = ops.view_as_real(xt_)
 
-        xt_ = xt.unflatten(-1, (-1, 2))
-        xt_r = xt_[..., 0]
-        xt_i = xt_[..., 1]
-
-        xt_out_r = xt_r * cos - xt_i * sin
-        xt_out_i = xt_r * sin + xt_i * cos
-        xt_out = torch.concatenate((xt_out_r, xt_out_i), dim=-1)
         return xt_out.type_as(xt)
 
     def _compute_rotary_embed_table(self, t):
         dim = self.rope_dimension_count
         freqs = 1.0 / (
-            self.rope_freq_base
-            ** (torch.arange(0, dim, 2, device=t.device)[: (dim // 2)].float() / dim)
+            self.rope_freq_base ** (torch.arange(0, dim, 2)[: (dim // 2)].float() / dim)
         )
         freqs = torch.outer(t, freqs).float()
 
-        cos = torch.cos(freqs).unsqueeze(0)
-        sin = torch.sin(freqs).unsqueeze(0)
-
-        return torch.concatenate((cos, sin), dim=0)
+        cos = torch.cos(freqs).to(torch.float16)
+        sin = torch.sin(freqs).to(torch.float16)
+        complex = torch.complex(cos, sin)
+        return complex
 
     def _create_rotary_embed_table(self):
         t = torch.arange(self.max_seqlen, device=self.device)
