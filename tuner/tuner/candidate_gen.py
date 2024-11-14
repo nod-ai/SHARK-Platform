@@ -23,18 +23,15 @@ import logging
 import math
 import pickle
 import re
-import z3
+import z3  # type: ignore
 from dataclasses import astuple, dataclass
 from enum import Enum
-from os import mkdir, path, makedirs
+from os import path, makedirs
 from typing import Optional
 from textwrap import indent
 from abc import ABC, abstractmethod
 
-import iree.compiler as ireec
-from iree.compiler import ir
-from iree.compiler.dialects import _linalg_ops_gen, _util_ops_gen
-
+from iree.compiler import ir  # type: ignore
 
 tune_logger = logging.getLogger("tune")
 
@@ -520,15 +517,14 @@ def get_default_output_dir() -> str:
     return "tuning_" + datetime.now().strftime("%Y_%m_%d_%H_%M")
 
 
-def parse_mlir(mlir_text: str) -> ir.Module:
+def parse_mlir(mlir_text: str, ctx: ir.Context) -> ir.Module:
     mlir_module = None
-    with ireec.ir.Context() as context:
-        try:
-            mlir_module = ireec.ir.Module.parse(mlir_text)
-            tune_logger.info("MLIR parsing successful!")
-        except ireec.ir.MLIRError as e:
-            tune_logger.error(f"Error parsing MLIR: {e}")
-            raise RuntimeError(f"Error parsing MLIR: {e}")
+    try:
+        mlir_module = ir.Module.parse(mlir_text)
+        tune_logger.info("MLIR parsing successful!")
+    except ir.MLIRError as e:
+        tune_logger.error(f"Error parsing MLIR: {e}")
+        raise RuntimeError(f"Error parsing MLIR: {e}")
 
     return mlir_module
 
@@ -537,7 +533,7 @@ def parse_mlir(mlir_text: str) -> ir.Module:
 class MLIRTransformation:
     """Transformation of MLIR context"""
 
-    template: str
+    template: list[str]
     modified: str
     embeddable: str
 
@@ -550,7 +546,7 @@ class DispatchTuner(ABC):
 
     @abstractmethod
     def get_shapes(self, template: list[str]) -> ProblemSize:
-        """Extract problem size of thge operation."""
+        """Extract problem size of the operation."""
         pass
 
     @abstractmethod
@@ -645,7 +641,7 @@ class MmtTuner(DispatchTuner):
                 dispatch_kind=DispatchKind.mmt,
             )
         assert mmt_re
-        assert dps, f"'{mmt_re}' not found in given context"
+        assert False, f"'{mmt_re}' not found in given context"
 
     def get_transform_function_mmt(
         self, problem_size: ProblemSize, functionName: str, configuration: Configuration
@@ -1353,45 +1349,47 @@ def tune(
     mlir_template = read_input_mlir(input_file)
     mlir_text = "".join(mlir_template)
 
-    mlir_module = parse_mlir(mlir_text)
-    # Save the input file as the first candidate.
-    with open(path.join(output, f"0.mlir"), "w") as f:
-        f.write(mlir_text)
+    with ir.Context() as ctx:
+        mlir_module: ir.Module = parse_mlir(mlir_text, ctx)
+        # Save the input file as the first candidate.
+        with open(path.join(output, f"0.mlir"), "w") as f:
+            f.write(mlir_text)
 
-    dispatch_tuner_registry = DispatchTunerRegistry()
-    dispatch_tuner_registry.register(
-        [
-            MmtTuner(),
-            ConvTuner(),
-            ContractionTuner(lhs_dims, rhs_dims, tile_dims),
-            BatchMmtTuner(),
-            BatchMatmulTuner(lhs_dims, rhs_dims, tile_dims),
-        ]
-    )
+        dispatch_tuner_registry = DispatchTunerRegistry()
+        dispatch_tuner_registry.register(
+            [
+                MmtTuner(),
+                ConvTuner(),
+                ContractionTuner(lhs_dims, rhs_dims, tile_dims),
+                BatchMmtTuner(),
+                BatchMatmulTuner(lhs_dims, rhs_dims, tile_dims),
+            ]
+        )
 
-    walk_result = walk_mlir_op(mlir_module, dispatch_tuner_registry)
+        walk_result: OpWalkResult = walk_mlir_op(mlir_module, dispatch_tuner_registry)
 
-    dispatch_tuner = walk_result.dispatch_tuner
-    problem_size = dispatch_tuner.get_shapes(mlir_template)
-    tune_logger.debug(str(problem_size))
-    configs = []
-    for i, config in enumerate(generate_solutions(problem_size, num_subgroups)):
-        if i >= limit:
-            break
-        tune_logger.info(f"Solution #{i+1}: {config}")
-        configs.append(config)
-        tf_mlir = dispatch_tuner.apply_params(problem_size, mlir_template, config)
+        dispatch_tuner = walk_result.dispatch_tuner
+        assert dispatch_tuner, "No suitable dispatch tuner found"
+        problem_size: ProblemSize = dispatch_tuner.get_shapes(mlir_template)
+        tune_logger.debug(str(problem_size))
+        configs = []
+        for i, config in enumerate(generate_solutions(problem_size, num_subgroups)):
+            if i >= limit:
+                break
+            tune_logger.info(f"Solution #{i+1}: {config}")
+            configs.append(config)
+            tf_mlir = dispatch_tuner.apply_params(problem_size, mlir_template, config)
 
-        with open(path.join(output, f"{i+1}.mlir"), "w") as f:
-            f.write(tf_mlir.modified)
-        with open(path.join(output, f"{i+1}_config.mlir"), "w") as f:
-            f.write(tf_mlir.embeddable)
+            with open(path.join(output, f"{i+1}.mlir"), "w") as f:
+                f.write(tf_mlir.modified)
+            with open(path.join(output, f"{i+1}_config.mlir"), "w") as f:
+                f.write(tf_mlir.embeddable)
 
-    with open(path.join(output, "configs.pkl"), "wb") as file:
-        pickle.dump(configs, file)
+        with open(path.join(output, "configs.pkl"), "wb") as file:
+            pickle.dump(configs, file)
 
-    tune_logger.info(f"Generated {len(configs)} candidates")
-    tune_logger.info(f"Configurations .pkl is stored in {output}/configs.pkl")
+        tune_logger.info(f"Generated {len(configs)} candidates")
+        tune_logger.info(f"Configurations .pkl is stored in {output}/configs.pkl")
 
 
 def main():
