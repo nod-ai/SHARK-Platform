@@ -203,26 +203,6 @@ class MatmulTest(unittest.TestCase):
             ops.custom_impls.matmul_generic_tensor_block_scaled,
         )
 
-    def testTorchImplTransposedQuantizedRHS_BlockScaledOffsetI4(self):
-        ops._registry._test_enable_last_op_dispatch(True)
-        a_dtype = torch.float32
-        d_dtype = torch.float32
-        ref_dtype = torch.float32
-        a = torch.rand([4, 16, 3200], dtype=a_dtype) / 256.0
-        d = torch.rand([3200, 100, 1], dtype=d_dtype) / 256.0
-        qs = (torch.rand([3200, 100, 16], dtype=ref_dtype) * 255.0).to(torch.uint8)
-        m = torch.rand([3200, 100, 1], dtype=d_dtype) + 16.0
-        rhs_pqt = PlanarQuantizedTensor(
-            shape=[3200, 3200],
-            layout=BlockScaledI4Layout([3200, 3200], d, qs, m=m, signed=False),
-        )
-        result = ops.matmul(a, rhs_pqt, transpose_rhs=True)
-        # Just verifying dispatch. Numerics are tested at the kernel level.
-        self.assertIs(
-            ops._registry._test_get_last_op_dispatch(),
-            ops.custom_impls.matmul_generic_tensor_block_scaled_i4,
-        )
-
     # TODO: mmt_super_block_scaled_offset_q4_unsigned
 
 

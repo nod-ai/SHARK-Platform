@@ -445,8 +445,8 @@ def to_default(tensor: Tensor, *args, **kwargs):
     return unbox_tensor(tensor).to(*args, **kwargs)
 
 
-@transfer_to_logical_device.override(Tensor)
-def transfer_to_logical_device_default(tensor: Tensor, ordinal: int):
+@transfer_to_logical_device.override(AllOfType(AnyTensor, QuantizedTensor))
+def transfer_to_logical_device_default(tensor, ordinal: int):
     return iree.turbine.ops.iree.transfer_to_logical_device(
         f"{ordinal}", unbox_tensor(tensor)
     )

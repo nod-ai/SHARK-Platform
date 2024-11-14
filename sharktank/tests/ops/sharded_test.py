@@ -27,7 +27,6 @@ class AllGatherTest(unittest.TestCase):
 
         sharded = SplitPrimitiveTensor(shard_dim=shard_dim, ts=shards)
         actual_result = ops.all_gather(sharded)
-
         for shard in actual_result.shards:
             torch.testing.assert_close(shard.as_torch(), expected_result)
 
@@ -822,6 +821,83 @@ class MatmulTest(unittest.TestCase):
         assert sharded_result.shard_count == shard_count
         assert sharded_result.shard_dim == shard_dim
         actual_result = unbox_tensor(ops.unshard(sharded_result))
+        torch.testing.assert_close(actual_result, expected_result)
+
+    def testTranposedQuantizedRHSSharded_BlockScaledOffsetI4(self):
+        ops._registry._test_enable_last_op_dispatch(True)
+        a_dtype = torch.float32
+        d_dtype = torch.float32
+        ref_dtype = torch.float32
+        a = torch.rand([4, 16, 3200], dtype=a_dtype) / 256.0
+        d = torch.rand([3200, 100, 1], dtype=d_dtype) / 256.0
+        qs = (torch.rand([3200, 100, 16], dtype=ref_dtype) * 255.0).to(torch.uint8)
+        m = torch.rand([3200, 100, 1], dtype=d_dtype) + 16.0
+        rhs_pqt = PlanarQuantizedTensor(
+            shape=[3200, 3200],
+            layout=BlockScaledI4Layout([3200, 3200], d, qs, m=m, signed=False),
+        )
+        expected_result = ops.matmul(a, rhs_pqt, transpose_rhs=True)
+
+        shard_count = 2
+        rhs_pqt_sharded = SplitPrimitiveTensor(
+            shard_dim=0, ts=rhs_pqt, shard_count=shard_count
+        )
+
+        sharded_result = ops.matmul(a, rhs_pqt_sharded, transpose_rhs=True)
+        actual_result = ops.sharded_cat(sharded_result)
+
+        torch.testing.assert_close(actual_result, expected_result)
+
+    def testTorchImplTransposedQuantizedRHSSharded_BlockScaledLayout(self):
+        ops._registry._test_enable_last_op_dispatch(True)
+        a_dtype = torch.float32
+        d_dtype = torch.float32
+        ref_dtype = torch.float32
+        a = torch.rand([4, 16, 3200], dtype=a_dtype) * 64
+        d = torch.rand([3200, 100, 1], dtype=d_dtype) * 64
+        qs = (torch.rand([3200, 100, 32], dtype=ref_dtype) * 32.0).to(torch.int8)
+        rhs_pqt = PlanarQuantizedTensor(
+            shape=[3200, 3200], layout=BlockScaledLayout([3200, 3200], d, qs)
+        )
+        expected_result = ops.matmul(a, rhs_pqt, transpose_rhs=True)
+
+        shard_count = 2
+        rhs_pqt_sharded = SplitPrimitiveTensor(
+            shard_dim=0, ts=rhs_pqt, shard_count=shard_count
+        )
+
+        sharded_result = ops.matmul(a, rhs_pqt_sharded, transpose_rhs=True)
+        actual_result = ops.sharded_cat(sharded_result)
+
+        torch.testing.assert_close(actual_result, expected_result)
+
+    def testTorchImplTransposedQuantizedRHSSharded_TensorScaledLayout(self):
+        ops._registry._test_enable_last_op_dispatch(True)
+        a_dtype = torch.float32
+        d_dtype = torch.float32
+        ref_dtype = torch.float32
+        a = torch.rand([4, 16, 3200], dtype=a_dtype) * 64
+        d = torch.tensor(5.1, dtype=d_dtype)  # torch.rand([3200], dtype=d_dtype)
+        qs = (torch.rand([3200, 3200], dtype=ref_dtype) * 32.0).to(torch.int8)
+        m = torch.tensor(
+            16.0, dtype=d_dtype
+        )  # torch.rand([3200], dtype=d_dtype) + 16.0
+        rhs_pqt = PlanarQuantizedTensor(
+            shape=[3200, 3200],
+            layout=TensorScaledLayout(shape=[3200, 3200], d=d, qs=qs, m=m),
+        )
+        print("a shape:, ", a.shape)
+        print("rhs_pqt.shape: ", rhs_pqt.shape)
+        expected_result = ops.matmul(a, rhs_pqt, transpose_rhs=True)
+
+        shard_count = 2
+        rhs_pqt_sharded = SplitPrimitiveTensor(
+            shard_dim=0, ts=rhs_pqt, shard_count=shard_count
+        )
+
+        sharded_result = ops.matmul(a, rhs_pqt_sharded, transpose_rhs=True)
+        actual_result = ops.sharded_cat(sharded_result)
+
         torch.testing.assert_close(actual_result, expected_result)
 
 
