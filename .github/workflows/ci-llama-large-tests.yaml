@@ -69,9 +69,7 @@ jobs:
             -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
 
           # Test with pinned nightly releases, not what iree-turbine uses.
-          pip install -f https://iree.dev/pip-release-links.html --upgrade \
-            iree-base-compiler==2.9.0rc20241108 \
-            iree-base-runtime==2.9.0rc20241108 \
+          pip install --upgrade -r shortfin/requirements-iree-compiler.txt \
             "numpy<2.0"
 
       - name: Run llama tests
