@@ -89,6 +89,8 @@ function upload_wheels() {
 
 function build_shark_ai_meta_package() {
   # TODO: download meta package from nightly releases instead of this
+  #   Be aware that nightly releases pin other dependencies via the
+  #   generated `requirements.txt` compared to stable releases.
   echo ""
 
   # TODO: rework `write_requirements.py` to use the versions from the downloaded whls?
@@ -106,7 +108,7 @@ function build_shark_ai_meta_package() {
   ${REPO_ROOT}/shark-ai/build_tools/build_linux_package.sh
 
   # TODO: This is error-prone. We only want to publish the whl for this release.
-  #   copy instead? specify exact file name? clear directory before building?
+  #   Copy instead? Specify exact file name? Clear directory before building?
   mv ${REPO_ROOT}/shark-ai/build_tools/wheelhouse/* .
 }
 
