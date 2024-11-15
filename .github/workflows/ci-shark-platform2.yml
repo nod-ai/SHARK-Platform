@@ -4,7 +4,7 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-name: CI - shark-platform
+name: CI - fast from source shark-platform
 
 on:
   workflow_dispatch:
@@ -58,7 +58,7 @@ jobs:
           # from non default locations first. Installing the PyTorch CPU
           # wheels saves multiple minutes and a lot of bandwidth on runner setup.
           pip install --no-compile -r pytorch-cpu-requirements.txt
-          pip install --no-compile -r requirements.txt -e sharktank/ shortfin/
+          pip install --no-compile -r requirements.txt -e sharktank/
 
           # Install latest iree-tubrine.
           pip install --no-compile -f https://iree.dev/pip-release-links.html --src deps \
@@ -70,6 +70,31 @@ jobs:
           pip install -f https://iree.dev/pip-release-links.html --upgrade --pre \
             iree-base-compiler \
             iree-base-runtime
+
+      - name: Clone IREE with matching version
+        run: |
+          # Get IREE version
+          IREE_VERSION=$(pip show iree-base-compiler | grep Version: | cut -d' ' -f2)
+          echo "Required IREE version: ${IREE_VERSION}"
+
+          EXPECTED_TAG="iree-${IREE_VERSION}"
+
+          # Clone or update IREE repository
+          IREE_PATH="../iree"
+          if [ -d "$IREE_PATH" ] && [ "$(cd $IREE_PATH && git describe --tags --exact-match 2>/dev/null)" = "$EXPECTED_TAG" ]; then
+              echo "IREE repository already at correct version"
+          else
+              rm -rf "$IREE_PATH"
+              git clone --depth 1 --branch "$EXPECTED_TAG" --recurse-submodules --shallow-submodules https://github.com/iree-org/iree.git "$IREE_PATH"
+          fi
+
+
+
+      - name: Install CMake
+        uses: ssrobins/install-cmake@v1 # this action installs cmake into the action workspace
+
+      - name: Install shortfin via dev_me.py
+        run: cd shortfin && python dev_me.py
 
       - name: Run LLM Integration Tests
         run: pytest -v build_tools/integration_tests/llm --log-cli-level=INFO
