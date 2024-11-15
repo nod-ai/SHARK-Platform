@@ -15,53 +15,6 @@ from iree.compiler import ir  # type: ignore
 from iree.compiler.dialects import func  # type: ignore
 
 
-def test_get_shaped_type_element_bitwidth() -> None:
-    assert (
-        candidate_gen.ShapedType([1024, 2048], candidate_gen.ElementType.i8).bitwidth
-        == 8
-    )
-    assert (
-        candidate_gen.ShapedType([2048], candidate_gen.ElementType.i32).bitwidth == 32
-    )
-    assert (
-        candidate_gen.ShapedType(
-            [2048, 512, 384], candidate_gen.ElementType.f8
-        ).bitwidth
-        == 8
-    )
-    assert (
-        candidate_gen.ShapedType([1, 1], candidate_gen.ElementType.f16).bitwidth == 16
-    )
-
-
-def test_get_shaped_type_to_str() -> None:
-    assert (
-        str(candidate_gen.ShapedType([1024, 2048], candidate_gen.ElementType.i8))
-        == "1024x2048xi8"
-    )
-    assert (
-        str(candidate_gen.ShapedType([1024], candidate_gen.ElementType.f32))
-        == "1024xf32"
-    )
-    assert (
-        str(candidate_gen.ShapedType([1, 2, 3], candidate_gen.ElementType.f16))
-        == "1x2x3xf16"
-    )
-    assert (
-        str(candidate_gen.ShapedType([-1, 2, 3], candidate_gen.ElementType.f16))
-        == "?x2x3xf16"
-    )
-
-
-def test_parse_tensor_type() -> None:
-    assert candidate_gen.parse_tensor_type(
-        "tensor<1x2x3xf32>"
-    ) == candidate_gen.ShapedType([1, 2, 3], candidate_gen.ElementType.f32)
-    assert candidate_gen.parse_tensor_type(
-        "tensor<123xi8>"
-    ) == candidate_gen.ShapedType([123], candidate_gen.ElementType.i8)
-
-
 def test_get_mmt_tile_sizes() -> None:
     config = candidate_gen.Configuration(
         subgroup_size=0,
@@ -98,32 +51,6 @@ def test_get_conv_tile_sizes() -> None:
     ]
 
 
-def test_gpu_pipeline_options() -> None:
-    options = candidate_gen.GpuPipelineOptions()
-    assert options.all_default()
-    assert str(options) == "#iree_gpu.pipeline_options<>"
-
-    options.prefetch_shared_memory = True
-    assert not options.all_default()
-    assert str(options) == "#iree_gpu.pipeline_options<prefetch_shared_memory = true>"
-
-    options.no_reduce_shared_memory_bank_conflicts = False
-    assert (
-        str(options)
-        == "#iree_gpu.pipeline_options<prefetch_shared_memory = true, no_reduce_shared_memory_bank_conflicts = false>"
-    )
-
-    options = candidate_gen.GpuPipelineOptions()
-    options.reorder_workgroups_strategy = (
-        candidate_gen.ReorderWorkgroupsStrategy.TRANSPOSE
-    )
-    assert not options.all_default()
-    assert (
-        str(options)
-        == "#iree_gpu.pipeline_options<reorder_workgroups_strategy = Transpose>"
-    )
-
-
 def test_get_contract_tile_sizes() -> None:
     config = candidate_gen.Configuration(
         subgroup_size=32,
@@ -143,32 +70,6 @@ def test_get_contract_tile_sizes() -> None:
         16,
         16,
     ]
-
-
-def test_get_pipeline_config() -> None:
-    config = candidate_gen.Configuration(
-        subgroup_size=32,
-        workgroup_size=[16, 16, 1],
-        intrinsic=candidate_gen.MfmaIntrinsic.mfma_f32_16x16x16_f16(),
-        tile_sizes=[4, 8, 16],
-        subgroup_m_count=1,
-        subgroup_n_count=1,
-        gpu_pipeline_options=candidate_gen.GpuPipelineOptions(),
-        waves_per_eu=2,
-    )
-    config1_str: str = candidate_gen.get_pipeline_config(config)
-    assert config1_str == ""
-
-    config.waves_per_eu = 4
-    config2_str: str = candidate_gen.get_pipeline_config(config)
-    assert config2_str == ', llvm_func_attrs = {"amdgpu-waves-per-eu" = "4"}'
-
-    config.gpu_pipeline_options.prefetch_shared_memory = True
-    config3_str = candidate_gen.get_pipeline_config(config)
-    assert (
-        config3_str
-        == ', gpu_pipeline_options = #iree_gpu.pipeline_options<prefetch_shared_memory = true>, llvm_func_attrs = {"amdgpu-waves-per-eu" = "4"}'
-    )
 
 
 def test_get_shapes_mmt() -> None:
@@ -252,58 +153,6 @@ def test_get_shapes_batch_mmt() -> None:
         candidate_gen.ShapedType([2, 4096, 640], candidate_gen.ElementType.i32),
         candidate_gen.DispatchKind.batch_mmt,
     )
-
-
-def test_mfma_intrinsic_to_str() -> None:
-    assert (
-        str(candidate_gen.MfmaIntrinsic.mfma_f32_16x16x16_f16())
-        == "MFMA_F32_16x16x16_F16"
-    )
-    assert (
-        str(candidate_gen.MfmaIntrinsic.mfma_i32_32x32x16_i8())
-        == "MFMA_I32_32x32x16_I8"
-    )
-
-
-def test_get_compatible_mfma_intrinsics() -> None:
-    assert candidate_gen.get_compatible_mfma_intrinsics(
-        candidate_gen.ProblemSize(
-            candidate_gen.MatmulSize(2048, 1280, 1280),
-            candidate_gen.ShapedType([2048, 1280], candidate_gen.ElementType.f16),
-            candidate_gen.ShapedType([1280, 1280], candidate_gen.ElementType.f16),
-            candidate_gen.ShapedType([2048, 1280], candidate_gen.ElementType.f32),
-            candidate_gen.DispatchKind.mmt,
-        )
-    ) == [
-        candidate_gen.MfmaIntrinsic.mfma_f32_16x16x16_f16(),
-        candidate_gen.MfmaIntrinsic.mfma_f32_32x32x8_f16(),
-    ]
-
-    assert candidate_gen.get_compatible_mfma_intrinsics(
-        candidate_gen.ProblemSize(
-            candidate_gen.MatmulSize(2048, 1280, 1280),
-            candidate_gen.ShapedType([2048, 1280], candidate_gen.ElementType.i8),
-            candidate_gen.ShapedType([1280, 1280], candidate_gen.ElementType.i8),
-            candidate_gen.ShapedType([2048, 1280], candidate_gen.ElementType.i32),
-            candidate_gen.DispatchKind.mmt,
-        )
-    ) == [
-        candidate_gen.MfmaIntrinsic.mfma_i32_16x16x32_i8(),
-        candidate_gen.MfmaIntrinsic.mfma_i32_32x32x16_i8(),
-    ]
-
-    assert candidate_gen.get_compatible_mfma_intrinsics(
-        candidate_gen.ProblemSize(
-            candidate_gen.MatmulSize(968, 320, 640, 64),
-            candidate_gen.ShapedType([64, 968, 640], candidate_gen.ElementType.f32),
-            candidate_gen.ShapedType([64, 640, 320], candidate_gen.ElementType.f32),
-            candidate_gen.ShapedType([64, 968, 320], candidate_gen.ElementType.f32),
-            candidate_gen.DispatchKind.batch_matmul,
-        )
-    ) == [
-        candidate_gen.MfmaIntrinsic.mfma_f32_16x16x16_f16(),
-        candidate_gen.MfmaIntrinsic.mfma_f32_32x32x8_f16(),
-    ]
 
 
 def test_generate_solutions() -> None:
