@@ -39,6 +39,9 @@ apps = [
   "transformers",
   "dataclasses-json",
   "pillow",
+  "fastapi",
+  "uvicorn",
+  "aiohttp",
 ]
 
 [tool.pytest.ini_options]
