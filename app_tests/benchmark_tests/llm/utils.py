@@ -37,6 +37,7 @@ class SGLangBenchmarkArgs:
             dataset_name="sharegpt",
             random_input_len=None,
             random_output_len=None,
+            random_range_ratio=0.0,
             dataset_path="",
             sharegpt_output_len=None,
             multi=False,
