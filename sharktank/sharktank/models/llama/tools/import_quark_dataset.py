@@ -107,25 +107,21 @@ def apply_per_layer_quant(
 
     layer_theta = root_theta(layer_name)
 
-    weight_quant_scale = layer_theta.tensor("weight_quant_scale").as_torch()
+    weight_quant_scale = layer_theta.tensor("weight_scale").as_torch()
 
     weight = layer_theta.tensor("weight").as_torch()
 
     # It looks dumb but, this step is required for numerical correctness against quark.
-    weight = weight.view(torch.float8_e4m3fn)
+    # weight = weight.view(torch.float8_e4m3fn)
     weight = (weight.to(torch.float64) * weight_quant_scale).to(torch.float16)
 
-    weight_quant_zero_point = layer_theta.optional_tensor("weight_quant_zero_point")
+    weight_quant_zero_point = layer_theta.optional_tensor("weight_zero_point")
     if weight_quant_zero_point == None:
         weight_quant_zero_point = torch.zeros(1, dtype=torch.float32)
     else:
         weight_quant_zero_point = weight_quant_zero_point.as_torch()
-    input_quant_scale = as_torch_or_none(
-        layer_theta.optional_tensor("input_quant_scale")
-    )
-    output_quant_scale = as_torch_or_none(
-        layer_theta.optional_tensor("output_quant_scale")
-    )
+    input_quant_scale = as_torch_or_none(layer_theta.optional_tensor("input_scale"))
+    output_quant_scale = as_torch_or_none(layer_theta.optional_tensor("output_scale"))
 
     if weight_quant_scale is None:
         print("weight quant scale not found for layer ", layer_name)
@@ -190,11 +186,11 @@ def apply_per_layer_quant(
                 reciprocal_scale=output_quant_scale * 2.0,
                 dtype=torch.float8_e4m3fnuz,
             )
-        names = [f"{i}.qdq_input" for i in [q_name, k_name, v_name]]
+        names = [f"{i}.q_input" for i in [q_name, k_name, v_name]]
         for name in names:
             updated_tensors[name] = StaticScaledQuantizer(
                 name=name,
-                scale=1.0 / input_quant_scale * 2.0,
+                scale=1.0 / (input_quant_scale * 2.0),
                 reciprocal_scale=input_quant_scale * 2.0,
                 dtype=torch.float8_e4m3fnuz,
             )
@@ -214,18 +210,18 @@ def apply_per_layer_quant(
         )
         # we explicitly provide the reciprocal scale because converting from float16 to float8 after doing 1/scale results in significant numerical differences
         if input_quant_scale is not None:
-            updated_tensors[new_layer_name + ".qdq_input"] = StaticScaledQuantizer(
-                name=new_layer_name + ".qdq_input",
-                scale=1.0 / input_quant_scale,
-                reciprocal_scale=input_quant_scale,
-                dtype=torch.float8_e4m3fn,
+            updated_tensors[new_layer_name + ".q_input"] = StaticScaledQuantizer(
+                name=new_layer_name + ".q_input",
+                scale=1.0 / (input_quant_scale * 2.0),
+                reciprocal_scale=input_quant_scale * 2.0,
+                dtype=torch.float8_e4m3fnuz,
             )
         if output_quant_scale is not None:
             updated_tensors[new_layer_name + ".qdq_output"] = StaticScaledQuantizer(
                 name=new_layer_name + ".qdq_output",
                 scale=1.0 / output_quant_scale,
                 reciprocal_scale=output_quant_scale,
-                dtype=torch.float8_e4m3fn,
+                dtype=torch.float8_e4m3fnuz,
             )
 
         # Remove the updated tensor from the original tree.
@@ -261,15 +257,15 @@ def update_norm_layer(
         sub_name = layer_name + "." + sub
         new_name = hf_to_gguf(sub_name) + ".weight"
         single_replace(quant_theta, sub_name, new_name, updated_tensors)
-    kv_cache_scale = (
-        quant_theta(layer_name).tensor("kv_cache_scaling_factor").as_torch()
-    )
+    kv_cache_scale = quant_theta(layer_name, "self_attn").tensor("kv_scale").as_torch()
     layer_idx = layer_name.split(".")[-1]
     new_name = f"blk.{layer_idx}.kv_cache"
-    kv_cache_scale = DefaultPrimitiveTensor(
-        name=new_name + ".kv_cache_scaling_factor", data=kv_cache_scale
+    updated_tensors[new_name] = StaticScaledQuantizer(
+        name=new_name + ".quantizer",
+        scale=1.0 / (kv_cache_scale * 2.0),
+        reciprocal_scale=kv_cache_scale * 2.0,
+        dtype=torch.float8_e4m3fnuz,
     )
-    updated_tensors[new_name] = kv_cache_scale
 
 
 def single_replace(
@@ -279,6 +275,8 @@ def single_replace(
     updated_tensors: dict[str, InferenceTensor],
 ):
     data = quant_theta(layer_name).tensor("weight").as_torch()
+    if data.dtype == torch.bfloat16:
+        data = data.to(torch.float32)
     updated_tensors[gguf_name] = DefaultPrimitiveTensor(name=gguf_name, data=data)
 
 
@@ -330,7 +328,9 @@ def main(argv):
         "mlp.down_proj",
         "mlp.up_proj",
         "self_attn.o_proj",
-        "self_attn.qkv",
+        "self_attn.q_proj",
+        "self_attn.k_proj",
+        "self_attn.v_proj",
     ]
     for layer in model_layers:
         for sub in sub_layers:
