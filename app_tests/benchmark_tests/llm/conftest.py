@@ -21,7 +21,6 @@ def pre_process_model(request, tmp_path_factory):
     settings = request.param["settings"]
     batch_sizes = request.param["batch_sizes"]
 
-    tmp_dir = tmp_path_factory.mktemp("llm_benchmark_test")
     mlir_path = tmp_dir / "model.mlir"
     config_path = tmp_dir / "config.json"
     vmfb_path = tmp_dir / "model.vmfb"
