@@ -21,7 +21,7 @@
 #     python3.13t -m ensurepip --upgrade
 #     ```
 #   * Choose a release candidate to promote from
-#     https://github.com/nod-ai/SHARK-Platform/releases/tag/dev-wheels
+#     https://github.com/nod-ai/shark-ai/releases/tag/dev-wheels
 #
 # Usage:
 #   ./pypi_deploy.sh 2.9.0rc20241108
@@ -33,7 +33,7 @@ RELEASE="$1"
 SCRIPT_DIR="$(dirname -- "$( readlink -f -- "$0"; )")";
 REPO_ROOT="$(cd "$SCRIPT_DIR"/../../ && pwd)"
 TMPDIR="$(mktemp --directory --tmpdir shark_platform_pypi_wheels.XXXXX)"
-ASSETS_PAGE="https://github.com/nod-ai/SHARK-Platform/releases/expanded_assets/dev-wheels"
+ASSETS_PAGE="https://github.com/nod-ai/shark-ai/releases/expanded_assets/dev-wheels"
 
 # TODO: rewrite in Python?
 

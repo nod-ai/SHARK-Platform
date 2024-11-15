@@ -24,7 +24,7 @@ requires-python = ">= 3.11"
 dynamic = ["version", "dependencies", "optional-dependencies"]
 
 [project.urls]
-Repository = "https://github.com/nod-ai/SHARK-Platform"
+Repository = "https://github.com/nod-ai/shark-ai"
 
 [tool.setuptools.packages.find]
 where = ["."]
