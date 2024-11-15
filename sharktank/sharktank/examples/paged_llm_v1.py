@@ -196,6 +196,14 @@ class Batch:
         trace_tensor("decode.start_positions", start_positions)
         trace_tensor("decode.seq_block_ids", seq_block_ids_tensor)
         trace_tensor("decode.attention_mask", decode_attention_mask)
+
+        if model.config.tensor_parallelism_size != 1:
+            tp = model.config.tensor_parallelism_size
+            self.next_tokens = replicate(self.next_tokens, tp)
+            start_positions = replicate(start_positions, tp)
+            seq_block_ids_tensor = replicate(seq_block_ids_tensor, tp)
+            decode_attention_mask = replicate(decode_attention_mask, tp)
+
         logits = model.decode(
             self.next_tokens,
             attention_mask=decode_attention_mask,

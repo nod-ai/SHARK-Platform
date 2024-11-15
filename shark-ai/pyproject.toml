@@ -24,11 +24,14 @@ requires-python = ">= 3.10"
 dynamic = ["version", "dependencies"]
 
 [project.urls]
-Repository = "https://github.com/nod-ai/SHARK-Platform"
+Repository = "https://github.com/nod-ai/shark-ai"
 
 [project.optional-dependencies]
 onnx = [
   "iree-base-compiler[onnx]",
+]
+apps = [
+  "shortfin[apps]",
 ]
 
 [tool.setuptools]

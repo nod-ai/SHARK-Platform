@@ -11,8 +11,6 @@ import argparse
 import time
 from typing import Dict, Any
 
-BASE_URL = "http://localhost:8000"
-
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Test LLM server")
@@ -26,7 +24,15 @@ def main() -> None:
     parser.add_argument(
         "--stream", action="store_true", help="Enable response streaming"
     )
+    parser.add_argument(
+        "--port",
+        type=str,
+        default="8000",
+        help="Port that shortfin server is running on",
+    )
     args = parser.parse_args()
+
+    base_url = f"http://localhost:{args.port}"
 
     data = {
         "text": args.text,
@@ -42,13 +48,13 @@ def main() -> None:
         "stream": args.stream,
     }
 
-    print(f"Testing LLM server at {BASE_URL}")
+    print(f"Testing LLM server at {base_url}")
 
     # Health check with exponential backoff
     backoff = 1
     while True:
         try:
-            requests.get(f"{BASE_URL}/health").raise_for_status()
+            requests.get(f"{base_url}/health").raise_for_status()
             break
         except requests.exceptions.RequestException as e:
             if backoff > 16:
@@ -62,7 +68,7 @@ def main() -> None:
     try:
         print("Prompt text:", data["text"])
         headers = {"Content-Type": "application/json"}
-        response = requests.post(f"{BASE_URL}/generate", headers=headers, json=data)
+        response = requests.post(f"{base_url}/generate", headers=headers, json=data)
         response.raise_for_status()
 
         if response.text.startswith("data: "):

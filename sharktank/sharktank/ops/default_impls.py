@@ -502,3 +502,13 @@ def view_QuantizedTensor(tensor: QuantizedTensor, shape):
         new_m = unpacked.m.view(shape[:-1] + [shape[-1] // 32, 1])
     layout = BlockScaledI4Layout(shape=shape, d=new_d, qs=new_qs, m=new_m)
     return PlanarQuantizedTensor(shape=shape, layout=layout)
+
+
+@view_as_complex.override(Tensor)
+def view_as_complex_default(tensor: Union[Tensor, PrimitiveTensor]) -> Tensor:
+    return torch.view_as_complex(unbox_tensor(tensor))
+
+
+@view_as_real.override(Tensor)
+def view_as_real_default(tensor: Union[Tensor, PrimitiveTensor]) -> Tensor:
+    return torch.view_as_real(unbox_tensor(tensor))
