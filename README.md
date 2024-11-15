@@ -50,6 +50,11 @@ conversion tools to produce inference-optimized programs.
 The Tuner sub-project assists with tuning program performance by searching for
 optimal parameter configurations to use during model compilation.
 
+> [!WARNING]
+> SHARK Tuner is still in early development. Interested users may want
+> to try it out, but the tuner is not ready for general use yet. Check out
+> [the readme](tuner/README.md) for more details.
+
 ## Support matrix
 
 <!-- TODO: version requirements for Python, ROCm, Linux, etc.  -->
