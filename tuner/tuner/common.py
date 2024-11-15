@@ -5,9 +5,18 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 import re
+import logging
 from dataclasses import astuple, dataclass
 from enum import Enum
 from typing import Optional
+
+from iree.compiler import ir  # type: ignore
+
+
+class TunerContext:
+    def __init__(self, mlir_ctx: ir.Context, logger: logging.Logger):
+        self.mlir_ctx = mlir_ctx
+        self.logger = logger
 
 
 class DispatchKind(Enum):

@@ -9,189 +9,48 @@ Usage: python -m pytest candidate_gen_test.py
 """
 
 import pytest
+
 from . import candidate_gen
-
-from iree.compiler import ir  # type: ignore
-from iree.compiler.dialects import func  # type: ignore
-
-
-def test_get_mmt_tile_sizes() -> None:
-    config = candidate_gen.Configuration(
-        subgroup_size=0,
-        workgroup_size=[],
-        intrinsic=candidate_gen.MfmaIntrinsic.mfma_f32_16x16x16_f16(),
-        tile_sizes=[128, 320, 32],
-        subgroup_m_count=0,
-        subgroup_n_count=0,
-        gpu_pipeline_options=candidate_gen.GpuPipelineOptions(),
-        waves_per_eu=0,
-    )
-    assert candidate_gen.get_mmt_tile_sizes(config) == [128, 320, 32]
-
-
-def test_get_conv_tile_sizes() -> None:
-    config = candidate_gen.Configuration(
-        subgroup_size=64,
-        workgroup_size=[256, 1, 1],
-        intrinsic=candidate_gen.MfmaIntrinsic.mfma_f32_16x16x16_f16(),
-        tile_sizes=[464, 320, 16],
-        subgroup_m_count=1,
-        subgroup_n_count=4,
-        gpu_pipeline_options=candidate_gen.GpuPipelineOptions(),
-        waves_per_eu=1,
-    )
-    assert candidate_gen.ConvTuner().get_conv_tile_sizes(config) == [
-        1,
-        1,
-        464,
-        320,
-        1,
-        1,
-        16,
-    ]
-
-
-def test_get_contract_tile_sizes() -> None:
-    config = candidate_gen.Configuration(
-        subgroup_size=32,
-        workgroup_size=[16, 16, 1],
-        intrinsic=candidate_gen.MfmaIntrinsic.mfma_f32_16x16x16_f16(),
-        tile_sizes=[4, 8, 16],
-        subgroup_m_count=1,
-        subgroup_n_count=1,
-        gpu_pipeline_options=candidate_gen.GpuPipelineOptions(),
-        waves_per_eu=2,
-    )
-    assert candidate_gen.get_contract_tile_sizes(config, "mnk") == [4, 8, 16]
-    assert candidate_gen.get_contract_tile_sizes(config, "nmk") == [8, 4, 16]
-    assert candidate_gen.get_contract_tile_sizes(config, "knm") == [16, 8, 4]
-    assert candidate_gen.get_contract_tile_sizes(config, "kkk") == [
-        16,
-        16,
-        16,
-    ]
-
-
-def test_get_shapes_mmt() -> None:
-    template = [
-        r"%18 = tensor.empty() : tensor<2048x1280xf32>",
-        r"%19 = linalg.fill {lowering_config = #iree_codegen.lowering_config<tile_sizes = [[64, 128, 64]]>} ins(%cst : f32) outs(%18 : tensor<2048x1280xf32>) -> tensor<2048x1280xf32>",
-        r'%20 = linalg.generic {indexing_maps = [affine_map<(d0, d1, d2) -> (d0, d2)>, affine_map<(d0, d1, d2) -> (d1, d2)>, affine_map<(d0, d1, d2) -> (d0, d1)>], iterator_types = ["parallel", "parallel", "reduction"]} ins(%13, %14 : tensor<2048x1280xf16>, tensor<1280x1280xf16>) outs(%19 : tensor<2048x1280xf32>) attrs =  {lowering_config = #iree_codegen.lowering_config<tile_sizes = [[64, 128, 64]]>} {',
-        r"^bb0(%in: f16, %in_0: f16, %out: f32):",
-    ]
-    assert candidate_gen.MmtTuner().get_shapes(template) == candidate_gen.ProblemSize(
-        candidate_gen.MatmulSize(2048, 1280, 1280),
-        candidate_gen.ShapedType([2048, 1280], candidate_gen.ElementType.f16),
-        candidate_gen.ShapedType([1280, 1280], candidate_gen.ElementType.f16),
-        candidate_gen.ShapedType([2048, 1280], candidate_gen.ElementType.f32),
-        candidate_gen.DispatchKind.mmt,
-    )
-
-
-def test_get_shapes_conv() -> None:
-    template = [
-        r"%7 = linalg.fill {lowering_config = #iree_codegen.lowering_config<tile_sizes = [[1, 1, 32, 256, 1, 1, 32]]>} ins(%cst : f32) outs(%4 : tensor<1x1x32x256xf32>) -> tensor<1x1x32x256xf32>",
-        r"%8 = linalg.conv_2d_nhwc_hwcf {dilations = dense<1> : vector<2xi64>, lowering_config = #iree_codegen.lowering_config<tile_sizes = [[1, 1, 32, 256, 1, 1, 32]]>, strides = dense<1> : vector<2xi64>} ins(%5, %6 : tensor<1x3x34x1280xf16>, tensor<3x3x1280x256xf16>) outs(%7 : tensor<1x1x32x256xf32>) -> tensor<1x1x32x256xf32>",
-        r"flow.dispatch.tensor.store %8, %2, offsets = [%workgroup_id_z, %workgroup_id_y, 0, %3], sizes = [1, 1, 32, 256], strides = [1, 1, 1, 1] : tensor<1x1x32x256xf32> -> !flow.dispatch.tensor<writeonly:tensor<2x32x32x1280xf32>>",
-    ]
-    assert candidate_gen.ConvTuner().get_shapes(template) == candidate_gen.ProblemSize(
-        candidate_gen.MatmulSize(32, 256, 11520),
-        candidate_gen.ShapedType([1, 3, 34, 1280], candidate_gen.ElementType.f16),
-        candidate_gen.ShapedType([3, 3, 1280, 256], candidate_gen.ElementType.f16),
-        candidate_gen.ShapedType([1, 1, 32, 256], candidate_gen.ElementType.f32),
-        candidate_gen.DispatchKind.conv,
-    )
-
-
-def test_get_shapes_contract() -> None:
-    template = [
-        r"%18 = tensor.empty() : tensor<2048x1280xf32>",
-        r"%19 = linalg.fill {lowering_config = #iree_codegen.lowering_config<tile_sizes = [[64, 128, 64]]>} ins(%cst : f32) outs(%18 : tensor<2048x1280xf32>) -> tensor<2048x1280xf32>",
-        r'%20 = linalg.generic {indexing_maps = [affine_map<(d0, d1, d2) -> (d0, d2)>, affine_map<(d0, d1, d2) -> (d1, d2)>, affine_map<(d0, d1, d2) -> (d0, d1)>], iterator_types = ["parallel", "parallel", "reduction"]} ins(%13, %14 : tensor<2048x1280xf16>, tensor<1280x1280xf16>) outs(%19 : tensor<2048x1280xf32>) attrs =  {lowering_config = #iree_codegen.lowering_config<tile_sizes = [[64, 128, 64]]>} {',
-        r"^bb0(%in: f16, %in_0: f16, %out: f32):",
-    ]
-    assert candidate_gen.ContractionTuner("mk", "nk", "mnk").get_shapes(
-        template
-    ) == candidate_gen.ProblemSize(
-        candidate_gen.MatmulSize(2048, 1280, 1280),
-        candidate_gen.ShapedType([2048, 1280], candidate_gen.ElementType.f16),
-        candidate_gen.ShapedType([1280, 1280], candidate_gen.ElementType.f16),
-        candidate_gen.ShapedType([2048, 1280], candidate_gen.ElementType.f32),
-        candidate_gen.DispatchKind.contraction,
-    )
-
-
-def test_get_shapes_batch_matmul() -> None:
-    template = [
-        "%10 = linalg.fill ins(%cst : f32) outs(%7 : tensor<1x32x32xf32>) -> tensor<1x32x32xf32>",
-        "%11 = linalg.batch_matmul ins(%8, %9 : tensor<1x32x1024xf32>, tensor<1x1024x32xf32>) outs(%10 : tensor<1x32x32xf32>) -> tensor<1x32x32xf32>",
-        "flow.dispatch.tensor.store %11, %2, offsets = [%arg0, %arg1, %arg2], sizes = [1, 32, 32], strides = [1, 1, 1] : tensor<1x32x32xf32> -> !flow.dispatch.tensor<writeonly:tensor<4x32x64xf32>>",
-    ]
-    assert candidate_gen.BatchMatmulTuner("bmk", "bkn", "mnk").get_shapes(
-        template
-    ) == candidate_gen.ProblemSize(
-        candidate_gen.MatmulSize(32, 32, 1024, 1),
-        candidate_gen.ShapedType([1, 32, 1024], candidate_gen.ElementType.f32),
-        candidate_gen.ShapedType([1, 1024, 32], candidate_gen.ElementType.f32),
-        candidate_gen.ShapedType([1, 32, 32], candidate_gen.ElementType.f32),
-        candidate_gen.DispatchKind.batch_matmul,
-    )
-
-
-def test_get_shapes_batch_mmt() -> None:
-    template = [
-        r"%19 = linalg.fill {lowering_config = #iree_codegen.lowering_config<tile_sizes = [[1, 64, 128, 128]]>} ins(%c0_i32 : i32) outs(%18 : tensor<2x4096x640xi32>) -> tensor<2x4096x640xi32>",
-        r'%20 = linalg.generic {indexing_maps = [affine_map<(d0, d1, d2, d3) -> (d0, d1, d3)>, affine_map<(d0, d1, d2, d3) -> (d0, d2, d3)>, affine_map<(d0, d1, d2, d3) -> (d0, d1, d2)>], iterator_types = ["parallel", "parallel", "parallel", "reduction"]} ins(%11, %12 : tensor<2x4096x640xi8>, tensor<2x640x640xi8>) outs(%19 : tensor<2x4096x640xi32>) attrs =  {lowering_config = #iree_codegen.lowering_config<tile_sizes = [[1, 64, 128, 128]]>} {',
-        r"flow.dispatch.tensor.store %21, %10, offsets = [0, 0, 0], sizes = [2, 4096, 640], strides = [1, 1, 1] : tensor<2x4096x640xf16> -> !flow.dispatch.tensor<writeonly:tensor<2x4096x640xf16>>",
-    ]
-    assert candidate_gen.BatchMmtTuner().get_shapes(
-        template
-    ) == candidate_gen.ProblemSize(
-        candidate_gen.MatmulSize(4096, 640, 640, 2),
-        candidate_gen.ShapedType([2, 4096, 640], candidate_gen.ElementType.i8),
-        candidate_gen.ShapedType([2, 640, 640], candidate_gen.ElementType.i8),
-        candidate_gen.ShapedType([2, 4096, 640], candidate_gen.ElementType.i32),
-        candidate_gen.DispatchKind.batch_mmt,
-    )
+from . import common
 
 
 def test_generate_solutions() -> None:
-    matmul_size = candidate_gen.MatmulSize(2048, 3840, 1280)
-    lhs_type = candidate_gen.ShapedType([2048, 1280], candidate_gen.ElementType.f16)
-    rhs_type = candidate_gen.ShapedType([3840, 1280], candidate_gen.ElementType.f16)
-    res_type = candidate_gen.ShapedType([2048, 3840], candidate_gen.ElementType.f32)
-    problem_size = candidate_gen.ProblemSize(
-        matmul_size, lhs_type, rhs_type, res_type, candidate_gen.DispatchKind.mmt
+    matmul_size = common.MatmulSize(2048, 3840, 1280)
+    lhs_type = common.ShapedType([2048, 1280], common.ElementType.f16)
+    rhs_type = common.ShapedType([3840, 1280], common.ElementType.f16)
+    res_type = common.ShapedType([2048, 3840], common.ElementType.f32)
+    problem_size = common.ProblemSize(
+        matmul_size, lhs_type, rhs_type, res_type, common.DispatchKind.mmt
     )
     configs = candidate_gen.generate_solutions(problem_size, 4)
     assert configs is not None
 
 
 def test_calculate_shared_memory_usage_in_bytes() -> None:
-    matmul_size = candidate_gen.MatmulSize(1024, 1024, 1024)
-    lhs_type = candidate_gen.ShapedType([1024, 1024], candidate_gen.ElementType.f16)
-    rhs_type = candidate_gen.ShapedType([1024, 1024], candidate_gen.ElementType.f16)
-    res_type = candidate_gen.ShapedType([1024, 1024], candidate_gen.ElementType.f32)
-    problem_size = candidate_gen.ProblemSize(
-        matmul_size, lhs_type, rhs_type, res_type, candidate_gen.DispatchKind.mmt
+    matmul_size = common.MatmulSize(1024, 1024, 1024)
+    lhs_type = common.ShapedType([1024, 1024], common.ElementType.f16)
+    rhs_type = common.ShapedType([1024, 1024], common.ElementType.f16)
+    res_type = common.ShapedType([1024, 1024], common.ElementType.f32)
+    problem_size = common.ProblemSize(
+        matmul_size, lhs_type, rhs_type, res_type, common.DispatchKind.mmt
     )
     assert (
         candidate_gen.calculate_shared_memory_usage_in_bytes(problem_size, 512, 64, 128)
         == 147456
     )
 
-    lhs_type = candidate_gen.ShapedType([1024, 1024], candidate_gen.ElementType.i8)
-    problem_size = candidate_gen.ProblemSize(
-        matmul_size, lhs_type, rhs_type, res_type, candidate_gen.DispatchKind.mmt
+    lhs_type = common.ShapedType([1024, 1024], common.ElementType.i8)
+    problem_size = common.ProblemSize(
+        matmul_size, lhs_type, rhs_type, res_type, common.DispatchKind.mmt
     )
     assert (
         candidate_gen.calculate_shared_memory_usage_in_bytes(problem_size, 512, 64, 128)
         == 81920
     )
 
-    rhs_type = candidate_gen.ShapedType([1024, 1024], candidate_gen.ElementType.i32)
-    problem_size = candidate_gen.ProblemSize(
-        matmul_size, lhs_type, rhs_type, res_type, candidate_gen.DispatchKind.mmt
+    rhs_type = common.ShapedType([1024, 1024], common.ElementType.i32)
+    problem_size = common.ProblemSize(
+        matmul_size, lhs_type, rhs_type, res_type, common.DispatchKind.mmt
     )
     assert (
         candidate_gen.calculate_shared_memory_usage_in_bytes(problem_size, 128, 64, 32)
@@ -200,12 +59,12 @@ def test_calculate_shared_memory_usage_in_bytes() -> None:
 
 
 def test_generate_constraints_valid_input() -> None:
-    matmul_size = candidate_gen.MatmulSize(1024, 1024, 1024)
-    lhs_type = candidate_gen.ShapedType([1024, 1024], candidate_gen.ElementType.f16)
-    rhs_type = candidate_gen.ShapedType([1024, 1024], candidate_gen.ElementType.f16)
-    res_type = candidate_gen.ShapedType([1024, 1024], candidate_gen.ElementType.f32)
-    problem_size = candidate_gen.ProblemSize(
-        matmul_size, lhs_type, rhs_type, res_type, candidate_gen.DispatchKind.mmt
+    matmul_size = common.MatmulSize(1024, 1024, 1024)
+    lhs_type = common.ShapedType([1024, 1024], common.ElementType.f16)
+    rhs_type = common.ShapedType([1024, 1024], common.ElementType.f16)
+    res_type = common.ShapedType([1024, 1024], common.ElementType.f32)
+    problem_size = common.ProblemSize(
+        matmul_size, lhs_type, rhs_type, res_type, common.DispatchKind.mmt
     )
     # Define input parameters as z3 Ints
     m, n, k = (
@@ -246,12 +105,12 @@ def test_generate_constraints_valid_input() -> None:
 
 def test_generate_constraints_invalid_input() -> None:
     # Define input parameters that should lead to unsatisfiable constraints
-    matmul_size = candidate_gen.MatmulSize(1024, 1024, 1024)
-    lhs_type = candidate_gen.ShapedType([1024, 1024], candidate_gen.ElementType.f16)
-    rhs_type = candidate_gen.ShapedType([1024, 1024], candidate_gen.ElementType.f16)
-    res_type = candidate_gen.ShapedType([1024, 1024], candidate_gen.ElementType.f32)
-    problem_size = candidate_gen.ProblemSize(
-        matmul_size, lhs_type, rhs_type, res_type, candidate_gen.DispatchKind.mmt
+    matmul_size = common.MatmulSize(1024, 1024, 1024)
+    lhs_type = common.ShapedType([1024, 1024], common.ElementType.f16)
+    rhs_type = common.ShapedType([1024, 1024], common.ElementType.f16)
+    res_type = common.ShapedType([1024, 1024], common.ElementType.f32)
+    problem_size = common.ProblemSize(
+        matmul_size, lhs_type, rhs_type, res_type, common.DispatchKind.mmt
     )
     m, n, k = (
         candidate_gen.z3.Int("m"),
@@ -307,25 +166,23 @@ def test_apply_params_mmt() -> None:
 
     M, N, K = 2048, 1280, 1280
 
-    config = candidate_gen.Configuration(
+    config = common.Configuration(
         subgroup_size=16,
         workgroup_size=[16, 16, 1],
-        intrinsic=candidate_gen.MfmaIntrinsic.mfma_f32_16x16x16_f16(),
+        intrinsic=common.MfmaIntrinsic.mfma_f32_16x16x16_f16(),
         tile_sizes=[8, 8, 8],
         subgroup_m_count=16,
         subgroup_n_count=16,
-        gpu_pipeline_options=candidate_gen.GpuPipelineOptions(
-            prefetch_shared_memory=True
-        ),
+        gpu_pipeline_options=common.GpuPipelineOptions(prefetch_shared_memory=True),
         waves_per_eu=8,
     )
 
-    problem_size = candidate_gen.ProblemSize(
-        candidate_gen.MatmulSize(M, N, K),
-        candidate_gen.ShapedType([M, K], candidate_gen.ElementType.f16),
-        candidate_gen.ShapedType([N, K], candidate_gen.ElementType.f16),
-        candidate_gen.ShapedType([M, N], candidate_gen.ElementType.f32),
-        candidate_gen.DispatchKind.mmt,
+    problem_size = common.ProblemSize(
+        common.MatmulSize(M, N, K),
+        common.ShapedType([M, K], common.ElementType.f16),
+        common.ShapedType([N, K], common.ElementType.f16),
+        common.ShapedType([M, N], common.ElementType.f32),
+        common.DispatchKind.mmt,
     )
     tf_mlir = candidate_gen.MmtTuner().apply_params(problem_size, mlir_template, config)
 
@@ -361,27 +218,25 @@ def test_apply_params_conv() -> None:
 
     n, oh, ow, oc, fh, fw, ic = 2, 64, 64, 640, 3, 3, 640
 
-    config = candidate_gen.Configuration(
+    config = common.Configuration(
         subgroup_size=64,
         workgroup_size=[256, 1, 1],
-        intrinsic=candidate_gen.MfmaIntrinsic.mfma_f32_16x16x16_f16(),
+        intrinsic=common.MfmaIntrinsic.mfma_f32_16x16x16_f16(),
         tile_sizes=[464, 320, 16],
         subgroup_m_count=1,
         subgroup_n_count=4,
-        gpu_pipeline_options=candidate_gen.GpuPipelineOptions(
-            reorder_workgroups_strategy=candidate_gen.ReorderWorkgroupsStrategy.TRANSPOSE
+        gpu_pipeline_options=common.GpuPipelineOptions(
+            reorder_workgroups_strategy=common.ReorderWorkgroupsStrategy.TRANSPOSE
         ),
         waves_per_eu=2,
     )
 
-    problem_size = candidate_gen.ProblemSize(
-        candidate_gen.MatmulSize(oh * ow, oc, fh * fw * ic),
-        candidate_gen.ShapedType(
-            [n, oh + 2, ow + 2, oc], candidate_gen.ElementType.f16
-        ),
-        candidate_gen.ShapedType([fh, fw, ic, oc], candidate_gen.ElementType.f16),
-        candidate_gen.ShapedType([n, oh, ow, oc], candidate_gen.ElementType.f32),
-        candidate_gen.DispatchKind.conv,
+    problem_size = common.ProblemSize(
+        common.MatmulSize(oh * ow, oc, fh * fw * ic),
+        common.ShapedType([n, oh + 2, ow + 2, oc], common.ElementType.f16),
+        common.ShapedType([fh, fw, ic, oc], common.ElementType.f16),
+        common.ShapedType([n, oh, ow, oc], common.ElementType.f32),
+        common.DispatchKind.conv,
     )
     tf_mlir = candidate_gen.ConvTuner().apply_params(
         problem_size, mlir_template, config
@@ -419,22 +274,22 @@ def test_apply_params_contract() -> None:
     ]
 
     tile_dims = "*mnk"
-    problem_size = candidate_gen.ProblemSize(
-        candidate_gen.MatmulSize(2048, 3840, 1280),
-        candidate_gen.ShapedType([2, 1024, 1280], candidate_gen.ElementType.f16),
-        candidate_gen.ShapedType([3, 20, 64, 1280], candidate_gen.ElementType.f16),
-        candidate_gen.ShapedType([3, 2, 20, 1024, 64], candidate_gen.ElementType.f32),
-        candidate_gen.DispatchKind.contraction,
+    problem_size = common.ProblemSize(
+        common.MatmulSize(2048, 3840, 1280),
+        common.ShapedType([2, 1024, 1280], common.ElementType.f16),
+        common.ShapedType([3, 20, 64, 1280], common.ElementType.f16),
+        common.ShapedType([3, 2, 20, 1024, 64], common.ElementType.f32),
+        common.DispatchKind.contraction,
     )
 
-    config = candidate_gen.Configuration(
+    config = common.Configuration(
         subgroup_size=64,
         workgroup_size=[256, 1, 1],
-        intrinsic=candidate_gen.MfmaIntrinsic.mfma_f32_32x32x8_f16(),
+        intrinsic=common.MfmaIntrinsic.mfma_f32_32x32x8_f16(),
         tile_sizes=[480, 384, 32],
         subgroup_m_count=1,
         subgroup_n_count=4,
-        gpu_pipeline_options=candidate_gen.GpuPipelineOptions(),
+        gpu_pipeline_options=common.GpuPipelineOptions(),
         waves_per_eu=2,
     )
 
@@ -466,22 +321,22 @@ def test_apply_params_batch_matmul() -> None:
     ]
 
     tile_dims = "bmnk"
-    problem_size = candidate_gen.ProblemSize(
-        candidate_gen.MatmulSize(968, 320, 640, 64),
-        candidate_gen.ShapedType([64, 968, 640], candidate_gen.ElementType.f16),
-        candidate_gen.ShapedType([64, 640, 320], candidate_gen.ElementType.f16),
-        candidate_gen.ShapedType([64, 968, 320], candidate_gen.ElementType.f32),
-        candidate_gen.DispatchKind.batch_matmul,
+    problem_size = common.ProblemSize(
+        common.MatmulSize(968, 320, 640, 64),
+        common.ShapedType([64, 968, 640], common.ElementType.f16),
+        common.ShapedType([64, 640, 320], common.ElementType.f16),
+        common.ShapedType([64, 968, 320], common.ElementType.f32),
+        common.DispatchKind.batch_matmul,
     )
 
-    config = candidate_gen.Configuration(
+    config = common.Configuration(
         subgroup_size=64,
         workgroup_size=[128, 2, 1],
-        intrinsic=candidate_gen.MfmaIntrinsic.mfma_f32_32x32x8_f16(),
+        intrinsic=common.MfmaIntrinsic.mfma_f32_32x32x8_f16(),
         tile_sizes=[416, 320, 128],
         subgroup_m_count=2,
         subgroup_n_count=2,
-        gpu_pipeline_options=candidate_gen.GpuPipelineOptions(),
+        gpu_pipeline_options=common.GpuPipelineOptions(),
         waves_per_eu=2,
     )
 
@@ -516,22 +371,22 @@ def test_apply_params_batch_mmt_float() -> None:
         '{llvm_func_attrs = {"amdgpu-waves-per-eu" = "1"}',
     ]
 
-    problem_size = candidate_gen.ProblemSize(
-        candidate_gen.MatmulSize(4096, 640, 640, 2),
-        candidate_gen.ShapedType([2, 4096, 640], candidate_gen.ElementType.f16),
-        candidate_gen.ShapedType([2, 640, 640], candidate_gen.ElementType.f16),
-        candidate_gen.ShapedType([2, 4096, 640], candidate_gen.ElementType.f32),
-        candidate_gen.DispatchKind.batch_mmt,
+    problem_size = common.ProblemSize(
+        common.MatmulSize(4096, 640, 640, 2),
+        common.ShapedType([2, 4096, 640], common.ElementType.f16),
+        common.ShapedType([2, 640, 640], common.ElementType.f16),
+        common.ShapedType([2, 4096, 640], common.ElementType.f32),
+        common.DispatchKind.batch_mmt,
     )
 
-    config = candidate_gen.Configuration(
+    config = common.Configuration(
         subgroup_size=64,
         workgroup_size=[128, 2, 1],
-        intrinsic=candidate_gen.MfmaIntrinsic.mfma_f32_16x16x16_f16(),
+        intrinsic=common.MfmaIntrinsic.mfma_f32_16x16x16_f16(),
         tile_sizes=[128, 64, 128],
         subgroup_m_count=2,
         subgroup_n_count=2,
-        gpu_pipeline_options=candidate_gen.GpuPipelineOptions(),
+        gpu_pipeline_options=common.GpuPipelineOptions(),
         waves_per_eu=2,
     )
 
@@ -564,22 +419,22 @@ def test_apply_params_batch_mmt_int() -> None:
         '{llvm_func_attrs = {"amdgpu-waves-per-eu" = "1"}',
     ]
 
-    problem_size = candidate_gen.ProblemSize(
-        candidate_gen.MatmulSize(4096, 640, 640, 2),
-        candidate_gen.ShapedType([2, 4096, 640], candidate_gen.ElementType.i8),
-        candidate_gen.ShapedType([2, 640, 640], candidate_gen.ElementType.i8),
-        candidate_gen.ShapedType([2, 4096, 640], candidate_gen.ElementType.i32),
-        candidate_gen.DispatchKind.batch_mmt,
+    problem_size = common.ProblemSize(
+        common.MatmulSize(4096, 640, 640, 2),
+        common.ShapedType([2, 4096, 640], common.ElementType.i8),
+        common.ShapedType([2, 640, 640], common.ElementType.i8),
+        common.ShapedType([2, 4096, 640], common.ElementType.i32),
+        common.DispatchKind.batch_mmt,
     )
 
-    config = candidate_gen.Configuration(
+    config = common.Configuration(
         subgroup_size=64,
         workgroup_size=[128, 2, 1],
-        intrinsic=candidate_gen.MfmaIntrinsic.mfma_i32_32x32x16_i8(),
+        intrinsic=common.MfmaIntrinsic.mfma_i32_32x32x16_i8(),
         tile_sizes=[128, 64, 128],
         subgroup_m_count=2,
         subgroup_n_count=2,
-        gpu_pipeline_options=candidate_gen.GpuPipelineOptions(),
+        gpu_pipeline_options=common.GpuPipelineOptions(),
         waves_per_eu=4,
     )
 
@@ -635,22 +490,22 @@ def test_apply_params_broadcast_rhs_mmt() -> None:
         '{llvm_func_attrs = {"amdgpu-waves-per-eu" = "1"}',
     ]
 
-    problem_size = candidate_gen.ProblemSize(
-        candidate_gen.MatmulSize(4096, 640, 640, 2),
-        candidate_gen.ShapedType([2, 4096, 640], candidate_gen.ElementType.i8),
-        candidate_gen.ShapedType([640, 640], candidate_gen.ElementType.i8),
-        candidate_gen.ShapedType([2, 4096, 640], candidate_gen.ElementType.i32),
-        candidate_gen.DispatchKind.broadcast_rhs_mmt,
+    problem_size = common.ProblemSize(
+        common.MatmulSize(4096, 640, 640, 2),
+        common.ShapedType([2, 4096, 640], common.ElementType.i8),
+        common.ShapedType([640, 640], common.ElementType.i8),
+        common.ShapedType([2, 4096, 640], common.ElementType.i32),
+        common.DispatchKind.broadcast_rhs_mmt,
     )
 
-    config = candidate_gen.Configuration(
+    config = common.Configuration(
         subgroup_size=64,
         workgroup_size=[128, 2, 1],
-        intrinsic=candidate_gen.MfmaIntrinsic.mfma_i32_32x32x16_i8(),
+        intrinsic=common.MfmaIntrinsic.mfma_i32_32x32x16_i8(),
         tile_sizes=[128, 64, 128],
         subgroup_m_count=2,
         subgroup_n_count=2,
-        gpu_pipeline_options=candidate_gen.GpuPipelineOptions(),
+        gpu_pipeline_options=common.GpuPipelineOptions(),
         waves_per_eu=4,
     )
 
@@ -711,19 +566,3 @@ def test_detect_broadcast_rhs_mmt() -> None:
     assert candidate_gen.ContractionTuner("mk", "nk", "mnk").is_broadcast_rhs_mmt(
         mlir_lines
     )
-
-
-def test_parse_mlir() -> None:
-    with ir.Context() as ctx:
-        mlir_str = r"""
-        builtin.module  {
-        func.func @simple_mul(%arg0: tensor<4xf32>, %arg1: tensor<4xf32>) -> tensor<4xf32> {
-            %0 = arith.mulf %arg0, %arg1 : tensor<4xf32>
-            return %0 : tensor<4xf32>
-        }
-        }
-    """
-        mlir_module = candidate_gen.parse_mlir(mlir_str, ctx)
-        assert mlir_module is not None
-        assert isinstance(mlir_module, ir.Module)
-        assert isinstance(mlir_module.body.operations[0], func.FuncOp)
