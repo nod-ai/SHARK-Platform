@@ -77,19 +77,18 @@ jobs:
           IREE_VERSION=$(pip show iree-base-compiler | grep Version: | cut -d' ' -f2)
           echo "Required IREE version: ${IREE_VERSION}"
 
-          # If IREE exists, check version and reclone if needed
-          if [ -d "../iree" ]; then
-              cd ../iree
-              if [ "$(git describe --tags --exact-match 2>/dev/null)" != "iree-${IREE_VERSION}" ]; then
-                  cd .. && rm -rf iree
-                  git clone --depth 1 --branch "iree-${IREE_VERSION}" https://github.com/iree-org/iree.git
-              fi
+          EXPECTED_TAG="iree-${IREE_VERSION}"
+
+          # Clone or update IREE repository
+          IREE_PATH="../iree"
+          if [ -d "$IREE_PATH" ] && [ "$(cd $IREE_PATH && git describe --tags --exact-match 2>/dev/null)" = "$EXPECTED_TAG" ]; then
+              echo "IREE repository already at correct version"
           else
-              cd .. && git clone --depth 1 --branch "iree-${IREE_VERSION}" https://github.com/iree-org/iree.git
+              rm -rf "$IREE_PATH"
+              git clone --depth 1 --branch "$EXPECTED_TAG" https://github.com/iree-org/iree.git "$IREE_PATH"
           fi
 
-          # init iree submodules
-          cd iree && git submodule update --init --recursive
+          (cd "$IREE_PATH" && git submodule update --init --recursive)
 
 
       - name: Install CMake
