@@ -5,21 +5,24 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 import torch
+
 from torch import Tensor, dtype
+from typing import Union
+
 import torch.nn.functional as F
 
 from ..kernels import (
     einsum_2args_q4,
     mmt_block_scaled_offset_q4_unsigned,
     mmt_block_scaled_q8,
-    mmtfp,
     mmt_super_block_scaled_offset_q4_unsigned,
+    bitcast_to_complex,
+    bitcast_to_real,
 )
 
 from ..types import (
     BlockScaledLayout,
     BlockScaledI4Layout,
-    InferenceTensor,
     PrimitiveTensor,
     QuantizedTensor,
     SuperBlockOffsetScaled_4_6_Layout,
@@ -123,3 +126,15 @@ def matmul_generic_tensor_super_block_offset_scaled_4_6_i4(
         sb_mins_low,
         rhs_unpacked.qs_bit_packed,
     )
+
+
+@view_as_complex.override(Union[Tensor, PrimitiveTensor])
+def view_as_complex(t):
+    t = unbox_tensor(t)
+    return bitcast_to_complex(t)
+
+
+@view_as_real.override(Union[Tensor, PrimitiveTensor])
+def view_as_real(t):
+    t = unbox_tensor(t)
+    return bitcast_to_real(t)

@@ -20,251 +20,21 @@ Usage: ./candidate_gen.py 121.mlir -o "tuning/candidates" -l 1024 --lhs-dims=mk 
 
 import argparse
 import logging
-import math
 import pickle
 import re
 import z3  # type: ignore
-from dataclasses import astuple, dataclass
-from enum import Enum
+from dataclasses import dataclass
 from os import path, makedirs
 from typing import Optional
 from textwrap import indent
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 
 from iree.compiler import ir  # type: ignore
 
+from .common import *
+from .dispatch_parser import *
+
 tune_logger = logging.getLogger("tune")
-
-
-class DispatchKind(Enum):
-    conv = 1
-    mmt = 2
-    contraction = 3
-    batch_mmt = 4
-    batch_matmul = 5
-    broadcast_rhs_mmt = 6
-
-
-class ElementType(Enum):
-    i8 = 1
-    i32 = 2
-    f8 = 3
-    f16 = 4
-    f32 = 5
-
-    @property
-    def bitwidth(self) -> int:
-        match self:
-            case ElementType.i8 | ElementType.f8:
-                return 8
-            case ElementType.f16:
-                return 16
-            case ElementType.i32 | ElementType.f32:
-                return 32
-            case _:
-                assert False, "unhandled case"
-
-    def __str__(self) -> str:
-        return self.name
-
-
-@dataclass
-class ShapedType:
-    shape: list[int]
-    element_type: ElementType
-
-    def rank(self) -> int:
-        return len(self.shape)
-
-    @property
-    def bitwidth(self) -> int:
-        return self.element_type.bitwidth
-
-    def __str__(self) -> str:
-        dim_to_str = lambda dim: str(dim) if dim != -1 else "?"
-        return "x".join(map(dim_to_str, self.shape)) + "x" + str(self.element_type)
-
-
-@dataclass
-class MatmulSize:
-    M: int
-    N: int
-    K: int
-    B: int = 1
-
-
-@dataclass
-class ProblemSize:
-    matmul_size: MatmulSize
-    lhs_type: ShapedType
-    rhs_type: ShapedType
-    res_type: ShapedType
-    dispatch_kind: DispatchKind
-
-    @property
-    def MNK(self) -> tuple[int, int, int]:
-        return (self.matmul_size.M, self.matmul_size.N, self.matmul_size.K)
-
-
-@dataclass
-class MfmaIntrinsic:
-    output_type: ElementType
-    m: int
-    n: int
-    k: int
-    input_type: ElementType
-
-    def __str__(self) -> str:
-        input = str(self.input_type).upper()
-        output = str(self.output_type).upper()
-        return f"MFMA_{output}_{self.m}x{self.n}x{self.k}_{input}"
-
-    @staticmethod
-    def mfma_f32_16x16x16_f16():
-        return MfmaIntrinsic(ElementType.f32, 16, 16, 16, ElementType.f16)
-
-    @staticmethod
-    def mfma_f32_32x32x8_f16():
-        return MfmaIntrinsic(ElementType.f32, 32, 32, 8, ElementType.f16)
-
-    @staticmethod
-    def mfma_i32_16x16x32_i8():
-        return MfmaIntrinsic(ElementType.i32, 16, 16, 32, ElementType.i8)
-
-    @staticmethod
-    def mfma_i32_32x32x16_i8():
-        return MfmaIntrinsic(ElementType.i32, 32, 32, 16, ElementType.i8)
-
-    @staticmethod
-    def all():
-        return [
-            MfmaIntrinsic.mfma_f32_16x16x16_f16(),
-            MfmaIntrinsic.mfma_f32_32x32x8_f16(),
-            MfmaIntrinsic.mfma_i32_16x16x32_i8(),
-            MfmaIntrinsic.mfma_i32_32x32x16_i8(),
-        ]
-
-
-class ReorderWorkgroupsStrategy(Enum):
-    NONE = 0
-    SWIZZLE = 1
-    TRANSPOSE = 2
-
-    def __str__(self) -> str:
-        return self.name.title()
-
-
-@dataclass
-class GpuPipelineOptions:
-    """Represents the `iree_gpu.pipeline_options` attribute"""
-
-    prefetch_shared_memory: Optional[bool] = None
-    no_reduce_shared_memory_bank_conflicts: Optional[bool] = None
-    reorder_workgroups_strategy: Optional[ReorderWorkgroupsStrategy] = None
-
-    def all_default(self) -> bool:
-        return all(x is None for x in astuple(self))
-
-    def __str__(self) -> str:
-        options: list[str] = []
-        if self.prefetch_shared_memory is not None:
-            options.append(
-                f"prefetch_shared_memory = {str(self.prefetch_shared_memory).lower()}"
-            )
-        if self.no_reduce_shared_memory_bank_conflicts is not None:
-            options.append(
-                f"no_reduce_shared_memory_bank_conflicts = {str(self.no_reduce_shared_memory_bank_conflicts).lower()}"
-            )
-        if self.reorder_workgroups_strategy is not None:
-            options.append(
-                f"reorder_workgroups_strategy = {self.reorder_workgroups_strategy}"
-            )
-
-        return f"#iree_gpu.pipeline_options<{', '.join(options)}>"
-
-
-@dataclass
-class Configuration:
-    subgroup_size: int
-    workgroup_size: list[int]
-    intrinsic: MfmaIntrinsic
-    tile_sizes: list[int]
-    subgroup_m_count: int
-    subgroup_n_count: int
-    gpu_pipeline_options: GpuPipelineOptions
-    waves_per_eu: int
-
-
-class MlirRegex(Enum):
-    ssa_value = r"%[a-zA-Z0-9-_]+"
-    tensor_type = r"tensor<(([0-9]+x)+((f|i)[0-9]+))>"
-
-    def __str__(self) -> str:
-        return self.value
-
-    @staticmethod
-    def dps_ins_two_args() -> str:
-        return rf"ins\({MlirRegex.ssa_value}, {MlirRegex.ssa_value} : (?P<LHS>{MlirRegex.tensor_type}), (?P<RHS>{MlirRegex.tensor_type})\)"
-
-    @staticmethod
-    def dps_outs_one_arg() -> str:
-        return rf"outs\({MlirRegex.ssa_value} : (?P<RES>{MlirRegex.tensor_type})\)"
-
-
-def read_input_mlir(filename: str) -> list[str]:
-    with open(filename, "r") as f:
-        return f.readlines()
-
-
-def get_mmt_tile_sizes(configuration: Configuration):
-    return configuration.tile_sizes
-
-
-@dataclass
-class ConvDimInfo:
-    n: int
-    oh: int
-    ow: int
-    oc: int
-    fh: int
-    fw: int
-    ic: int
-
-    @staticmethod
-    def from_rhs_res(rhs_shaped_type: ShapedType, res_shaped_type: ShapedType):
-        n, oh, ow, oc = res_shaped_type.shape
-        fh, fw, ic, _ = rhs_shaped_type.shape
-        return ConvDimInfo(n, oh, ow, oc, fh, fw, ic)
-
-    @staticmethod
-    def from_problem_size(problem_size: ProblemSize):
-        return ConvDimInfo.from_rhs_res(problem_size.rhs_type, problem_size.res_type)
-
-
-def get_contract_tile_sizes(configuration: Configuration, tile_dims: str) -> list[int]:
-    m, n, k = configuration.tile_sizes
-    tile_size = [1] * len(tile_dims)
-    for idx, dim in enumerate(tile_dims):
-        if dim == "m":
-            tile_size[idx] = m
-        if dim == "n":
-            tile_size[idx] = n
-        if dim == "k":
-            tile_size[idx] = k
-    return tile_size
-
-
-def get_batch_mmt_tile_sizes(configuration: Configuration) -> list[int]:
-    return [1] + configuration.tile_sizes
-
-
-def get_pipeline_config(configuration: Configuration) -> str:
-    extra_config = ""
-    if not configuration.gpu_pipeline_options.all_default():
-        extra_config += f", gpu_pipeline_options = {configuration.gpu_pipeline_options}"
-    if configuration.waves_per_eu != 2:
-        extra_config += f', llvm_func_attrs = {{"amdgpu-waves-per-eu" = "{configuration.waves_per_eu}"}}'
-    return extra_config
 
 
 def apply_configuration(
@@ -301,32 +71,6 @@ def apply_configuration(
         new_mlir += line
 
     return new_mlir
-
-
-def parse_tensor_type(tensor_type: str) -> ShapedType:
-    shape_match = re.search(str(MlirRegex.tensor_type), tensor_type)
-    assert shape_match
-
-    shape_str = shape_match.group(1)
-    dims_and_elem = shape_str.split("x")
-    dims = [int(x) for x in dims_and_elem[:-1]]
-    elem = dims_and_elem[-1]
-    str_to_elem_ty = {x.name: x for x in ElementType}
-    return ShapedType(dims, str_to_elem_ty[elem])
-
-
-def get_compatible_mfma_intrinsics(problem_size: ProblemSize) -> list[MfmaIntrinsic]:
-    def is_compatible(intrinsic: MfmaIntrinsic) -> bool:
-        if problem_size.res_type.element_type != intrinsic.output_type:
-            return False
-        if problem_size.dispatch_kind != DispatchKind.batch_matmul:
-            if problem_size.lhs_type.element_type != intrinsic.input_type:
-                return False
-            if problem_size.rhs_type.element_type != intrinsic.input_type:
-                return False
-        return True
-
-    return list(filter(is_compatible, MfmaIntrinsic.all()))
 
 
 def get_mfma_intrinsic_constraints(
@@ -517,38 +261,8 @@ def get_default_output_dir() -> str:
     return "tuning_" + datetime.now().strftime("%Y_%m_%d_%H_%M")
 
 
-def parse_mlir(mlir_text: str, ctx: ir.Context) -> ir.Module:
-    mlir_module = None
-    try:
-        mlir_module = ir.Module.parse(mlir_text)
-        tune_logger.info("MLIR parsing successful!")
-    except ir.MLIRError as e:
-        tune_logger.error(f"Error parsing MLIR: {e}")
-        raise RuntimeError(f"Error parsing MLIR: {e}")
-
-    return mlir_module
-
-
-@dataclass
-class MLIRTransformation:
-    """Transformation of MLIR context"""
-
-    template: list[str]
-    modified: str
-    embeddable: str
-
-
-class DispatchTuner(ABC):
-    @abstractmethod
-    def supports(self, op_name: str) -> bool:
-        """Check if the tuner can handle the type of operation represented by the input string."""
-        pass
-
-    @abstractmethod
-    def get_shapes(self, template: list[str]) -> ProblemSize:
-        """Extract problem size of the operation."""
-        pass
-
+class DispatchTuner(DispatchParser):
+    # TODO(https://github.com/nod-ai/SHARK-Platform/issues/453): Remove this in favor of configuring using transform dialect.
     @abstractmethod
     def apply_params(
         self,
@@ -558,12 +272,6 @@ class DispatchTuner(ABC):
     ) -> MLIRTransformation:
         """Apply parameter transformations to the operation."""
         pass
-
-
-@dataclass
-class OpWalkResult:
-    was_interrupted: bool = False
-    dispatch_tuner: Optional[DispatchTuner] = None
 
 
 class DispatchTunerRegistry:
@@ -589,60 +297,7 @@ class DispatchTunerRegistry:
         assert False, "Dispatch kind not supported"
 
 
-class MmtTuner(DispatchTuner):
-    def supports(self, op_name: str) -> bool:
-        return "matmul_transpose_b" in op_name
-
-    def get_shapes(self, template: list[str]) -> ProblemSize:
-        mmt_re = None
-        dps = None
-        for line in template:
-            if "linalg.generic" not in line:
-                continue
-            if r'iterator_types = ["parallel", "parallel", "reduction"]' not in line:
-                continue
-            # ins(%13, %14 : tensor<2048x1280xf16>, tensor<1280x1280xf16>) outs(%19 : tensor<2048x1280xf32>)
-            mmt_re = rf"{MlirRegex.dps_ins_two_args()}\s+{MlirRegex.dps_outs_one_arg()}"
-            dps = re.search(mmt_re, line)
-            if dps is None:
-                continue
-
-            lhs_tensor_type = dps.group("LHS")
-            rhs_tensor_type = dps.group("RHS")
-            lhs_shaped_type = parse_tensor_type(lhs_tensor_type)
-            assert lhs_shaped_type.rank() == 2
-            lhs_M, lhs_K = lhs_shaped_type.shape
-
-            rhs_shaped_type = parse_tensor_type(rhs_tensor_type)
-            assert rhs_shaped_type.rank() == 2
-            rhs_N, rhs_K = rhs_shaped_type.shape
-
-            assert lhs_shaped_type.element_type == rhs_shaped_type.element_type
-            assert lhs_K == rhs_K
-
-            res_tensor_type = dps.group("RES")
-            res_shaped_type = parse_tensor_type(res_tensor_type)
-            assert res_shaped_type.rank() == 2
-            res_M, res_N = res_shaped_type.shape
-
-            assert lhs_M == res_M
-            assert rhs_N == res_N
-
-            matmul_size = MatmulSize(
-                lhs_shaped_type.shape[0],
-                rhs_shaped_type.shape[0],
-                lhs_shaped_type.shape[1],
-            )
-            return ProblemSize(
-                matmul_size,
-                lhs_type=lhs_shaped_type,
-                rhs_type=rhs_shaped_type,
-                res_type=res_shaped_type,
-                dispatch_kind=DispatchKind.mmt,
-            )
-        assert mmt_re
-        assert False, f"'{mmt_re}' not found in given context"
-
+class MmtTuner(DispatchTuner, MmtParser):
     def get_transform_function_mmt(
         self, problem_size: ProblemSize, functionName: str, configuration: Configuration
     ) -> str:
@@ -694,71 +349,7 @@ class MmtTuner(DispatchTuner):
         return MLIRTransformation(template, modified, embeddable)
 
 
-class ConvTuner(DispatchTuner):
-    def supports(self, op_name: str) -> bool:
-        return "conv_2d_nhwc_hwcf" in op_name
-
-    def get_conv_tile_sizes(self, configuration: Configuration) -> list[int]:
-        m, n, k = configuration.tile_sizes
-        batch = 1
-        fh = 1
-        fw = 1
-
-        oh = 1
-
-        oc = n
-        ow = m
-        ic = k
-        return [batch, oh, ow, oc, fh, fw, ic]
-
-    def get_shapes(self, template: list[str]) -> ProblemSize:
-        for line in template:
-            if "linalg.conv_2d_nhwc_hwcf" not in line:
-                continue
-
-            # ins(%19, %20 : tensor<2x34x34x1280xf16>, tensor<3x3x1280x1280xf16>) outs (%27 : tensor<2x32x32x1280xf32>)
-            conv_re = (
-                rf"{MlirRegex.dps_ins_two_args()}\s+{MlirRegex.dps_outs_one_arg()}"
-            )
-            dps = re.search(conv_re, line)
-            if dps is None:
-                continue
-
-            lhs_tensor_type = dps.group("LHS")
-            rhs_tensor_type = dps.group("RHS")
-            lhs_shaped_type = parse_tensor_type(lhs_tensor_type)
-            assert lhs_shaped_type.rank() == 4
-
-            rhs_shaped_type = parse_tensor_type(rhs_tensor_type)
-            assert rhs_shaped_type.rank() == 4
-
-            res_tensor_type = dps.group("RES")
-            res_shaped_type = parse_tensor_type(res_tensor_type)
-            assert res_shaped_type.rank() == 4
-
-            # int64_t n = outputShape[0];
-            # int64_t oh = outputShape[1];
-            # int64_t ow = outputShape[2];
-            # int64_t oc = outputShape[3];
-            # int64_t fh = filterShape[0];
-            # int64_t fw = filterShape[1];
-            # int64_t ic = filterShape[2];
-            dim_info = ConvDimInfo.from_rhs_res(rhs_shaped_type, res_shaped_type)
-            return ProblemSize(
-                MatmulSize(
-                    M=dim_info.oh * dim_info.ow,
-                    N=dim_info.oc,
-                    K=dim_info.fh * dim_info.fw * dim_info.ic,
-                    B=dim_info.n,
-                ),
-                lhs_shaped_type,
-                rhs_shaped_type,
-                res_shaped_type,
-                DispatchKind.conv,
-            )
-
-        assert False, "Shape not found"
-
+class ConvTuner(DispatchTuner, ConvParser):
     # int64_t n = outputShape[0];
     # int64_t oh = outputShape[1];
     # int64_t ow = outputShape[2];
@@ -833,135 +424,7 @@ class ConvTuner(DispatchTuner):
         return MLIRTransformation(template, modified, embeddable)
 
 
-class ContractionTuner(DispatchTuner):
-    def __init__(self, lhs_dims: str, rhs_dims: str, tile_dims: str):
-        self.lhs_dims = lhs_dims
-        self.rhs_dims = rhs_dims
-        self.tile_dims = tile_dims
-
-    def supports(self, op_name: str) -> bool:
-        return "matmul_like" in op_name
-
-    def is_broadcast_rhs_mmt_op(self, line: str) -> bool:
-        if "linalg.generic" not in line:
-            return False
-        if (
-            r'iterator_types = ["parallel", "parallel", "parallel", "reduction"]'
-            not in line
-        ):
-            return False
-        if (
-            r"indexing_maps = [affine_map<(d0, d1, d2, d3) -> (d0, d1, d3)>, affine_map<(d0, d1, d2, d3) -> (d2, d3)>, affine_map<(d0, d1, d2, d3) -> (d0, d1, d2)>"
-            not in line
-        ):
-            return False
-        return True
-
-    def is_broadcast_rhs_mmt(self, template: list[str]) -> bool:
-        return any(self.is_broadcast_rhs_mmt_op(line) for line in template)
-
-    def get_shapes_broadcast_rhs_mmt(self, template: list[str]) -> ProblemSize:
-        for line in template:
-            if not self.is_broadcast_rhs_mmt_op(line):
-                continue
-
-            # ins(%11, %12 : tensor<2x1024x1280xi8>, tensor<10240x1280xi8>) outs(%19 : tensor<2x1024x10240xi32>)
-            bmmt_re = (
-                rf"{MlirRegex.dps_ins_two_args()}\s+{MlirRegex.dps_outs_one_arg()}"
-            )
-            dps = re.search(bmmt_re, line)
-            if dps is None:
-                continue
-
-            lhs_tensor_type = dps.group("LHS")
-            rhs_tensor_type = dps.group("RHS")
-            lhs_shaped_type = parse_tensor_type(lhs_tensor_type)
-            assert lhs_shaped_type.rank() == 3
-
-            rhs_shaped_type = parse_tensor_type(rhs_tensor_type)
-            assert rhs_shaped_type.rank() == 2
-
-            res_tensor_type = dps.group("RES")
-            res_shaped_type = parse_tensor_type(res_tensor_type)
-            assert res_shaped_type.rank() == 3
-
-            B0, M0, K0 = lhs_shaped_type.shape
-            N1, K1 = rhs_shaped_type.shape
-            B2, M2, N2 = res_shaped_type.shape
-            assert B0 == B2
-            assert M0 == M2
-            assert N1 == N2
-            assert K0 == K1
-            return ProblemSize(
-                MatmulSize(M0, N1, K0, B0),
-                lhs_shaped_type,
-                rhs_shaped_type,
-                res_shaped_type,
-                DispatchKind.broadcast_rhs_mmt,
-            )
-
-        assert False, "Shape not found"
-
-    def get_shapes(self, template: list[str]) -> ProblemSize:
-        if self.is_broadcast_rhs_mmt(template):
-            return self.get_shapes_broadcast_rhs_mmt(template)
-
-        for line in template:
-            if "linalg.generic" not in line:
-                continue
-            if "lowering_config =" not in line:
-                continue
-            if '"reduction"' not in line:
-                continue
-
-            # ins(%7, %8 : tensor<2x1024x1280xf16>, tensor<20x64x1280xf16>)
-            cont_re = (
-                rf"{MlirRegex.dps_ins_two_args()}\s+{MlirRegex.dps_outs_one_arg()}"
-            )
-            dps = re.search(cont_re, line)
-            if dps is None:
-                continue
-
-            lhs_tensor_type = dps.group("LHS")
-            rhs_tensor_type = dps.group("RHS")
-            lhs_shaped_type = parse_tensor_type(lhs_tensor_type)
-            assert lhs_shaped_type.rank() == len(self.lhs_dims)
-
-            rhs_shaped_type = parse_tensor_type(rhs_tensor_type)
-            assert rhs_shaped_type.rank() == len(self.rhs_dims)
-
-            res_tensor_type = dps.group("RES")
-            res_shaped_type = parse_tensor_type(res_tensor_type)
-            assert res_shaped_type.rank() >= 2
-
-            M = math.prod(
-                val if dim == "m" else 1
-                for dim, val in zip(self.lhs_dims, lhs_shaped_type.shape)
-            )
-            N = math.prod(
-                val if dim == "n" else 1
-                for dim, val in zip(self.rhs_dims, rhs_shaped_type.shape)
-            )
-            K0 = math.prod(
-                val if dim == "k" else 1
-                for dim, val in zip(self.lhs_dims, lhs_shaped_type.shape)
-            )
-            K1 = math.prod(
-                val if dim == "k" else 1
-                for dim, val in zip(self.rhs_dims, rhs_shaped_type.shape)
-            )
-            assert K0 == K1
-
-            return ProblemSize(
-                MatmulSize(M, N, K0),
-                lhs_type=lhs_shaped_type,
-                rhs_type=rhs_shaped_type,
-                res_type=res_shaped_type,
-                dispatch_kind=DispatchKind.contraction,
-            )
-
-        assert False, "Shape not found"
-
+class ContractionTuner(DispatchTuner, ContractionParser):
     def get_transform_function_broadcast_rhs_mmt(
         self,
         problem_size: ProblemSize,
@@ -1045,57 +508,7 @@ transform.yield %generic, %config : !transform.any_op, !transform.any_param
         )
 
 
-class BatchMmtTuner(DispatchTuner):
-    def supports(self, op_name: str) -> bool:
-        return "batch_matmul_transpose_b" in op_name
-
-    def get_shapes(self, template: list[str]) -> ProblemSize:
-        for line in template:
-            if "linalg.generic" not in line:
-                continue
-            if (
-                r'iterator_types = ["parallel", "parallel", "parallel", "reduction"]'
-                not in line
-            ):
-                continue
-            # ins(%11, %12 : tensor<2x4096x640xi8>, tensor<2x640x640xi8>) outs(%19 : tensor<2x4096x640xi32>)
-            bmmt_re = (
-                rf"{MlirRegex.dps_ins_two_args()}\s+{MlirRegex.dps_outs_one_arg()}"
-            )
-            dps = re.search(bmmt_re, line)
-            if dps is None:
-                continue
-
-            lhs_tensor_type = dps.group("LHS")
-            rhs_tensor_type = dps.group("RHS")
-            lhs_shaped_type = parse_tensor_type(lhs_tensor_type)
-            assert lhs_shaped_type.rank() == 3
-
-            rhs_shaped_type = parse_tensor_type(rhs_tensor_type)
-            assert rhs_shaped_type.rank() == 3
-
-            res_tensor_type = dps.group("RES")
-            res_shaped_type = parse_tensor_type(res_tensor_type)
-            assert res_shaped_type.rank() == 3
-
-            B0, M0, K0 = lhs_shaped_type.shape
-            B1, N1, K1 = rhs_shaped_type.shape
-            B2, M2, N2 = res_shaped_type.shape
-            assert B0 == B1
-            assert B0 == B2
-            assert M0 == M2
-            assert N1 == N2
-            assert K0 == K1
-            return ProblemSize(
-                MatmulSize(M0, N1, K0, B0),
-                lhs_shaped_type,
-                rhs_shaped_type,
-                res_shaped_type,
-                DispatchKind.batch_mmt,
-            )
-
-        assert False, "Shape not found"
-
+class BatchMmtTuner(DispatchTuner, BatchMmtParser):
     def get_transform_function_batch_mmt(
         self,
         problem_size: ProblemSize,
@@ -1154,78 +567,7 @@ transform.yield %generic, %config : !transform.any_op, !transform.any_param
         return MLIRTransformation(template, modified, embeddable)
 
 
-class BatchMatmulTuner(DispatchTuner):
-    def __init__(self, lhs_dims: str, rhs_dims: str, tile_dims: str):
-        self.lhs_dims = lhs_dims
-        self.rhs_dims = rhs_dims
-        self.tile_dims = tile_dims
-
-    def supports(self, op_name: str) -> bool:
-        return "batch_matmul" in op_name
-
-    def get_shapes(self, template: list[str]) -> ProblemSize:
-        for line in template:
-            if "linalg.batch_matmul" not in line:
-                continue
-            # ins(%9, %10 : tensor<64x72x1280xf16>, tensor<64x1280x1280xf16>)
-            # outs(%12 : tensor<64x72x1280xf32>)
-            cont_re = (
-                rf"{MlirRegex.dps_ins_two_args()}\s+{MlirRegex.dps_outs_one_arg()}"
-            )
-            dps = re.search(cont_re, line)
-            if dps is None:
-                continue
-
-            lhs_tensor_type = dps.group("LHS")
-            rhs_tensor_type = dps.group("RHS")
-            lhs_shaped_type = parse_tensor_type(lhs_tensor_type)
-            assert lhs_shaped_type.rank() == len(self.lhs_dims)
-
-            rhs_shaped_type = parse_tensor_type(rhs_tensor_type)
-            assert rhs_shaped_type.rank() == len(self.rhs_dims)
-
-            res_tensor_type = dps.group("RES")
-            res_shaped_type = parse_tensor_type(res_tensor_type)
-            assert res_shaped_type.rank() == lhs_shaped_type.rank()
-
-            LHS = lhs_shaped_type.shape
-            RHS = rhs_shaped_type.shape
-            RES = res_shaped_type.shape
-
-            B = math.prod(
-                val if dim == "b" else 1 for dim, val in zip(self.lhs_dims, LHS)
-            )
-            B0 = math.prod(
-                val if dim == "b" else 1 for dim, val in zip(self.lhs_dims, RHS)
-            )
-            B1 = math.prod(
-                val if dim == "b" else 1 for dim, val in zip(self.lhs_dims, RES)
-            )
-            M = math.prod(
-                val if dim == "m" else 1 for dim, val in zip(self.lhs_dims, LHS)
-            )
-            N = math.prod(
-                val if dim == "n" else 1 for dim, val in zip(self.rhs_dims, RHS)
-            )
-            K0 = math.prod(
-                val if dim == "k" else 1 for dim, val in zip(self.lhs_dims, LHS)
-            )
-            K1 = math.prod(
-                val if dim == "k" else 1 for dim, val in zip(self.rhs_dims, RHS)
-            )
-            assert B == B0 and B == B1
-            assert K0 == K1
-
-            return ProblemSize(
-                MatmulSize(M, N, K0, B),
-                lhs_type=lhs_shaped_type,
-                rhs_type=rhs_shaped_type,
-                res_type=res_shaped_type,
-                dispatch_kind=DispatchKind.batch_matmul,
-            )
-
-        assert False, "Shape not found"
-
+class BatchMatmulTuner(DispatchTuner, BatchMatmulParser):
     def get_transform_function_batch_matmul(
         self,
         problem_size: ProblemSize,
@@ -1297,6 +639,12 @@ class BatchMatmulTuner(DispatchTuner):
         return MLIRTransformation(template, modified, embeddable)
 
 
+@dataclass
+class OpWalkResult:
+    was_interrupted: bool = False
+    dispatch_tuner: Optional[DispatchTuner] = None
+
+
 def walk_callback_get_fn(
     op: ir.Operation,
     walk_result: OpWalkResult,
@@ -1350,7 +698,8 @@ def tune(
     mlir_text = "".join(mlir_template)
 
     with ir.Context() as ctx:
-        mlir_module: ir.Module = parse_mlir(mlir_text, ctx)
+        tuner_context = TunerContext(ctx, tune_logger)
+        mlir_module: ir.Module = parse_mlir(mlir_text, tuner_context)
         # Save the input file as the first candidate.
         with open(path.join(output, f"0.mlir"), "w") as f:
             f.write(mlir_text)
