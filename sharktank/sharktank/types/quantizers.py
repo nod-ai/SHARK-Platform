@@ -131,6 +131,25 @@ class StaticScaledQuantizer(QuantizerTensor):
         else:
             assert len(self._scale.shape) == 0, "Expected per-tensor scale to be 0D"
 
+    def dequantize_raw_tensor(
+        self, t: torch.Tensor, to: torch.dtype, *, name: str
+    ) -> torch.Tensor:
+        return (
+            PlanarQuantizedTensor(
+                shape=t.shape,
+                name=t.name,
+                layout=TensorScaledLayout(
+                    shape=t.shape,
+                    d=self._reciprocal_scale,
+                    qs=t,
+                    m=self.offset,
+                    dtype=to,
+                ),
+            )
+            .unpack()
+            .dequant()
+        )
+
     def _quantize_raw_tensor(self, t: torch.Tensor, *, name: str) -> QuantizedTensor:
         """Performs a quantizing transformation on t, returning a QuantizeTensor."""
         shape = list(t.shape)

@@ -2,19 +2,19 @@
 
 > [!WARNING]
 > This is still under development! See
-> https://github.com/nod-ai/SHARK-Platform/issues/400.
+> https://github.com/nod-ai/shark-ai/issues/400.
 >
 > These instructions will be converted into a user guide once stable packages
-> are published to PyPI: <https://github.com/nod-ai/SHARK-Platform/issues/359>.
+> are published to PyPI: <https://github.com/nod-ai/shark-ai/issues/359>.
 
 Nightly releases are uploaded to
-https://github.com/nod-ai/SHARK-Platform/releases/tag/dev-wheels.
+https://github.com/nod-ai/shark-ai/releases/tag/dev-wheels.
 
 * The "expanded_assets" version of a release page is compatible with the
   `-f, --find-links <url>` options of `pip install`
   ([docs here](https://pip.pypa.io/en/stable/cli/pip_install/#cmdoption-f)).
   For the "dev-wheels" release above, that page is:
-  <https://github.com/nod-ai/SHARK-Platform/releases/expanded_assets/dev-wheels>
+  <https://github.com/nod-ai/shark-ai/releases/expanded_assets/dev-wheels>
 * These releases are generated using
   [`.github/workflows/build_package.yml`](../.github/workflows/build_packages.yml)
 * That workflow runs the
@@ -23,7 +23,7 @@ https://github.com/nod-ai/SHARK-Platform/releases/tag/dev-wheels.
 [`shortfin/build_tools/build_linux_package.sh`](../shortfin/build_tools/build_linux_package.sh)
   scripts
 * Workflow history can be viewed at
-  <https://github.com/nod-ai/SHARK-Platform/actions/workflows/build_packages.yml>
+  <https://github.com/nod-ai/shark-ai/actions/workflows/build_packages.yml>
 
 ## Prerequisites
 
@@ -38,7 +38,7 @@ source builds.
 You will need a recent version of Python.
 
 * As of Nov 1, 2024, sharktank is compatible with Python 3.11. See
-  https://github.com/nod-ai/SHARK-Platform/issues/349 for Python 3.12 support.
+  https://github.com/nod-ai/shark-ai/issues/349 for Python 3.12 support.
 * As of Nov 4, 2024, shortfin publishes packages for Python 3.11, 3.12, 3.13,
   and 3.13t
 
@@ -67,7 +67,7 @@ python3.11 -m venv 3.11.venv
 source 3.11.venv/bin/activate
 
 # Install 'sharktank' package from nightly releases.
-pip install sharktank -f https://github.com/nod-ai/SHARK-Platform/releases/expanded_assets/dev-wheels
+pip install sharktank -f https://github.com/nod-ai/shark-ai/releases/expanded_assets/dev-wheels
 
 # Test the installation.
 python -c "from sharktank import ops; print('Sanity check passed')"
@@ -84,7 +84,7 @@ python3.11 -m venv 3.11.venv
 source 3.11.venv/bin/activate
 
 # Install 'shortfin' package from nightly releases.
-pip install shortfin -f https://github.com/nod-ai/SHARK-Platform/releases/expanded_assets/dev-wheels
+pip install shortfin -f https://github.com/nod-ai/shark-ai/releases/expanded_assets/dev-wheels
 
 # Test the installation.
 python -c "import shortfin as sf; print('Sanity check passed')"

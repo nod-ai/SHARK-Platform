@@ -355,7 +355,6 @@ def matmul_default(lhs, rhs, *, transpose_rhs: bool) -> Tensor:
     rhs = unbox_tensor(rhs)
     if transpose_rhs:
         rhs = rhs.mT
-
     rhs = rhs.to(lhs.dtype)
 
     if len(lhs.shape) > 2 and len(rhs.shape) < 3:

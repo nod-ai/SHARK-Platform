@@ -16,7 +16,7 @@ process of exporting a model for use in the shortfin llm server with an MI300 GP
 ### Setting Up Environment
 
 Follow the `Development Getting Started` docs
-[here](https://github.com/nod-ai/SHARK-Platform/blob/main/README.md#development-getting-started)
+[here](https://github.com/nod-ai/shark-ai/blob/main/README.md#development-getting-started)
 to setup your environment for development.
 
 We will use an example with `llama_8b_f16_decomposed` in order to describe the

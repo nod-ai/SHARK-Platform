@@ -1,6 +1,6 @@
 # Model cookbook
 
-Note: These are early notes and commands that the SHARK-Platform team is using
+Note: These are early notes and commands that the shark-ai team is using
 and will turn into proper docs later.
 
 ## Diagrams

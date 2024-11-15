@@ -255,7 +255,7 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
         )
 
     @pytest.mark.xfail(
-        reason="Test not yet implemented", strict=True, raises=ExportMlirException
+        reason="Compile failure", strict=True, raises=ExportMlirException
     )
     def testBenchmark8B_fp8_Non_Decomposed(self):
         output_file_name = self.dir_path_8b / "fp8_torch"
