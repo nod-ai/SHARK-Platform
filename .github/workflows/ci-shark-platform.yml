@@ -88,6 +88,9 @@ jobs:
               cd .. && git clone --depth 1 --branch "iree-${IREE_VERSION}" https://github.com/iree-org/iree.git
           fi
 
+          # init iree submodules
+          cd iree && git submodule update --init --recursive
+
 
       - name: Install CMake
         uses: ssrobins/install-cmake@v1 # this action installs cmake into the action workspace
