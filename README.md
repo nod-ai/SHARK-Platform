@@ -1,11 +1,11 @@
 # shark-ai: SHARK Modeling and Serving Libraries
 
-> [!IMPORTANT]
-> Development is still in progress for several project components. See the
-> notes below for which workflows are best supported.
-
 ![GitHub License](https://img.shields.io/github/license/nod-ai/shark-ai)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
+
+## SHARK Users
+
+If you're looking to use SHARK check out our [User Guide](docs/user_guide.md). For developers continue to read on.
 
 <!-- TODO: high level overview, features when components are used together -->
 
@@ -65,11 +65,6 @@ Model name | Model recipes | Serving apps
 ---------- | ------------- | ------------
 SDXL       | [`sharktank/sharktank/models/punet/`](https://github.com/nod-ai/shark-ai/tree/main/sharktank/sharktank/models/punet) | [`shortfin/python/shortfin_apps/sd/`](https://github.com/nod-ai/shark-ai/tree/main/shortfin/python/shortfin_apps/sd)
 llama      | [`sharktank/sharktank/models/llama/`](https://github.com/nod-ai/shark-ai/tree/main/sharktank/sharktank/models/llama) | [`shortfin/python/shortfin_apps/llm/`](https://github.com/nod-ai/shark-ai/tree/main/shortfin/python/shortfin_apps/llm)
-
-
-## SHARK Users
-
-If you're looking to use SHARK check out our [User Guide](docs/user_guide.md).
 
 ## SHARK Developers
 
