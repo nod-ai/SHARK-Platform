@@ -88,8 +88,6 @@ jobs:
               git clone --depth 1 --branch "$EXPECTED_TAG" --recurse-submodules --shallow-submodules https://github.com/iree-org/iree.git "$IREE_PATH"
           fi
 
-
-
       - name: Install CMake
         uses: ssrobins/install-cmake@v1 # this action installs cmake into the action workspace
 
