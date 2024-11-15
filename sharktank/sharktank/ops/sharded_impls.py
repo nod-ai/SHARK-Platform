@@ -1303,3 +1303,27 @@ def view_split(tensor: SplitPrimitiveTensor, shape: List[int]) -> SplitPrimitive
     res = SplitPrimitiveTensor(shard_dim=shard_dim, ts=shards)
     assert math.prod(res.shape) == math.prod(tensor.shape)
     return res
+
+
+@view_as_complex.override(SplitPrimitiveTensor)
+def view_as_complex_split(tensor: SplitPrimitiveTensor) -> SplitPrimitiveTensor:
+    shards = [view_as_complex(shard) for shard in tensor.shards]
+    return SplitPrimitiveTensor(ts=shards, shard_dim=tensor.shard_dim)
+
+
+@view_as_complex.override(ReplicatedTensor)
+def view_as_complex_rep(tensor: ReplicatedTensor) -> ReplicatedTensor:
+    shards = [view_as_complex(shard) for shard in tensor.shards]
+    return ReplicatedTensor(ts=shards)
+
+
+@view_as_real.override(SplitPrimitiveTensor)
+def view_as_real_split(tensor: SplitPrimitiveTensor) -> SplitPrimitiveTensor:
+    shards = [view_as_real(shard) for shard in tensor.shards]
+    return SplitPrimitiveTensor(ts=shards, shard_dim=tensor.shard_dim)
+
+
+@view_as_real.override(ReplicatedTensor)
+def view_as_real_rep(tensor: ReplicatedTensor) -> ReplicatedTensor:
+    shards = [view_as_real(shard) for shard in tensor.shards]
+    return ReplicatedTensor(ts=shards)

@@ -20,6 +20,7 @@ namespace shortfin::local {
 
 System::System(iree_allocator_t host_allocator)
     : host_allocator_(host_allocator) {
+  SHORTFIN_TRACE_SCOPE_NAMED("System::System");
   logging::construct("System", this);
   SHORTFIN_THROW_IF_ERROR(iree_vm_instance_create(IREE_VM_TYPE_CAPACITY_DEFAULT,
                                                   host_allocator_,
@@ -29,6 +30,7 @@ System::System(iree_allocator_t host_allocator)
 }
 
 System::~System() {
+  SHORTFIN_TRACE_SCOPE_NAMED("System::~System");
   logging::destruct("System", this);
   bool needs_shutdown = false;
   {
@@ -61,6 +63,7 @@ System::~System() {
 }
 
 void System::Shutdown() {
+  SHORTFIN_TRACE_SCOPE_NAMED("System::Shutdown");
   // Stop workers.
   std::vector<Worker *> local_workers;
   {

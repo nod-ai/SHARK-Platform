@@ -7,6 +7,7 @@
 #include "shortfin/local/systems/amdgpu.h"
 
 #include "shortfin/support/logging.h"
+#include "shortfin/support/sysconfig.h"
 
 namespace shortfin::local::systems {
 
@@ -86,6 +87,7 @@ void AMDGPUSystemBuilder::InitializeDefaultSettings() {
 
 void AMDGPUSystemBuilder::Enumerate() {
   if (hip_hal_driver_) return;
+  SHORTFIN_TRACE_SCOPE_NAMED("AMDGPUSystemBuilder::Enumerate");
 
   iree_hal_hip_driver_options_t driver_options;
   iree_hal_hip_driver_options_initialize(&driver_options);
@@ -126,6 +128,7 @@ std::vector<std::string> AMDGPUSystemBuilder::GetAvailableDeviceIds() {
 }
 
 SystemPtr AMDGPUSystemBuilder::CreateSystem() {
+  SHORTFIN_TRACE_SCOPE_NAMED("AMDGPUSystemBuilder::CreateSystem");
   auto lsys = std::make_shared<System>(host_allocator());
   Enumerate();
 
@@ -188,6 +191,22 @@ SystemPtr AMDGPUSystemBuilder::CreateSystem() {
       iree_hal_device_info_t *info = &available_devices_.get()[i];
       used_device_ids.push_back(info->device_id);
     }
+  }
+
+  // Estimate the resource requirements for the requested number of devices.
+  // As of 2024-11-08, the number of file handles required to open 64 device
+  // partitions was 31 times the number to open one device. Because it is not
+  // good to run near the limit, we conservatively round that up to 64 above
+  // an arbitrary baseline of 768. This means that on a small, four device
+  // system, we will not request to raise limits for the Linux default of
+  // 1024 file handles, but we will raise for everything larger (which tends
+  // to be where the problems are).
+  size_t expected_device_count =
+      used_device_ids.size() * logical_devices_per_physical_device_;
+  if (!sysconfig::EnsureFileLimit(expected_device_count * 64 + 768)) {
+    logging::error(
+        "Could not ensure sufficient file handles for minimum operations: "
+        "Suggest setting explicit limits with `ulimit -n` and system settings");
   }
 
   // Initialize all used GPU devices.

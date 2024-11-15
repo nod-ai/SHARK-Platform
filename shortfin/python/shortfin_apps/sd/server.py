@@ -15,10 +15,6 @@ import io
 import copy
 import subprocess
 
-from iree.build import *
-
-import uvicorn.logging
-
 # Import first as it does dep checking and reporting.
 from shortfin.interop.fastapi import FastAPIResponder
 
@@ -26,7 +22,6 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
 import uvicorn
-
 
 from .components.generate import ClientGenerateBatchProcess
 from .components.config_struct import ModelParams
@@ -36,10 +31,12 @@ from .components.service import GenerateService
 from .components.tokenizer import Tokenizer
 from .components.builders import sdxl
 
+from shortfin.support.logging_setup import native_handler, configure_main_logger
 
-from shortfin.support.logging_setup import configure_main_logger
-
-logger = configure_main_logger("server")
+logger = logging.getLogger("shortfin-sd")
+logger.addHandler(native_handler)
+logger.setLevel(logging.INFO)
+logger.propagate = False
 
 THIS_DIR = Path(__file__).resolve().parent
 
@@ -88,7 +85,8 @@ app.put("/generate")(generate_request)
 
 def configure(args) -> SystemManager:
     # Setup system (configure devices, etc).
-    sysman = SystemManager(args.device, args.device_ids)
+    model_config, topology_config, flagfile, tuning_spec, args = get_configs(args)
+    sysman = SystemManager(args.device, args.device_ids, args.amdgpu_async_allocations)
 
     # Setup each service we are hosting.
     tokenizers = []
@@ -96,7 +94,9 @@ def configure(args) -> SystemManager:
         subfolder = f"tokenizer_{idx + 1}" if idx > 0 else "tokenizer"
         tokenizers.append(Tokenizer.from_pretrained(tok_name, subfolder))
 
-    model_params = ModelParams.load_json(args.model_config)
+    model_params = ModelParams.load_json(model_config)
+    vmfbs, params = get_modules(args, model_config, flagfile, tuning_spec)
+
     sm = GenerateService(
         name="sd",
         sysman=sysman,
@@ -108,7 +108,6 @@ def configure(args) -> SystemManager:
         show_progress=args.show_progress,
         trace_execution=args.trace_execution,
     )
-    vmfbs, params = get_modules(args)
     for key, vmfblist in vmfbs.items():
         for vmfb in vmfblist:
             sm.load_inference_module(vmfb, component=key)
@@ -118,14 +117,80 @@ def configure(args) -> SystemManager:
     return sysman
 
 
-def get_modules(args):
+def get_configs(args):
+    # Returns one set of config artifacts.
+    modelname = "sdxl"
+    model_config = args.model_config if args.model_config else None
+    topology_config = None
+    tuning_spec = None
+    flagfile = args.flagfile if args.flagfile else None
+    topology_inp = args.topology if args.topology else "spx_single"
+    cfg_builder_args = [
+        sys.executable,
+        "-m",
+        "iree.build",
+        os.path.join(THIS_DIR, "components", "config_artifacts.py"),
+        f"--target={args.target}",
+        f"--output-dir={args.artifacts_dir}",
+        f"--model={modelname}",
+        f"--topology={topology_inp}",
+    ]
+    outs = subprocess.check_output(cfg_builder_args).decode()
+    outs_paths = outs.splitlines()
+    for i in outs_paths:
+        if "sdxl_config" in i and not args.model_config:
+            model_config = i
+        elif "topology" in i and args.topology:
+            topology_config = i
+        elif "flagfile" in i and not args.flagfile:
+            flagfile = i
+        elif "attention_and_matmul_spec" in i and args.use_tuned:
+            tuning_spec = i
+
+    if args.use_tuned and args.tuning_spec:
+        tuning_spec = os.path.abspath(args.tuning_spec)
+
+    if topology_config:
+        with open(topology_config, "r") as f:
+            contents = [line.rstrip() for line in f]
+        for spec in contents:
+            if "--" in spec:
+                arglist = spec.strip("--").split("=")
+                arg = arglist[0]
+                if len(arglist) > 2:
+                    value = arglist[1:]
+                    for val in value:
+                        try:
+                            val = int(val)
+                        except ValueError:
+                            continue
+                elif len(arglist) == 2:
+                    value = arglist[-1]
+                    try:
+                        value = int(value)
+                    except ValueError:
+                        continue
+                else:
+                    # It's a boolean arg.
+                    value = True
+                setattr(args, arg, value)
+            else:
+                # It's an env var.
+                arglist = spec.split("=")
+                os.environ[arglist[0]] = arglist[1]
+
+    return model_config, topology_config, flagfile, tuning_spec, args
+
+
+def get_modules(args, model_config, flagfile, td_spec):
+    # TODO: Move this out of server entrypoint
     vmfbs = {"clip": [], "unet": [], "vae": [], "scheduler": []}
     params = {"clip": [], "unet": [], "vae": []}
     model_flags = copy.deepcopy(vmfbs)
     model_flags["all"] = args.compile_flags
 
-    if args.flagfile:
-        with open(args.flagfile, "r") as f:
+    if flagfile:
+        with open(flagfile, "r") as f:
             contents = [line.rstrip() for line in f]
         flagged_model = "all"
         for elem in contents:
@@ -134,6 +199,10 @@ def get_modules(args):
                 flagged_model = elem
             else:
                 model_flags[flagged_model].extend([elem])
+    if td_spec:
+        model_flags["unet"].extend(
+            [f"--iree-codegen-transform-dialect-library={td_spec}"]
+        )
 
     filenames = []
     for modelname in vmfbs.keys():
@@ -143,7 +212,7 @@ def get_modules(args):
             "-m",
             "iree.build",
             os.path.join(THIS_DIR, "components", "builders.py"),
-            f"--model-json={args.model_config}",
+            f"--model-json={model_config}",
             f"--target={args.target}",
             f"--splat={args.splat}",
             f"--build-preference={args.build_preference}",
@@ -151,11 +220,9 @@ def get_modules(args):
             f"--model={modelname}",
             f"--iree-hal-target-device={args.device}",
             f"--iree-hip-target={args.target}",
-            f"--iree-compile-extra-args={" ".join(ireec_args)}",
+            f"--iree-compile-extra-args={' '.join(ireec_args)}",
         ]
-        print("BUILDER INPUT:\n", " \ \n  ".join(builder_args))
         output = subprocess.check_output(builder_args).decode()
-        print("OUTPUT:", output)
 
         output_paths = output.splitlines()
         filenames.extend(output_paths)
@@ -170,15 +237,11 @@ def get_modules(args):
 
 
 def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
+    from pathlib import Path
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", type=str, default=None)
     parser.add_argument("--port", type=int, default=8000)
-    parser.add_argument(
-        "--root-path",
-        type=str,
-        default=None,
-        help="Root path to use for installing behind path based proxy.",
-    )
     parser.add_argument(
         "--timeout-keep-alive", type=int, default=5, help="Keep alive timeout"
     )
@@ -199,7 +262,7 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
     )
     parser.add_argument(
         "--device_ids",
-        type=int,
+        type=str,
         nargs="*",
         default=None,
         help="Device IDs visible to the system builder. Defaults to None (full visibility). Can be an index or a sf device id like amdgpu:0:0@0",
@@ -217,8 +280,7 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
     parser.add_argument(
         "--model_config",
         type=Path,
-        required=True,
-        help="Path to the model config file",
+        help="Path to the model config file. If None, defaults to i8 punet, batch size 1",
     )
     parser.add_argument(
         "--workers_per_device",
@@ -240,9 +302,6 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
         help="Concurrency control -- How to isolate programs.",
     )
     parser.add_argument(
-        "--log_level", type=str, default="error", choices=["info", "debug", "error"]
-    )
-    parser.add_argument(
         "--show_progress",
         action="store_true",
         help="enable tqdm progress for unet iterations.",
@@ -251,6 +310,11 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
         "--trace_execution",
         action="store_true",
         help="Enable tracing of program modules.",
+    )
+    parser.add_argument(
+        "--amdgpu_async_allocations",
+        action="store_true",
+        help="Enable asynchronous allocations for amdgpu device contexts.",
     )
     parser.add_argument(
         "--splat",
@@ -278,21 +342,36 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
     )
     parser.add_argument(
         "--artifacts_dir",
-        type=str,
-        default="",
+        type=Path,
+        default=None,
         help="Path to local artifacts cache.",
     )
-    log_levels = {
-        "info": logging.INFO,
-        "debug": logging.DEBUG,
-        "error": logging.ERROR,
-    }
+    parser.add_argument(
+        "--tuning_spec",
+        type=str,
+        default=None,
+        help="Path to transform dialect spec if compiling an executable with tunings.",
+    )
+    parser.add_argument(
+        "--topology",
+        type=str,
+        default=None,
+        choices=["spx_single", "cpx_single", "spx_multi", "cpx_multi"],
+        help="Use one of four known performant preconfigured device/fiber topologies.",
+    )
+    parser.add_argument(
+        "--use_tuned",
+        type=int,
+        default=1,
+        help="Use tunings for attention and matmul ops. 0 to disable.",
+    )
 
     args = parser.parse_args(argv)
+    if not args.artifacts_dir:
+        home = Path.home()
+        artdir = home / ".cache" / "shark"
+        args.artifacts_dir = str(artdir)
 
-    log_level = log_levels[args.log_level]
-    logger.setLevel(log_level)
-    logger.addHandler(logging.FileHandler("shortfin_sd.log"))
     global sysman
     sysman = configure(args)
     uvicorn.run(
@@ -305,14 +384,31 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
 
 
 if __name__ == "__main__":
+    logging.root.setLevel(logging.INFO)
     main(
         sys.argv[1:],
         # Make logging defer to the default shortfin logging config.
         log_config={
             "version": 1,
             "disable_existing_loggers": False,
-            "formatters": {},
-            "handlers": {},
-            "loggers": {},
+            "formatters": {
+                "default": {
+                    "format": "%(asctime)s - %(levelname)s - %(message)s",
+                    "datefmt": "%Y-%m-%d %H:%M:%S",
+                },
+            },
+            "handlers": {
+                "console": {
+                    "class": "logging.StreamHandler",
+                    "formatter": "default",
+                },
+            },
+            "loggers": {
+                "uvicorn": {
+                    "handlers": ["console"],
+                    "level": "INFO",
+                    "propagate": False,
+                },
+            },
         },
     )

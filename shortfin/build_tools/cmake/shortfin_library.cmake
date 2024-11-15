@@ -80,7 +80,7 @@ function(shortfin_public_library)
       PRIVATE ${_DYLIB_COMPONENTS}
     )
     set_target_properties("${_RULE_NAME}" PROPERTIES
-      VERSION ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}
+      VERSION ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}
       SOVERSION ${SOVERSION}
     )
   endif()

@@ -1,4 +1,4 @@
 # Keep in sync with "ref: iree-" in .github/workflows/* and GIT_TAG in CMakeLists.txt
 -f https://iree.dev/pip-release-links.html
-iree-base-compiler==2.9.0rc20241108
-iree-base-runtime==2.9.0rc20241108
+iree-base-compiler==3.0.0rc20241115
+iree-base-runtime==3.0.0rc20241115

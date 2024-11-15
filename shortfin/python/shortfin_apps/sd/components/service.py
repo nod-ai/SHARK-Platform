@@ -24,7 +24,8 @@ from .tokenizer import Tokenizer
 from .metrics import measure
 
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("shortfin-sd.service")
+logger.setLevel(logging.DEBUG)
 
 prog_isolations = {
     "none": sf.ProgramIsolation.NONE,
@@ -62,12 +63,20 @@ class GenerateService:
         self.inference_parameters: dict[str, list[sf.BaseProgramParameters]] = {}
         self.inference_modules: dict[str, sf.ProgramModule] = {}
         self.inference_functions: dict[str, dict[str, sf.ProgramFunction]] = {}
-        self.inference_programs: dict[str, sf.Program] = {}
+        self.inference_programs: dict[int, dict[str, sf.Program]] = {}
         self.trace_execution = trace_execution
         self.show_progress = show_progress
+
+        self.prog_isolation = prog_isolations[prog_isolation]
+
         self.workers_per_device = workers_per_device
         self.fibers_per_device = fibers_per_device
-        self.prog_isolation = prog_isolations[prog_isolation]
+        if fibers_per_device % workers_per_device != 0:
+            raise ValueError(
+                "Currently, fibers_per_device must be divisible by workers_per_device"
+            )
+        self.fibers_per_worker = int(fibers_per_device / workers_per_device)
+
         self.workers = []
         self.fibers = []
         self.fiber_status = []
@@ -81,7 +90,9 @@ class GenerateService:
                 )
                 self.fibers.append(fiber)
                 self.fiber_status.append(0)
-
+        for idx in range(len(self.workers)):
+            self.inference_programs[idx] = {}
+            self.inference_functions[idx] = {}
         # Scope dependent objects.
         self.batcher = BatcherProcess(self)
 
@@ -108,52 +119,61 @@ class GenerateService:
         self.inference_parameters[component].append(p)
 
     def start(self):
-        for fiber in self.fibers:
-            for component in self.inference_modules:
-                component_modules = [
-                    sf.ProgramModule.parameter_provider(
-                        self.sysman.ls, *self.inference_parameters.get(component, [])
-                    ),
-                    *self.inference_modules[component],
-                ]
-                self.inference_programs[component] = sf.Program(
+        # Initialize programs.
+        for component in self.inference_modules:
+            component_modules = [
+                sf.ProgramModule.parameter_provider(
+                    self.sysman.ls, *self.inference_parameters.get(component, [])
+                ),
+                *self.inference_modules[component],
+            ]
+
+            for worker_idx, worker in enumerate(self.workers):
+                worker_devices = self.fibers[
+                    worker_idx * (self.fibers_per_worker)
+                ].raw_devices
+                logger.info(
+                    f"Loading inference program: {component}, worker index: {worker_idx}, device: {worker_devices}"
+                )
+                self.inference_programs[worker_idx][component] = sf.Program(
                     modules=component_modules,
-                    devices=fiber.raw_devices,
+                    devices=worker_devices,
                     isolation=self.prog_isolation,
                     trace_execution=self.trace_execution,
                 )
+                logger.info("Program loaded.")
 
-        # TODO: export vmfbs with multiple batch size entrypoints
-
-        self.inference_functions["encode"] = {}
-        for bs in self.model_params.clip_batch_sizes:
-            self.inference_functions["encode"][bs] = self.inference_programs["clip"][
-                f"{self.model_params.clip_module_name}.encode_prompts"
-            ]
-
-        self.inference_functions["denoise"] = {}
-        for bs in self.model_params.unet_batch_sizes:
-            self.inference_functions["denoise"][bs] = {
-                "unet": self.inference_programs["unet"][
-                    f"{self.model_params.unet_module_name}.{self.model_params.unet_fn_name}"
-                ],
-                "init": self.inference_programs["scheduler"][
-                    f"{self.model_params.scheduler_module_name}.run_initialize"
-                ],
-                "scale": self.inference_programs["scheduler"][
-                    f"{self.model_params.scheduler_module_name}.run_scale"
-                ],
-                "step": self.inference_programs["scheduler"][
-                    f"{self.model_params.scheduler_module_name}.run_step"
-                ],
-            }
-
-        self.inference_functions["decode"] = {}
-        for bs in self.model_params.vae_batch_sizes:
-            self.inference_functions["decode"][bs] = self.inference_programs["vae"][
-                f"{self.model_params.vae_module_name}.decode"
-            ]
-
+        for worker_idx, worker in enumerate(self.workers):
+            self.inference_functions[worker_idx]["encode"] = {}
+            for bs in self.model_params.clip_batch_sizes:
+                self.inference_functions[worker_idx]["encode"][
+                    bs
+                ] = self.inference_programs[worker_idx]["clip"][
+                    f"{self.model_params.clip_module_name}.encode_prompts"
+                ]
+            self.inference_functions[worker_idx]["denoise"] = {}
+            for bs in self.model_params.unet_batch_sizes:
+                self.inference_functions[worker_idx]["denoise"][bs] = {
+                    "unet": self.inference_programs[worker_idx]["unet"][
+                        f"{self.model_params.unet_module_name}.{self.model_params.unet_fn_name}"
+                    ],
+                    "init": self.inference_programs[worker_idx]["scheduler"][
+                        f"{self.model_params.scheduler_module_name}.run_initialize"
+                    ],
+                    "scale": self.inference_programs[worker_idx]["scheduler"][
+                        f"{self.model_params.scheduler_module_name}.run_scale"
+                    ],
+                    "step": self.inference_programs[worker_idx]["scheduler"][
+                        f"{self.model_params.scheduler_module_name}.run_step"
+                    ],
+                }
+            self.inference_functions[worker_idx]["decode"] = {}
+            for bs in self.model_params.vae_batch_sizes:
+                self.inference_functions[worker_idx]["decode"][
+                    bs
+                ] = self.inference_programs[worker_idx]["vae"][
+                    f"{self.model_params.vae_module_name}.decode"
+                ]
         self.batcher.launch()
 
     def shutdown(self):
@@ -166,6 +186,8 @@ class GenerateService:
         params = [
             f"     {key} : {value}" for key, value in self.inference_parameters.items()
         ]
+        # For python 3.11 since we can't have \ in the f"" expression.
+        new_line = "\n"
         return (
             f"ServiceManager("
             f"\n  INFERENCE DEVICES : \n"
@@ -176,9 +198,9 @@ class GenerateService:
             f"     fibers per device : {self.fibers_per_device}\n"
             f"     program isolation mode : {self.prog_isolation}\n"
             f"\n  INFERENCE MODULES : \n"
-            f"{'\n'.join(modules)}\n"
+            f"{new_line.join(modules)}\n"
             f"\n  INFERENCE PARAMETERS : \n"
-            f"{'\n'.join(params)}\n"
+            f"{new_line.join(params)}\n"
             f")"
         )
 
@@ -193,8 +215,8 @@ class BatcherProcess(sf.Process):
     into batches.
     """
 
-    STROBE_SHORT_DELAY = 0.1
-    STROBE_LONG_DELAY = 0.25
+    STROBE_SHORT_DELAY = 0.5
+    STROBE_LONG_DELAY = 1
 
     def __init__(self, service: GenerateService):
         super().__init__(fiber=service.fibers[0])
@@ -320,7 +342,11 @@ class InferenceExecutorProcess(sf.Process):
     ):
         super().__init__(fiber=service.fibers[index])
         self.service = service
-        self.worker_index = index
+        self.fiber_index = index
+        self.worker_index = int(
+            (index - index % self.service.fibers_per_worker)
+            / self.service.fibers_per_worker
+        )
         self.exec_requests: list[InferenceExecRequest] = []
 
     @measure(type="exec", task="inference process")
@@ -333,9 +359,8 @@ class InferenceExecutorProcess(sf.Process):
                         logger.error("Executor process recieved disjoint batch.")
                 phase = req.phase
             phases = self.exec_requests[0].phases
-
             req_count = len(self.exec_requests)
-            device0 = self.service.fibers[self.worker_index].device(0)
+            device0 = self.service.fibers[self.fiber_index].device(0)
             if phases[InferencePhase.PREPARE]["required"]:
                 await self._prepare(device=device0, requests=self.exec_requests)
             if phases[InferencePhase.ENCODE]["required"]:
@@ -346,11 +371,11 @@ class InferenceExecutorProcess(sf.Process):
                 await self._decode(device=device0, requests=self.exec_requests)
             if phases[InferencePhase.POSTPROCESS]["required"]:
                 await self._postprocess(device=device0, requests=self.exec_requests)
-
+            await device0
             for i in range(req_count):
                 req = self.exec_requests[i]
                 req.done.set_success()
-            self.service.fiber_status[self.worker_index] = 0
+            self.service.fiber_status[self.fiber_index] = 0
 
         except Exception:
             logger.exception("Fatal error in image generation")
@@ -400,10 +425,13 @@ class InferenceExecutorProcess(sf.Process):
 
     async def _encode(self, device, requests):
         req_bs = len(requests)
-
-        entrypoints = self.service.inference_functions["encode"]
+        entrypoints = self.service.inference_functions[self.worker_index]["encode"]
+        if req_bs not in list(entrypoints.keys()):
+            for request in requests:
+                await self._encode(device, [request])
+            return
         for bs, fn in entrypoints.items():
-            if bs >= req_bs:
+            if bs == req_bs:
                 break
 
         # Prepare tokenized input ids for CLIP inference
@@ -440,6 +468,7 @@ class InferenceExecutorProcess(sf.Process):
             fn,
             "".join([f"\n  {i}: {ary.shape}" for i, ary in enumerate(clip_inputs)]),
         )
+        await device
         pe, te = await fn(*clip_inputs, fiber=self.fiber)
 
         for i in range(req_bs):
@@ -454,9 +483,13 @@ class InferenceExecutorProcess(sf.Process):
         step_count = requests[0].steps
         cfg_mult = 2 if self.service.model_params.cfg_mode else 1
         # Produce denoised latents
-        entrypoints = self.service.inference_functions["denoise"]
+        entrypoints = self.service.inference_functions[self.worker_index]["denoise"]
+        if req_bs not in list(entrypoints.keys()):
+            for request in requests:
+                await self._denoise(device, [request])
+            return
         for bs, fns in entrypoints.items():
-            if bs >= req_bs:
+            if bs == req_bs:
                 break
 
         # Get shape of batched latents.
@@ -590,9 +623,13 @@ class InferenceExecutorProcess(sf.Process):
     async def _decode(self, device, requests):
         req_bs = len(requests)
         # Decode latents to images
-        entrypoints = self.service.inference_functions["decode"]
+        entrypoints = self.service.inference_functions[self.worker_index]["decode"]
+        if req_bs not in list(entrypoints.keys()):
+            for request in requests:
+                await self._decode(device, [request])
+            return
         for bs, fn in entrypoints.items():
-            if bs >= req_bs:
+            if bs == req_bs:
                 break
 
         latents_shape = [

@@ -43,6 +43,7 @@ storage storage::import_buffer(local::ScopedDevice &device,
 
 storage storage::allocate_device(ScopedDevice &device,
                                  iree_device_size_t allocation_size) {
+  SHORTFIN_TRACE_SCOPE_NAMED("storage::allocate_device");
   if (!device.raw_device()) {
     throw std::invalid_argument("Cannot allocate with a null device affinity");
   }
@@ -63,6 +64,7 @@ storage storage::allocate_device(ScopedDevice &device,
 storage storage::allocate_host(ScopedDevice &device,
                                iree_device_size_t allocation_size,
                                bool device_visible) {
+  SHORTFIN_TRACE_SCOPE_NAMED("storage::allocate_host");
   if (!device.raw_device()) {
     throw std::invalid_argument("Cannot allocate with a null device affinity");
   }
@@ -207,6 +209,7 @@ std::string storage::formatted_buffer_usage() const {
 
 void storage::AddAsInvocationArgument(local::ProgramInvocation *inv,
                                       local::ProgramResourceBarrier barrier) {
+  SHORTFIN_TRACE_SCOPE_NAMED("storage::AddAsInvocationArgument");
   iree::vm_opaque_ref ref;
   *(&ref) = iree_hal_buffer_retain_ref(buffer_);
   inv->AddArg(std::move(ref));
@@ -220,6 +223,7 @@ iree_vm_ref_type_t storage::invocation_marshalable_type() {
 
 storage storage::CreateFromInvocationResultRef(local::ProgramInvocation *inv,
                                                iree::vm_opaque_ref ref) {
+  SHORTFIN_TRACE_SCOPE_NAMED("storage::CreateFromInvocationResultRef");
   // Steal the ref to one of our smart pointers.
   // TODO: Should have an opaque_ref::release().
   iree::hal_buffer_ptr buffer =
@@ -230,6 +234,7 @@ storage storage::CreateFromInvocationResultRef(local::ProgramInvocation *inv,
 
 storage storage::ImportInvocationResultStorage(local::ProgramInvocation *inv,
                                                iree::hal_buffer_ptr buffer) {
+  SHORTFIN_TRACE_SCOPE_NAMED("storage::ImportInvocationResultStorage");
   local::ScopedDevice device =
       local::ScopedDevice(*inv->fiber(), inv->device_selection());
   auto imported_storage = storage::import_buffer(device, std::move(buffer));
@@ -251,6 +256,7 @@ storage storage::ImportInvocationResultStorage(local::ProgramInvocation *inv,
 
 void storage::AddInvocationArgBarrier(local::ProgramInvocation *inv,
                                       local::ProgramResourceBarrier barrier) {
+  SHORTFIN_TRACE_SCOPE_NAMED("storage::AddInvocationArgBarrier");
   switch (barrier) {
     case ProgramResourceBarrier::DEFAULT:
     case ProgramResourceBarrier::READ:

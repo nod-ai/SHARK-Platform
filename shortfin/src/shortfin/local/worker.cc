@@ -109,6 +109,7 @@ iree_status_t Worker::TransactLoop(iree_status_t signal_status) {
   for (auto& next_thunk : next_thunks_) {
     // TODO: Make thunks have to return a status, propagate, and handle
     // exceptions.
+    SHORTFIN_TRACE_SCOPE_NAMED("Worker::ThreadsafeCallback");
     next_thunk();
   }
   next_thunks_.clear();

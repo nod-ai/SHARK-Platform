@@ -14,7 +14,7 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
 endif()
 
 # Get version number from file
-file(READ ${CMAKE_CURRENT_SOURCE_DIR}/version_info.json VERSION_JSON_STRING)
+file(READ ${CMAKE_CURRENT_SOURCE_DIR}/version.json VERSION_JSON_STRING)
 string(JSON PACKAGE_VERSION GET ${VERSION_JSON_STRING} package-version)
 string(REGEX MATCH "(0|[1-9][0-9]*)(\.(0|[1-9][0-9]*))*" BASE_VERSION ${PACKAGE_VERSION})
 
@@ -40,7 +40,7 @@ if(NOT WIN32)
 endif()
 
 # Pins
-set(SHORTFIN_IREE_GIT_TAG "iree-2.9.0rc20241108")
+set(SHORTFIN_IREE_GIT_TAG "iree-3.0.0rc20241115")
 
 # build options
 option(SHORTFIN_BUILD_PYTHON_BINDINGS "Builds Python Bindings" OFF)

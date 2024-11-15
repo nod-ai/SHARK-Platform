@@ -8,6 +8,7 @@
 
 #include <sstream>
 
+#include "shortfin/support/logging.h"
 #include "xtl/xhalf_float.hpp"
 
 namespace shortfin::array {
@@ -56,6 +57,7 @@ class typed_xt_methods final : public poly_xt_methods {
 bool poly_xt_methods::inplace_new(uint8_t *inst_storage, DType dtype,
                                   void *array_memory, size_t array_memory_size,
                                   Dims &dims) {
+  SHORTFIN_TRACE_SCOPE_NAMED("array_xtensor_cast");
 #define POLY_XT_CASE(et, cpp_type)                            \
   case et:                                                    \
     typed_xt_methods<cpp_type>::concrete_inplace_new(         \
