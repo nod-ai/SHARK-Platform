@@ -54,3 +54,6 @@ jobs:
 
       - name: Run tuner tests
         run: pytest tuner/
+
+      - name: Run mypy type checker
+        run: mypy tuner/tuner
