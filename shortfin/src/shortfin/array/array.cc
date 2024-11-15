@@ -64,6 +64,7 @@ mapping device_array::data_rw() { return storage_.map_read_write(); }
 mapping device_array::data_w() { return storage_.map_write_discard(); }
 
 std::optional<mapping> device_array::map_memory_for_xtensor() {
+  SHORTFIN_TRACE_SCOPE_NAMED("PyDeviceArray::map_memory_for_xtensor");
   if (storage_.is_mappable_for_read_write()) {
     return storage_.map_read_write();
   } else if (storage_.is_mappable_for_read()) {
@@ -97,6 +98,7 @@ std::string device_array::to_s() const {
 
 void device_array::AddAsInvocationArgument(
     local::ProgramInvocation *inv, local::ProgramResourceBarrier barrier) {
+  SHORTFIN_TRACE_SCOPE_NAMED("PyDeviceArray::AddAsInvocationArgument");
   auto dims_span = shape();
   iree_hal_buffer_view_t *buffer_view;
   SHORTFIN_THROW_IF_ERROR(iree_hal_buffer_view_create(
@@ -117,6 +119,7 @@ iree_vm_ref_type_t device_array::invocation_marshalable_type() {
 
 device_array device_array::CreateFromInvocationResultRef(
     local::ProgramInvocation *inv, iree::vm_opaque_ref ref) {
+  SHORTFIN_TRACE_SCOPE_NAMED("PyDeviceArray::CreateFromInvocationResultRef");
   // We don't retain the buffer view in the device array, so just deref it
   // vs stealing the ref.
   iree_hal_buffer_view_t *bv = iree_hal_buffer_view_deref(*ref.get());

@@ -30,6 +30,9 @@ wheelhouse
 *.whl
 *.venv
 
+# Local-only config options
+version_local.json
+
 #Model artifacts
 *.pt
 *.safetensors

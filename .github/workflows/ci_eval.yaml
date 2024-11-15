@@ -40,15 +40,15 @@ jobs:
     steps:
       - name: "Setting up Python"
         id: setup_python
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
         with:
           python-version: ${{matrix.version}}
 
       - name: "Checkout Code"
-        uses: actions/checkout@v3
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Cache Pip Packages
-        uses: actions/cache@v4
+        uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4.1.2
         id: cache-pip
         with:
           path: ${{ env.PIP_CACHE_DIR }}
@@ -70,10 +70,9 @@ jobs:
           # Try with the latest IREE nightly releases, not what iree-turbine pins.
           # We could also pin to a known working or stable version.
           # This should eventually stabilize. Do the best we can for now.
-          pip install -f https://iree.dev/pip-release-links.html --upgrade \
+          pip install -f https://iree.dev/pip-release-links.html --upgrade --pre \
             iree-base-compiler \
-            iree-base-runtime \
-            "numpy<2.0"
+            iree-base-runtime
 
       - name: Run perplexity test with IREE
         run:  pytest -n 8 -v -s sharktank/tests/evaluate/perplexity_iree_test.py --longrun --iree-device='hip://7' --iree-hip-target=gfx942 --iree-hal-target-backends=rocm --llama3-8b-f16-model-path=/data/llama3.1/8b/llama8b_f16.irpa --llama3-8b-tokenizer-path=/data/llama3.1/8b/tokenizer_config.json --html=perplexity/perplexity_iree.html
@@ -102,15 +101,15 @@ jobs:
     steps:
       - name: "Setting up Python"
         id: setup_python
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
         with:
           python-version: ${{matrix.version}}
 
       - name: "Checkout Code"
-        uses: actions/checkout@v3
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Cache Pip Packages
-        uses: actions/cache@v4
+        uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4.1.2
         id: cache-pip
         with:
           path: ${{ env.PIP_CACHE_DIR }}

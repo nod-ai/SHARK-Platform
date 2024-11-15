@@ -71,6 +71,7 @@ class PagedLlamaModelV1(BaseCausalLMModel):
             device=config.device,
             activation_dtype=config.activation_dtype,
             attention_dtype=config.attention_dtype,
+            fake_quant=config.fake_quant,
         )
         self.config = config
         self.hp = hp
@@ -113,6 +114,7 @@ class PagedLlamaModelV1(BaseCausalLMModel):
                     head_count_kv=hp.attention_head_count_kv,
                     rms_epsilon=hp.attention_layer_norm_rms_epsilon,
                     attention_kernel=self.attention_kernel,
+                    fake_quant=self.fake_quant,
                 )
                 for n in range(hp.block_count)
             ]
@@ -185,29 +187,6 @@ class PagedLlamaModelV1(BaseCausalLMModel):
         self._assert_device(attention_mask, dtype=self.activation_dtype)
         self._assert_device(start_positions)
         self._assert_device(*cache_state, dtype=self.activation_dtype)
-
-        if self.config.tensor_parallelism_size > 1:
-            if not isinstance(tokens, ReplicatedTensor):
-                tokens = ops.replicate(
-                    tokens, count=self.config.tensor_parallelism_size
-                )
-            if not isinstance(attention_mask, ReplicatedTensor):
-                attention_mask = ops.replicate(
-                    attention_mask, count=self.config.tensor_parallelism_size
-                )
-            if not isinstance(start_positions, ReplicatedTensor):
-                start_positions = ops.replicate(
-                    start_positions, count=self.config.tensor_parallelism_size
-                )
-            if not isinstance(seq_block_ids, ReplicatedTensor):
-                seq_block_ids = ops.replicate(
-                    seq_block_ids, count=self.config.tensor_parallelism_size
-                )
-            # If the user provided unsharded arguments they probably want
-            # an unsharded result as well.
-            unshard_result = True
-        else:
-            unshard_result = False
 
         bs, _ = tokens.shape
         # Precompute a position based mask for computing rope embeddings
@@ -307,6 +286,7 @@ class AttentionFFNBlock(ThetaLayer):
         head_count_kv: int,
         rms_epsilon: float,
         attention_kernel: str = "decomposed",
+        fake_quant: bool = True,
     ):
         super().__init__(theta)
         self.add_module(
@@ -320,6 +300,7 @@ class AttentionFFNBlock(ThetaLayer):
                 head_count_kv=head_count_kv,
                 rms_epsilon=rms_epsilon,
                 attention_kernel=attention_kernel,
+                fake_quant=fake_quant,
             ),
         )
         self.add_module(

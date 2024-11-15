@@ -42,15 +42,15 @@ jobs:
 
       - name: "Setting up Python"
         id: setup_python
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
         with:
           python-version: ${{matrix.version}}
 
       - name: "Checkout Code"
-        uses: actions/checkout@v3
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Cache Pip Packages
-        uses: actions/cache@v4
+        uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4.1.2
         id: cache-pip
         with:
           path: ${{ env.PIP_CACHE_DIR }}
@@ -71,9 +71,8 @@ jobs:
 
           # Test with pinned nightly releases, not what iree-turbine uses.
           pip install -f https://iree.dev/pip-release-links.html --upgrade \
-            iree-base-compiler==2.9.0rc20241108 \
-            iree-base-runtime==2.9.0rc20241108 \
-            "numpy<2.0"
+            iree-base-compiler==3.0.0rc20241115 \
+            iree-base-runtime==3.0.0rc20241115
 
       - name: Run llama 8b tests
         run: pytest sharktank/tests/models/llama/benchmark_amdgpu_test.py -v -s --iree-hip-target=gfx942 --run-8b-llama

@@ -54,24 +54,19 @@ def main():
         help="Enables strictness during export",
         action="store_true",
     )
-    parser.add_argument(
-        "--attention-kernel",
-        type=str,
-        default="decomposed",
-        choices=["decomposed", "torch"],
-    )
-
+    cli.add_quantization_options(parser)
+    cli.add_model_options(parser)
     args = cli.parse(parser)
     dataset_type = cli.get_input_data_files(args)
     dataset_type = "irpa" if "irpa" in dataset_type else "gguf"
     dataset = cli.get_input_dataset(args)
-
     hp = configs.LlamaHParams.from_gguf_props(dataset.properties)
     tensor_parallelism_size = (
         dataset.properties["tensor_parallelism_size"]
         if "tensor_parallelism_size" in dataset.properties
         else 1
     )
+
     llama_config = LlamaModelConfig(
         hp,
         tensor_parallelism_size=tensor_parallelism_size,
@@ -80,6 +75,7 @@ def main():
         kv_cache_type="direct" if args.bs == [1] else "paged",
         attention_kernel=args.attention_kernel,
     )
+    llama_config.fake_quant = args.fake_quant
 
     if llama_config.hp.expert_count:
         if llama_config.hp.model_arch == "grok":
@@ -214,8 +210,6 @@ def main():
 
                 cache_tensors = repack_cache(cs, cache_shard_dim)
 
-            cache_tensors = [model.cache.unflatten_page_table(cache_tensors)]
-
             logits = model.prefill(
                 tokens,
                 attention_mask=attention_mask,
@@ -301,8 +295,6 @@ def main():
                 seq_block_ids = ops.replicate(seq_block_ids, count=shard_count)
 
                 cache_state = repack_cache(cache_state, cache_shard_dim)
-
-            cache_state = [model.cache.unflatten_page_table(cache_state)]
 
             logits = model.decode(
                 tokens,

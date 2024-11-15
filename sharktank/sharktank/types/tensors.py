@@ -543,9 +543,10 @@ class DefaultPrimitiveTensor(PrimitiveTensor):
     ) -> "InferenceTensor":
         return DefaultPrimitiveTensor(name=self.name, data=new_globals[self.name])
 
-    def __getitem__(self, keys):
-        if not isinstance(keys, list) and not isinstance(keys, tuple):
-            keys = [keys]
+    def __getitem__(self, key):
+        keys = [key]
+        if isinstance(key, tuple) or isinstance(key, list):
+            keys = key
 
         keys = [
             unbox_tensor(key) if isinstance(key, PrimitiveTensor) else key
@@ -1188,15 +1189,19 @@ class ReplicatedTensor(ShardedTensor):
             raise IOError(f"Missing component tensor '' in {raw_tensors.keys()}") from e
         return cls(name=name, ts=ts)
 
-    def __getitem__(self, keys):
-        if not isinstance(keys, list) and not isinstance(keys, tuple):
-            keys = [keys]
+    def __getitem__(self, key):
+        keys = [key]
+        if isinstance(key, tuple) or isinstance(key, list):
+            keys = key
 
         shards = []
         for i, shard in enumerate(self.shards):
-            shard_keys = [
-                k.shards[i] if isinstance(k, ReplicatedTensor) else k for k in keys
-            ]
+            shard_keys = []
+            for k in keys:
+                if isinstance(k, ReplicatedTensor):
+                    shard_keys.append(k.shards[i])
+                else:
+                    shard_keys.append(k)
             shards.append(shard[*shard_keys])
         return ReplicatedTensor(ts=shards)
 

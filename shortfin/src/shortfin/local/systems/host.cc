@@ -11,6 +11,7 @@
 #include "iree/hal/local/loaders/registration/init.h"
 #include "shortfin/support/iree_helpers.h"
 #include "shortfin/support/logging.h"
+#include "shortfin/support/sysconfig.h"
 
 namespace shortfin::local::systems {
 
@@ -124,6 +125,7 @@ HostCPUSystemBuilder::SelectHostCPUNodesFromOptions() {
 }
 
 SystemPtr HostCPUSystemBuilder::CreateSystem() {
+  SHORTFIN_TRACE_SCOPE_NAMED("HostCPUSystemBuilder::CreateSystem");
   auto lsys = std::make_shared<System>(host_allocator());
   // TODO: Real NUMA awareness.
   lsys->InitializeNodes(1);
@@ -135,6 +137,7 @@ SystemPtr HostCPUSystemBuilder::CreateSystem() {
 }
 
 iree_hal_driver_t *HostCPUSystemBuilder::InitializeHostCPUDriver(System &lsys) {
+  SHORTFIN_TRACE_SCOPE_NAMED("HostCPUSystemBuilder::InitializeHostCPUDriver");
   // TODO: Kill these flag variants in favor of settings on the config
   // object.
   SHORTFIN_THROW_IF_ERROR(iree_task_executor_options_initialize_from_flags(
@@ -149,6 +152,8 @@ iree_hal_driver_t *HostCPUSystemBuilder::InitializeHostCPUDriver(System &lsys) {
   }
 
   // Create one queue executor per node.
+  unsigned total_needed_file_handles = 512;
+  bool has_issued_limit_error = false;
   std::vector<iree::task_executor_ptr> queue_executors;
   queue_executors.reserve(selected_nodes.size());
   queue_node_ids_.reserve(selected_nodes.size());
@@ -162,6 +167,21 @@ iree_hal_driver_t *HostCPUSystemBuilder::InitializeHostCPUDriver(System &lsys) {
                    node_id, iree_task_topology_group_count(&topology.topology));
     queue_executors.push_back({});
     auto &executor = queue_executors.back();
+    // As of 2024-11-8, it took approximately 32 file handles per node-group.
+    // To be conservative because file handle limits are basically free, we
+    // round up to 64 and assume a floor of 512. This allows small, default
+    // 8 group, single node configs to require no limit increase for Linux
+    // 1024 default cases.
+    total_needed_file_handles += 64 * topology.topology.group_count;
+    if (!sysconfig::EnsureFileLimit(total_needed_file_handles) &&
+        !has_issued_limit_error) {
+      logging::error(
+          "Could not ensure sufficient file handles for minimum operations: "
+          "Suggest setting explicit limits with `ulimit -n` and system "
+          "settings");
+      has_issued_limit_error = true;
+    }
+
     SHORTFIN_THROW_IF_ERROR(iree_task_executor_create(
         host_cpu_deps_.task_executor_options, &topology.topology,
         host_allocator(), executor.for_output()));
@@ -188,6 +208,7 @@ iree_hal_driver_t *HostCPUSystemBuilder::InitializeHostCPUDriver(System &lsys) {
 
 void HostCPUSystemBuilder::InitializeHostCPUDevices(System &lsys,
                                                     iree_hal_driver_t *driver) {
+  SHORTFIN_TRACE_SCOPE_NAMED("HostCPUSystemBuilder::InitializeHostCPUDevices");
   iree_host_size_t device_info_count = 0;
   iree::allocated_ptr<iree_hal_device_info_t> device_infos(host_allocator());
   SHORTFIN_THROW_IF_ERROR(iree_hal_driver_query_available_devices(

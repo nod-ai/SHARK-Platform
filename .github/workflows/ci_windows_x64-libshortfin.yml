@@ -54,7 +54,7 @@ jobs:
         repository: iree-org/iree
         path: ${{ env.IREE_REPO_DIR }}
         submodules: false
-        ref: iree-2.9.0rc20241108
+        ref: iree-3.0.0rc20241115
 
     - name: Initalize IREE submodules
       working-directory: ${{ env.IREE_REPO_DIR }}
@@ -66,7 +66,7 @@ jobs:
         git submodule update --init --depth 1 -- third_party/hip-build-deps/
 
     - name: Setup Python
-      uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.3
+      uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
       with:
         python-version: "3.12"
         cache: "pip"

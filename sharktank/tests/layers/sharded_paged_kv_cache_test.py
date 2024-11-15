@@ -104,7 +104,7 @@ class ShardedPagedKVCacheTest(unittest.TestCase):
             sharded_cache_state,
         ) = self.make_unsharded_and_sharded_equal_cache_states()
 
-        dest_partitions_snapshot = [
+        read_into_partitions_snapshot = [
             torch.rand(
                 self.batch_size,
                 self.block_seq_len * self.block_seq_stride,
@@ -113,33 +113,35 @@ class ShardedPagedKVCacheTest(unittest.TestCase):
             )
             for _ in range(self.cache_partition_count)
         ]
-        dest_partitions = deepcopy(dest_partitions_snapshot)
+        read_into_partitions = deepcopy(read_into_partitions_snapshot)
         transformer_block_index = 1
         page_ids = torch.randint(
             low=0, high=self.page_count, size=[self.batch_size, self.block_seq_len]
         ).reshape([self.batch_size, self.block_seq_len])
         self.cache.read(
             state=cache_state,
-            dest_partitions=dest_partitions,
+            read_into_partitions=read_into_partitions,
             transformer_block_index=transformer_block_index,
             page_ids=page_ids,
             seq_len=self.block_seq_len * self.block_seq_stride,
         )
-        sharded_dest_partitions = deepcopy(
+        sharded_read_into_partitions = deepcopy(
             [
                 ops.reshard_split(t, dim=2, count=self.shard_count)
-                for t in dest_partitions_snapshot
+                for t in read_into_partitions_snapshot
             ]
         )
         sharded_page_ids = ops.replicate(page_ids, count=self.shard_count)
         self.sharded_cache.read(
             state=sharded_cache_state,
-            dest_partitions=sharded_dest_partitions,
+            read_into_partitions=sharded_read_into_partitions,
             transformer_block_index=transformer_block_index,
             page_ids=sharded_page_ids,
             seq_len=self.block_seq_len * self.block_seq_stride,
         )
-        for unsharded, sharded in zip(dest_partitions, sharded_dest_partitions):
+        for unsharded, sharded in zip(
+            read_into_partitions, sharded_read_into_partitions
+        ):
             assert ops.equal(unsharded, ops.unshard(sharded))
 
     def testWriteTimestep(self):
