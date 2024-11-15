@@ -50,7 +50,7 @@ pip install shark-ai[apps]
 Temporarily, you may need an update to your `shortfin` install.
 Install the latest pre-release with:
 ```
-pip install shortfin --upgrade --pre -f https://github.com/nod-ai/SHARK-Platform/releases/expanded_assets/dev-wheels
+pip install shortfin --upgrade --pre -f https://github.com/nod-ai/shark-ai/releases/expanded_assets/dev-wheels
 ```
 
 ### Test the installation.

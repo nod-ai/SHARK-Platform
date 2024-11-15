@@ -74,7 +74,7 @@ def apply_configuration(
 
 
 class DispatchTuner(DispatchParser):
-    # TODO(https://github.com/nod-ai/SHARK-Platform/issues/453): Remove this in favor of configuring using transform dialect.
+    # TODO(https://github.com/nod-ai/shark-ai/issues/453): Remove this in favor of configuring using transform dialect.
     @abstractmethod
     def apply_params(
         self,

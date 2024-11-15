@@ -25,7 +25,7 @@ logger.root.handlers[0].setFormatter(
 
 
 class ExportMlirException(Exception):
-    """SHARK-Platform export MLIR exception that preserves the command line and error output."""
+    """shark-ai export MLIR exception that preserves the command line and error output."""
 
     def __init__(self, process: subprocess.CompletedProcess, cwd: str):
         try:

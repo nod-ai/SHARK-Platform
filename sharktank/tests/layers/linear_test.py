@@ -84,7 +84,7 @@ class LinearQuantTest(unittest.TestCase):
                 bias_quant,
             ]
         )
-        linear = LinearLayer(theta)
+        linear = LinearLayer(theta, fake_quant=False)
 
         output = linear(lhs)
         output_ref = torch.matmul(lhs, rhs.T) + bias
