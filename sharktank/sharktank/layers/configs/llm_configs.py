@@ -15,7 +15,7 @@ When in question, we draw from the vocabulary and normalization they have done
 """
 
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, Optional, ClassVar
 import torch
 
 __all__ = ["LlamaHParams", "LlamaModelConfig"]
@@ -142,7 +142,8 @@ class LlamaModelConfig:
 
     # Block sequence stride for a paged KV cache. This must divide evenly
     # into the context length.
-    block_seq_stride: int = 16
+    default_block_seq_stride: ClassVar[int] = 16
+    block_seq_stride: int = default_block_seq_stride
 
     # Either "paged" or "direct".
     kv_cache_type: str = "paged"
@@ -151,10 +152,12 @@ class LlamaModelConfig:
     device: Optional[torch.device] = None
 
     # Dtype to use for general FP activations not otherwise configured.
-    activation_dtype: torch.dtype = torch.float16
+    default_activation_dtype: ClassVar[torch.dtype] = torch.float16
+    activation_dtype: torch.dtype = default_activation_dtype
 
     # Dtype to use for attention.
-    attention_dtype: torch.dtype = torch.float16
+    default_attention_dtype: ClassVar[torch.dtype] = torch.float16
+    attention_dtype: torch.dtype = default_attention_dtype
 
     # How many devices are involved for tensor parallel sharding.
     # If greater than 1, the model will expect sharded model parameters and function
