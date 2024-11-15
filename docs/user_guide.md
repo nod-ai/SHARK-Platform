@@ -21,7 +21,7 @@ Officially we support Python versions: 3.11, 3.12, 3.13, 3.13t
 
 The rest of this guide assumes you are using Python 3.11.
 
-### Install Python 
+### Install Python
 To install Python 3.11 on Ubuntu:
 
 ```bash
@@ -90,11 +90,11 @@ Please see --help for both the server and client for usage instructions. Here's 
 |--device_ids |
 |--tokenizers |
 |--model_config |
-| --workers_per_device | 
+| --workers_per_device |
 | --fibers_per_device |
 | --isolation |	per_fiber, per_call, none |
 | --show_progress  |
-| --trace_execution | 
+| --trace_execution |
 | --amdgpu_async_allocations |
 | --splat   |
 | --build_preference | compile,precompiled |
