@@ -15,15 +15,12 @@ from sharktank.layers import *
 from sharktank.types import *
 from sharktank.utils.math import ceildiv
 
-# TODO: Should be using a base class with the protocol supported.
 from ..models.llama.llama import LlamaModelConfig, PagedLlamaModelV1
-from ..models.llama.sharding import shard_theta
 from ..models.mixtral.mixtral import *
 from ..models.grok.grok import *
-from .. import ops
 
 
-def main():
+def main(raw_args: list[str] | None = None):
     from ..utils import cli
 
     parser = cli.create_parser()
@@ -61,7 +58,7 @@ def main():
         choices=["decomposed", "torch"],
     )
 
-    args = cli.parse(parser)
+    args = cli.parse(parser, args=raw_args)
     dataset_type = cli.get_input_data_files(args)
     dataset_type = "irpa" if "irpa" in dataset_type else "gguf"
     dataset = cli.get_input_dataset(args)
@@ -111,7 +108,7 @@ def main():
 
     fxb = FxProgramsBuilder(model)
 
-    def setup_cache(model, shard_count):
+    def setup_cache(model):
         if model.config.kv_cache_type == "paged":
             cache_state = model.cache.allocate(
                 page_count=hp.context_length // llama_config.block_seq_stride
@@ -167,7 +164,7 @@ def main():
         seq_lens = torch.empty(bs, dtype=torch.int64)
 
         cache, cache_shard_dim, cache_dynamic_shapes, arg_affinities = setup_cache(
-            model, llama_config.tensor_parallelism_size
+            model
         )
 
         # We need to offset the indices for the cache
@@ -245,7 +242,7 @@ def main():
             cache_shard_dim,
             cache_dynamic_shapes,
             arg_affinities,
-        ) = setup_cache(model, llama_config.tensor_parallelism_size)
+        ) = setup_cache(model)
 
         # We need to offset the indices for the cache
         arg_affinities = {key + 4: arg_affinities[key] for key in arg_affinities}
