@@ -29,6 +29,15 @@ def tuner_ctx() -> Generator[common.TunerContext, None, None]:
         yield common.TunerContext(ctx, logger)
 
 
+def test_parse_tensor_type(tuner_ctx: common.TunerContext) -> None:
+    assert dispatch_parser.parse_tensor_type("tensor<1x2x3xf32>") == common.ShapedType(
+        [1, 2, 3], tuner_ctx.type.f32
+    )
+    assert dispatch_parser.parse_tensor_type("tensor<123xi8>") == common.ShapedType(
+        [123], tuner_ctx.type.i8
+    )
+
+
 def test_get_mmt_tile_sizes(tuner_ctx: common.TunerContext) -> None:
     config = dispatch_parser.Configuration(
         subgroup_size=0,

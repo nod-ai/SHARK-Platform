@@ -46,15 +46,6 @@ def test_get_shaped_type_to_str(tuner_ctx: common.TunerContext) -> None:
     assert str(common.ShapedType([-1, 2, 3], tuner_ctx.type.f16)) == "?x2x3xf16"
 
 
-def test_parse_tensor_type(tuner_ctx: common.TunerContext) -> None:
-    assert common.parse_tensor_type("tensor<1x2x3xf32>") == common.ShapedType(
-        [1, 2, 3], tuner_ctx.type.f32
-    )
-    assert common.parse_tensor_type("tensor<123xi8>") == common.ShapedType(
-        [123], tuner_ctx.type.i8
-    )
-
-
 def test_gpu_pipeline_options() -> None:
     options = common.GpuPipelineOptions()
     assert options.all_default()

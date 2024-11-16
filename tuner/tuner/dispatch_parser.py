@@ -14,6 +14,12 @@ from abc import ABCMeta, abstractmethod
 from .common import *
 
 
+def parse_tensor_type(tensor_type: str) -> ShapedType:
+    shaped_ty = ir.RankedTensorType(ir.Type.parse(tensor_type))
+    assert shaped_ty
+    return ShapedType(shaped_ty.shape, shaped_ty.element_type)
+
+
 def get_mmt_tile_sizes(configuration: Configuration):
     return configuration.tile_sizes
 

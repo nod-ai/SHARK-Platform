@@ -245,17 +245,6 @@ class ConvDimInfo:
         return ConvDimInfo.from_rhs_res(problem_size.rhs_type, problem_size.res_type)
 
 
-def parse_tensor_type(tensor_type: str) -> ShapedType:
-    shape_match = re.search(str(MlirRegex.tensor_type), tensor_type)
-    assert shape_match
-
-    shape_str = shape_match.group(1)
-    dims_and_elem = shape_str.split("x")
-    dims = [int(x) for x in dims_and_elem[:-1]]
-    elem = dims_and_elem[-1]
-    return ShapedType(dims, ir.Type.parse(elem))
-
-
 @dataclass
 class MLIRTransformation:
     """Transformation of MLIR context"""
