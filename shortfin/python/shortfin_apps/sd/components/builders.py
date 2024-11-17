@@ -164,6 +164,8 @@ def needs_update(ctx):
 
 def needs_file(filename, ctx, namespace=FileNamespace.GEN):
     out_file = ctx.allocate_file(filename, namespace=namespace).get_fs_path()
+    print("__________________")
+    print(out_file)
     if os.path.exists(out_file):
         needed = False
     else:
@@ -177,16 +179,13 @@ def needs_file(filename, ctx, namespace=FileNamespace.GEN):
 
 
 def needs_compile(filename, target, ctx):
-    device = "amdgpu" if "gfx" in target else "llvmcpu"
-    vmfb_name = f"{filename}_{device}-{target}.vmfb"
+    vmfb_name = f"{filename}_{target}.vmfb"
     namespace = FileNamespace.BIN
     return needs_file(vmfb_name, ctx, namespace)
 
 
 def get_cached_vmfb(filename, target, ctx):
-    device = "amdgpu" if "gfx" in target else "llvmcpu"
-    vmfb_name = f"{filename}_{device}-{target}.vmfb"
-    namespace = FileNamespace.BIN
+    vmfb_name = f"{filename}_{target}.vmfb"
     return ctx.file(vmfb_name)
 
 
@@ -250,7 +249,6 @@ def sdxl(
     params_filenames = get_params_filenames(model_params, model=model, splat=splat)
     params_urls = get_url_map(params_filenames, SDXL_WEIGHTS_BUCKET)
     for f, url in params_urls.items():
-        out_file = os.path.join(ctx.executor.output_dir, f)
         if needs_file(f, ctx):
             fetch_http(name=f, url=url)
     filenames = [*vmfb_filenames, *params_filenames, *mlir_filenames]

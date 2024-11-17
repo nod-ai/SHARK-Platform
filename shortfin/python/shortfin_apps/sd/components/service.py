@@ -23,9 +23,7 @@ from .messages import InferenceExecRequest, InferencePhase, StrobeMessage
 from .tokenizer import Tokenizer
 from .metrics import measure
 
-
 logger = logging.getLogger("shortfin-sd.service")
-logger.setLevel(logging.DEBUG)
 
 prog_isolations = {
     "none": sf.ProgramIsolation.NONE,
@@ -79,23 +77,35 @@ class GenerateService:
 
         self.workers = []
         self.fibers = []
-        self.fiber_status = []
+        self.idle_fibers = set()
         for idx, device in enumerate(self.sysman.ls.devices):
             for i in range(self.workers_per_device):
                 worker = sysman.ls.create_worker(f"{name}-inference-{device.name}-{i}")
                 self.workers.append(worker)
+        for idx, device in enumerate(self.sysman.ls.devices):
             for i in range(self.fibers_per_device):
+                tgt_worker = self.workers[i % len(self.workers)]
                 fiber = sysman.ls.create_fiber(
-                    self.workers[i % len(self.workers)], devices=[device]
+                    tgt_worker, devices=[device]
                 )
                 self.fibers.append(fiber)
-                self.fiber_status.append(0)
+                self.idle_fibers.add(fiber)
         for idx in range(len(self.workers)):
             self.inference_programs[idx] = {}
             self.inference_functions[idx] = {}
         # Scope dependent objects.
         self.batcher = BatcherProcess(self)
 
+    def get_worker_index(self, fiber):
+        if fiber not in self.fibers:
+            raise ValueError("A worker was requested from a rogue fiber.")
+        fiber_idx = self.fibers.index(fiber)
+        worker_idx = int(
+            (fiber_idx - fiber_idx % self.fibers_per_worker)
+            / self.fibers_per_worker
+        )
+        return worker_idx
+        
     def load_inference_module(self, vmfb_path: Path, component: str = None):
         if not self.inference_modules.get(component):
             self.inference_modules[component] = []
@@ -112,7 +122,7 @@ class GenerateService:
     ):
         p = sf.StaticProgramParameters(self.sysman.ls, parameter_scope=parameter_scope)
         for path in paths:
-            logging.info("Loading parameter fiber '%s' from: %s", parameter_scope, path)
+            logger.info("Loading parameter fiber '%s' from: %s", parameter_scope, path)
             p.load(path, format=format)
         if not self.inference_parameters.get(component):
             self.inference_parameters[component] = []
@@ -121,6 +131,9 @@ class GenerateService:
     def start(self):
         # Initialize programs.
         for component in self.inference_modules:
+            logger.info(
+                f"Loading component: {component}"
+            )
             component_modules = [
                 sf.ProgramModule.parameter_provider(
                     self.sysman.ls, *self.inference_parameters.get(component, [])
@@ -141,7 +154,6 @@ class GenerateService:
                     isolation=self.prog_isolation,
                     trace_execution=self.trace_execution,
                 )
-                logger.info("Program loaded.")
 
         for worker_idx, worker in enumerate(self.workers):
             self.inference_functions[worker_idx]["encode"] = {}
@@ -270,14 +282,18 @@ class BatcherProcess(sf.Process):
             return
         self.strobes = 0
         batches = self.sort_batches()
-        for idx, batch in batches.items():
-            for fidx, status in enumerate(self.service.fiber_status):
-                if (
-                    status == 0
-                    or self.service.prog_isolation == sf.ProgramIsolation.PER_CALL
-                ):
-                    self.board(batch["reqs"], index=fidx)
-                    break
+        for batch in batches.values():
+            # Assign the batch to the next idle fiber.
+            if len(self.service.idle_fibers) == 0:
+                return
+            fiber = self.service.idle_fibers.pop()
+            fiber_idx = self.service.fibers.index(fiber)
+            worker_idx = self.service.get_worker_index(fiber)
+            logger.debug(f"Sending batch to fiber {fiber_idx} (worker {worker_idx})")
+            self.board(batch["reqs"], fiber=fiber)
+            if self.service.prog_isolation != sf.ProgramIsolation.PER_FIBER:
+                self.service.idle_fibers.add(fiber)
+                
 
     def sort_batches(self):
         """Files pending requests into sorted batches suitable for program invocations."""
@@ -310,11 +326,11 @@ class BatcherProcess(sf.Process):
                 }
         return batches
 
-    def board(self, request_bundle, index):
+    def board(self, request_bundle, fiber):
         pending = request_bundle
         if len(pending) == 0:
             return
-        exec_process = InferenceExecutorProcess(self.service, index)
+        exec_process = InferenceExecutorProcess(self.service, fiber)
         for req in pending:
             if len(exec_process.exec_requests) >= self.ideal_batch_size:
                 break
@@ -322,8 +338,6 @@ class BatcherProcess(sf.Process):
         if exec_process.exec_requests:
             for flighted_request in exec_process.exec_requests:
                 self.pending_requests.remove(flighted_request)
-            if self.service.prog_isolation != sf.ProgramIsolation.PER_CALL:
-                self.service.fiber_status[index] = 1
             exec_process.launch()
 
 
@@ -338,15 +352,11 @@ class InferenceExecutorProcess(sf.Process):
     def __init__(
         self,
         service: GenerateService,
-        index: int,
+        fiber,
     ):
-        super().__init__(fiber=service.fibers[index])
+        super().__init__(fiber=fiber)
         self.service = service
-        self.fiber_index = index
-        self.worker_index = int(
-            (index - index % self.service.fibers_per_worker)
-            / self.service.fibers_per_worker
-        )
+        self.worker_index = self.service.get_worker_index(fiber)
         self.exec_requests: list[InferenceExecRequest] = []
 
     @measure(type="exec", task="inference process")
@@ -360,7 +370,7 @@ class InferenceExecutorProcess(sf.Process):
                 phase = req.phase
             phases = self.exec_requests[0].phases
             req_count = len(self.exec_requests)
-            device0 = self.service.fibers[self.fiber_index].device(0)
+            device0 = self.fiber.device(0)
             if phases[InferencePhase.PREPARE]["required"]:
                 await self._prepare(device=device0, requests=self.exec_requests)
             if phases[InferencePhase.ENCODE]["required"]:
@@ -375,7 +385,8 @@ class InferenceExecutorProcess(sf.Process):
             for i in range(req_count):
                 req = self.exec_requests[i]
                 req.done.set_success()
-            self.service.fiber_status[self.fiber_index] = 0
+            if self.service.prog_isolation == sf.ProgramIsolation.PER_FIBER:
+                self.service.idle_fibers.add(self.fiber)
 
         except Exception:
             logger.exception("Fatal error in image generation")
@@ -574,7 +585,7 @@ class InferenceExecutorProcess(sf.Process):
         for i, t in tqdm(
             enumerate(range(step_count)),
             disable=(not self.service.show_progress),
-            desc=f"Worker #{self.worker_index} DENOISE (bs{req_bs})",
+            desc=f"DENOISE (bs{req_bs})",
         ):
             step = sfnp.device_array.for_device(device, [1], sfnp.sint64)
             s_host = step.for_transfer()

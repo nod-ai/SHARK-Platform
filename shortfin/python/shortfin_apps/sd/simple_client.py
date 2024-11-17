@@ -58,7 +58,7 @@ def get_batched(request, arg, idx):
 
 async def send_request(session, rep, args, data):
     print("Sending request batch #", rep)
-    url = f"http://0.0.0.0:{args.port}/generate"
+    url = f"{args.host}:{args.port}/generate"
     start = time.time()
     async with session.post(url, json=data) as response:
         end = time.time()
@@ -81,7 +81,6 @@ async def send_request(session, rep, args, data):
         else:
             print(f"Error: Received {response.status} from server")
             raise Exception
-
 
 async def static(args):
     # Create an aiohttp session for sending requests
@@ -179,6 +178,22 @@ async def async_range(count):
         await asyncio.sleep(0.0)
 
 
+def check_health(url):
+    ready = False
+    print(f"Waiting for server.", end=None)
+    while not ready:
+        try:
+            if requests.get(f"{url}/health").status_code == 200:
+                print("Successfully connected to server.")
+                ready = True
+                return
+            else:
+                time.sleep(2)
+                print(".", end=None)
+        except:
+            time.sleep(2)
+            print(".", end=None)
+
 def main(argv):
     p = argparse.ArgumentParser()
     p.add_argument(
@@ -205,6 +220,7 @@ def main(argv):
         default="gen_imgs",
         help="Directory to which images get saved.",
     )
+    p.add_argument("--host", type=str, default="http://0.0.0.0", help="Server host address.")
     p.add_argument("--port", type=str, default="8000", help="Server port")
     p.add_argument(
         "--steps",
@@ -218,6 +234,7 @@ def main(argv):
         help="Start as an example CLI client instead of sending static requests.",
     )
     args = p.parse_args()
+    check_health(f"{args.host}:{args.port}")
     if args.interactive:
         asyncio.run(interactive(args))
     else:

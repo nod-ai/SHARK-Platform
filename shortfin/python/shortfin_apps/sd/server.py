@@ -11,7 +11,6 @@ import logging
 from pathlib import Path
 import sys
 import os
-import io
 import copy
 import subprocess
 
@@ -35,19 +34,17 @@ from shortfin.support.logging_setup import native_handler, configure_main_logger
 
 logger = logging.getLogger("shortfin-sd")
 logger.addHandler(native_handler)
-logger.setLevel(logging.INFO)
 logger.propagate = False
 
 THIS_DIR = Path(__file__).resolve().parent
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     sysman.start()
     try:
         for service_name, service in services.items():
-            logging.info("Initializing service '%s':", service_name)
-            logging.info(str(service))
+            logger.info("Initializing service '%s':", service_name)
+            logger.info(str(service))
             service.start()
     except:
         sysman.shutdown()
@@ -55,11 +52,10 @@ async def lifespan(app: FastAPI):
     yield
     try:
         for service_name, service in services.items():
-            logging.info("Shutting down service '%s'", service_name)
+            logger.info("Shutting down service '%s'", service_name)
             service.shutdown()
     finally:
         sysman.shutdown()
-
 
 sysman: SystemManager
 services: dict[str, Any] = {}
@@ -83,11 +79,13 @@ app.post("/generate")(generate_request)
 app.put("/generate")(generate_request)
 
 
-def configure(args) -> SystemManager:
+def configure_sys(args) -> SystemManager:
     # Setup system (configure devices, etc).
     model_config, topology_config, flagfile, tuning_spec, args = get_configs(args)
     sysman = SystemManager(args.device, args.device_ids, args.amdgpu_async_allocations)
+    return sysman, model_config, flagfile, tuning_spec
 
+def configure_service(args, sysman, model_config, flagfile, tuning_spec):
     # Setup each service we are hosting.
     tokenizers = []
     for idx, tok_name in enumerate(args.tokenizers):
@@ -135,7 +133,7 @@ def get_configs(args):
         f"--model={modelname}",
         f"--topology={topology_inp}",
     ]
-    outs = subprocess.check_output(cfg_builder_args).decode()
+    outs = subprocess.check_output(cfg_builder_args, stderr=subprocess.DEVNULL).decode()
     outs_paths = outs.splitlines()
     for i in outs_paths:
         if "sdxl_config" in i and not args.model_config:
@@ -158,18 +156,19 @@ def get_configs(args):
                 arglist = spec.strip("--").split("=")
                 arg = arglist[0]
                 if len(arglist) > 2:
+                    print(arglist)
                     value = arglist[1:]
                     for val in value:
                         try:
                             val = int(val)
                         except ValueError:
-                            continue
+                            val = val
                 elif len(arglist) == 2:
                     value = arglist[-1]
                     try:
                         value = int(value)
                     except ValueError:
-                        continue
+                        value = value
                 else:
                     # It's a boolean arg.
                     value = True
@@ -178,7 +177,6 @@ def get_configs(args):
                 # It's an env var.
                 arglist = spec.split("=")
                 os.environ[arglist[0]] = arglist[1]
-
     return model_config, topology_config, flagfile, tuning_spec, args
 
 
@@ -222,7 +220,9 @@ def get_modules(args, model_config, flagfile, td_spec):
             f"--iree-hip-target={args.target}",
             f"--iree-compile-extra-args={' '.join(ireec_args)}",
         ]
-        output = subprocess.check_output(builder_args).decode()
+        logger.info(f"Preparing runtime artifacts for {modelname}...")
+        logger.debug(f"COMMAND LINE EQUIVALENT: " + " ".join([str(argn) for argn in builder_args]))
+        output = subprocess.check_output(builder_args, stderr=subprocess.DEVNULL).decode()
 
         output_paths = output.splitlines()
         filenames.extend(output_paths)
@@ -257,7 +257,7 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
         type=str,
         required=False,
         default="gfx942",
-        choices=["gfx942", "gfx1100"],
+        choices=["gfx942", "gfx1100", "gfx90a"],
         help="Primary inferencing device LLVM target arch.",
     )
     parser.add_argument(
@@ -297,7 +297,7 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
     parser.add_argument(
         "--isolation",
         type=str,
-        default="per_fiber",
+        default="per_call",
         choices=["per_fiber", "per_call", "none"],
         help="Concurrency control -- How to isolate programs.",
     )
@@ -371,9 +371,12 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
         home = Path.home()
         artdir = home / ".cache" / "shark"
         args.artifacts_dir = str(artdir)
+    else:
+        args.artifacts_dir = Path(args.artifacts_dir).resolve()
 
     global sysman
-    sysman = configure(args)
+    sysman, model_config, flagfile, tuning_spec = configure_sys(args)
+    configure_service(args, sysman, model_config, flagfile, tuning_spec)
     uvicorn.run(
         app,
         host=args.host,
@@ -393,8 +396,11 @@ if __name__ == "__main__":
             "disable_existing_loggers": False,
             "formatters": {
                 "default": {
-                    "format": "%(asctime)s - %(levelname)s - %(message)s",
+                    "()": "uvicorn.logging.DefaultFormatter",
+                    "format": "[{asctime}] {message}",
                     "datefmt": "%Y-%m-%d %H:%M:%S",
+                    "style": "{",
+                    "use_colors": True,
                 },
             },
             "handlers": {
