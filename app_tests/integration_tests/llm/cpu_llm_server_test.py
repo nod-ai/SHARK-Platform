@@ -10,7 +10,7 @@ import pytest
 import requests
 import uuid
 
-from .utils import AccuracyValidationException
+from .utils import AccuracyValidationException, start_log_group, end_log_group
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +84,10 @@ def test_llm_server(llm_server, available_port):
     assert llm_server.poll() is None
     PROMPT = "1 2 3 4 5 "
     expected_output_prefix = "6 7 8"
-    logger.info("::group::Sending HTTP Generation Request")
+    logger.info(
+        "Sending HTTP Generation Request"
+        + start_log_group("Sending HTTP Generation Request")
+    )
     output = do_generate(PROMPT, available_port)
     # log to GITHUB_STEP_SUMMARY if we are in a GitHub Action
     if "GITHUB_ACTION" in os.environ:
@@ -98,3 +101,4 @@ def test_llm_server(llm_server, available_port):
         raise AccuracyValidationException(
             f"Expected '{output}' to start with '{expected_output_prefix}'"
         )
+    logger.info("HTTP Generation Request Successful" + end_log_group())
