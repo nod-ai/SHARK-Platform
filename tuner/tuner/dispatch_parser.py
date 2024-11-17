@@ -41,6 +41,22 @@ def get_batch_mmt_tile_sizes(configuration: Configuration) -> list[int]:
     return [1] + configuration.tile_sizes
 
 
+class MlirRegex(Enum):
+    ssa_value = r"%[a-zA-Z0-9-_]+"
+    tensor_type = r"tensor<([^>]+)>"
+
+    def __str__(self) -> str:
+        return self.value
+
+    @staticmethod
+    def dps_ins_two_args() -> str:
+        return rf"ins\({MlirRegex.ssa_value}, {MlirRegex.ssa_value} : (?P<LHS>{MlirRegex.tensor_type}), (?P<RHS>{MlirRegex.tensor_type})\)"
+
+    @staticmethod
+    def dps_outs_one_arg() -> str:
+        return rf"outs\({MlirRegex.ssa_value} : (?P<RES>{MlirRegex.tensor_type})\)"
+
+
 def parse_mlir(mlir_text: str, ctx: TunerContext) -> ir.Module:
     mlir_module = None
     try:

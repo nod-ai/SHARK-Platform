@@ -203,22 +203,6 @@ def get_pipeline_config(configuration: Configuration) -> str:
     return extra_config
 
 
-class MlirRegex(Enum):
-    ssa_value = r"%[a-zA-Z0-9-_]+"
-    tensor_type = r"tensor<(([0-9]+x)+((f|i)[0-9]+))>"
-
-    def __str__(self) -> str:
-        return self.value
-
-    @staticmethod
-    def dps_ins_two_args() -> str:
-        return rf"ins\({MlirRegex.ssa_value}, {MlirRegex.ssa_value} : (?P<LHS>{MlirRegex.tensor_type}), (?P<RHS>{MlirRegex.tensor_type})\)"
-
-    @staticmethod
-    def dps_outs_one_arg() -> str:
-        return rf"outs\({MlirRegex.ssa_value} : (?P<RES>{MlirRegex.tensor_type})\)"
-
-
 def read_input_mlir(filename: str) -> list[str]:
     with open(filename, "r") as f:
         return f.readlines()
