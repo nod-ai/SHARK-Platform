@@ -164,8 +164,6 @@ def needs_update(ctx):
 
 def needs_file(filename, ctx, namespace=FileNamespace.GEN):
     out_file = ctx.allocate_file(filename, namespace=namespace).get_fs_path()
-    print("__________________")
-    print(out_file)
     if os.path.exists(out_file):
         needed = False
     else:
