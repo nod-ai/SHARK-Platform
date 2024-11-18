@@ -4,11 +4,7 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-from pathlib import Path
-
 from transformers import CLIPTokenizer, BatchEncoding
-
-import numpy as np
 
 import shortfin as sf
 import shortfin.array as sfnp

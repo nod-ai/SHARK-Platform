@@ -15,7 +15,6 @@ we extend the configuration to enumerate inference boundaries of some given set 
 from dataclasses import dataclass
 from pathlib import Path
 
-import dataclasses_json
 from dataclasses_json import dataclass_json, Undefined
 
 import shortfin.array as sfnp

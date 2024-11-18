@@ -6,12 +6,9 @@
 
 from iree.build import *
 from iree.build.executor import FileNamespace
-import itertools
 import os
-import shortfin.array as sfnp
-import copy
 
-ARTIFACT_VERSION = "11132024"
+ARTIFACT_VERSION = "11182024"
 SDXL_CONFIG_BUCKET = f"https://sharkpublic.blob.core.windows.net/sharkpublic/sdxl/{ARTIFACT_VERSION}/configs/"
 
 
@@ -72,21 +69,18 @@ def sdxlconfig(
     model_config_filenames = [f"{model}_config_i8.json"]
     model_config_urls = get_url_map(model_config_filenames, SDXL_CONFIG_BUCKET)
     for f, url in model_config_urls.items():
-        out_file = os.path.join(ctx.executor.output_dir, f)
         if update or needs_file(f, ctx):
             fetch_http(name=f, url=url)
 
     topology_config_filenames = [f"topology_config_{topology}.txt"]
     topology_config_urls = get_url_map(topology_config_filenames, SDXL_CONFIG_BUCKET)
     for f, url in topology_config_urls.items():
-        out_file = os.path.join(ctx.executor.output_dir, f)
         if update or needs_file(f, ctx):
             fetch_http(name=f, url=url)
 
     flagfile_filenames = [f"{model}_flagfile_{target}.txt"]
     flagfile_urls = get_url_map(flagfile_filenames, SDXL_CONFIG_BUCKET)
     for f, url in flagfile_urls.items():
-        out_file = os.path.join(ctx.executor.output_dir, f)
         if update or needs_file(f, ctx):
             fetch_http(name=f, url=url)
 
@@ -95,7 +89,6 @@ def sdxlconfig(
     )
     tuning_urls = get_url_map(tuning_filenames, SDXL_CONFIG_BUCKET)
     for f, url in tuning_urls.items():
-        out_file = os.path.join(ctx.executor.output_dir, f)
         if update or needs_file(f, ctx):
             fetch_http(name=f, url=url)
     filenames = [
