@@ -11,7 +11,7 @@ import os
 import shortfin.array as sfnp
 import copy
 
-ARTIFACT_VERSION = "11132024"
+ARTIFACT_VERSION = "11182024"
 SDXL_CONFIG_BUCKET = f"https://sharkpublic.blob.core.windows.net/sharkpublic/sdxl/{ARTIFACT_VERSION}/configs/"
 
 
