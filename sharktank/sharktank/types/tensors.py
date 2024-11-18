@@ -1191,7 +1191,7 @@ class ReplicatedTensor(ShardedTensor):
 
     def __getitem__(self, key):
         keys = [key]
-        if isinstance(keys, tuple) or isinstance(keys, list):
+        if isinstance(key, tuple) or isinstance(key, list):
             keys = key
 
         shards = []

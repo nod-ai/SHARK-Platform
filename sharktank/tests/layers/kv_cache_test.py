@@ -56,7 +56,7 @@ def test_direct():
     ]
     read_back = cache.read(
         allocation,
-        dest_partitions=read_empty,
+        read_into_partitions=read_empty,
         transformer_block_index=1,
         seq_len=write_seq_length,
     )
@@ -79,7 +79,7 @@ def test_direct():
         ]
         read_ones = cache.read(
             allocation,
-            dest_partitions=read_ones,
+            read_into_partitions=read_ones,
             transformer_block_index=i,
             seq_len=write_seq_length,
         )
@@ -113,7 +113,7 @@ def test_direct():
     ]
     read_back = cache.read(
         allocation,
-        dest_partitions=read_empty,
+        read_into_partitions=read_empty,
         transformer_block_index=1,
         seq_len=write_seq_length + 1,
     )
@@ -184,7 +184,7 @@ def test_sharded_direct():
     ]
     read_back = cache.read(
         allocation,
-        dest_partitions=read_empty,
+        read_into_partitions=read_empty,
         transformer_block_index=1,
         seq_len=write_seq_length,
     )
@@ -225,7 +225,7 @@ def test_sharded_direct():
     ]
     read_back = cache.read(
         allocation,
-        dest_partitions=read_empty,
+        read_into_partitions=read_empty,
         transformer_block_index=1,
         seq_len=write_seq_length + 1,
     )
@@ -288,7 +288,7 @@ def test_paged():
     ]
     read_back = cache.read(
         allocation,
-        dest_partitions=read_empty,
+        read_into_partitions=read_empty,
         transformer_block_index=1,
         seq_len=write_seq_length,
         page_ids=write_page_ids,
@@ -312,7 +312,7 @@ def test_paged():
         ]
         read_ones = cache.read(
             allocation,
-            dest_partitions=read_ones,
+            read_into_partitions=read_ones,
             transformer_block_index=i,
             seq_len=write_seq_length,
             page_ids=write_page_ids,
@@ -348,7 +348,7 @@ def test_paged():
     ]
     read_back = cache.read(
         allocation,
-        dest_partitions=read_empty,
+        read_into_partitions=read_empty,
         transformer_block_index=1,
         seq_len=write_seq_length + 1,
         page_ids=page_ids,
@@ -436,7 +436,7 @@ def test_sharded_paged():
 
     read_back = cache.read(
         allocation,
-        dest_partitions=read_empty,
+        read_into_partitions=read_empty,
         transformer_block_index=1,
         seq_len=write_seq_length,
         page_ids=write_page_ids,
@@ -489,7 +489,7 @@ def test_sharded_paged():
 
     read_back = cache.read(
         allocation,
-        dest_partitions=[empty_k, empty_v],
+        read_into_partitions=[empty_k, empty_v],
         transformer_block_index=1,
         seq_len=write_seq_length + 1,
         page_ids=page_ids,

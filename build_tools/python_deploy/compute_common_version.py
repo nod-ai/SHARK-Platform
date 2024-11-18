@@ -6,8 +6,12 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 # This scripts grabs the `X.Y.Z[.dev]` version identifier from the
-# sharktank and shortfin version files and computes the version
-# for the meta package.
+# 'sharktank' and 'shortfin' version files and computes the version
+# for the meta 'shark-ai' package.
+#
+# Usage:
+#   ./compute_common_version.py --stable-release --write-json
+#   cat ../../shark-ai/version_local.json
 
 import argparse
 from pathlib import Path

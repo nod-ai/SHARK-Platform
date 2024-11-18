@@ -129,7 +129,7 @@ jobs:
         token: "${{ secrets.RELEASE_PUBLISH_ACCESS_TOKEN }}"
         tag: "dev-wheels"
         name: "dev-wheels"
-        body: "Automatic snapshot release of SHARK-Platform python wheels."
+        body: "Automatic snapshot release of shark-ai python wheels."
         removeArtifacts: false
         allowUpdates: true
         replacesArtifacts: true

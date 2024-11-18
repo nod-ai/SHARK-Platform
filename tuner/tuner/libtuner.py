@@ -38,7 +38,7 @@ import pickle
 import random
 import json
 from abc import ABC, abstractmethod
-import iree.runtime as ireert
+import iree.runtime as ireert  # type: ignore
 from . import candidate_gen
 
 
@@ -250,10 +250,11 @@ class IREEBenchmarkResult:
         mean_benchmark = self.find_mean_benchmark(self.result_json)
 
         if mean_benchmark:
-            real_time = mean_benchmark.get("real_time")
-            time_unit = mean_benchmark.get("time_unit")
+            real_time: float | None = mean_benchmark.get("real_time")
+            time_unit: str | None = mean_benchmark.get("time_unit")
 
             if real_time is not None:
+                assert time_unit is not None
                 return self.unit_to_microseconds(real_time, time_unit)
 
         return None
@@ -549,7 +550,7 @@ def create_worker_context_queue(device_ids: list[int]) -> queue.Queue[tuple[int,
     return worker_contexts_queue
 
 
-def run_command(run_pack: RunPack) -> TaskResult:
+def run_command(run_pack: RunPack) -> RunResult:
     command = run_pack.command
     check = run_pack.check
     timeout_seconds = run_pack.timeout_seconds
@@ -946,6 +947,7 @@ def parse_dispatch_benchmark_results(
             continue
 
         res_json = extract_benchmark_from_run_result(benchmark_result.run_result)
+        assert res_json is not None
         res = IREEBenchmarkResult(candidate_id, res_json)
         benchmark_time = res.get_mean_time_us()
         assert benchmark_time is not None
@@ -985,7 +987,10 @@ def generate_sample_task_result(
         stdout=stdout,
         returncode=0,
     )
-    return TaskResult(result=res, candidate_id=candidate_id, device_id=device_id)
+    run_result = RunResult(res, False)
+    return TaskResult(
+        run_result=run_result, candidate_id=candidate_id, device_id=device_id
+    )
 
 
 def generate_dryrun_dispatch_benchmark_results(
@@ -1235,6 +1240,7 @@ def parse_model_benchmark_results(
                 continue
 
             result_json = extract_benchmark_from_run_result(task_result.run_result)
+            assert result_json is not None
             res = IREEBenchmarkResult(candidate_id, result_json)
             benchmark_time = res.get_mean_time_us()
             assert benchmark_time is not None

@@ -10,7 +10,7 @@ import pytest
 import requests
 import uuid
 
-from utils import AccuracyValidationException
+from .utils import AccuracyValidationException
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +78,6 @@ def do_generate(prompt, port):
     ],
     indirect=True,
 )
-@pytest.mark.xfail(raises=AccuracyValidationException)
 def test_llm_server(llm_server, available_port):
     # Here you would typically make requests to your server
     # and assert on the responses
@@ -86,7 +85,6 @@ def test_llm_server(llm_server, available_port):
     output = do_generate("1 2 3 4 5 ", available_port)
     logger.info(output)
     expected_output_prefix = "6 7 8"
-    # TODO(#437): Remove when accuracy issue from latest iree-compiler RC is resolved.
     if not output.startswith(expected_output_prefix):
         raise AccuracyValidationException(
             f"Expected '{output}' to start with '{expected_output_prefix}'"

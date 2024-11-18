@@ -59,6 +59,8 @@ __all__ = [
     "unshard",
     "unsqueeze",
     "view",
+    "view_as_complex",
+    "view_as_real",
 ]
 
 IntOrSequenceInt = Union[int, Sequence[int]]
@@ -1083,6 +1085,40 @@ def _view_trampoline(
     tensors = (tensor,)
     for override in d.find_overrides(tensors):
         result = override(tensor, shape)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(tensors)
+
+
+@overridable
+def view_as_complex(tensor: AnyTensor, shape: List[int]) -> AnyTensor:
+    """See torch.Tensor.view_as_complex"""
+    ...
+
+
+@view_as_complex.trampoline
+def _view_as_complex_trampoline(d: SignatureDispatcher, tensor: AnyTensor) -> AnyTensor:
+    tensors = (tensor,)
+    for override in d.find_overrides(tensors):
+        result = override(tensor)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(tensors)
+
+
+@overridable
+def view_as_real(tensor: AnyTensor, shape: List[int]) -> AnyTensor:
+    """See torch.Tensor.view_as_complex"""
+    ...
+
+
+@view_as_real.trampoline
+def _view_as_real_trampoline(d: SignatureDispatcher, tensor: AnyTensor) -> AnyTensor:
+    tensors = (tensor,)
+    for override in d.find_overrides(tensors):
+        result = override(tensor)
         if result is not NotImplemented:
             return override, result
     else:

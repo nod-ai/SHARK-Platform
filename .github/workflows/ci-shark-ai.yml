@@ -4,7 +4,7 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-name: CI - shark-platform
+name: CI - shark-ai
 
 on:
   workflow_dispatch:
@@ -72,4 +72,4 @@ jobs:
             iree-base-runtime
 
       - name: Run LLM Integration Tests
-        run: pytest -v build_tools/integration_tests/llm --log-cli-level=INFO
+        run: pytest -v app_tests/integration_tests/llm --log-cli-level=INFO
