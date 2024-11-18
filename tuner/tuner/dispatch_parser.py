@@ -14,6 +14,12 @@ from abc import ABCMeta, abstractmethod
 from .common import *
 
 
+def parse_tensor_type(tensor_type: str) -> ShapedType:
+    shaped_ty = ir.RankedTensorType(ir.Type.parse(tensor_type))
+    assert shaped_ty
+    return ShapedType(shaped_ty.shape, shaped_ty.element_type)
+
+
 def get_mmt_tile_sizes(configuration: Configuration):
     return configuration.tile_sizes
 
@@ -33,6 +39,22 @@ def get_contract_tile_sizes(configuration: Configuration, tile_dims: str) -> lis
 
 def get_batch_mmt_tile_sizes(configuration: Configuration) -> list[int]:
     return [1] + configuration.tile_sizes
+
+
+class MlirRegex(Enum):
+    ssa_value = r"%[a-zA-Z0-9-_]+"
+    tensor_type = r"tensor<([^>]+)>"
+
+    def __str__(self) -> str:
+        return self.value
+
+    @staticmethod
+    def dps_ins_two_args() -> str:
+        return rf"ins\({MlirRegex.ssa_value}, {MlirRegex.ssa_value} : (?P<LHS>{MlirRegex.tensor_type}), (?P<RHS>{MlirRegex.tensor_type})\)"
+
+    @staticmethod
+    def dps_outs_one_arg() -> str:
+        return rf"outs\({MlirRegex.ssa_value} : (?P<RES>{MlirRegex.tensor_type})\)"
 
 
 def parse_mlir(mlir_text: str, ctx: TunerContext) -> ir.Module:

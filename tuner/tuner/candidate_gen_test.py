@@ -10,8 +10,22 @@ Usage: python -m pytest candidate_gen_test.py
 
 import pytest
 
+from typing import Generator
+
+from iree.compiler import ir  # type: ignore
+
 from . import candidate_gen
 from . import common
+
+
+@pytest.fixture
+def tuner_ctx() -> Generator[common.TunerContext, None, None]:
+    from logging import Logger
+    from unittest.mock import MagicMock
+
+    with ir.Context() as ctx:
+        logger: Logger = MagicMock(spec=Logger)
+        yield common.TunerContext(ctx, logger)
 
 
 def remove_comments(mlir: str) -> str:
@@ -20,7 +34,7 @@ def remove_comments(mlir: str) -> str:
     )
 
 
-def test_apply_params_mmt() -> None:
+def test_apply_params_mmt(tuner_ctx: common.TunerContext) -> None:
     mlir_template = [
         "<intrinsic = #iree_gpu.mma_layout<MFMA_F32_32x32x8_F16>, subgroup_m_count = 16, subgroup_n_count = 16>",
         "<LLVMGPUVectorDistribute workgroup_size = [16, 16] subgroup_size = 16,",
@@ -44,9 +58,9 @@ def test_apply_params_mmt() -> None:
 
     problem_size = common.ProblemSize(
         common.MatmulSize(M, N, K),
-        common.ShapedType([M, K], common.ElementType.f16),
-        common.ShapedType([N, K], common.ElementType.f16),
-        common.ShapedType([M, N], common.ElementType.f32),
+        common.ShapedType([M, K], tuner_ctx.type.f16),
+        common.ShapedType([N, K], tuner_ctx.type.f16),
+        common.ShapedType([M, N], tuner_ctx.type.f32),
         common.DispatchKind.mmt,
     )
     tf_mlir = candidate_gen.MmtTuner().apply_params(problem_size, mlir_template, config)
@@ -73,7 +87,7 @@ def test_apply_params_mmt() -> None:
     assert '{llvm_func_attrs = {"amdgpu-waves-per-eu" = "8"}' in modified
 
 
-def test_apply_params_conv() -> None:
+def test_apply_params_conv(tuner_ctx: common.TunerContext) -> None:
     mlir_template = [
         "<intrinsic = #iree_gpu.mma_layout<MFMA_F32_16x16x16_F16>, subgroup_m_count = 16, subgroup_n_count = 16>",
         "<LLVMGPUVectorDistribute workgroup_size = [256, 1, 1] subgroup_size = 64,",
@@ -98,9 +112,9 @@ def test_apply_params_conv() -> None:
 
     problem_size = common.ProblemSize(
         common.MatmulSize(oh * ow, oc, fh * fw * ic),
-        common.ShapedType([n, oh + 2, ow + 2, oc], common.ElementType.f16),
-        common.ShapedType([fh, fw, ic, oc], common.ElementType.f16),
-        common.ShapedType([n, oh, ow, oc], common.ElementType.f32),
+        common.ShapedType([n, oh + 2, ow + 2, oc], tuner_ctx.type.f16),
+        common.ShapedType([fh, fw, ic, oc], tuner_ctx.type.f16),
+        common.ShapedType([n, oh, ow, oc], tuner_ctx.type.f32),
         common.DispatchKind.conv,
     )
     tf_mlir = candidate_gen.ConvTuner().apply_params(
@@ -130,7 +144,7 @@ def test_apply_params_conv() -> None:
     assert '{llvm_func_attrs = {"amdgpu-waves-per-eu" = "2"}' in modified
 
 
-def test_apply_params_contract() -> None:
+def test_apply_params_contract(tuner_ctx: common.TunerContext) -> None:
     mlir_template = [
         "<intrinsic = #iree_gpu.mma_layout<MFMA_F32_16x16x16_F16>, subgroup_m_count = 2, subgroup_n_count = 2>}>",
         "<LLVMGPUVectorDistribute workgroup_size = [128, 2, 1] subgroup_size = 64,",
@@ -141,9 +155,9 @@ def test_apply_params_contract() -> None:
     tile_dims = "*mnk"
     problem_size = common.ProblemSize(
         common.MatmulSize(2048, 3840, 1280),
-        common.ShapedType([2, 1024, 1280], common.ElementType.f16),
-        common.ShapedType([3, 20, 64, 1280], common.ElementType.f16),
-        common.ShapedType([3, 2, 20, 1024, 64], common.ElementType.f32),
+        common.ShapedType([2, 1024, 1280], tuner_ctx.type.f16),
+        common.ShapedType([3, 20, 64, 1280], tuner_ctx.type.f16),
+        common.ShapedType([3, 2, 20, 1024, 64], tuner_ctx.type.f32),
         common.DispatchKind.contraction,
     )
 
@@ -177,7 +191,7 @@ def test_apply_params_contract() -> None:
     assert '{llvm_func_attrs = {"amdgpu-waves-per-eu" = "2"}' in new_mlir
 
 
-def test_apply_params_batch_matmul() -> None:
+def test_apply_params_batch_matmul(tuner_ctx: common.TunerContext) -> None:
     mlir_template = [
         "<intrinsic = #iree_gpu.mma_layout<MFMA_F32_16x16x16_F16>, subgroup_m_count = 4, subgroup_n_count = 1>}>",
         "<LLVMGPUVectorDistribute workgroup_size = [64, 4, 1] subgroup_size = 64,",
@@ -188,9 +202,9 @@ def test_apply_params_batch_matmul() -> None:
     tile_dims = "bmnk"
     problem_size = common.ProblemSize(
         common.MatmulSize(968, 320, 640, 64),
-        common.ShapedType([64, 968, 640], common.ElementType.f16),
-        common.ShapedType([64, 640, 320], common.ElementType.f16),
-        common.ShapedType([64, 968, 320], common.ElementType.f32),
+        common.ShapedType([64, 968, 640], tuner_ctx.type.f16),
+        common.ShapedType([64, 640, 320], tuner_ctx.type.f16),
+        common.ShapedType([64, 968, 320], tuner_ctx.type.f32),
         common.DispatchKind.batch_matmul,
     )
 
@@ -228,7 +242,7 @@ def test_apply_params_batch_matmul() -> None:
     assert '{llvm_func_attrs = {"amdgpu-waves-per-eu" = "2"}' in modified
 
 
-def test_apply_params_batch_mmt_float() -> None:
+def test_apply_params_batch_mmt_float(tuner_ctx: common.TunerContext) -> None:
     mlir_template = [
         "<intrinsic = #iree_gpu.mma_layout<MFMA_F32_16x16x16_F16>, subgroup_m_count = 4, subgroup_n_count = 1>}>",
         "<LLVMGPUVectorDistribute workgroup_size = [64, 4, 1] subgroup_size = 64,",
@@ -238,9 +252,9 @@ def test_apply_params_batch_mmt_float() -> None:
 
     problem_size = common.ProblemSize(
         common.MatmulSize(4096, 640, 640, 2),
-        common.ShapedType([2, 4096, 640], common.ElementType.f16),
-        common.ShapedType([2, 640, 640], common.ElementType.f16),
-        common.ShapedType([2, 4096, 640], common.ElementType.f32),
+        common.ShapedType([2, 4096, 640], tuner_ctx.type.f16),
+        common.ShapedType([2, 640, 640], tuner_ctx.type.f16),
+        common.ShapedType([2, 4096, 640], tuner_ctx.type.f32),
         common.DispatchKind.batch_mmt,
     )
 
@@ -276,7 +290,7 @@ def test_apply_params_batch_mmt_float() -> None:
     assert '{llvm_func_attrs = {"amdgpu-waves-per-eu" = "2"}' in modified
 
 
-def test_apply_params_batch_mmt_int() -> None:
+def test_apply_params_batch_mmt_int(tuner_ctx: common.TunerContext) -> None:
     mlir_template = [
         "<intrinsic = #iree_gpu.mma_layout<MFMA_I32_16x16x32_I8>, subgroup_m_count = 4, subgroup_n_count = 1>}>",
         "<LLVMGPUVectorDistribute workgroup_size = [64, 4, 1] subgroup_size = 64,",
@@ -286,9 +300,9 @@ def test_apply_params_batch_mmt_int() -> None:
 
     problem_size = common.ProblemSize(
         common.MatmulSize(4096, 640, 640, 2),
-        common.ShapedType([2, 4096, 640], common.ElementType.i8),
-        common.ShapedType([2, 640, 640], common.ElementType.i8),
-        common.ShapedType([2, 4096, 640], common.ElementType.i32),
+        common.ShapedType([2, 4096, 640], tuner_ctx.type.i8),
+        common.ShapedType([2, 640, 640], tuner_ctx.type.i8),
+        common.ShapedType([2, 4096, 640], tuner_ctx.type.i32),
         common.DispatchKind.batch_mmt,
     )
 
@@ -347,7 +361,7 @@ def test_apply_params_batch_mmt_int() -> None:
     assert "workgroup_size = [128, 2, 1] subgroup_size = 64" in embeddable
 
 
-def test_apply_params_broadcast_rhs_mmt() -> None:
+def test_apply_params_broadcast_rhs_mmt(tuner_ctx: common.TunerContext) -> None:
     mlir_template = [
         "<intrinsic = #iree_gpu.mma_layout<MFMA_I32_16x16x32_I8>, subgroup_m_count = 4, subgroup_n_count = 1>}>",
         "<LLVMGPUVectorDistribute workgroup_size = [64, 4, 1] subgroup_size = 64,",
@@ -357,9 +371,9 @@ def test_apply_params_broadcast_rhs_mmt() -> None:
 
     problem_size = common.ProblemSize(
         common.MatmulSize(4096, 640, 640, 2),
-        common.ShapedType([2, 4096, 640], common.ElementType.i8),
-        common.ShapedType([640, 640], common.ElementType.i8),
-        common.ShapedType([2, 4096, 640], common.ElementType.i32),
+        common.ShapedType([2, 4096, 640], tuner_ctx.type.i8),
+        common.ShapedType([640, 640], tuner_ctx.type.i8),
+        common.ShapedType([2, 4096, 640], tuner_ctx.type.i32),
         common.DispatchKind.broadcast_rhs_mmt,
     )
 
@@ -422,7 +436,7 @@ def test_apply_params_broadcast_rhs_mmt() -> None:
     assert "workgroup_size = [128, 2, 1] subgroup_size = 64" in embeddable
 
 
-def test_detect_broadcast_rhs_mmt() -> None:
+def test_detect_broadcast_rhs_mmt(tuner_ctx: common.TunerContext) -> None:
     mlir_lines = [
         r"%18 = tensor.empty() : tensor<2x1024x10240xi32>",
         r"%19 = linalg.fill {lowering_config = #iree_codegen.lowering_config<tile_sizes = [[1, 64, 128, 128]]>} ins(%c0_i32 : i32) outs(%18 : tensor<2x1024x10240xi32>) -> tensor<2x1024x10240xi32>",
