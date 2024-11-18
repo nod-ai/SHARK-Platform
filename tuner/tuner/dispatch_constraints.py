@@ -130,10 +130,10 @@ def generate_constraints(
 
 
 def generate_solutions(
-    ctx: TunerContext, problem_size: ProblemSize, num_subgrups: int
+    logger: logging.Logger, problem_size: ProblemSize, num_subgrups: int
 ) -> Iterator[Configuration]:
     M, N, K = problem_size.MNK
-    ctx.logger.info(f"{M},{N},{K}")
+    logger.info(f"{M},{N},{K}")
     m, n, k = z3.Int("m"), z3.Int("n"), z3.Int("k")
     subgroup_size = z3.Int("subgroup_size")
     intrinsic_mn = z3.Int("intrinsic_mn")
@@ -170,7 +170,7 @@ def generate_solutions(
         waves_per_eu,
     )
     solver.add(z3.simplify(z3.And(constraints)))
-    ctx.logger.debug(f"Initial constraints: {solver}")
+    logger.debug(f"Initial constraints: {solver}")
     i = 0
     while solver.check() == z3.sat:
         model = solver.model()

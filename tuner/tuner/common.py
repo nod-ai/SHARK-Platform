@@ -13,10 +13,27 @@ from typing import Optional
 from iree.compiler import ir  # type: ignore
 
 
+class CommonTypes:
+    def __init__(self, ctx: ir.Context):
+        assert ctx
+        self.i1 = ir.IntegerType.get_signless(1, ctx)
+        self.i8 = ir.IntegerType.get_signless(8, ctx)
+        self.i16 = ir.IntegerType.get_signless(16, ctx)
+        self.i32 = ir.IntegerType.get_signless(32, ctx)
+
+        self.f8E4M3FNUZ = ir.Float8E4M3FNUZType.get(ctx)
+        self.f8E5M2FNUZ = ir.Float8E5M2FNUZType.get(ctx)
+        self.f16 = ir.F16Type.get(ctx)
+        self.f32 = ir.F32Type.get(ctx)
+
+        self.bf16 = ir.BF16Type.get(ctx)
+
+
 class TunerContext:
     def __init__(self, mlir_ctx: ir.Context, logger: logging.Logger):
-        self.mlir_ctx = mlir_ctx
-        self.logger = logger
+        self.mlir_ctx: ir.Context = mlir_ctx
+        self.logger: logging.Logger = logger
+        self.type: CommonTypes = CommonTypes(mlir_ctx)
 
 
 class DispatchKind(Enum):
@@ -28,40 +45,17 @@ class DispatchKind(Enum):
     broadcast_rhs_mmt = 6
 
 
-class ElementType(Enum):
-    i8 = 1
-    i32 = 2
-    f8 = 3
-    f16 = 4
-    f32 = 5
-
-    @property
-    def bitwidth(self) -> int:
-        match self:
-            case ElementType.i8 | ElementType.f8:
-                return 8
-            case ElementType.f16:
-                return 16
-            case ElementType.i32 | ElementType.f32:
-                return 32
-            case _:
-                assert False, "unhandled case"
-
-    def __str__(self) -> str:
-        return self.name
-
-
 @dataclass
 class ShapedType:
     shape: list[int]
-    element_type: ElementType
+    element_type: ir.IntegerType | ir.FloatType
 
     def rank(self) -> int:
         return len(self.shape)
 
     @property
     def bitwidth(self) -> int:
-        return self.element_type.bitwidth
+        return self.element_type.width
 
     def __str__(self) -> str:
         dim_to_str = lambda dim: str(dim) if dim != -1 else "?"
@@ -91,11 +85,11 @@ class ProblemSize:
 
 @dataclass
 class MfmaIntrinsic:
-    output_type: ElementType
+    output_type: ir.IntegerType | ir.FloatType
     m: int
     n: int
     k: int
-    input_type: ElementType
+    input_type: ir.IntegerType | ir.FloatType
 
     def __str__(self) -> str:
         input = str(self.input_type).upper()
@@ -104,19 +98,27 @@ class MfmaIntrinsic:
 
     @staticmethod
     def mfma_f32_16x16x16_f16():
-        return MfmaIntrinsic(ElementType.f32, 16, 16, 16, ElementType.f16)
+        f16 = ir.F16Type.get()
+        f32 = ir.F32Type.get()
+        return MfmaIntrinsic(f32, 16, 16, 16, f16)
 
     @staticmethod
     def mfma_f32_32x32x8_f16():
-        return MfmaIntrinsic(ElementType.f32, 32, 32, 8, ElementType.f16)
+        f16 = ir.F16Type.get()
+        f32 = ir.F32Type.get()
+        return MfmaIntrinsic(f32, 32, 32, 8, f16)
 
     @staticmethod
     def mfma_i32_16x16x32_i8():
-        return MfmaIntrinsic(ElementType.i32, 16, 16, 32, ElementType.i8)
+        i32 = ir.IntegerType.get_signless(32)
+        i8 = ir.IntegerType.get_signless(8)
+        return MfmaIntrinsic(i32, 16, 16, 32, i8)
 
     @staticmethod
     def mfma_i32_32x32x16_i8():
-        return MfmaIntrinsic(ElementType.i32, 32, 32, 16, ElementType.i8)
+        i32 = ir.IntegerType.get_signless(32)
+        i8 = ir.IntegerType.get_signless(8)
+        return MfmaIntrinsic(i32, 32, 32, 16, i8)
 
     @staticmethod
     def all():
@@ -201,22 +203,6 @@ def get_pipeline_config(configuration: Configuration) -> str:
     return extra_config
 
 
-class MlirRegex(Enum):
-    ssa_value = r"%[a-zA-Z0-9-_]+"
-    tensor_type = r"tensor<(([0-9]+x)+((f|i)[0-9]+))>"
-
-    def __str__(self) -> str:
-        return self.value
-
-    @staticmethod
-    def dps_ins_two_args() -> str:
-        return rf"ins\({MlirRegex.ssa_value}, {MlirRegex.ssa_value} : (?P<LHS>{MlirRegex.tensor_type}), (?P<RHS>{MlirRegex.tensor_type})\)"
-
-    @staticmethod
-    def dps_outs_one_arg() -> str:
-        return rf"outs\({MlirRegex.ssa_value} : (?P<RES>{MlirRegex.tensor_type})\)"
-
-
 def read_input_mlir(filename: str) -> list[str]:
     with open(filename, "r") as f:
         return f.readlines()
@@ -241,18 +227,6 @@ class ConvDimInfo:
     @staticmethod
     def from_problem_size(problem_size: ProblemSize):
         return ConvDimInfo.from_rhs_res(problem_size.rhs_type, problem_size.res_type)
-
-
-def parse_tensor_type(tensor_type: str) -> ShapedType:
-    shape_match = re.search(str(MlirRegex.tensor_type), tensor_type)
-    assert shape_match
-
-    shape_str = shape_match.group(1)
-    dims_and_elem = shape_str.split("x")
-    dims = [int(x) for x in dims_and_elem[:-1]]
-    elem = dims_and_elem[-1]
-    str_to_elem_ty = {x.name: x for x in ElementType}
-    return ShapedType(dims, str_to_elem_ty[elem])
 
 
 @dataclass
