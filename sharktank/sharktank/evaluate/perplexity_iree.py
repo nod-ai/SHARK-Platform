@@ -183,7 +183,7 @@ class Perplexity:
             s.replace("\n", "").rstrip()
             for s in test_prompts
             if s != "" and len(s.split()) >= 20 and s.count("=") < 2
-        ]
+        ][0:4]
 
         self.bs = len(test_prompts)
 
