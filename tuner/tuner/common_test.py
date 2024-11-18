@@ -11,28 +11,39 @@ Usage: python -m pytest candidate_gen_test.py
 import pytest
 from . import common
 
+from typing import Generator
 
-def test_get_shaped_type_element_bitwidth() -> None:
-    assert common.ShapedType([1024, 2048], common.ElementType.i8).bitwidth == 8
-    assert common.ShapedType([2048], common.ElementType.i32).bitwidth == 32
-    assert common.ShapedType([2048, 512, 384], common.ElementType.f8).bitwidth == 8
-    assert common.ShapedType([1, 1], common.ElementType.f16).bitwidth == 16
+from iree.compiler import ir  # type: ignore
 
 
-def test_get_shaped_type_to_str() -> None:
-    assert str(common.ShapedType([1024, 2048], common.ElementType.i8)) == "1024x2048xi8"
-    assert str(common.ShapedType([1024], common.ElementType.f32)) == "1024xf32"
-    assert str(common.ShapedType([1, 2, 3], common.ElementType.f16)) == "1x2x3xf16"
-    assert str(common.ShapedType([-1, 2, 3], common.ElementType.f16)) == "?x2x3xf16"
+@pytest.fixture
+def tuner_ctx() -> Generator[common.TunerContext, None, None]:
+    from logging import Logger
+    from unittest.mock import MagicMock
+
+    with ir.Context() as ctx:
+        logger: Logger = MagicMock(spec=Logger)
+        yield common.TunerContext(ctx, logger)
 
 
-def test_parse_tensor_type() -> None:
-    assert common.parse_tensor_type("tensor<1x2x3xf32>") == common.ShapedType(
-        [1, 2, 3], common.ElementType.f32
-    )
-    assert common.parse_tensor_type("tensor<123xi8>") == common.ShapedType(
-        [123], common.ElementType.i8
-    )
+@pytest.fixture
+def mlir_ctx() -> Generator[ir.Context, None, None]:
+    with ir.Context() as ctx:
+        yield ctx
+
+
+def test_get_shaped_type_element_bitwidth(tuner_ctx: common.TunerContext) -> None:
+    assert common.ShapedType([1024, 2048], tuner_ctx.type.i8).bitwidth == 8
+    assert common.ShapedType([2048], tuner_ctx.type.i32).bitwidth == 32
+    assert common.ShapedType([2048, 512, 384], tuner_ctx.type.f8E4M3FNUZ).bitwidth == 8
+    assert common.ShapedType([1, 1], tuner_ctx.type.f16).bitwidth == 16
+
+
+def test_get_shaped_type_to_str(tuner_ctx: common.TunerContext) -> None:
+    assert str(common.ShapedType([1024, 2048], tuner_ctx.type.i8)) == "1024x2048xi8"
+    assert str(common.ShapedType([1024], tuner_ctx.type.f32)) == "1024xf32"
+    assert str(common.ShapedType([1, 2, 3], tuner_ctx.type.f16)) == "1x2x3xf16"
+    assert str(common.ShapedType([-1, 2, 3], tuner_ctx.type.f16)) == "?x2x3xf16"
 
 
 def test_gpu_pipeline_options() -> None:
@@ -59,7 +70,7 @@ def test_gpu_pipeline_options() -> None:
     )
 
 
-def test_get_pipeline_config() -> None:
+def test_get_pipeline_config(mlir_ctx: ir.Context) -> None:
     config = common.Configuration(
         subgroup_size=32,
         workgroup_size=[16, 16, 1],
@@ -85,18 +96,18 @@ def test_get_pipeline_config() -> None:
     )
 
 
-def test_mfma_intrinsic_to_str() -> None:
+def test_mfma_intrinsic_to_str(mlir_ctx: ir.Context) -> None:
     assert str(common.MfmaIntrinsic.mfma_f32_16x16x16_f16()) == "MFMA_F32_16x16x16_F16"
     assert str(common.MfmaIntrinsic.mfma_i32_32x32x16_i8()) == "MFMA_I32_32x32x16_I8"
 
 
-def test_get_compatible_mfma_intrinsics() -> None:
+def test_get_compatible_mfma_intrinsics(tuner_ctx: common.TunerContext) -> None:
     assert common.get_compatible_mfma_intrinsics(
         common.ProblemSize(
             common.MatmulSize(2048, 1280, 1280),
-            common.ShapedType([2048, 1280], common.ElementType.f16),
-            common.ShapedType([1280, 1280], common.ElementType.f16),
-            common.ShapedType([2048, 1280], common.ElementType.f32),
+            common.ShapedType([2048, 1280], tuner_ctx.type.f16),
+            common.ShapedType([1280, 1280], tuner_ctx.type.f16),
+            common.ShapedType([2048, 1280], tuner_ctx.type.f32),
             common.DispatchKind.mmt,
         )
     ) == [
@@ -107,9 +118,9 @@ def test_get_compatible_mfma_intrinsics() -> None:
     assert common.get_compatible_mfma_intrinsics(
         common.ProblemSize(
             common.MatmulSize(2048, 1280, 1280),
-            common.ShapedType([2048, 1280], common.ElementType.i8),
-            common.ShapedType([1280, 1280], common.ElementType.i8),
-            common.ShapedType([2048, 1280], common.ElementType.i32),
+            common.ShapedType([2048, 1280], tuner_ctx.type.i8),
+            common.ShapedType([1280, 1280], tuner_ctx.type.i8),
+            common.ShapedType([2048, 1280], tuner_ctx.type.i32),
             common.DispatchKind.mmt,
         )
     ) == [
@@ -120,9 +131,9 @@ def test_get_compatible_mfma_intrinsics() -> None:
     assert common.get_compatible_mfma_intrinsics(
         common.ProblemSize(
             common.MatmulSize(968, 320, 640, 64),
-            common.ShapedType([64, 968, 640], common.ElementType.f32),
-            common.ShapedType([64, 640, 320], common.ElementType.f32),
-            common.ShapedType([64, 968, 320], common.ElementType.f32),
+            common.ShapedType([64, 968, 640], tuner_ctx.type.f32),
+            common.ShapedType([64, 640, 320], tuner_ctx.type.f32),
+            common.ShapedType([64, 968, 320], tuner_ctx.type.f32),
             common.DispatchKind.batch_matmul,
         )
     ) == [
