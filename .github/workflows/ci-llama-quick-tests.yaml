@@ -78,7 +78,7 @@ jobs:
         run: pytest sharktank/tests/models/llama/benchmark_amdgpu_test.py -v -s --iree-hip-target=gfx942 --run-8b-llama
 
       - name: Upload llama executable files
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
         with:
           name: llama-files
           path: ${{ github.workspace }}/${{ steps.date.outputs.date }}
