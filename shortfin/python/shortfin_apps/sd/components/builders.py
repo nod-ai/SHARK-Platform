@@ -165,6 +165,7 @@ def needs_update(ctx):
 
 def needs_file(filename, ctx, url=None, namespace=FileNamespace.GEN):
     out_file = ctx.allocate_file(filename, namespace=namespace).get_fs_path()
+    needed = True
     if os.path.exists(out_file):
         if url:
             needed = not is_valid_size(out_file, url)

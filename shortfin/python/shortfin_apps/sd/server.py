@@ -136,7 +136,7 @@ def get_configs(args):
         f"--model={modelname}",
         f"--topology={topology_inp}",
     ]
-    outs = subprocess.check_output(cfg_builder_args, stderr=subprocess.DEVNULL).decode()
+    outs = subprocess.check_output(cfg_builder_args).decode()
     outs_paths = outs.splitlines()
     for i in outs_paths:
         if "sdxl_config" in i and not args.model_config:
@@ -159,7 +159,6 @@ def get_configs(args):
                 arglist = spec.strip("--").split("=")
                 arg = arglist[0]
                 if len(arglist) > 2:
-                    print(arglist)
                     value = arglist[1:]
                     for val in value:
                         try:
@@ -228,9 +227,7 @@ def get_modules(args, model_config, flagfile, td_spec):
             f"COMMAND LINE EQUIVALENT: "
             + " ".join([str(argn) for argn in builder_args])
         )
-        output = subprocess.check_output(
-            builder_args, stderr=subprocess.DEVNULL
-        ).decode()
+        output = subprocess.check_output(builder_args).decode()
 
         output_paths = output.splitlines()
         filenames.extend(output_paths)
