@@ -77,6 +77,10 @@ python -m shortfin_apps.sd.simple_client --interactive
 
 Congratulations!!! At this point you can play around with the server and client based on your usage.
 
+### Note: Server implementation scope
+
+The SDXL server's implementation does not account for extremely large client batches. Normally, for heavy workloads, services would be composed under a load balancer to ensure each service is fed with requests optimally. For most cases outside of large-scale deployments, the server's internal batching/load balancing is sufficient.
+
 ### Update flags
 
 Please see --help for both the server and client for usage instructions. Here's a quick snapshot.
