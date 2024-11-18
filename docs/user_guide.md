@@ -1,9 +1,5 @@
 # SHARK User Guide
 
-> [!WARNING]
-> This is still pre-release so the artifacts listed here may be broken
->
-
 These instructions cover the usage of the latest stable release of SHARK. For a more bleeding edge release please install the [nightly releases](nightly_releases.md).
 
 ## Prerequisites
@@ -11,7 +7,6 @@ These instructions cover the usage of the latest stable release of SHARK. For a 
 Our current user guide requires that you have:
 - Access to a computer with an installed AMD Instinct™ MI300x Series Accelerator
 - Installed a compatible version of Linux and ROCm on the computer (see the [ROCm compatability matrix](https://rocm.docs.amd.com/en/latest/compatibility/compatibility-matrix.html))
-
 
 ## Set up Environment
 
@@ -51,11 +46,9 @@ pip install torch torchvision torchaudio --index-url https://download.pytorch.or
 pip install shark-ai[apps]
 ```
 
-Temporarily, you may need an update to your `shortfin` install.
-Install the latest pre-release with:
-```
-pip install shortfin --upgrade --pre -f https://github.com/nod-ai/shark-ai/releases/expanded_assets/dev-wheels
-```
+> [!TIP]
+> To switch from the stable release channel to the nightly release channel,
+> see [`nightly_releases.md`](./nightly_releases.md).
 
 ### Test the installation.
 
