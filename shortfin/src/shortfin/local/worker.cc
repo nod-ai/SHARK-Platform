@@ -46,8 +46,8 @@ Worker::Worker(const Options options)
     iree_status_ignore(status);
   };
   // TODO: We need a way to dynamically resize this vs having a hard limit.
-  iree_loop_sync_options_t loop_options = {.max_queue_depth = 256,
-                                           .max_wait_count = 256};
+  iree_loop_sync_options_t loop_options = {.max_queue_depth = 2048,
+                                           .max_wait_count = 2048};
   SHORTFIN_THROW_IF_ERROR(
       iree_loop_sync_allocate(loop_options, options_.allocator, &loop_sync_));
   iree_loop_sync_scope_initialize(loop_sync_, OnError, this, &loop_scope_);
