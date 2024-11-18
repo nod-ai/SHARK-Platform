@@ -5,7 +5,6 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 from typing import Any
-
 import argparse
 import logging
 from pathlib import Path
@@ -13,14 +12,14 @@ import sys
 import os
 import copy
 import subprocess
+from contextlib import asynccontextmanager
+import uvicorn
 
 # Import first as it does dep checking and reporting.
 from shortfin.interop.fastapi import FastAPIResponder
-
-from contextlib import asynccontextmanager
+from shortfin.support.logging_setup import native_handler
 
 from fastapi import FastAPI, Request, Response
-import uvicorn
 
 from .components.generate import ClientGenerateBatchProcess
 from .components.config_struct import ModelParams
@@ -29,13 +28,39 @@ from .components.manager import SystemManager
 from .components.service import GenerateService
 from .components.tokenizer import Tokenizer
 
-from shortfin.support.logging_setup import native_handler
 
 logger = logging.getLogger("shortfin-sd")
 logger.addHandler(native_handler)
 logger.propagate = False
 
 THIS_DIR = Path(__file__).resolve().parent
+
+UVICORN_LOG_CONFIG = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "default": {
+            "()": "uvicorn.logging.DefaultFormatter",
+            "format": "[{asctime}] {message}",
+            "datefmt": "%Y-%m-%d %H:%M:%S",
+            "style": "{",
+            "use_colors": True,
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "default",
+        },
+    },
+    "loggers": {
+        "uvicorn": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+    },
+}
 
 
 @asynccontextmanager
@@ -233,16 +258,14 @@ def get_modules(args, model_config, flagfile, td_spec):
     for name in filenames:
         for key in vmfbs.keys():
             if key in name.lower():
-                if any([x in name for x in [".irpa", ".safetensors", ".gguf"]]):
+                if any(x in name for x in [".irpa", ".safetensors", ".gguf"]):
                     params[key].extend([name])
                 elif "vmfb" in name:
                     vmfbs[key].extend([name])
     return vmfbs, params
 
 
-def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
-    from pathlib import Path
-
+def main(argv, log_config=UVICORN_LOG_CONFIG):
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", type=str, default=None)
     parser.add_argument("--port", type=int, default=8000)
@@ -394,30 +417,5 @@ if __name__ == "__main__":
     main(
         sys.argv[1:],
         # Make logging defer to the default shortfin logging config.
-        log_config={
-            "version": 1,
-            "disable_existing_loggers": False,
-            "formatters": {
-                "default": {
-                    "()": "uvicorn.logging.DefaultFormatter",
-                    "format": "[{asctime}] {message}",
-                    "datefmt": "%Y-%m-%d %H:%M:%S",
-                    "style": "{",
-                    "use_colors": True,
-                },
-            },
-            "handlers": {
-                "console": {
-                    "class": "logging.StreamHandler",
-                    "formatter": "default",
-                },
-            },
-            "loggers": {
-                "uvicorn": {
-                    "handlers": ["console"],
-                    "level": "INFO",
-                    "propagate": False,
-                },
-            },
-        },
+        log_config=UVICORN_LOG_CONFIG,
     )
