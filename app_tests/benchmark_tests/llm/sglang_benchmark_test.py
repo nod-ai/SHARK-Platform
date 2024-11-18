@@ -38,7 +38,19 @@ MODEL_PATH = Path("/data/llama3.1/8b/llama8b_f16.irpa")
 TOKENIZER_DIR = Path("/data/llama3.1/8b/")
 
 
-@pytest.mark.parametrize("request_rate", [1, 2, 4, 8, 16, 32])
+def log_jsonl_result(file_path):
+    with open(file_path, "r") as file:
+        json_string = file.readline().strip()
+
+    json_data = json.loads(json_string)
+    for key, val in json_data.items():
+        logger.info(f"{key.upper()}: {val}")
+
+
+@pytest.mark.parametrize(
+    "request_rate",
+    [1, 2, 4, 8, 16, 32],
+)
 @pytest.mark.parametrize(
     "pre_process_model",
     [
@@ -101,6 +113,8 @@ def test_sglang_benchmark_server(request_rate, pre_process_model):
             benchmark_process.join()
 
         logger.info(f"Benchmark run completed in {str(time.time() - start)} seconds")
+        logger.info("======== RESULTS ========")
+        log_jsonl_result(benchmark_args.output_file)
     except Exception as e:
         logger.info(e)
 

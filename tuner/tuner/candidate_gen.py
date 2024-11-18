@@ -74,7 +74,7 @@ def apply_configuration(
 
 
 class DispatchTuner(DispatchParser):
-    # TODO(https://github.com/nod-ai/SHARK-Platform/issues/453): Remove this in favor of configuring using transform dialect.
+    # TODO(https://github.com/nod-ai/shark-ai/issues/453): Remove this in favor of configuring using transform dialect.
     @abstractmethod
     def apply_params(
         self,
@@ -517,48 +517,52 @@ def tune(
 
     with ir.Context() as ctx:
         tuner_context = TunerContext(ctx, tune_logger)
-        mlir_module: ir.Module = parse_mlir(mlir_text, tuner_context)
-        # Save the input file as the first candidate.
-        with open(path.join(output, f"0.mlir"), "w") as f:
-            f.write(mlir_text)
+        with parse_mlir(mlir_text, tuner_context) as mlir_module:
+            # Save the input file as the first candidate.
+            with open(path.join(output, f"0.mlir"), "w") as f:
+                f.write(mlir_text)
 
-        dispatch_tuner_registry = DispatchTunerRegistry()
-        dispatch_tuner_registry.register(
-            [
-                MmtTuner(),
-                ConvTuner(),
-                ContractionTuner(lhs_dims, rhs_dims, tile_dims),
-                BatchMmtTuner(),
-                BatchMatmulTuner(lhs_dims, rhs_dims, tile_dims),
-            ]
-        )
+            dispatch_tuner_registry = DispatchTunerRegistry()
+            dispatch_tuner_registry.register(
+                [
+                    MmtTuner(),
+                    ConvTuner(),
+                    ContractionTuner(lhs_dims, rhs_dims, tile_dims),
+                    BatchMmtTuner(),
+                    BatchMatmulTuner(lhs_dims, rhs_dims, tile_dims),
+                ]
+            )
 
-        walk_result: OpWalkResult = walk_mlir_op(mlir_module, dispatch_tuner_registry)
+            walk_result: OpWalkResult = walk_mlir_op(
+                mlir_module, dispatch_tuner_registry
+            )
 
-        dispatch_tuner = walk_result.dispatch_tuner
-        assert dispatch_tuner, "No suitable dispatch tuner found"
-        problem_size: ProblemSize = dispatch_tuner.get_shapes(mlir_template)
-        tune_logger.debug(str(problem_size))
-        configs = []
-        for i, config in enumerate(
-            generate_solutions(tuner_context, problem_size, num_subgroups)
-        ):
-            if i >= limit:
-                break
-            tune_logger.info(f"Solution #{i+1}: {config}")
-            configs.append(config)
-            tf_mlir = dispatch_tuner.apply_params(problem_size, mlir_template, config)
+            dispatch_tuner = walk_result.dispatch_tuner
+            assert dispatch_tuner, "No suitable dispatch tuner found"
+            problem_size: ProblemSize = dispatch_tuner.get_shapes(mlir_template)
+            tune_logger.debug(str(problem_size))
+            configs = []
+            for i, config in enumerate(
+                generate_solutions(tune_logger, problem_size, num_subgroups)
+            ):
+                if i >= limit:
+                    break
+                tune_logger.info(f"Solution #{i+1}: {config}")
+                configs.append(config)
+                tf_mlir = dispatch_tuner.apply_params(
+                    problem_size, mlir_template, config
+                )
 
-            with open(path.join(output, f"{i+1}.mlir"), "w") as f:
-                f.write(tf_mlir.modified)
-            with open(path.join(output, f"{i+1}_config.mlir"), "w") as f:
-                f.write(tf_mlir.embeddable)
+                with open(path.join(output, f"{i+1}.mlir"), "w") as f:
+                    f.write(tf_mlir.modified)
+                with open(path.join(output, f"{i+1}_config.mlir"), "w") as f:
+                    f.write(tf_mlir.embeddable)
 
-        with open(path.join(output, "configs.pkl"), "wb") as file:
-            pickle.dump(configs, file)
+            with open(path.join(output, "configs.pkl"), "wb") as file:
+                pickle.dump(configs, file)
 
-        tune_logger.info(f"Generated {len(configs)} candidates")
-        tune_logger.info(f"Configurations .pkl is stored in {output}/configs.pkl")
+            tune_logger.info(f"Generated {len(configs)} candidates")
+            tune_logger.info(f"Configurations .pkl is stored in {output}/configs.pkl")
 
 
 def main():
