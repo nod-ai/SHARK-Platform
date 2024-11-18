@@ -5,18 +5,16 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 import asyncio
-import io
 import logging
 import json
 
 import shortfin as sf
-import shortfin.array as sfnp
 
 # TODO: Have a generic "Responder" interface vs just the concrete impl.
 from shortfin.interop.fastapi import FastAPIResponder
 
 from .io_struct import GenerateReqInput
-from .messages import InferenceExecRequest, InferencePhase
+from .messages import InferenceExecRequest
 from .service import GenerateService
 from .metrics import measure
 

@@ -6,8 +6,7 @@
 
 import logging
 import time
-import asyncio
-from typing import Callable, Any
+from typing import Any
 import functools
 
 logger = logging.getLogger("shortfin-sd.metrics")

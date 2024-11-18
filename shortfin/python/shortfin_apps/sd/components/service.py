@@ -6,12 +6,10 @@
 
 import asyncio
 import logging
-import math
 import numpy as np
 from tqdm.auto import tqdm
 from pathlib import Path
 from PIL import Image
-import io
 import base64
 
 import shortfin as sf

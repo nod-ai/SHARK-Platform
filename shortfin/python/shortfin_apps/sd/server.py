@@ -28,9 +28,8 @@ from .components.io_struct import GenerateReqInput
 from .components.manager import SystemManager
 from .components.service import GenerateService
 from .components.tokenizer import Tokenizer
-from .components.builders import sdxl
 
-from shortfin.support.logging_setup import native_handler, configure_main_logger
+from shortfin.support.logging_setup import native_handler
 
 logger = logging.getLogger("shortfin-sd")
 logger.addHandler(native_handler)
@@ -370,7 +369,6 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
         default=1,
         help="Use tunings for attention and matmul ops. 0 to disable.",
     )
-
     args = parser.parse_args(argv)
     if not args.artifacts_dir:
         home = Path.home()
