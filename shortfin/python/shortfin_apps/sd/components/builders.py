@@ -165,6 +165,7 @@ def needs_update(ctx):
 
 def needs_file(filename, ctx, url=None, namespace=FileNamespace.GEN):
     out_file = ctx.allocate_file(filename, namespace=namespace).get_fs_path()
+    needed = True
     if os.path.exists(out_file):
         if url:
             needed = not is_valid_size(out_file, url)
@@ -176,16 +177,13 @@ def needs_file(filename, ctx, url=None, namespace=FileNamespace.GEN):
 
 
 def needs_compile(filename, target, ctx):
-    device = "amdgpu" if "gfx" in target else "llvmcpu"
-    vmfb_name = f"{filename}_{device}-{target}.vmfb"
+    vmfb_name = f"{filename}_{target}.vmfb"
     namespace = FileNamespace.BIN
     return needs_file(vmfb_name, ctx, namespace=namespace)
 
 
 def get_cached_vmfb(filename, target, ctx):
-    device = "amdgpu" if "gfx" in target else "llvmcpu"
-    vmfb_name = f"{filename}_{device}-{target}.vmfb"
-    namespace = FileNamespace.BIN
+    vmfb_name = f"{filename}_{target}.vmfb"
     return ctx.file(vmfb_name)
 
 

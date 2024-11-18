@@ -428,16 +428,15 @@ ConfigOptions CreateConfigOptions(std::optional<std::string> &env_prefix,
 }  // namespace
 
 NB_MODULE(lib, m) {
-// Tragically, debug builds of Python do the right thing and don't immortalize
-// many identifiers and such. This makes the last chance leak checking that
-// nanobind does somewhat unreliable since the reports it prints may be
-// to identifiers that are no longer live (at a time in process shutdown
-// where it is expected that everything left just gets dropped on the floor).
-// This causes segfaults or ASAN violations in the leak checker on exit in
-// certain scenarios where we have spurious "leaks" of global objects.
-#if defined(Py_DEBUG)
+  // Tragically, debug builds of Python do the right thing and don't immortalize
+  // many identifiers and such. This makes the last chance leak checking that
+  // nanobind does somewhat unreliable since the reports it prints may be
+  // to identifiers that are no longer live (at a time in process shutdown
+  // where it is expected that everything left just gets dropped on the floor).
+  // This causes segfaults or ASAN violations in the leak checker on exit in
+  // certain scenarios where we have spurious "leaks" of global objects.
+
   py::set_leak_warnings(false);
-#endif
 
   logging::InitializeFromEnv();
 
