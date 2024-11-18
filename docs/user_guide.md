@@ -17,7 +17,7 @@ Our current user guide requires that you have:
 
 This section will help you install Python and set up a Python environment with venv.
 
-Officially we support Python versions: 3.11, 3.12, 3.13, 3.13t
+Officially we support Python versions: 3.11, 3.12, 3.13
 
 The rest of this guide assumes you are using Python 3.11.
 
@@ -39,6 +39,10 @@ Setup your Python environment with the following commands:
 # Set up a virtual environment to isolate packages from other envs.
 python3.11 -m venv 3.11.venv
 source 3.11.venv/bin/activate
+
+# Optional: faster installation of torch with just CPU support.
+# See other options at https://pytorch.org/get-started/locally/
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
 ```
 
 ## Install SHARK and its dependencies
