@@ -168,8 +168,6 @@ def needs_file(filename, ctx, url=None, namespace=FileNamespace.GEN):
     if os.path.exists(out_file):
         if url:
             needed = not is_valid_size(out_file, url)
-        else:
-            needed = False
         if not needed:
             return False
     filekey = os.path.join(ctx.path, filename)
@@ -192,6 +190,8 @@ def get_cached_vmfb(filename, target, ctx):
 
 
 def is_valid_size(file_path, url):
+    if not url:
+        return True
     with urllib.request.urlopen(url) as response:
         content_length = response.getheader("Content-Length")
     local_size = get_file_size(str(file_path))
