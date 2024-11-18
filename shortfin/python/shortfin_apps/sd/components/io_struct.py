@@ -4,11 +4,9 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-from typing import Dict, List, Optional, Union
+from typing import List, Optional, Union
 from dataclasses import dataclass
 import uuid
-
-import shortfin.array as sfnp
 
 
 @dataclass

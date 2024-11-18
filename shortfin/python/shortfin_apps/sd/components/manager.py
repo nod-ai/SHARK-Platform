@@ -25,7 +25,7 @@ class SystemManager:
                 sb.visible_devices = sb.available_devices
                 sb.visible_devices = get_selected_devices(sb, device_ids)
             self.ls = sb.create_system()
-        logging.info(f"Created local system with {self.ls.device_names} devices")
+        logger.info(f"Created local system with {self.ls.device_names} devices")
         # TODO: Come up with an easier bootstrap thing than manually
         # running a thread.
         self.t = threading.Thread(target=lambda: self.ls.run(self.run()))
@@ -39,9 +39,10 @@ class SystemManager:
     def shutdown(self):
         logger.info("Shutting down system manager")
         self.command_queue.close()
+        self.ls.shutdown()
 
     async def run(self):
         reader = self.command_queue.reader()
         while command := await reader():
             ...
-        logging.info("System manager command processor stopped")
+        logger.info("System manager command processor stopped")
