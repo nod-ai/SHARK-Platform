@@ -65,7 +65,6 @@ template <typename CppType, typename KeepAlivePatient, typename... Args>
 inline py::object custom_new_keep_alive(py::handle py_type,
                                         KeepAlivePatient &keep_alive,
                                         Args &&...args) {
-  py::set_leak_warnings(false);
   py::object self = custom_new<CppType>(py_type, std::forward<Args>(args)...);
   py::detail::keep_alive(
       self.ptr(),
