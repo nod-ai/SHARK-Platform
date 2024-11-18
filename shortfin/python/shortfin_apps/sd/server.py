@@ -207,6 +207,7 @@ def get_modules(args, model_config, flagfile, td_spec):
     filenames = []
     for modelname in vmfbs.keys():
         ireec_args = model_flags["all"] + model_flags[modelname]
+        ireec_extra_args = " ".join(ireec_args)
         builder_args = [
             sys.executable,
             "-m",
@@ -220,12 +221,11 @@ def get_modules(args, model_config, flagfile, td_spec):
             f"--model={modelname}",
             f"--iree-hal-target-device={args.device}",
             f"--iree-hip-target={args.target}",
-            f"--iree-compile-extra-args={' '.join(ireec_args)}",
+            f"--iree-compile-extra-args={ireec_extra_args}",
         ]
         logger.info(f"Preparing runtime artifacts for {modelname}...")
         logger.debug(
-            f"COMMAND LINE EQUIVALENT: "
-            + " ".join([str(argn) for argn in builder_args])
+            "COMMAND LINE EQUIVALENT: " + " ".join([str(argn) for argn in builder_args])
         )
         output = subprocess.check_output(builder_args).decode()
 
