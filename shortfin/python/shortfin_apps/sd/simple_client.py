@@ -4,17 +4,17 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
+from datetime import datetime as dt
+import os
+import sys
+import time
 import json
-import requests
 import argparse
 import base64
-import time
 import asyncio
 import aiohttp
-import sys
-import os
+import requests
 
-from datetime import datetime as dt
 from PIL import Image
 
 sample_request = {
@@ -32,10 +32,10 @@ sample_request = {
 }
 
 
-def bytes_to_img(bytes, outputdir, idx=0, width=1024, height=1024):
+def bytes_to_img(in_bytes, outputdir, idx=0, width=1024, height=1024):
     timestamp = dt.now().strftime("%Y-%m-%d_%H-%M-%S")
     image = Image.frombytes(
-        mode="RGB", size=(width, height), data=base64.b64decode(bytes)
+        mode="RGB", size=(width, height), data=base64.b64decode(in_bytes)
     )
     if not os.path.isdir(outputdir):
         os.mkdir(outputdir)
@@ -58,14 +58,13 @@ def get_batched(request, arg, idx):
 
 async def send_request(session, rep, args, data):
     print("Sending request batch #", rep)
-    url = f"http://0.0.0.0:{args.port}/generate"
+    url = f"{args.host}:{args.port}/generate"
     start = time.time()
     async with session.post(url, json=data) as response:
         end = time.time()
         # Check if the response was successful
         if response.status == 200:
             response.raise_for_status()  # Raise an error for bad responses
-            timestamp = dt.now().strftime("%Y-%m-%d_%H-%M-%S")
             res_json = await response.json(content_type=None)
             if args.save:
                 for idx, item in enumerate(res_json["images"]):
@@ -78,9 +77,8 @@ async def send_request(session, rep, args, data):
             latency = end - start
             print("Responses processed.")
             return latency, len(data["prompt"])
-        else:
-            print(f"Error: Received {response.status} from server")
-            raise Exception
+        print(f"Error: Received {response.status} from server")
+        raise Exception
 
 
 async def static(args):
@@ -116,7 +114,7 @@ async def static(args):
                 latencies.append(latency)
                 sample_counts.append(num_samples)
         end = time.time()
-        if not any([i is None for i in [latencies, sample_counts]]):
+        if not any(i is None for i in [latencies, sample_counts]):
             total_num_samples = sum(sample_counts)
             sps = str(total_num_samples / (end - start))
             # Until we have better measurements, don't report the throughput that includes saving images.
@@ -163,9 +161,9 @@ async def interactive(args):
                     pending, return_when=asyncio.ALL_COMPLETED
                 )
                 for task in done:
-                    latency, num_samples = await task
+                    _, _ = await task
             pending = []
-            if any([i is None for i in [latencies, sample_counts]]):
+            if any(i is None for i in [latencies, sample_counts]):
                 raise ValueError("Received error response from server.")
 
 
@@ -175,11 +173,27 @@ async def ainput(prompt: str) -> str:
 
 async def async_range(count):
     for i in range(count):
-        yield (i)
+        yield i
         await asyncio.sleep(0.0)
 
 
-def main(argv):
+def check_health(url):
+    ready = False
+    print("Waiting for server.", end=None)
+    while not ready:
+        try:
+            if requests.get(f"{url}/health", timeout=20).status_code == 200:
+                print("Successfully connected to server.")
+                ready = True
+                return
+            time.sleep(2)
+            print(".", end=None)
+        except:
+            time.sleep(2)
+            print(".", end=None)
+
+
+def main():
     p = argparse.ArgumentParser()
     p.add_argument(
         "--file",
@@ -205,6 +219,9 @@ def main(argv):
         default="gen_imgs",
         help="Directory to which images get saved.",
     )
+    p.add_argument(
+        "--host", type=str, default="http://0.0.0.0", help="Server host address."
+    )
     p.add_argument("--port", type=str, default="8000", help="Server port")
     p.add_argument(
         "--steps",
@@ -218,6 +235,7 @@ def main(argv):
         help="Start as an example CLI client instead of sending static requests.",
     )
     args = p.parse_args()
+    check_health(f"{args.host}:{args.port}")
     if args.interactive:
         asyncio.run(interactive(args))
     else:
@@ -225,4 +243,4 @@ def main(argv):
 
 
 if __name__ == "__main__":
-    main(sys.argv)
+    main()

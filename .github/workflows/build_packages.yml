@@ -12,6 +12,9 @@ on:
     # Runs at 11:00 AM UTC, which is 3:00 AM PST (UTC-8)
     - cron: '0 11 * * *'
 
+permissions:
+  contents: read
+
 jobs:
   # Note: metadata generation could happen in a separate trigger/schedule
   # workflow. For cross platform builds, it's useful to just generate the
@@ -43,7 +46,7 @@ jobs:
           shortfin_package_version=$(python3 build_tools/python_deploy/compute_local_version.py --version-suffix=${version_suffix} shortfin)
           sharkai_package_version=$(python3 build_tools/python_deploy/compute_common_version.py -rc --version-suffix=${version_suffix} --write-json)
       - name: Upload version_local.json
-        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
         with:
           name: version_local
           path: |
@@ -54,6 +57,8 @@ jobs:
   build_packages:
     name: "${{ matrix.package }} :: ${{ matrix.platform }} :: ${{ matrix.python-version }}"
     runs-on: ${{ matrix.runs-on }}
+    permissions:
+      contents: write
     needs: [setup_metadata]
     strategy:
       fail-fast: false
@@ -133,7 +138,7 @@ jobs:
         ./c/shortfin/build_tools/build_linux_package.sh
 
     - name: Upload python wheels
-      uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
       with:
         if-no-files-found: error
         name: snapshot-${{ matrix.package }}-${{ matrix.platform }}-${{ matrix.python-version }}
@@ -143,7 +148,6 @@ jobs:
       uses: ncipollo/release-action@2c591bcc8ecdcd2db72b97d6147f871fcd833ba5 # v1.14.0
       with:
         artifacts: bindist/*.whl
-        token: "${{ secrets.RELEASE_PUBLISH_ACCESS_TOKEN }}"
         tag: "dev-wheels"
         name: "dev-wheels"
         body: "Automatic snapshot release of shark-ai python wheels."
