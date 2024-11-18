@@ -24,12 +24,12 @@ class FFN(ThetaLayer):
         self,
         theta: Theta,
         is_gated: bool = True,
-        activation_fn: Optional[Callable[[AnyTensor], AnyTensor]] = None,
+        activation_fn: Callable[[AnyTensor], AnyTensor] = F.silu,
     ):
         super().__init__(theta)
 
         self.is_gated = is_gated
-        self.activation_fn = activation_fn or F.silu
+        self.activation_fn = activation_fn
         if self.is_gated:
             self.add_module("ffn_gate", LinearLayer(theta("ffn_gate")))
         self.add_module("ffn_up", LinearLayer(theta("ffn_up")))
