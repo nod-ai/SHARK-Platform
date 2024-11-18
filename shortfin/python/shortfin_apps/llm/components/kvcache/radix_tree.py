@@ -1,436 +1,264 @@
 from __future__ import annotations
-from typing import List, Tuple, Optional, Sequence
-import threading
-import logging
-import shortfin as sf
+from typing import List, Dict, Optional, Tuple, TypeVar, Generic
 from dataclasses import dataclass
 
-from ..config_struct import human_size
-import math
-
-import time
-
-logger = logging.getLogger(__name__)
+T = TypeVar("T")  # Generic type for page data
 
 
 @dataclass
-class PageInfo:
-    """
-    Page index with some metadata about its contents.
-    """
+class RadixNode(Generic[T]):
+    """A node in the radix tree that tracks cached pages of data.
 
-    page_index: int
-    in_use: bool
-    pool: PagePool
-    token_offset: int  # Offset within the page
-    token_count: int  # Number of tokens stored in this page
-    ref_count: int = 0  # Number of references to this page in the radix tree
+    Each node represents a sequence of tokens and maintains references to the pages
+    containing the cached data for those tokens. The node structure allows for
+    efficient prefix matching and sharing of cached data.
 
+    Attributes:
+        children: Mapping of first token to child nodes
+        parent: Reference to parent node, None for root
+        key: Token sequence this node represents
+        pages: List of page data associated with this token sequence
+        last_access_timestamp: Unix timestamp of last access
+        ref_count: Number of active references to this node
 
-@dataclass
-class PagePoolConfig:
-    """
-    Hyperparameters for the page pool.
-    """
-
-    device_block_count: int
-    dtype: sf.dtype
-    alloc_page_count: int
-
-    paged_kv_block_size_elements: int  # size of a single page as # of elements
-    # (e.g. one configuration for llama3.1 8b hax 32x2x16x8x128=1048576 elements where:
-    # 32: number of transformer blocks
-    # 2: one for k + one for v
-    # 16: tokens per page
-    # 8: head count (32 heads, but every 4 heads share the same kv buffer)
-    # 128: hidden dimension
-
-
-class PagePool:
-    """Page table based attention cache.
-
-    While internal to a model, the cache is organized with additional structure
-    per page, outside of the model, it is just a list of pages of a certain
-    element type and number of elements (all inner dims are flattened).
-
-    One page table is allocated per device in a fiber. Currently, this is a
-    dense allocation with committed memory but in the future, we may just
-    allocate the address space and lazily populate it with committed memory.
-
-    The cache is unique because usage of it can span fibers and concurrency
-    is implicitly managed at the block level (i.e. freshly acquired blocks
-    are assumed to be uninitialized and available immediately for use).
-
-    It is initialized with a discrete list of fiberd devices from a fiber but
-    cache usage can be done from any fiber which includes those devices.
-    """
-
-    def __init__(self, *, devices: Sequence[sf.ScopedDevice], config: PagePoolConfig):
-        self._lock = threading.Lock()
-        self.devices = list(devices)
-        self.config = config
-        self.page_tables: list[sf.array.device_array] = []
-
-        # Setup accounting structs.
-        self.attn_page_entries = [
-            PageInfo(
-                page_index=i,
-                in_use=False,
-                pool=self,
-                token_offset=0,
-                token_count=0,
-                ref_count=0,
-            )
-            for i in range(self.config.alloc_page_count)
-        ]
-
-        self.attn_page_free = list(self.attn_page_entries)
-
-        # Initialize a page table on each device.
-        page_table_shape = [
-            self.config.alloc_page_count,
-            self.config.paged_kv_block_size_elements,
-        ]
-        for device in devices:
-            logging.info(
-                "Allocating page table (shape=%r, dtype=%r, size=%s) on %r",
-                page_table_shape,
-                self.config.dtype,
-                human_size(
-                    math.prod(page_table_shape) * self.config.dtype.dense_size_bytes
-                ),
-                device,
-            )
-            page_table = sf.array.device_array.for_device(
-                device, page_table_shape, self.config.dtype
-            )
-            self.page_tables.append(page_table)
-
-    def acquire_free_pages(self, count: int) -> list[PageInfo] | None:
-        with self._lock:
-            available = len(self.attn_page_free)
-            if count > available:
-                return None
-            return [self.attn_page_free.pop() for _ in range(count)]
-
-    def release_pages(self, pages: list[PageInfo]):
-        with self._lock:
-            self.attn_page_free.extend(pages)
-
-    def copy_page(self, src_page: PageInfo) -> PageInfo:
-        """
-        Copy a page's contents to a new page.
-
-        Args:
-            src_page: Source page to copy from
-            token_count: Optional number of tokens to copy. If None, copies all tokens.
-
-        Returns:
-            New PageInfo containing the copied data
-        """
-        with self._lock:
-            # Allocate new page
-            (dst_page,) = self.acquire_free_pages(1)
-
-            # Copy the data on each device
-            for page_table in self.page_tables:
-                # View of source and destination pages
-                src_view = page_table.view((src_page.page_index,))
-                dst_view = page_table.view((dst_page.page_index,))
-
-                # Copy the data
-                dst_view.copy_from(src_view)
-
-            # Setup destination page metadata
-            dst_page.in_use = True
-            dst_page.token_offset = 0  # Always start at beginning of new page
-
-            return dst_page
-
-    def __repr__(self):
-        # No need to lock for repr (list is internally synchronized).
-        free_pages = len(self.attn_page_free)
-        total_pages = len(self.attn_page_entries)
-        return (
-            f"AttnPageCache({total_pages - free_pages}/{total_pages} pages in use: "
-            f"{100.0 * free_pages / total_pages}% free)"
+    Example:
+        ```python
+        # Create a leaf node for token sequence [5, 2, 8]
+        node = RadixNode(
+            children={},
+            parent=parent_node,
+            key=[5, 2, 8],
+            pages=[page1, page2],
+            ref_count=1
         )
 
+        # Access timestamp is automatically updated when node is accessed
+        assert node.last_access_timestamp > 0
 
-############################## begin radix attention
+        # When done with node, decrement reference count
+        node.ref_count -= 1
+        ```
+    """
 
-
-@dataclass
-class RadixNode:
-    """Node in radix tree tracking pages"""
-
-    children: dict[int, RadixNode]
-    parent: Optional[RadixNode]
+    children: Dict[int, RadixNode[T]]
+    parent: Optional[RadixNode[T]]
     key: List[int]
-    pages: List[PageInfo]
+    pages: List[T]
     last_access_timestamp: int = 0
     ref_count: int = 0
 
 
-class RadixTree:
-    """
-    Radix Tree for mapping token sequences to pages in the attention cache.
+class RadixTree(Generic[T]):
+    """A radix tree implementation for caching token sequence data.
 
-    Requests pages from a PagePool to store kvs for tokens in the sequence.
+    The tree efficiently stores and retrieves cached data for token sequences,
+    enabling prefix sharing and fast lookups. It handles memory management through
+    reference counting and LRU eviction.
+
+    Example:
+        ```python
+        # Initialize tree with a page pool and 16 tokens per page
+        tree = RadixTree(page_pool=my_pool, tokens_per_page=16)
+
+        # Cache a sequence of tokens with their associated data
+        token_ids = [1, 5, 8, 2]
+        node = tree.cache_sequence(token_ids)
+
+        # Later, find cached data for a prefix
+        pages, match_node = tree.match_prefix([1, 5, 8])
+        assert len(pages) > 0
+
+        # When done with the cached data, release it
+        tree.release_pages(pages)
+        ```
     """
 
     def __init__(
-        self, *, page_pool: PagePool, tokens_per_page: int, disable: bool = False
-    ):
-        self._lock = threading.Lock()
-        self.page_pool = page_pool
-        self.disable = disable
-        self.tokens_per_page = tokens_per_page
-        self.reset()
+        self, *, page_pool: Any, tokens_per_page: int, disable: bool = False
+    ) -> None:
+        """Initialize the radix tree.
+
+        Args:
+            page_pool: Pool that manages the underlying page allocations
+            tokens_per_page: Number of tokens that can be stored in each page
+            disable: If True, disables caching (useful for testing)
+
+        Example:
+            ```python
+            tree = RadixTree(
+                page_pool=PagePool(...),
+                tokens_per_page=16,
+                disable=False
+            )
+            ```
+        """
+        raise NotImplementedError()
 
     def reset(self) -> None:
-        """Reset the cache state"""
-        with self._lock:
-            # free
-            self.root = RadixNode(
-                children={}, parent=None, key=[], pages=[], ref_count=1
-            )
+        """Reset the tree to initial empty state.
 
-    def _get_match_len(self, key1: List[int], key2: List[int]) -> int:
-        """Return length of matching prefix between two keys"""
-        for i, (k1, k2) in enumerate(zip(key1, key2)):
-            if k1 != k2:
-                return i
-        return min(len(key1), len(key2))
+        Releases all cached pages and resets the tree to contain only a root node.
 
-    def match_prefix(self, token_ids: List[int]) -> Tuple[List[PageInfo], RadixNode]:
-        """Find longest matching prefix and return its pages"""
-        if self.disable:
-            return [], self.root
+        Example:
+            ```python
+            tree = RadixTree(...)
 
-        with self._lock:
-            matched_pages = []
-            last_node = self.root
-            curr_node = self.root
-            remaining_tokens = token_ids
+            # Cache some sequences
+            tree.cache_sequence([1, 2, 3])
+            tree.cache_sequence([4, 5, 6])
 
-            while remaining_tokens:
-                first_token = remaining_tokens[0]
-                if first_token not in curr_node.children:
-                    break
+            # Reset tree to clean state
+            tree.reset()
 
-                child = curr_node.children[first_token]
-                match_len = self._get_match_len(child.key, remaining_tokens)
+            # Tree is now empty except for root node
+            pages, _ = tree.match_prefix([1, 2, 3])
+            assert len(pages) == 0
+            ```
+        """
+        raise NotImplementedError()
 
-                if match_len < len(child.key):
-                    # Partial match - need to split
-                    new_node = self._split_node(child, match_len)
-                    matched_pages.extend(new_node.pages)
-                    last_node = new_node
-                    break
-                else:
-                    # Full match of this node
-                    matched_pages.extend(child.pages)
-                    last_node = child
-                    remaining_tokens = remaining_tokens[match_len:]
-                    curr_node = child
+    def match_prefix(self, token_ids: List[int]) -> Tuple[List[T], RadixNode[T]]:
+        """Find the longest matching prefix and return its cached pages.
 
-            # Update access time and ref counts
-            self._update_access_path(last_node)
-            for page in matched_pages:
-                page.ref_count += 1
+        Args:
+            token_ids: Sequence of tokens to match against
 
-            return matched_pages, last_node
+        Returns:
+            Tuple containing:
+            - List of cached pages for the matching prefix
+            - The node containing the last matched token
 
-    def _split_node(self, node: RadixNode, split_pos: int) -> RadixNode:
-        """Split a node at given position, return new intermediate node"""
-        # Calculate which page contains the split point
-        current_pos = 0
-        split_page_idx = 0
-        tokens_in_split_page = 0
+        Example:
+            ```python
+            # Cache a sequence
+            tree.cache_sequence([1, 2, 3, 4, 5])
 
-        for idx, page in enumerate(node.pages):
-            if current_pos + page.token_count > split_pos:
-                # This page contains our split point
-                split_page_idx = idx
-                tokens_in_split_page = split_pos - current_pos
-                break
-            current_pos += page.token_count
+            # Match a prefix
+            pages, node = tree.match_prefix([1, 2, 3])
 
-        # Handle the page containing split point
-        split_page = node.pages[split_page_idx]
-        if tokens_in_split_page > 0 and tokens_in_split_page < split_page.token_count:
-            # Need to copy-on-write this page
-            new_page = self.page_pool.copy_page(
-                split_page, token_count=tokens_in_split_page
-            )
+            # pages contains cached data for tokens [1, 2, 3]
+            assert len(pages) > 0
 
-            # Adjust original page
-            split_page.token_offset += tokens_in_split_page
-            split_page.token_count -= tokens_in_split_page
+            # node represents the position after [1, 2, 3]
+            assert node.key == [1, 2, 3]
 
-            # Build new pages list with the copy
-            new_pages = (
-                node.pages[:split_page_idx]
-                + [new_page]  # Full pages before split
-                + node.pages[  # Copied partial page
-                    split_page_idx + 1 :
-                ]  # Any remaining full pages
-            )
-        else:
-            # Split aligned with page boundary
-            new_pages = node.pages[:split_pos]
-
-        # Create new node
-        new_node = RadixNode(
-            children={},
-            parent=node.parent,
-            key=node.key[:split_pos],
-            pages=new_pages,
-            ref_count=node.ref_count,
-        )
-
-        # Update the original node
-        node.parent.children[node.key[0]] = new_node
-        node.key = node.key[split_pos:]
-        node.pages = node.pages[split_page_idx:]  # Keep remaining pages
-        node.parent = new_node
-        new_node.children[node.key[0]] = node
-
-        # Increment ref counts for shared pages
-        for page in new_pages[:-1]:  # All but last page are shared
-            page.ref_count += 1
-
-        return new_node
-
-    def _update_access_path(self, node: RadixNode) -> None:
-        """Update access timestamp along path to root"""
-        current_time = int(time.time())
-        while node is not None:
-            node.last_access_timestamp = current_time
-            node = node.parent
+            # Don't forget to release when done
+            tree.release_pages(pages)
+            ```
+        """
+        raise NotImplementedError()
 
     def cache_sequence(
-        self, token_ids: List[int], existing_pages: Optional[List[PageInfo]] = None
-    ) -> RadixNode:
-        """Cache a token sequence, potentially extending existing pages"""
-        with self._lock:
-            if existing_pages:
-                total_cached_tokens = sum(p.token_count for p in existing_pages)
-                new_tokens = token_ids[total_cached_tokens:]
-                if new_tokens:
-                    new_pages = self._allocate_pages(len(new_tokens))
-                    pages = existing_pages + new_pages
-                else:
-                    pages = existing_pages
-            else:
-                pages = self._allocate_pages(len(token_ids))
+        self, token_ids: List[int], existing_pages: Optional[List[T]] = None
+    ) -> RadixNode[T]:
+        """Cache a token sequence, potentially extending existing cached pages.
 
-            return self._insert_sequence(token_ids, pages)
+        Args:
+            token_ids: Complete sequence of tokens to cache
+            existing_pages: Optional list of already cached pages to extend
 
-    def _allocate_pages(self, token_count: int) -> List[PageInfo]:
-        """Allocate pages needed for token sequence"""
-        pages_needed = (token_count + self.tokens_per_page - 1) // self.tokens_per_page
-        page_entries = self.page_pool.acquire_free_pages(pages_needed)
+        Returns:
+            Node containing the cached sequence
 
-        if not page_entries:
-            self._evict_pages(pages_needed)
-            page_entries = self.page_pool.acquire_free_pages(pages_needed)
-            if not page_entries:
-                raise RuntimeError(
-                    f"Failed to allocate {pages_needed} pages after eviction"
-                )
+        Example:
+            ```python
+            # Cache initial sequence
+            node1 = tree.cache_sequence([1, 2, 3])
 
-        pages = []
-        tokens_remaining = token_count
-        for entry in page_entries:
-            tokens_in_page = min(self.tokens_per_page, tokens_remaining)
-            pages.append(
-                PageInfo(
-                    page=entry, token_offset=0, token_count=tokens_in_page, ref_count=1
-                )
-            )
-            tokens_remaining -= tokens_in_page
+            # Match prefix and extend with new tokens
+            pages, _ = tree.match_prefix([1, 2, 3])
+            node2 = tree.cache_sequence([1, 2, 3, 4, 5], existing_pages=pages)
 
-        return pages
+            # New node contains extended sequence
+            assert node2.key == [1, 2, 3, 4, 5]
 
-    def _insert_sequence(
-        self, token_ids: List[int], pages: List[PageInfo]
-    ) -> RadixNode:
-        """Insert a sequence into the radix tree"""
-        curr_node = self.root
-        remaining_tokens = token_ids
+            # Release pages when done
+            tree.release_pages(pages)
+            ```
+        """
+        raise NotImplementedError()
 
-        while remaining_tokens:
-            first_token = remaining_tokens[0]
-            if first_token not in curr_node.children:
-                # Create new leaf node
-                new_node = RadixNode(
-                    children={},
-                    parent=curr_node,
-                    key=remaining_tokens,
-                    pages=pages[len(token_ids) - len(remaining_tokens) :],
-                    ref_count=1,
-                )
-                curr_node.children[first_token] = new_node
-                return new_node
+    def release_pages(self, pages: List[T]) -> None:
+        """Release references to cached pages.
 
-            child = curr_node.children[first_token]
-            match_len = self._get_match_len(child.key, remaining_tokens)
+        Decrements reference counts and potentially frees memory if counts reach zero.
 
-            if match_len < len(child.key):
-                # Split existing node
-                split_node = self._split_node(child, match_len)
-                if match_len < len(remaining_tokens):
-                    # Create new node for remaining tokens
-                    new_node = RadixNode(
-                        children={},
-                        parent=split_node,
-                        key=remaining_tokens[match_len:],
-                        pages=pages[
-                            len(token_ids) - len(remaining_tokens) + match_len :
-                        ],
-                        ref_count=1,
-                    )
-                    split_node.children[remaining_tokens[match_len]] = new_node
-                    return new_node
-                return split_node
+        Args:
+            pages: List of pages to release
 
-            remaining_tokens = remaining_tokens[match_len:]
-            curr_node = child
+        Example:
+            ```python
+            # Get cached pages
+            pages, _ = tree.match_prefix([1, 2, 3])
 
-        return curr_node
+            # Use the pages...
+
+            # Release when done
+            tree.release_pages(pages)
+            ```
+        """
+        raise NotImplementedError()
+
+    def _get_match_len(self, key1: List[int], key2: List[int]) -> int:
+        """Return length of matching prefix between two keys.
+
+        Args:
+            key1: First sequence of tokens
+            key2: Second sequence of tokens
+
+        Returns:
+            Length of the matching prefix
+
+        Example:
+            ```python
+            # Internal use for finding split points
+            length = tree._get_match_len([1, 2, 3, 4], [1, 2, 5, 6])
+            assert length == 2  # Matches [1, 2]
+            ```
+        """
+        raise NotImplementedError()
+
+    def _split_node(self, node: RadixNode[T], split_pos: int) -> RadixNode[T]:
+        """Split a node at the given position.
+
+        Args:
+            node: Node to split
+            split_pos: Position in the node's key where split should occur
+
+        Returns:
+            New intermediate node created by the split
+
+        Example:
+            ```python
+            # Internal use during insertion
+            # If we have a node with key [1, 2, 3, 4] and need to
+            # insert [1, 2, 5, 6], we first split at position 2:
+
+            old_node.key == [1, 2, 3, 4]
+            new_node = tree._split_node(old_node, 2)
+
+            assert new_node.key == [1, 2]
+            assert old_node.key == [3, 4]
+            assert old_node.parent == new_node
+            ```
+        """
+        raise NotImplementedError()
 
     def _evict_pages(self, pages_needed: int) -> None:
-        """Evict pages using LRU strategy"""
-        # Collect all nodes
-        nodes = []
-        stack = [self.root]
-        while stack:
-            node = stack.pop()
-            stack.extend(node.children.values())
-            if not node.children:  # leaf node
-                nodes.append(node)
+        """Evict pages using LRU strategy until enough pages are free.
 
-        # Sort by access time
-        nodes.sort(key=lambda n: n.last_access_timestamp)
+        Args:
+            pages_needed: Number of pages that need to be freed
 
-        pages_freed = 0
-        for node in nodes:
-            if node.ref_count == 0:
-                freeable_pages = [p for p in node.pages if p.ref_count == 0]
-                self.page_pool.release_pages([p.page for p in freeable_pages])
-                pages_freed += len(freeable_pages)
+        Example:
+            ```python
+            # Internal use when cache is full
+            # If we need 5 pages and cache is full:
+            tree._evict_pages(5)
 
-                # Remove node if all pages freed
-                if len(freeable_pages) == len(node.pages):
-                    del node.parent.children[node.key[0]]
-
-                if pages_freed >= pages_needed:
-                    break
-
-    def release_pages(self, pages: List[PageInfo]) -> None:
-        """Release references to pages"""
-        with self._lock:
-            for page in pages:
-                page.ref_count -= 1
+            # After eviction, at least 5 pages should be available
+            pages = page_pool.acquire_free_pages(5)
+            assert pages is not None
+            ```
+        """
+        raise NotImplementedError()
