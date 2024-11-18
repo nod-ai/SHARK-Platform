@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title id="head-title">index.html</title>
+      <link href="assets/style.css" rel="stylesheet" type="text/css"/>
+  </head>
+  <body>
+    <h1 id="title">index.html</h1>
+    <p>Report generated on 18-Nov-2024 at 05:21:57 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a>
+        v4.1.1</p>
+    <div id="environment-header">
+      <h2>Environment</h2>
+    </div>
+    <table id="environment"></table>
+    <!-- TEMPLATES -->
+      <template id="template_environment_row">
+      <tr>
+        <td></td>
+        <td></td>
+      </tr>
+    </template>
+    <template id="template_results-table__body--empty">
+      <tbody class="results-table-row">
+        <tr id="not-found-message">
+          <td colspan="4">No results found. Check the filters.</th>
+        </tr>
+    </template>
+    <template id="template_results-table__tbody">
+      <tbody class="results-table-row">
+        <tr class="collapsible">
+        </tr>
+        <tr class="extras-row">
+          <td class="extra" colspan="4">
+            <div class="extraHTML"></div>
+            <div class="media">
+              <div class="media-container">
+                  <div class="media-container__nav--left"><</div>
+                  <div class="media-container__viewport">
+                    <img src="" />
+                    <video controls>
+                      <source src="" type="video/mp4">
+                    </video>
+                  </div>
+                  <div class="media-container__nav--right">></div>
+                </div>
+                <div class="media__name"></div>
+                <div class="media__counter"></div>
+            </div>
+            <div class="logwrapper">
+              <div class="logexpander"></div>
+              <div class="log"></div>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </template>
+    <!-- END TEMPLATES -->
+    <div class="summary">
+      <div class="summary__data">
+        <h2>Summary</h2>
+        <div class="additional-summary prefix">
+        </div>
+        <p class="run-count">6 tests took 01:13:33.</p>
+        <p class="filter">(Un)check the boxes to filter the results.</p>
+        <div class="summary__reload">
+          <div class="summary__reload__button hidden" onclick="location.reload()">
+            <div>There are still tests running. <br />Reload this page to get the latest results!</div>
+          </div>
+        </div>
+        <div class="summary__spacer"></div>
+        <div class="controls">
+          <div class="filters">
+            <input checked="true" class="filter" name="filter_checkbox" type="checkbox" data-test-result="failed" disabled/>
+            <span class="failed">0 Failed,</span>
+            <input checked="true" class="filter" name="filter_checkbox" type="checkbox" data-test-result="passed" />
+            <span class="passed">6 Passed,</span>
+            <input checked="true" class="filter" name="filter_checkbox" type="checkbox" data-test-result="skipped" disabled/>
+            <span class="skipped">0 Skipped,</span>
+            <input checked="true" class="filter" name="filter_checkbox" type="checkbox" data-test-result="xfailed" disabled/>
+            <span class="xfailed">0 Expected failures,</span>
+            <input checked="true" class="filter" name="filter_checkbox" type="checkbox" data-test-result="xpassed" disabled/>
+            <span class="xpassed">0 Unexpected passes,</span>
+            <input checked="true" class="filter" name="filter_checkbox" type="checkbox" data-test-result="error" disabled/>
+            <span class="error">0 Errors,</span>
+            <input checked="true" class="filter" name="filter_checkbox" type="checkbox" data-test-result="rerun" disabled/>
+            <span class="rerun">0 Reruns</span>
+          </div>
+          <div class="collapse">
+            <button id="show_all_details">Show all details</button>&nbsp;/&nbsp;<button id="hide_all_details">Hide all details</button>
+          </div>
+        </div>
+      </div>
+      <div class="additional-summary summary">
+      </div>
+      <div class="additional-summary postfix">
+      </div>
+    </div>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable" data-column-type="result">Result</th>
+          <th class="sortable" data-column-type="testId">Test</th>
+          <th class="sortable" data-column-type="duration">Duration</th>
+          <th>Links</th>
+        </tr>
+      </thead>
+    </table>
+  </body>
+  <footer>
+    <div id="data-container" data-jsonblob="{&#34;environment&#34;: {&#34;Python&#34;: &#34;3.11.10&#34;, &#34;Platform&#34;: &#34;Linux-5.15.0-124-generic-x86_64-with-glibc2.35&#34;, &#34;Packages&#34;: {&#34;pytest&#34;: &#34;8.0.0&#34;, &#34;pluggy&#34;: &#34;1.5.0&#34;}, &#34;Plugins&#34;: {&#34;anyio&#34;: &#34;4.6.2.post1&#34;, &#34;xdist&#34;: &#34;3.5.0&#34;, &#34;html&#34;: &#34;4.1.1&#34;, &#34;metadata&#34;: &#34;3.1.1&#34;}, &#34;CI&#34;: &#34;true&#34;}, &#34;tests&#34;: {&#34;app_tests/benchmark_tests/llm/sglang_benchmark_test.py::test_sglang_benchmark_server[pre_process_model0-1]&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;Passed&#34;, &#34;testId&#34;: &#34;app_tests/benchmark_tests/llm/sglang_benchmark_test.py::test_sglang_benchmark_server[pre_process_model0-1]&#34;, &#34;duration&#34;: &#34;00:30:37&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;Passed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;app_tests/benchmark_tests/llm/sglang_benchmark_test.py::test_sglang_benchmark_server[pre_process_model0-1]&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;00:30:37&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;---------------------------- Captured stdout setup -----------------------------\nExporting prefill_bs1\nExporting decode_bs1\nExporting prefill_bs4\nExporting decode_bs4\nGENERATED!\nExporting\nSaving to &amp;#x27;/tmp/pytest-of-nod/pytest-77/sglang_benchmark_test0/model.mlir&amp;#x27;\n\n---------------------------- Captured stderr setup -----------------------------\n/home/nod/actions-runner-llama/_work/shark-ai/shark-ai/deps/iree-turbine/iree/turbine/aot/params.py:163: UserWarning: The given NumPy array is not writable, and PyTorch does not support non-writable tensors. This means writing to this tensor will result in undefined behavior. You may want to copy the array to protect its data or make it writable before converting it to a tensor. This type of warning will be suppressed for the rest of this program. (Triggered internally at ../torch/csrc/utils/tensor_numpy.cpp:206.)\n  return torch.from_numpy(wrapper)\n/home/nod/actions-runner-llama/_work/shark-ai/shark-ai/deps/iree-turbine/iree/turbine/runtime/op_reg/base.py:407: UserWarning: ComplexHalf support is experimental and many operators don&amp;#x27;t support it yet. (Triggered internally at ../aten/src/ATen/EmptyTensor.cpp:41.)\n  return self.return_tensor(torch.empty(size, dtype=dtype, device=&amp;quot;meta&amp;quot;))\n\n------------------------------ Captured log setup ------------------------------\nINFO     __name__:utils.py:56 Exporting model with following settings:\n  MLIR Path: /tmp/pytest-of-nod/pytest-77/sglang_benchmark_test0/model.mlir\n  Config Path: /tmp/pytest-of-nod/pytest-77/sglang_benchmark_test0/config.json\n  Batch Sizes: 1,4\nINFO     __name__:utils.py:74 Model successfully exported to /tmp/pytest-of-nod/pytest-77/sglang_benchmark_test0/model.mlir\nINFO     __name__:utils.py:78 Compiling model to /tmp/pytest-of-nod/pytest-77/sglang_benchmark_test0/model.vmfb\nINFO     __name__:utils.py:89 Model successfully compiled to /tmp/pytest-of-nod/pytest-77/sglang_benchmark_test0/model.vmfb\n\n----------------------------- Captured stderr call -----------------------------\nSpecial tokens have been added in the vocabulary, make sure the associated word embeddings are fine-tuned or trained.\n\r  0%|          | 0/10 [00:00&amp;lt;?, ?it/s]\r 10%|\u2588         | 1/10 [00:07&amp;lt;01:08,  7.62s/it]\r 30%|\u2588\u2588\u2588       | 3/10 [00:18&amp;lt;00:41,  5.98s/it]\r 40%|\u2588\u2588\u2588\u2588      | 4/10 [02:16&amp;lt;04:28, 44.78s/it]\r 50%|\u2588\u2588\u2588\u2588\u2588     | 5/10 [03:09&amp;lt;03:58, 47.65s/it]\r 60%|\u2588\u2588\u2588\u2588\u2588\u2588    | 6/10 [03:36&amp;lt;02:43, 40.78s/it]\r 70%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588   | 7/10 [04:35&amp;lt;02:19, 46.51s/it]\r 80%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588  | 8/10 [04:39&amp;lt;01:06, 33.47s/it]\r 90%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588 | 9/10 [05:43&amp;lt;00:42, 42.72s/it]\r100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 10/10 [05:54&amp;lt;00:00, 32.98s/it]\r100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 10/10 [05:54&amp;lt;00:00, 35.41s/it]\n\n------------------------------ Captured log call -------------------------------\nINFO     __name__:utils.py:96 Finding available port...\nINFO     __name__:utils.py:101 Found available port: 50353\nINFO     __name__:utils.py:149 Starting LLM server...\nINFO     __name__:utils.py:177 Process started... waiting for server\nINFO     __name__:utils.py:106 Waiting for server to start at http://localhost:50353...\nINFO     __name__:utils.py:111 Server successfully started\nINFO     __name__:sglang_benchmark_test.py:103 Running SGLang Benchmark with the following args:\nINFO     __name__:sglang_benchmark_test.py:104 Backend: shortfin\nBase URL: http://localhost:50353\nNum Prompt: 10\nTokenizer: /data/llama3.1/8b\nRequest Rate: 1\nINFO     __name__:sglang_benchmark_test.py:115 Benchmark run completed in 481.6394884586334 seconds\nINFO     __name__:sglang_benchmark_test.py:116 ======== RESULTS ========\nINFO     __name__:sglang_benchmark_test.py:47 BACKEND: shortfin\nINFO     __name__:sglang_benchmark_test.py:47 DATASET_NAME: sharegpt\nINFO     __name__:sglang_benchmark_test.py:47 REQUEST_RATE: 1\nINFO     __name__:sglang_benchmark_test.py:47 TOTAL_INPUT_TOKENS: 1960\nINFO     __name__:sglang_benchmark_test.py:47 TOTAL_OUTPUT_TOKENS: 2774\nINFO     __name__:sglang_benchmark_test.py:47 TOTAL_OUTPUT_TOKENS_RETOKENIZED: 320\nINFO     __name__:sglang_benchmark_test.py:47 MEAN_E2E_LATENCY_MS: 180833.77678773832\nINFO     __name__:sglang_benchmark_test.py:47 MEDIAN_E2E_LATENCY_MS: 202210.61183256097\nINFO     __name__:sglang_benchmark_test.py:47 MEDIAN_TTFT_MS: 2643.3081129798666\nINFO     __name__:sglang_benchmark_test.py:47 MEDIAN_ITL_MS: 503.3702829387039\nINFO     __name__:sglang_benchmark_test.py:47 OUTPUT_THROUGHPUT: 7.834665148892491\nINFO     __name__:sglang_benchmark_test.py:47 SHAREGPT_OUTPUT_LEN: None\nINFO     __name__:sglang_benchmark_test.py:47 RANDOM_INPUT_LEN: None\nINFO     __name__:sglang_benchmark_test.py:47 RANDOM_OUTPUT_LEN: None\nINFO     __name__:sglang_benchmark_test.py:47 RANDOM_RANGE_RATIO: 0.0\nINFO     __name__:sglang_benchmark_test.py:47 DURATION: 354.0674613760784\nINFO     __name__:sglang_benchmark_test.py:47 COMPLETED: 10\n\n&#34;}], &#34;app_tests/benchmark_tests/llm/sglang_benchmark_test.py::test_sglang_benchmark_server[pre_process_model0-2]&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;Passed&#34;, &#34;testId&#34;: &#34;app_tests/benchmark_tests/llm/sglang_benchmark_test.py::test_sglang_benchmark_server[pre_process_model0-2]&#34;, &#34;duration&#34;: &#34;00:06:60&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;Passed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;app_tests/benchmark_tests/llm/sglang_benchmark_test.py::test_sglang_benchmark_server[pre_process_model0-2]&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;00:06:60&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;----------------------------- Captured stderr call -----------------------------\nSpecial tokens have been added in the vocabulary, make sure the associated word embeddings are fine-tuned or trained.\n\r  0%|          | 0/10 [00:00&amp;lt;?, ?it/s]\r 10%|\u2588         | 1/10 [00:05&amp;lt;00:51,  5.72s/it]\r 20%|\u2588\u2588        | 2/10 [00:06&amp;lt;00:23,  2.95s/it]\r 30%|\u2588\u2588\u2588       | 3/10 [00:07&amp;lt;00:14,  2.05s/it]\r 40%|\u2588\u2588\u2588\u2588      | 4/10 [00:14&amp;lt;00:22,  3.77s/it]\r 50%|\u2588\u2588\u2588\u2588\u2588     | 5/10 [01:50&amp;lt;03:05, 37.19s/it]\r 60%|\u2588\u2588\u2588\u2588\u2588\u2588    | 6/10 [03:07&amp;lt;03:23, 50.82s/it]\r 70%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588   | 7/10 [03:36&amp;lt;02:10, 43.65s/it]\r 80%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588  | 8/10 [03:39&amp;lt;01:01, 30.69s/it]\r 90%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588 | 9/10 [04:05&amp;lt;00:29, 29.19s/it]\r100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 10/10 [04:44&amp;lt;00:00, 32.15s/it]\r100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 10/10 [04:44&amp;lt;00:00, 28.43s/it]\n\n------------------------------ Captured log call -------------------------------\nINFO     __name__:utils.py:96 Finding available port...\nINFO     __name__:utils.py:101 Found available port: 47495\nINFO     __name__:utils.py:149 Starting LLM server...\nINFO     __name__:utils.py:177 Process started... waiting for server\nINFO     __name__:utils.py:106 Waiting for server to start at http://localhost:47495...\nINFO     __name__:utils.py:111 Server successfully started\nINFO     __name__:sglang_benchmark_test.py:103 Running SGLang Benchmark with the following args:\nINFO     __name__:sglang_benchmark_test.py:104 Backend: shortfin\nBase URL: http://localhost:47495\nNum Prompt: 10\nTokenizer: /data/llama3.1/8b\nRequest Rate: 2\nINFO     __name__:sglang_benchmark_test.py:115 Benchmark run completed in 411.7831678390503 seconds\nINFO     __name__:sglang_benchmark_test.py:116 ======== RESULTS ========\nINFO     __name__:sglang_benchmark_test.py:47 BACKEND: shortfin\nINFO     __name__:sglang_benchmark_test.py:47 DATASET_NAME: sharegpt\nINFO     __name__:sglang_benchmark_test.py:47 REQUEST_RATE: 2\nINFO     __name__:sglang_benchmark_test.py:47 TOTAL_INPUT_TOKENS: 1960\nINFO     __name__:sglang_benchmark_test.py:47 TOTAL_OUTPUT_TOKENS: 2774\nINFO     __name__:sglang_benchmark_test.py:47 TOTAL_OUTPUT_TOKENS_RETOKENIZED: 250\nINFO     __name__:sglang_benchmark_test.py:47 MEAN_E2E_LATENCY_MS: 128871.72982406338\nINFO     __name__:sglang_benchmark_test.py:47 MEDIAN_E2E_LATENCY_MS: 148610.13823538087\nINFO     __name__:sglang_benchmark_test.py:47 MEDIAN_TTFT_MS: 3452.8261785162613\nINFO     __name__:sglang_benchmark_test.py:47 MEDIAN_ITL_MS: 500.5419268272817\nINFO     __name__:sglang_benchmark_test.py:47 OUTPUT_THROUGHPUT: 9.755698122065976\nINFO     __name__:sglang_benchmark_test.py:47 SHAREGPT_OUTPUT_LEN: None\nINFO     __name__:sglang_benchmark_test.py:47 RANDOM_INPUT_LEN: None\nINFO     __name__:sglang_benchmark_test.py:47 RANDOM_OUTPUT_LEN: None\nINFO     __name__:sglang_benchmark_test.py:47 RANDOM_RANGE_RATIO: 0.0\nINFO     __name__:sglang_benchmark_test.py:47 DURATION: 284.34664185903966\nINFO     __name__:sglang_benchmark_test.py:47 COMPLETED: 10\n\n&#34;}], &#34;app_tests/benchmark_tests/llm/sglang_benchmark_test.py::test_sglang_benchmark_server[pre_process_model0-4]&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;Passed&#34;, &#34;testId&#34;: &#34;app_tests/benchmark_tests/llm/sglang_benchmark_test.py::test_sglang_benchmark_server[pre_process_model0-4]&#34;, &#34;duration&#34;: &#34;00:09:07&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;Passed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;app_tests/benchmark_tests/llm/sglang_benchmark_test.py::test_sglang_benchmark_server[pre_process_model0-4]&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;00:09:07&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;----------------------------- Captured stderr call -----------------------------\nSpecial tokens have been added in the vocabulary, make sure the associated word embeddings are fine-tuned or trained.\n\r  0%|          | 0/10 [00:00&amp;lt;?, ?it/s]\r 10%|\u2588         | 1/10 [00:05&amp;lt;00:51,  5.76s/it]\r 20%|\u2588\u2588        | 2/10 [00:09&amp;lt;00:37,  4.69s/it]\r 30%|\u2588\u2588\u2588       | 3/10 [00:17&amp;lt;00:43,  6.17s/it]\r 40%|\u2588\u2588\u2588\u2588      | 4/10 [02:27&amp;lt;05:30, 55.01s/it]\r 50%|\u2588\u2588\u2588\u2588\u2588     | 5/10 [03:26&amp;lt;04:42, 56.45s/it]\r 60%|\u2588\u2588\u2588\u2588\u2588\u2588    | 6/10 [03:32&amp;lt;02:37, 39.28s/it]\r 70%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588   | 7/10 [03:56&amp;lt;01:42, 34.25s/it]\r 80%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588  | 8/10 [05:09&amp;lt;01:33, 46.65s/it]\r 90%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588 | 9/10 [05:54&amp;lt;00:45, 45.98s/it]\r100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 10/10 [06:51&amp;lt;00:00, 49.47s/it]\r100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 10/10 [06:51&amp;lt;00:00, 41.14s/it]\n\n------------------------------ Captured log call -------------------------------\nINFO     __name__:utils.py:96 Finding available port...\nINFO     __name__:utils.py:101 Found available port: 39801\nINFO     __name__:utils.py:149 Starting LLM server...\nINFO     __name__:utils.py:177 Process started... waiting for server\nINFO     __name__:utils.py:106 Waiting for server to start at http://localhost:39801...\nINFO     __name__:utils.py:111 Server successfully started\nINFO     __name__:sglang_benchmark_test.py:103 Running SGLang Benchmark with the following args:\nINFO     __name__:sglang_benchmark_test.py:104 Backend: shortfin\nBase URL: http://localhost:39801\nNum Prompt: 10\nTokenizer: /data/llama3.1/8b\nRequest Rate: 4\nINFO     __name__:sglang_benchmark_test.py:115 Benchmark run completed in 538.8473148345947 seconds\nINFO     __name__:sglang_benchmark_test.py:116 ======== RESULTS ========\nINFO     __name__:sglang_benchmark_test.py:47 BACKEND: shortfin\nINFO     __name__:sglang_benchmark_test.py:47 DATASET_NAME: sharegpt\nINFO     __name__:sglang_benchmark_test.py:47 REQUEST_RATE: 4\nINFO     __name__:sglang_benchmark_test.py:47 TOTAL_INPUT_TOKENS: 1960\nINFO     __name__:sglang_benchmark_test.py:47 TOTAL_OUTPUT_TOKENS: 2774\nINFO     __name__:sglang_benchmark_test.py:47 TOTAL_OUTPUT_TOKENS_RETOKENIZED: 321\nINFO     __name__:sglang_benchmark_test.py:47 MEAN_E2E_LATENCY_MS: 190581.65140887722\nINFO     __name__:sglang_benchmark_test.py:47 MEDIAN_E2E_LATENCY_MS: 209426.86489003245\nINFO     __name__:sglang_benchmark_test.py:47 MEDIAN_TTFT_MS: 3626.4853745233268\nINFO     __name__:sglang_benchmark_test.py:47 MEDIAN_ITL_MS: 732.2483758907765\nINFO     __name__:sglang_benchmark_test.py:47 OUTPUT_THROUGHPUT: 6.743271289582033\nINFO     __name__:sglang_benchmark_test.py:47 SHAREGPT_OUTPUT_LEN: None\nINFO     __name__:sglang_benchmark_test.py:47 RANDOM_INPUT_LEN: None\nINFO     __name__:sglang_benchmark_test.py:47 RANDOM_OUTPUT_LEN: None\nINFO     __name__:sglang_benchmark_test.py:47 RANDOM_RANGE_RATIO: 0.0\nINFO     __name__:sglang_benchmark_test.py:47 DURATION: 411.37303852592595\nINFO     __name__:sglang_benchmark_test.py:47 COMPLETED: 10\n\n&#34;}], &#34;app_tests/benchmark_tests/llm/sglang_benchmark_test.py::test_sglang_benchmark_server[pre_process_model0-8]&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;Passed&#34;, &#34;testId&#34;: &#34;app_tests/benchmark_tests/llm/sglang_benchmark_test.py::test_sglang_benchmark_server[pre_process_model0-8]&#34;, &#34;duration&#34;: &#34;00:08:57&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;Passed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;app_tests/benchmark_tests/llm/sglang_benchmark_test.py::test_sglang_benchmark_server[pre_process_model0-8]&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;00:08:57&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;----------------------------- Captured stderr call -----------------------------\nSpecial tokens have been added in the vocabulary, make sure the associated word embeddings are fine-tuned or trained.\n\r  0%|          | 0/10 [00:00&amp;lt;?, ?it/s]\r 10%|\u2588         | 1/10 [00:06&amp;lt;00:54,  6.07s/it]\r 20%|\u2588\u2588        | 2/10 [00:07&amp;lt;00:26,  3.37s/it]\r 30%|\u2588\u2588\u2588       | 3/10 [00:11&amp;lt;00:23,  3.41s/it]\r 40%|\u2588\u2588\u2588\u2588      | 4/10 [02:17&amp;lt;05:12, 52.09s/it]\r 50%|\u2588\u2588\u2588\u2588\u2588     | 5/10 [03:36&amp;lt;05:08, 61.69s/it]\r 60%|\u2588\u2588\u2588\u2588\u2588\u2588    | 6/10 [03:49&amp;lt;03:01, 45.27s/it]\r 70%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588   | 7/10 [04:10&amp;lt;01:51, 37.29s/it]\r 80%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588  | 8/10 [04:52&amp;lt;01:17, 38.85s/it]\r 90%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588 | 9/10 [05:15&amp;lt;00:33, 33.88s/it]\r100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 10/10 [06:41&amp;lt;00:00, 49.76s/it]\r100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 10/10 [06:41&amp;lt;00:00, 40.12s/it]\n\n------------------------------ Captured log call -------------------------------\nINFO     __name__:utils.py:96 Finding available port...\nINFO     __name__:utils.py:101 Found available port: 35379\nINFO     __name__:utils.py:149 Starting LLM server...\nINFO     __name__:utils.py:177 Process started... waiting for server\nINFO     __name__:utils.py:106 Waiting for server to start at http://localhost:35379...\nINFO     __name__:utils.py:111 Server successfully started\nINFO     __name__:sglang_benchmark_test.py:103 Running SGLang Benchmark with the following args:\nINFO     __name__:sglang_benchmark_test.py:104 Backend: shortfin\nBase URL: http://localhost:35379\nNum Prompt: 10\nTokenizer: /data/llama3.1/8b\nRequest Rate: 8\nINFO     __name__:sglang_benchmark_test.py:115 Benchmark run completed in 528.6165082454681 seconds\nINFO     __name__:sglang_benchmark_test.py:116 ======== RESULTS ========\nINFO     __name__:sglang_benchmark_test.py:47 BACKEND: shortfin\nINFO     __name__:sglang_benchmark_test.py:47 DATASET_NAME: sharegpt\nINFO     __name__:sglang_benchmark_test.py:47 REQUEST_RATE: 8\nINFO     __name__:sglang_benchmark_test.py:47 TOTAL_INPUT_TOKENS: 1960\nINFO     __name__:sglang_benchmark_test.py:47 TOTAL_OUTPUT_TOKENS: 2774\nINFO     __name__:sglang_benchmark_test.py:47 TOTAL_OUTPUT_TOKENS_RETOKENIZED: 317\nINFO     __name__:sglang_benchmark_test.py:47 MEAN_E2E_LATENCY_MS: 186658.5352316266\nINFO     __name__:sglang_benchmark_test.py:47 MEDIAN_E2E_LATENCY_MS: 223022.60730450507\nINFO     __name__:sglang_benchmark_test.py:47 MEDIAN_TTFT_MS: 3301.8849180079997\nINFO     __name__:sglang_benchmark_test.py:47 MEDIAN_ITL_MS: 506.01462507620454\nINFO     __name__:sglang_benchmark_test.py:47 OUTPUT_THROUGHPUT: 6.9150585526445205\nINFO     __name__:sglang_benchmark_test.py:47 SHAREGPT_OUTPUT_LEN: None\nINFO     __name__:sglang_benchmark_test.py:47 RANDOM_INPUT_LEN: None\nINFO     __name__:sglang_benchmark_test.py:47 RANDOM_OUTPUT_LEN: None\nINFO     __name__:sglang_benchmark_test.py:47 RANDOM_RANGE_RATIO: 0.0\nINFO     __name__:sglang_benchmark_test.py:47 DURATION: 401.15350851789117\nINFO     __name__:sglang_benchmark_test.py:47 COMPLETED: 10\n\n&#34;}], &#34;app_tests/benchmark_tests/llm/sglang_benchmark_test.py::test_sglang_benchmark_server[pre_process_model0-16]&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;Passed&#34;, &#34;testId&#34;: &#34;app_tests/benchmark_tests/llm/sglang_benchmark_test.py::test_sglang_benchmark_server[pre_process_model0-16]&#34;, &#34;duration&#34;: &#34;00:08:56&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;Passed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;app_tests/benchmark_tests/llm/sglang_benchmark_test.py::test_sglang_benchmark_server[pre_process_model0-16]&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;00:08:56&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;----------------------------- Captured stderr call -----------------------------\nSpecial tokens have been added in the vocabulary, make sure the associated word embeddings are fine-tuned or trained.\n\r  0%|          | 0/10 [00:00&amp;lt;?, ?it/s]\r 10%|\u2588         | 1/10 [00:06&amp;lt;00:57,  6.44s/it]\r 20%|\u2588\u2588        | 2/10 [00:16&amp;lt;01:09,  8.74s/it]\r 30%|\u2588\u2588\u2588       | 3/10 [03:38&amp;lt;11:19, 97.04s/it]\r 40%|\u2588\u2588\u2588\u2588      | 4/10 [03:52&amp;lt;06:24, 64.02s/it]\r 50%|\u2588\u2588\u2588\u2588\u2588     | 5/10 [04:46&amp;lt;05:02, 60.50s/it]\r 60%|\u2588\u2588\u2588\u2588\u2588\u2588    | 6/10 [04:58&amp;lt;02:55, 43.82s/it]\r 70%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588   | 7/10 [05:15&amp;lt;01:45, 35.21s/it]\r 80%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588  | 8/10 [05:25&amp;lt;00:54, 27.31s/it]\r 90%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588 | 9/10 [06:22&amp;lt;00:36, 36.43s/it]\r100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 10/10 [06:42&amp;lt;00:00, 31.29s/it]\r100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 10/10 [06:42&amp;lt;00:00, 40.21s/it]\n\n------------------------------ Captured log call -------------------------------\nINFO     __name__:utils.py:96 Finding available port...\nINFO     __name__:utils.py:101 Found available port: 48745\nINFO     __name__:utils.py:149 Starting LLM server...\nINFO     __name__:utils.py:177 Process started... waiting for server\nINFO     __name__:utils.py:106 Waiting for server to start at http://localhost:48745...\nINFO     __name__:utils.py:111 Server successfully started\nINFO     __name__:sglang_benchmark_test.py:103 Running SGLang Benchmark with the following args:\nINFO     __name__:sglang_benchmark_test.py:104 Backend: shortfin\nBase URL: http://localhost:48745\nNum Prompt: 10\nTokenizer: /data/llama3.1/8b\nRequest Rate: 16\nINFO     __name__:sglang_benchmark_test.py:115 Benchmark run completed in 529.5262115001678 seconds\nINFO     __name__:sglang_benchmark_test.py:116 ======== RESULTS ========\nINFO     __name__:sglang_benchmark_test.py:47 BACKEND: shortfin\nINFO     __name__:sglang_benchmark_test.py:47 DATASET_NAME: sharegpt\nINFO     __name__:sglang_benchmark_test.py:47 REQUEST_RATE: 16\nINFO     __name__:sglang_benchmark_test.py:47 TOTAL_INPUT_TOKENS: 1960\nINFO     __name__:sglang_benchmark_test.py:47 TOTAL_OUTPUT_TOKENS: 2774\nINFO     __name__:sglang_benchmark_test.py:47 TOTAL_OUTPUT_TOKENS_RETOKENIZED: 358\nINFO     __name__:sglang_benchmark_test.py:47 MEAN_E2E_LATENCY_MS: 248351.90907611977\nINFO     __name__:sglang_benchmark_test.py:47 MEDIAN_E2E_LATENCY_MS: 292149.6897825273\nINFO     __name__:sglang_benchmark_test.py:47 MEDIAN_TTFT_MS: 3317.6658081356436\nINFO     __name__:sglang_benchmark_test.py:47 MEDIAN_ITL_MS: 735.608936403878\nINFO     __name__:sglang_benchmark_test.py:47 OUTPUT_THROUGHPUT: 6.898087480255787\nINFO     __name__:sglang_benchmark_test.py:47 SHAREGPT_OUTPUT_LEN: None\nINFO     __name__:sglang_benchmark_test.py:47 RANDOM_INPUT_LEN: None\nINFO     __name__:sglang_benchmark_test.py:47 RANDOM_OUTPUT_LEN: None\nINFO     __name__:sglang_benchmark_test.py:47 RANDOM_RANGE_RATIO: 0.0\nINFO     __name__:sglang_benchmark_test.py:47 DURATION: 402.1404494999442\nINFO     __name__:sglang_benchmark_test.py:47 COMPLETED: 10\n\n&#34;}], &#34;app_tests/benchmark_tests/llm/sglang_benchmark_test.py::test_sglang_benchmark_server[pre_process_model0-32]&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;Passed&#34;, &#34;testId&#34;: &#34;app_tests/benchmark_tests/llm/sglang_benchmark_test.py::test_sglang_benchmark_server[pre_process_model0-32]&#34;, &#34;duration&#34;: &#34;00:08:57&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;Passed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;app_tests/benchmark_tests/llm/sglang_benchmark_test.py::test_sglang_benchmark_server[pre_process_model0-32]&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;00:08:57&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;----------------------------- Captured stderr call -----------------------------\nSpecial tokens have been added in the vocabulary, make sure the associated word embeddings are fine-tuned or trained.\n\r  0%|          | 0/10 [00:00&amp;lt;?, ?it/s]\r 10%|\u2588         | 1/10 [00:05&amp;lt;00:48,  5.40s/it]\r 20%|\u2588\u2588        | 2/10 [00:05&amp;lt;00:20,  2.52s/it]\r 30%|\u2588\u2588\u2588       | 3/10 [00:08&amp;lt;00:19,  2.72s/it]\r 40%|\u2588\u2588\u2588\u2588      | 4/10 [03:03&amp;lt;07:04, 70.71s/it]\r 50%|\u2588\u2588\u2588\u2588\u2588     | 5/10 [03:19&amp;lt;04:13, 50.76s/it]\r 60%|\u2588\u2588\u2588\u2588\u2588\u2588    | 6/10 [03:41&amp;lt;02:44, 41.23s/it]\r 70%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588   | 7/10 [04:03&amp;lt;01:44, 34.87s/it]\r 80%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588  | 8/10 [04:47&amp;lt;01:15, 37.63s/it]\r 90%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588 | 9/10 [06:00&amp;lt;00:48, 48.76s/it]\r100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 10/10 [06:41&amp;lt;00:00, 46.30s/it]\r100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 10/10 [06:41&amp;lt;00:00, 40.13s/it]\n\n------------------------------ Captured log call -------------------------------\nINFO     __name__:utils.py:96 Finding available port...\nINFO     __name__:utils.py:101 Found available port: 36353\nINFO     __name__:utils.py:149 Starting LLM server...\nINFO     __name__:utils.py:177 Process started... waiting for server\nINFO     __name__:utils.py:106 Waiting for server to start at http://localhost:36353...\nINFO     __name__:utils.py:111 Server successfully started\nINFO     __name__:sglang_benchmark_test.py:103 Running SGLang Benchmark with the following args:\nINFO     __name__:sglang_benchmark_test.py:104 Backend: shortfin\nBase URL: http://localhost:36353\nNum Prompt: 10\nTokenizer: /data/llama3.1/8b\nRequest Rate: 32\nINFO     __name__:sglang_benchmark_test.py:115 Benchmark run completed in 528.7174460887909 seconds\nINFO     __name__:sglang_benchmark_test.py:116 ======== RESULTS ========\nINFO     __name__:sglang_benchmark_test.py:47 BACKEND: shortfin\nINFO     __name__:sglang_benchmark_test.py:47 DATASET_NAME: sharegpt\nINFO     __name__:sglang_benchmark_test.py:47 REQUEST_RATE: 32\nINFO     __name__:sglang_benchmark_test.py:47 TOTAL_INPUT_TOKENS: 1960\nINFO     __name__:sglang_benchmark_test.py:47 TOTAL_OUTPUT_TOKENS: 2774\nINFO     __name__:sglang_benchmark_test.py:47 TOTAL_OUTPUT_TOKENS_RETOKENIZED: 315\nINFO     __name__:sglang_benchmark_test.py:47 MEAN_E2E_LATENCY_MS: 191707.4621906737\nINFO     __name__:sglang_benchmark_test.py:47 MEDIAN_E2E_LATENCY_MS: 210521.17594098672\nINFO     __name__:sglang_benchmark_test.py:47 MEDIAN_TTFT_MS: 3354.7730564605445\nINFO     __name__:sglang_benchmark_test.py:47 MEDIAN_ITL_MS: 730.8596970979124\nINFO     __name__:sglang_benchmark_test.py:47 OUTPUT_THROUGHPUT: 6.91305894540146\nINFO     __name__:sglang_benchmark_test.py:47 SHAREGPT_OUTPUT_LEN: None\nINFO     __name__:sglang_benchmark_test.py:47 RANDOM_INPUT_LEN: None\nINFO     __name__:sglang_benchmark_test.py:47 RANDOM_OUTPUT_LEN: None\nINFO     __name__:sglang_benchmark_test.py:47 RANDOM_RANGE_RATIO: 0.0\nINFO     __name__:sglang_benchmark_test.py:47 DURATION: 401.2695424570702\nINFO     __name__:sglang_benchmark_test.py:47 COMPLETED: 10\n\n&#34;}]}, &#34;renderCollapsed&#34;: [&#34;passed&#34;], &#34;initialSort&#34;: &#34;result&#34;, &#34;title&#34;: &#34;index.html&#34;}"></div>
+    <script>
+      (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
+const { getCollapsedCategory, setCollapsedIds } = require('./storage.js')
+
+class DataManager {
+    setManager(data) {
+        const collapsedCategories = [...getCollapsedCategory(data.renderCollapsed)]
+        const collapsedIds = []
+        const tests = Object.values(data.tests).flat().map((test, index) => {
+            const collapsed = collapsedCategories.includes(test.result.toLowerCase())
+            const id = `test_${index}`
+            if (collapsed) {
+                collapsedIds.push(id)
+            }
+            return {
+                ...test,
+                id,
+                collapsed,
+            }
+        })
+        const dataBlob = { ...data, tests }
+        this.data = { ...dataBlob }
+        this.renderData = { ...dataBlob }
+        setCollapsedIds(collapsedIds)
+    }
+
+    get allData() {
+        return { ...this.data }
+    }
+
+    resetRender() {
+        this.renderData = { ...this.data }
+    }
+
+    setRender(data) {
+        this.renderData.tests = [...data]
+    }
+
+    toggleCollapsedItem(id) {
+        this.renderData.tests = this.renderData.tests.map((test) =>
+            test.id === id ? { ...test, collapsed: !test.collapsed } : test,
+        )
+    }
+
+    set allCollapsed(collapsed) {
+        this.renderData = { ...this.renderData, tests: [...this.renderData.tests.map((test) => (
+            { ...test, collapsed }
+        ))] }
+    }
+
+    get testSubset() {
+        return [...this.renderData.tests]
+    }
+
+    get environment() {
+        return this.renderData.environment
+    }
+
+    get initialSort() {
+        return this.data.initialSort
+    }
+}
+
+module.exports = {
+    manager: new DataManager(),
+}
+
+},{"./storage.js":8}],2:[function(require,module,exports){
+const mediaViewer = require('./mediaviewer.js')
+const templateEnvRow = document.getElementById('template_environment_row')
+const templateResult = document.getElementById('template_results-table__tbody')
+
+function htmlToElements(html) {
+    const temp = document.createElement('template')
+    temp.innerHTML = html
+    return temp.content.childNodes
+}
+
+const find = (selector, elem) => {
+    if (!elem) {
+        elem = document
+    }
+    return elem.querySelector(selector)
+}
+
+const findAll = (selector, elem) => {
+    if (!elem) {
+        elem = document
+    }
+    return [...elem.querySelectorAll(selector)]
+}
+
+const dom = {
+    getStaticRow: (key, value) => {
+        const envRow = templateEnvRow.content.cloneNode(true)
+        const isObj = typeof value === 'object' && value !== null
+        const values = isObj ? Object.keys(value).map((k) => `${k}: ${value[k]}`) : null
+
+        const valuesElement = htmlToElements(
+            values ? `<ul>${values.map((val) => `<li>${val}</li>`).join('')}<ul>` : `<div>${value}</div>`)[0]
+        const td = findAll('td', envRow)
+        td[0].textContent = key
+        td[1].appendChild(valuesElement)
+
+        return envRow
+    },
+    getResultTBody: ({ testId, id, log, extras, resultsTableRow, tableHtml, result, collapsed }) => {
+        const resultBody = templateResult.content.cloneNode(true)
+        resultBody.querySelector('tbody').classList.add(result.toLowerCase())
+        resultBody.querySelector('tbody').id = testId
+        resultBody.querySelector('.collapsible').dataset.id = id
+
+        resultsTableRow.forEach((html) => {
+            const t = document.createElement('template')
+            t.innerHTML = html
+            resultBody.querySelector('.collapsible').appendChild(t.content)
+        })
+
+        if (log) {
+            // Wrap lines starting with "E" with span.error to color those lines red
+            const wrappedLog = log.replace(/^E.*$/gm, (match) => `<span class="error">${match}</span>`)
+            resultBody.querySelector('.log').innerHTML = wrappedLog
+        } else {
+            resultBody.querySelector('.log').remove()
+        }
+
+        if (collapsed) {
+            resultBody.querySelector('.collapsible > td')?.classList.add('collapsed')
+            resultBody.querySelector('.extras-row').classList.add('hidden')
+        } else {
+            resultBody.querySelector('.collapsible > td')?.classList.remove('collapsed')
+        }
+
+        const media = []
+        extras?.forEach(({ name, format_type, content }) => {
+            if (['image', 'video'].includes(format_type)) {
+                media.push({ path: content, name, format_type })
+            }
+
+            if (format_type === 'html') {
+                resultBody.querySelector('.extraHTML').insertAdjacentHTML('beforeend', `<div>${content}</div>`)
+            }
+        })
+        mediaViewer.setup(resultBody, media)
+
+        // Add custom html from the pytest_html_results_table_html hook
+        tableHtml?.forEach((item) => {
+            resultBody.querySelector('td[class="extra"]').insertAdjacentHTML('beforeend', item)
+        })
+
+        return resultBody
+    },
+}
+
+module.exports = {
+    dom,
+    htmlToElements,
+    find,
+    findAll,
+}
+
+},{"./mediaviewer.js":6}],3:[function(require,module,exports){
+const { manager } = require('./datamanager.js')
+const { doSort } = require('./sort.js')
+const storageModule = require('./storage.js')
+
+const getFilteredSubSet = (filter) =>
+    manager.allData.tests.filter(({ result }) => filter.includes(result.toLowerCase()))
+
+const doInitFilter = () => {
+    const currentFilter = storageModule.getVisible()
+    const filteredSubset = getFilteredSubSet(currentFilter)
+    manager.setRender(filteredSubset)
+}
+
+const doFilter = (type, show) => {
+    if (show) {
+        storageModule.showCategory(type)
+    } else {
+        storageModule.hideCategory(type)
+    }
+
+    const currentFilter = storageModule.getVisible()
+    const filteredSubset = getFilteredSubSet(currentFilter)
+    manager.setRender(filteredSubset)
+
+    const sortColumn = storageModule.getSort()
+    doSort(sortColumn, true)
+}
+
+module.exports = {
+    doFilter,
+    doInitFilter,
+}
+
+},{"./datamanager.js":1,"./sort.js":7,"./storage.js":8}],4:[function(require,module,exports){
+const { redraw, bindEvents, renderStatic } = require('./main.js')
+const { doInitFilter } = require('./filter.js')
+const { doInitSort } = require('./sort.js')
+const { manager } = require('./datamanager.js')
+const data = JSON.parse(document.getElementById('data-container').dataset.jsonblob)
+
+function init() {
+    manager.setManager(data)
+    doInitFilter()
+    doInitSort()
+    renderStatic()
+    redraw()
+    bindEvents()
+}
+
+init()
+
+},{"./datamanager.js":1,"./filter.js":3,"./main.js":5,"./sort.js":7}],5:[function(require,module,exports){
+const { dom, find, findAll } = require('./dom.js')
+const { manager } = require('./datamanager.js')
+const { doSort } = require('./sort.js')
+const { doFilter } = require('./filter.js')
+const {
+    getVisible,
+    getCollapsedIds,
+    setCollapsedIds,
+    getSort,
+    getSortDirection,
+    possibleFilters,
+} = require('./storage.js')
+
+const removeChildren = (node) => {
+    while (node.firstChild) {
+        node.removeChild(node.firstChild)
+    }
+}
+
+const renderStatic = () => {
+    const renderEnvironmentTable = () => {
+        const environment = manager.environment
+        const rows = Object.keys(environment).map((key) => dom.getStaticRow(key, environment[key]))
+        const table = document.getElementById('environment')
+        removeChildren(table)
+        rows.forEach((row) => table.appendChild(row))
+    }
+    renderEnvironmentTable()
+}
+
+const addItemToggleListener = (elem) => {
+    elem.addEventListener('click', ({ target }) => {
+        const id = target.parentElement.dataset.id
+        manager.toggleCollapsedItem(id)
+
+        const collapsedIds = getCollapsedIds()
+        if (collapsedIds.includes(id)) {
+            const updated = collapsedIds.filter((item) => item !== id)
+            setCollapsedIds(updated)
+        } else {
+            collapsedIds.push(id)
+            setCollapsedIds(collapsedIds)
+        }
+        redraw()
+    })
+}
+
+const renderContent = (tests) => {
+    const sortAttr = getSort(manager.initialSort)
+    const sortAsc = JSON.parse(getSortDirection())
+    const rows = tests.map(dom.getResultTBody)
+    const table = document.getElementById('results-table')
+    const tableHeader = document.getElementById('results-table-head')
+
+    const newTable = document.createElement('table')
+    newTable.id = 'results-table'
+
+    // remove all sorting classes and set the relevant
+    findAll('.sortable', tableHeader).forEach((elem) => elem.classList.remove('asc', 'desc'))
+    tableHeader.querySelector(`.sortable[data-column-type="${sortAttr}"]`)?.classList.add(sortAsc ? 'desc' : 'asc')
+    newTable.appendChild(tableHeader)
+
+    if (!rows.length) {
+        const emptyTable = document.getElementById('template_results-table__body--empty').content.cloneNode(true)
+        newTable.appendChild(emptyTable)
+    } else {
+        rows.forEach((row) => {
+            if (!!row) {
+                findAll('.collapsible td:not(.col-links', row).forEach(addItemToggleListener)
+                find('.logexpander', row).addEventListener('click',
+                    (evt) => evt.target.parentNode.classList.toggle('expanded'),
+                )
+                newTable.appendChild(row)
+            }
+        })
+    }
+
+    table.replaceWith(newTable)
+}
+
+const renderDerived = () => {
+    const currentFilter = getVisible()
+    possibleFilters.forEach((result) => {
+        const input = document.querySelector(`input[data-test-result="${result}"]`)
+        input.checked = currentFilter.includes(result)
+    })
+}
+
+const bindEvents = () => {
+    const filterColumn = (evt) => {
+        const { target: element } = evt
+        const { testResult } = element.dataset
+
+        doFilter(testResult, element.checked)
+        const collapsedIds = getCollapsedIds()
+        const updated = manager.renderData.tests.map((test) => {
+            return {
+                ...test,
+                collapsed: collapsedIds.includes(test.id),
+            }
+        })
+        manager.setRender(updated)
+        redraw()
+    }
+
+    const header = document.getElementById('environment-header')
+    header.addEventListener('click', () => {
+        const table = document.getElementById('environment')
+        table.classList.toggle('hidden')
+        header.classList.toggle('collapsed')
+    })
+
+    findAll('input[name="filter_checkbox"]').forEach((elem) => {
+        elem.addEventListener('click', filterColumn)
+    })
+
+    findAll('.sortable').forEach((elem) => {
+        elem.addEventListener('click', (evt) => {
+            const { target: element } = evt
+            const { columnType } = element.dataset
+            doSort(columnType)
+            redraw()
+        })
+    })
+
+    document.getElementById('show_all_details').addEventListener('click', () => {
+        manager.allCollapsed = false
+        setCollapsedIds([])
+        redraw()
+    })
+    document.getElementById('hide_all_details').addEventListener('click', () => {
+        manager.allCollapsed = true
+        const allIds = manager.renderData.tests.map((test) => test.id)
+        setCollapsedIds(allIds)
+        redraw()
+    })
+}
+
+const redraw = () => {
+    const { testSubset } = manager
+
+    renderContent(testSubset)
+    renderDerived()
+}
+
+module.exports = {
+    redraw,
+    bindEvents,
+    renderStatic,
+}
+
+},{"./datamanager.js":1,"./dom.js":2,"./filter.js":3,"./sort.js":7,"./storage.js":8}],6:[function(require,module,exports){
+class MediaViewer {
+    constructor(assets) {
+        this.assets = assets
+        this.index = 0
+    }
+
+    nextActive() {
+        this.index = this.index === this.assets.length - 1 ? 0 : this.index + 1
+        return [this.activeFile, this.index]
+    }
+
+    prevActive() {
+        this.index = this.index === 0 ? this.assets.length - 1 : this.index -1
+        return [this.activeFile, this.index]
+    }
+
+    get currentIndex() {
+        return this.index
+    }
+
+    get activeFile() {
+        return this.assets[this.index]
+    }
+}
+
+
+const setup = (resultBody, assets) => {
+    if (!assets.length) {
+        resultBody.querySelector('.media').classList.add('hidden')
+        return
+    }
+
+    const mediaViewer = new MediaViewer(assets)
+    const container = resultBody.querySelector('.media-container')
+    const leftArrow = resultBody.querySelector('.media-container__nav--left')
+    const rightArrow = resultBody.querySelector('.media-container__nav--right')
+    const mediaName = resultBody.querySelector('.media__name')
+    const counter = resultBody.querySelector('.media__counter')
+    const imageEl = resultBody.querySelector('img')
+    const sourceEl = resultBody.querySelector('source')
+    const videoEl = resultBody.querySelector('video')
+
+    const setImg = (media, index) => {
+        if (media?.format_type === 'image') {
+            imageEl.src = media.path
+
+            imageEl.classList.remove('hidden')
+            videoEl.classList.add('hidden')
+        } else if (media?.format_type === 'video') {
+            sourceEl.src = media.path
+
+            videoEl.classList.remove('hidden')
+            imageEl.classList.add('hidden')
+        }
+
+        mediaName.innerText = media?.name
+        counter.innerText = `${index + 1} / ${assets.length}`
+    }
+    setImg(mediaViewer.activeFile, mediaViewer.currentIndex)
+
+    const moveLeft = () => {
+        const [media, index] = mediaViewer.prevActive()
+        setImg(media, index)
+    }
+    const doRight = () => {
+        const [media, index] = mediaViewer.nextActive()
+        setImg(media, index)
+    }
+    const openImg = () => {
+        window.open(mediaViewer.activeFile.path, '_blank')
+    }
+    if (assets.length === 1) {
+        container.classList.add('media-container--fullscreen')
+    } else {
+        leftArrow.addEventListener('click', moveLeft)
+        rightArrow.addEventListener('click', doRight)
+    }
+    imageEl.addEventListener('click', openImg)
+}
+
+module.exports = {
+    setup,
+}
+
+},{}],7:[function(require,module,exports){
+const { manager } = require('./datamanager.js')
+const storageModule = require('./storage.js')
+
+const genericSort = (list, key, ascending, customOrder) => {
+    let sorted
+    if (customOrder) {
+        sorted = list.sort((a, b) => {
+            const aValue = a.result.toLowerCase()
+            const bValue = b.result.toLowerCase()
+
+            const aIndex = customOrder.findIndex((item) => item.toLowerCase() === aValue)
+            const bIndex = customOrder.findIndex((item) => item.toLowerCase() === bValue)
+
+            // Compare the indices to determine the sort order
+            return aIndex - bIndex
+        })
+    } else {
+        sorted = list.sort((a, b) => a[key] === b[key] ? 0 : a[key] > b[key] ? 1 : -1)
+    }
+
+    if (ascending) {
+        sorted.reverse()
+    }
+    return sorted
+}
+
+const durationSort = (list, ascending) => {
+    const parseDuration = (duration) => {
+        if (duration.includes(':')) {
+            // If it's in the format "HH:mm:ss"
+            const [hours, minutes, seconds] = duration.split(':').map(Number)
+            return (hours * 3600 + minutes * 60 + seconds) * 1000
+        } else {
+            // If it's in the format "nnn ms"
+            return parseInt(duration)
+        }
+    }
+    const sorted = list.sort((a, b) => parseDuration(a['duration']) - parseDuration(b['duration']))
+    if (ascending) {
+        sorted.reverse()
+    }
+    return sorted
+}
+
+const doInitSort = () => {
+    const type = storageModule.getSort(manager.initialSort)
+    const ascending = storageModule.getSortDirection()
+    const list = manager.testSubset
+    const initialOrder = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed', 'Skipped', 'Passed']
+
+    storageModule.setSort(type)
+    storageModule.setSortDirection(ascending)
+
+    if (type?.toLowerCase() === 'original') {
+        manager.setRender(list)
+    } else {
+        let sortedList
+        switch (type) {
+        case 'duration':
+            sortedList = durationSort(list, ascending)
+            break
+        case 'result':
+            sortedList = genericSort(list, type, ascending, initialOrder)
+            break
+        default:
+            sortedList = genericSort(list, type, ascending)
+            break
+        }
+        manager.setRender(sortedList)
+    }
+}
+
+const doSort = (type, skipDirection) => {
+    const newSortType = storageModule.getSort(manager.initialSort) !== type
+    const currentAsc = storageModule.getSortDirection()
+    let ascending
+    if (skipDirection) {
+        ascending = currentAsc
+    } else {
+        ascending = newSortType ? false : !currentAsc
+    }
+    storageModule.setSort(type)
+    storageModule.setSortDirection(ascending)
+
+    const list = manager.testSubset
+    const sortedList = type === 'duration' ? durationSort(list, ascending) : genericSort(list, type, ascending)
+    manager.setRender(sortedList)
+}
+
+module.exports = {
+    doInitSort,
+    doSort,
+}
+
+},{"./datamanager.js":1,"./storage.js":8}],8:[function(require,module,exports){
+const possibleFilters = [
+    'passed',
+    'skipped',
+    'failed',
+    'error',
+    'xfailed',
+    'xpassed',
+    'rerun',
+]
+
+const getVisible = () => {
+    const url = new URL(window.location.href)
+    const settings = new URLSearchParams(url.search).get('visible')
+    const lower = (item) => {
+        const lowerItem = item.toLowerCase()
+        if (possibleFilters.includes(lowerItem)) {
+            return lowerItem
+        }
+        return null
+    }
+    return settings === null ?
+        possibleFilters :
+        [...new Set(settings?.split(',').map(lower).filter((item) => item))]
+}
+
+const hideCategory = (categoryToHide) => {
+    const url = new URL(window.location.href)
+    const visibleParams = new URLSearchParams(url.search).get('visible')
+    const currentVisible = visibleParams ? visibleParams.split(',') : [...possibleFilters]
+    const settings = [...new Set(currentVisible)].filter((f) => f !== categoryToHide).join(',')
+
+    url.searchParams.set('visible', settings)
+    window.history.pushState({}, null, unescape(url.href))
+}
+
+const showCategory = (categoryToShow) => {
+    if (typeof window === 'undefined') {
+        return
+    }
+    const url = new URL(window.location.href)
+    const currentVisible = new URLSearchParams(url.search).get('visible')?.split(',').filter(Boolean) ||
+        [...possibleFilters]
+    const settings = [...new Set([categoryToShow, ...currentVisible])]
+    const noFilter = possibleFilters.length === settings.length || !settings.length
+
+    noFilter ? url.searchParams.delete('visible') : url.searchParams.set('visible', settings.join(','))
+    window.history.pushState({}, null, unescape(url.href))
+}
+
+const getSort = (initialSort) => {
+    const url = new URL(window.location.href)
+    let sort = new URLSearchParams(url.search).get('sort')
+    if (!sort) {
+        sort = initialSort || 'result'
+    }
+    return sort
+}
+
+const setSort = (type) => {
+    const url = new URL(window.location.href)
+    url.searchParams.set('sort', type)
+    window.history.pushState({}, null, unescape(url.href))
+}
+
+const getCollapsedCategory = (renderCollapsed) => {
+    let categories
+    if (typeof window !== 'undefined') {
+        const url = new URL(window.location.href)
+        const collapsedItems = new URLSearchParams(url.search).get('collapsed')
+        switch (true) {
+        case !renderCollapsed && collapsedItems === null:
+            categories = ['passed']
+            break
+        case collapsedItems?.length === 0 || /^["']{2}$/.test(collapsedItems):
+            categories = []
+            break
+        case /^all$/.test(collapsedItems) || collapsedItems === null && /^all$/.test(renderCollapsed):
+            categories = [...possibleFilters]
+            break
+        default:
+            categories = collapsedItems?.split(',').map((item) => item.toLowerCase()) || renderCollapsed
+            break
+        }
+    } else {
+        categories = []
+    }
+    return categories
+}
+
+const getSortDirection = () => JSON.parse(sessionStorage.getItem('sortAsc')) || false
+const setSortDirection = (ascending) => sessionStorage.setItem('sortAsc', ascending)
+
+const getCollapsedIds = () => JSON.parse(sessionStorage.getItem('collapsedIds')) || []
+const setCollapsedIds = (list) => sessionStorage.setItem('collapsedIds', JSON.stringify(list))
+
+module.exports = {
+    getVisible,
+    hideCategory,
+    showCategory,
+    getCollapsedIds,
+    setCollapsedIds,
+    getSort,
+    setSort,
+    getSortDirection,
+    setSortDirection,
+    getCollapsedCategory,
+    possibleFilters,
+}
+
+},{}]},{},[4]);
+    </script>
+  </footer>
+</html>
