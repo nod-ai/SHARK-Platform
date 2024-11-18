@@ -17,7 +17,6 @@ from transformers import (
 import pytest
 import torch
 from unittest import TestCase
-from parameterized import parameterized
 from sharktank.types import Theta, DefaultPrimitiveTensor, unbox_tensor, Dataset
 from sharktank.models.t5.t5 import (
     T5Attention,
@@ -28,6 +27,8 @@ from sharktank.models.t5.t5 import (
 )
 from sharktank.utils.testing import make_rand_torch, longrun
 from sharktank.utils.hf_datasets import get_dataset
+
+with_t5_data = pytest.mark.skipif("not config.getoption('with_t5_data')")
 
 
 def make_random_mask(shape: tuple[int], dtype: torch.dtype):
@@ -43,14 +44,9 @@ class T5EncoderTest(TestCase):
         torch.random.manual_seed(12345)
         torch.no_grad()
 
-    @parameterized.expand(
-        [
-            "google/t5-v1_1-small",
-            "google/t5-v1_1-xxl",
-        ]
-    )
-    @longrun
-    def testV1_1Fp32CompareTorchEagerAgainstHuggingFace(self, huggingface_repo_id: str):
+    def runTestV1_1Fp32CompareTorchEagerAgainstHuggingFace(
+        self, huggingface_repo_id: str
+    ):
         get_dataset(
             huggingface_repo_id,
         ).download()
@@ -83,6 +79,15 @@ class T5EncoderTest(TestCase):
         expected_outputs = reference_model(input_ids=input_ids)
         actual_outputs = model(input_ids=input_ids)
         torch.testing.assert_close(actual_outputs, expected_outputs, atol=1e-5, rtol=0)
+
+    @with_t5_data
+    def testV1_1SmallFp32CompareTorchEagerAgainstHuggingFace(self):
+        self.runTestV1_1Fp32CompareTorchEagerAgainstHuggingFace("google/t5-v1_1-small")
+
+    @with_t5_data
+    @longrun
+    def testV1_1XxlFp32CompareTorchEagerAgainstHuggingFace(self):
+        self.runTestV1_1Fp32CompareTorchEagerAgainstHuggingFace("google/t5-v1_1-xxl")
 
 
 class T5AttentionTest(TestCase):

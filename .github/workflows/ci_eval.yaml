@@ -26,7 +26,7 @@ jobs:
   test_perplexity_vmfb:
     if: ${{ github.repository_owner == 'nod-ai' || github.event_name != 'schedule' }}
     timeout-minutes: 1000
-    name: "IREE/vmfb"
+    name: "IREE/vmfb perplexity"
     strategy:
       matrix:
         version: [3.11]
@@ -82,7 +82,7 @@ jobs:
   test_perplexity_torch:
     if: ${{ github.repository_owner == 'nod-ai' || github.event_name != 'schedule' }}
     timeout-minutes: 1000
-    name: "Torch/eager mode"
+    name: "Torch/eager mode perplexity"
     strategy:
       matrix:
         version: [3.11]
@@ -183,7 +183,7 @@ jobs:
 
       - name: Run long running tests
         run: |
-          pytest --longrun \
-            --google-t5-v1-1-small-fp32-model-path=/data/t5/small/google__t5-v1_1-small_fp32.gguf \
-            --google-t5-v1-1-xxl-fp32-model-path=/data/t5/xxl/google__t5-v1_1-xxl_fp32.gguf \
+          pytest
+            --longrun \
+            --with-t5-data \
             sharktank/tests/models/t5/t5_test.py

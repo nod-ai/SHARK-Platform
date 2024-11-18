@@ -88,6 +88,16 @@ def pytest_addoption(parser):
         help="Enable all llama benchmarking tests",
     )
 
+    parser.addoption(
+        "--with-t5-data",
+        action="store_true",
+        default=False,
+        help=(
+            "Enable tests that use T5 data like models that is not a part of the source "
+            "code. The user is expected to provide the data"
+        ),
+    )
+
     # TODO: Remove all hardcoded paths in CI tests
     parser.addoption(
         "--llama3-8b-tokenizer-path",
@@ -136,16 +146,14 @@ def pytest_addoption(parser):
     parser.addoption(
         "--google-t5-v1-1-small-fp32-model-path",
         type=Path,
-        action="store",
-        default=None,
+        default="/data/t5/small/google__t5-v1_1-small_fp32.gguf",
         help="Google T5 v1.1 small fp32 model path",
     )
 
     parser.addoption(
         "--google-t5-v1-1-xxl-fp32-model-path",
         type=Path,
-        action="store",
-        default=None,
+        default="/data/t5/xxl/google__t5-v1_1-xxl_fp32.gguf",
         help="Google T5 v1.1 XXL fp32 model path",
     )
 

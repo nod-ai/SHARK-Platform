@@ -147,7 +147,7 @@ def elementwise_binary(operator, x, y, *args, **kwargs):
         IsOfType(Tensor, PrimitiveTensor, Number),
     )
 )
-def elementwise_trenary(operator, x, y, z, *args, **kwargs):
+def elementwise_ternary(operator, x, y, z, *args, **kwargs):
     x = unbox_tensor(x)
     if isinstance(y, PrimitiveTensor):
         y = unbox_tensor(y)
