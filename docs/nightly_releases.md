@@ -160,23 +160,19 @@ pip freeze
 Installing the `shark-ai` package again should get back to aligned versions:
 
 ```bash
-pip install shark-ai==2.9.2
+pip install shark-ai==2.9.1
 # ...
-# Installing collected packages: shortfin, shark-ai
+# Installing collected packages: shortfin
 #   Attempting uninstall: shortfin
 #     Found existing installation: shortfin 3.0.0rc20241118
 #     Uninstalling shortfin-3.0.0rc20241118:
 #       Successfully uninstalled shortfin-3.0.0rc20241118
-#   Attempting uninstall: shark-ai
-#     Found existing installation: shark-ai 2.9.1
-#     Uninstalling shark-ai-2.9.1:
-#       Successfully uninstalled shark-ai-2.9.1
-# Successfully installed shark-ai-2.9.2 shortfin-2.9.2
+# Successfully installed shortfin-2.9.1
 
 pip freeze
 # ...
-# shark-ai==2.9.2
-# shortfin==2.9.2
+# shark-ai==2.9.1
+# shortfin==2.9.1
 # ...
 ```
 
@@ -189,7 +185,7 @@ pip uninstall shark-ai
 pip freeze
 # ...
 # (note: no shark-ai package)
-# shortfin==2.9.2
+# shortfin==2.9.1
 # ...
 
 pip install --upgrade --pre \
@@ -198,13 +194,12 @@ pip install --upgrade --pre \
 
 # Looking in links: https://github.com/nod-ai/shark-ai/releases/expanded_assets/dev-wheels
 # Collecting shortfin==3.0.0rc20241118
-#   Downloading https://github.com/nod-ai/shark-ai/releases/download/dev-wheels/shortfin-3.0.0rc20241118-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (2.5 MB)
-#      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.5/2.5 MB 45.1 MB/s eta 0:00:00
+#   Using cached https://github.com/nod-ai/shark-ai/releases/download/dev-wheels/shortfin-3.0.0rc20241118-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (2.5 MB)
 # Installing collected packages: shortfin
 #   Attempting uninstall: shortfin
-#     Found existing installation: shortfin 2.9.2
-#     Uninstalling shortfin-2.9.2:
-#       Successfully uninstalled shortfin-2.9.2
+#     Found existing installation: shortfin 2.9.1
+#     Uninstalling shortfin-2.9.1:
+#       Successfully uninstalled shortfin-2.9.1
 # Successfully installed shortfin-3.0.0rc20241118
 
 pip freeze
