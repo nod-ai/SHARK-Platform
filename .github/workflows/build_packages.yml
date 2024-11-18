@@ -43,7 +43,7 @@ jobs:
           sharktank_package_version=$(python3 build_tools/python_deploy/compute_local_version.py sharktank)
           shortfin_package_version=$(python3 build_tools/python_deploy/compute_local_version.py shortfin)
       - name: Upload version_local.json
-        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
         with:
           name: version_local
           path: |
@@ -121,7 +121,7 @@ jobs:
         ./c/shortfin/build_tools/build_linux_package.sh
 
     - name: Upload python wheels
-      uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
       with:
         if-no-files-found: error
         name: snapshot-${{ matrix.package }}-${{ matrix.platform }}-${{ matrix.python-version }}
