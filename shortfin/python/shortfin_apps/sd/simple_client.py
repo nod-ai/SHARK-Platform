@@ -82,6 +82,7 @@ async def send_request(session, rep, args, data):
             print(f"Error: Received {response.status} from server")
             raise Exception
 
+
 async def static(args):
     # Create an aiohttp session for sending requests
     async with aiohttp.ClientSession() as session:
@@ -194,6 +195,7 @@ def check_health(url):
             time.sleep(2)
             print(".", end=None)
 
+
 def main(argv):
     p = argparse.ArgumentParser()
     p.add_argument(
@@ -220,7 +222,9 @@ def main(argv):
         default="gen_imgs",
         help="Directory to which images get saved.",
     )
-    p.add_argument("--host", type=str, default="http://0.0.0.0", help="Server host address.")
+    p.add_argument(
+        "--host", type=str, default="http://0.0.0.0", help="Server host address."
+    )
     p.add_argument("--port", type=str, default="8000", help="Server port")
     p.add_argument(
         "--steps",

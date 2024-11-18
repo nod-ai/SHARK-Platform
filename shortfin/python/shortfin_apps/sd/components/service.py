@@ -85,9 +85,7 @@ class GenerateService:
         for idx, device in enumerate(self.sysman.ls.devices):
             for i in range(self.fibers_per_device):
                 tgt_worker = self.workers[i % len(self.workers)]
-                fiber = sysman.ls.create_fiber(
-                    tgt_worker, devices=[device]
-                )
+                fiber = sysman.ls.create_fiber(tgt_worker, devices=[device])
                 self.fibers.append(fiber)
                 self.idle_fibers.add(fiber)
         for idx in range(len(self.workers)):
@@ -101,11 +99,10 @@ class GenerateService:
             raise ValueError("A worker was requested from a rogue fiber.")
         fiber_idx = self.fibers.index(fiber)
         worker_idx = int(
-            (fiber_idx - fiber_idx % self.fibers_per_worker)
-            / self.fibers_per_worker
+            (fiber_idx - fiber_idx % self.fibers_per_worker) / self.fibers_per_worker
         )
         return worker_idx
-        
+
     def load_inference_module(self, vmfb_path: Path, component: str = None):
         if not self.inference_modules.get(component):
             self.inference_modules[component] = []
@@ -131,9 +128,7 @@ class GenerateService:
     def start(self):
         # Initialize programs.
         for component in self.inference_modules:
-            logger.info(
-                f"Loading component: {component}"
-            )
+            logger.info(f"Loading component: {component}")
             component_modules = [
                 sf.ProgramModule.parameter_provider(
                     self.sysman.ls, *self.inference_parameters.get(component, [])
@@ -293,7 +288,6 @@ class BatcherProcess(sf.Process):
             self.board(batch["reqs"], fiber=fiber)
             if self.service.prog_isolation != sf.ProgramIsolation.PER_FIBER:
                 self.service.idle_fibers.add(fiber)
-                
 
     def sort_batches(self):
         """Files pending requests into sorted batches suitable for program invocations."""

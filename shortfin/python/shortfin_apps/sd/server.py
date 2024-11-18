@@ -38,6 +38,7 @@ logger.propagate = False
 
 THIS_DIR = Path(__file__).resolve().parent
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     sysman.start()
@@ -56,6 +57,7 @@ async def lifespan(app: FastAPI):
             service.shutdown()
     finally:
         sysman.shutdown()
+
 
 sysman: SystemManager
 services: dict[str, Any] = {}
@@ -84,6 +86,7 @@ def configure_sys(args) -> SystemManager:
     model_config, topology_config, flagfile, tuning_spec, args = get_configs(args)
     sysman = SystemManager(args.device, args.device_ids, args.amdgpu_async_allocations)
     return sysman, model_config, flagfile, tuning_spec
+
 
 def configure_service(args, sysman, model_config, flagfile, tuning_spec):
     # Setup each service we are hosting.
@@ -221,8 +224,13 @@ def get_modules(args, model_config, flagfile, td_spec):
             f"--iree-compile-extra-args={' '.join(ireec_args)}",
         ]
         logger.info(f"Preparing runtime artifacts for {modelname}...")
-        logger.debug(f"COMMAND LINE EQUIVALENT: " + " ".join([str(argn) for argn in builder_args]))
-        output = subprocess.check_output(builder_args, stderr=subprocess.DEVNULL).decode()
+        logger.debug(
+            f"COMMAND LINE EQUIVALENT: "
+            + " ".join([str(argn) for argn in builder_args])
+        )
+        output = subprocess.check_output(
+            builder_args, stderr=subprocess.DEVNULL
+        ).decode()
 
         output_paths = output.splitlines()
         filenames.extend(output_paths)
