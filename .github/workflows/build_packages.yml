@@ -12,6 +12,9 @@ on:
     # Runs at 11:00 AM UTC, which is 3:00 AM PST (UTC-8)
     - cron: '0 11 * * *'
 
+permissions:
+  contents: read
+
 jobs:
   # Note: metadata generation could happen in a separate trigger/schedule
   # workflow. For cross platform builds, it's useful to just generate the
@@ -50,6 +53,8 @@ jobs:
   build_packages:
     name: "${{ matrix.package }} :: ${{ matrix.platform }} :: ${{ matrix.python-version }}"
     runs-on: ${{ matrix.runs-on }}
+    permissions:
+      contents: write
     needs: [setup_metadata]
     strategy:
       fail-fast: false
@@ -126,7 +131,6 @@ jobs:
       uses: ncipollo/release-action@2c591bcc8ecdcd2db72b97d6147f871fcd833ba5 # v1.14.0
       with:
         artifacts: bindist/*.whl
-        token: "${{ secrets.RELEASE_PUBLISH_ACCESS_TOKEN }}"
         tag: "dev-wheels"
         name: "dev-wheels"
         body: "Automatic snapshot release of shark-ai python wheels."
