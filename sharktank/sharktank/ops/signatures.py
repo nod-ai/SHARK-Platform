@@ -582,12 +582,14 @@ def layer_norm(
 def _layer_norm_trampoline(
     d: SignatureDispatcher,
     input: AnyTensor,
-    weight: AnyTensor,
+    weight: Optional[AnyTensor],
     bias: Optional[AnyTensor],
     *,
     eps: float,
 ):
-    tensors = [input, weight]
+    tensors = [input]
+    if weight is not None:
+        tensors.append(bias)
     if bias is not None:
         tensors.append(bias)
     for override in d.find_overrides(tensors):

@@ -303,15 +303,23 @@ def interpolate_default(
         antialias=antialias,
     )
 
-
-@layer_norm.override(Tensor, Tensor, Tensor)
 def layer_norm_default(input, weight, bias, *, eps):
     input = unbox_tensor(input)
-    weight = unbox_tensor(weight)
-    bias = unbox_tensor(bias)
+    if weight is not None:
+        weight = unbox_tensor(weight)
+    else:
+        weight = torch.ones(input.shape)
+    if bias is not None:
+        bias = unbox_tensor(bias)
+    else:
+        bias = torch.zeros(input.shape)
     return F.layer_norm(
         input, normalized_shape=weight.shape, weight=weight, bias=bias, eps=eps
     )
+
+layer_norm.override(Tensor)(layer_norm_default)
+layer_norm.override(Tensor, Tensor)(layer_norm_default)
+layer_norm.override(Tensor, Tensor, Tensor)(layer_norm_default)
 
 
 # Linear
@@ -394,6 +402,7 @@ def rms_norm_default(x, weight, *, epsilon: float) -> Tensor:
     variance = x.pow(2).mean(-1, keepdim=True)
     output = x * elementwise(torch.rsqrt, variance + epsilon)
     # The cast here is to match the hf implementation, affects numerics
+    print(x.shape, weight.shape)
     output = elementwise(torch.mul, weight, to(output, weight.dtype))
     return output
 

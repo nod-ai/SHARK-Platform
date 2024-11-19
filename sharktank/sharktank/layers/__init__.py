@@ -17,5 +17,7 @@ from .paged_llama_attention_block import PagedLlamaAttentionBlock
 from .ffn_block import FFN
 from .ffn_moe_block import FFNMOE
 from .mixture_of_experts_block import MoeBlock
+from .mmdit_double import MMDITDoubleBlock
+from .mmdit_single import MMDITSingleBlock
 
 from .configs import *
