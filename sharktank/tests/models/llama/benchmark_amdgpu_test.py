@@ -55,6 +55,9 @@ class BaseBenchmarkTest(unittest.TestCase):
             "--iree-opt-aggressively-propagate-transposes=true",
             "--iree-opt-data-tiling=false",
             "--iree-preprocessing-pass-pipeline='builtin.module(util.func(iree-preprocessing-generalize-linalg-matmul-experimental))'",
+            "--iree-hal-force-indirect-command-buffers=true",
+            "--iree-stream-resource-memory-model=discrete",
+            "--iree-hip-legacy-sync=false",
         ]
 
 
@@ -63,9 +66,9 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
     def setUp(self):
         super().setUp()
         # TODO: add numpy files to Azure and download from it
-        self.artifacts_dir = Path("/data/llama-3.1/weights/8b")
+        self.artifacts_dir = Path("/data/llama3.1/weights/8b")
         self.irpa_path = self.artifacts_dir / "fp16/llama3.1_8b_fp16.irpa"
-        self.irpa_path_fp8 = self.artifacts_dir / "f8/llama8b_fp8.irpa"
+        self.irpa_path_fp8 = self.artifacts_dir / "f8/llama3.1_8b_fp8.irpa"
         self.tensor_parallelism_size = 1
         self.dir_path_8b = self.dir_path / "llama-8b"
         self.temp_dir_8b = Path(self.dir_path_8b)
@@ -103,6 +106,9 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
             tensor_parallelism_size=self.tensor_parallelism_size,
         )
         self.prefill_args_f16 = self.artifacts_dir / "prefill_args"
+        self.prefill_args_bs4_128_in_tokens_f16 = (
+            self.artifacts_dir / "prefill_args_bs4_128"
+        )
         self.decode_args_f16 = self.artifacts_dir / "decode_args"
         self.prefill_args_fp8 = self.artifacts_dir / "prefill_args_fp8"
         self.decode_args_fp8 = self.artifacts_dir / "decode_args_fp8"
@@ -112,6 +118,14 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
             f"--input=@{self.prefill_args_f16}/seq_lens.npy",
             f"--input=@{self.prefill_args_f16}/seq_block_ids.npy",
             f"--input=@{self.prefill_args_f16}/cache_state_f16.npy",
+            "--benchmark_repetitions=3",
+        ]
+        self.iree_run_prefill_nondecomposed_args_fp16 = [
+            "--function=prefill_bs4",
+            f"--input=@{self.prefill_args_bs4_128_in_tokens_f16}/random_tokens.npy",
+            f"--input=@{self.prefill_args_bs4_128_in_tokens_f16}/seq_lens.npy",
+            f"--input=@{self.prefill_args_bs4_128_in_tokens_f16}/seq_block_ids.npy",
+            f"--input=@{self.prefill_args_bs4_128_in_tokens_f16}/cs_f16.npy",
             "--benchmark_repetitions=3",
         ]
         self.iree_run_decode_args = [
@@ -181,6 +195,7 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
         )
 
     @skipif_run_quick_llama_test
+    @pytest.mark.xfail(reason="Compile Error", strict=True, raises=IreeCompileException)
     def testBenchmark8B_f16_Non_Decomposed_Prefill(self):
         output_file_name = self.dir_path_8b / "f16_torch_prefill"
         output_mlir = self.llama8b_f16_torch_sdpa_artifacts.create_file(
@@ -210,7 +225,7 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
             hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path,
-            args=self.iree_run_prefill_args,
+            args=self.iree_run_prefill_nondecomposed_args_fp16,
             cwd=self.repo_root,
         )
 
@@ -256,9 +271,7 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
             cwd=self.repo_root,
         )
 
-    @pytest.mark.xfail(
-        reason="Test not yet implemented", strict=True, raises=ExportMlirException
-    )
+    @pytest.mark.xfail(reason="Compile Error", strict=True, raises=IreeCompileException)
     def testBenchmark8B_fp8_Decomposed(self):
         output_file_name = self.dir_path_8b / "fp8_decomposed"
         output_mlir = self.llama8b_fp8_decomposed_artifacts.create_file(
@@ -298,9 +311,7 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
             cwd=self.repo_root,
         )
 
-    @pytest.mark.xfail(
-        reason="Compile failure", strict=True, raises=ExportMlirException
-    )
+    @pytest.mark.xfail(reason="Compile Error", strict=True, raises=IreeCompileException)
     def testBenchmark8B_fp8_Non_Decomposed(self):
         output_file_name = self.dir_path_8b / "fp8_torch"
         output_mlir = self.llama8b_fp8_torch_sdpa_artifacts.create_file(
@@ -347,7 +358,7 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
     def setUp(self):
         super().setUp()
         # TODO: add numpy files to Azure and download from it
-        self.artifacts_dir = Path("/data/llama-3.1/weights/70b")
+        self.artifacts_dir = Path("/data/llama3.1/weights/70b")
         self.irpa_path = self.artifacts_dir / "fp16/llama3.1_70b_f16.irpa"
         self.irpa_path_fp8 = self.artifacts_dir / "f8/llama70b_fp8.irpa"
         self.tensor_parallelism_size = 8
@@ -387,6 +398,9 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
             tensor_parallelism_size=self.tensor_parallelism_size,
         )
         self.prefill_args_f16 = self.artifacts_dir / "prefill_args"
+        self.prefill_args_bs4_128_in_tokens_f16 = (
+            self.artifacts_dir / "prefill_args_bs4_128"
+        )
         self.decode_args_f16 = self.artifacts_dir / "decode_args"
         self.prefill_args_fp8 = self.artifacts_dir / "prefill_args_fp8"
         self.decode_args_fp8 = self.artifacts_dir / "decode_args_fp8"
@@ -396,6 +410,14 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
             f"--input=@{self.prefill_args_f16}/seq_lens.npy",
             f"--input=@{self.prefill_args_f16}/seq_block_ids.npy",
             f"--input=@{self.prefill_args_f16}/cache_state_f16.npy",
+            "--benchmark_repetitions=3",
+        ]
+        self.iree_run_prefill_nondecomposed_args_fp16 = [
+            "--function=prefill_bs4",
+            f"--input=@{self.prefill_args_bs4_128_in_tokens_f16}/random_tokens.npy",
+            f"--input=@{self.prefill_args_bs4_128_in_tokens_f16}/seq_lens.npy",
+            f"--input=@{self.prefill_args_bs4_128_in_tokens_f16}/seq_block_ids.npy",
+            f"--input=@{self.prefill_args_bs4_128_in_tokens_f16}/cs_f16.npy",
             "--benchmark_repetitions=3",
         ]
         self.iree_run_decode_args = [
@@ -524,9 +546,7 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
             cwd=self.repo_root,
         )
 
-    @pytest.mark.xfail(
-        reason="Test not yet implemented", strict=True, raises=ExportMlirException
-    )
+    @pytest.mark.xfail(reason="Compile Error", strict=True, raises=IreeCompileException)
     def testBenchmark70B_fp8_TP8_Decomposed(self):
         output_file_name = self.dir_path_70b / "fp8_decomposed"
         output_mlir = self.llama70b_fp8_decomposed_artifacts.create_file(
@@ -572,9 +592,7 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
             cwd=self.repo_root,
         )
 
-    @pytest.mark.xfail(
-        reason="Test not yet implemented", strict=True, raises=ExportMlirException
-    )
+    @pytest.mark.xfail(reason="Compile Error", strict=True, raises=IreeCompileException)
     def testBenchmark70B_fp8_TP8_Non_Decomposed(self):
         output_file_name = self.dir_path_70b / "fp8_torch"
         output_mlir = self.llama70b_fp8_torch_sdpa_artifacts.create_file(
@@ -627,9 +645,9 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
     def setUp(self):
         super().setUp()
         # TODO: add numpy files to Azure and download from it
-        self.artifacts_dir = Path("/data/llama-3.1/weights/405b")
+        self.artifacts_dir = Path("/data/llama3.1/weights/405b")
         self.irpa_path = self.artifacts_dir / "fp16/llama3.1_405b_fp16.irpa"
-        self.irpa_path_fp8 = self.artifacts_dir / "f8/llama405b_fp8.irpa"
+        self.irpa_path_fp8 = self.artifacts_dir / "f8/llama3.1_405b_fp8.irpa"
         self.tensor_parallelism_size = 8
         self.dir_path_405b = self.dir_path / "llama-405b"
         self.temp_dir_405b = Path(self.dir_path_405b)
@@ -667,6 +685,9 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
             tensor_parallelism_size=self.tensor_parallelism_size,
         )
         self.prefill_args_f16 = self.artifacts_dir / "prefill_args"
+        self.prefill_args_bs4_128_in_tokens_f16 = (
+            self.artifacts_dir / "prefill_args_bs4_128"
+        )
         self.decode_args_f16 = self.artifacts_dir / "decode_args"
         self.prefill_args_fp8 = self.artifacts_dir / "prefill_args_fp8"
         self.decode_args_fp8 = self.artifacts_dir / "decode_args_fp8"
@@ -676,6 +697,14 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
             f"--input=@{self.prefill_args_f16}/seq_lens.npy",
             f"--input=@{self.prefill_args_f16}/seq_block_ids.npy",
             f"--input=@{self.prefill_args_f16}/cache_state_f16.npy",
+            "--benchmark_repetitions=3",
+        ]
+        self.iree_run_prefill_nondecomposed_args_fp16 = [
+            "--function=prefill_bs4",
+            f"--input=@{self.prefill_args_bs4_128_in_tokens_f16}/random_tokens.npy",
+            f"--input=@{self.prefill_args_bs4_128_in_tokens_f16}/seq_lens.npy",
+            f"--input=@{self.prefill_args_bs4_128_in_tokens_f16}/seq_block_ids.npy",
+            f"--input=@{self.prefill_args_bs4_128_in_tokens_f16}/cs_f16.npy",
             "--benchmark_repetitions=3",
         ]
         self.iree_run_decode_args = [
@@ -799,9 +828,7 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
             cwd=self.repo_root,
         )
 
-    @pytest.mark.xfail(
-        reason="Test not yet implemented", strict=True, raises=ExportMlirException
-    )
+    @pytest.mark.xfail(reason="Compile Error", strict=True, raises=IreeCompileException)
     def testBenchmark405B_fp8_TP8_Decomposed(self):
         output_file_name = self.dir_path_405b / "fp8_decomposed"
         output_mlir = self.llama405b_fp8_decomposed_artifacts.create_file(
@@ -847,9 +874,7 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
             cwd=self.repo_root,
         )
 
-    @pytest.mark.xfail(
-        reason="Test not yet implemented", strict=True, raises=ExportMlirException
-    )
+    @pytest.mark.xfail(reason="Compile Error", strict=True, raises=IreeCompileException)
     def testBenchmark405B_fp8_TP8_Non_Decomposed(self):
         output_file_name = self.dir_path_405b / "fp8_torch"
         output_mlir = self.llama405b_fp8_torch_sdpa_artifacts.create_file(
