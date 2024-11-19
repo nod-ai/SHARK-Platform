@@ -10,7 +10,7 @@ import pytest
 import requests
 import uuid
 
-from .utils import AccuracyValidationException, start_log_group, end_log_group
+from ..utils import AccuracyValidationException, start_log_group, end_log_group
 
 logger = logging.getLogger(__name__)
 
