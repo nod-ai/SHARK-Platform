@@ -69,12 +69,11 @@ jobs:
             -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
           pip install --no-compile -r requirements.txt -e sharktank/ shortfin/
 
-          # Try with the latest nightly releases, not what iree-turbine pins.
-          # We could also pin to a known working or stable version.
-          # This should eventually stabilize. Do the best we can for now.
+          # Use newest possible releases to be able to track commits that may
+          # cause errors.
           pip install -f https://iree.dev/pip-release-links.html --upgrade \
-            iree-base-compiler==3.0.0rc20241115 \
-            iree-base-runtime==3.0.0rc20241115 \
+            iree-base-compiler \
+            iree-base-runtime \
             "numpy<2.0"
 
       - name: Install SGLang
