@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title id="head-title">index.html</title>
+      <link href="assets/style.css" rel="stylesheet" type="text/css"/>
+  </head>
+  <body>
+    <h1 id="title">index.html</h1>
+    <p>Report generated on 19-Nov-2024 at 06:16:57 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a>
+        v4.1.1</p>
+    <div id="environment-header">
+      <h2>Environment</h2>
+    </div>
+    <table id="environment"></table>
+    <!-- TEMPLATES -->
+      <template id="template_environment_row">
+      <tr>
+        <td></td>
+        <td></td>
+      </tr>
+    </template>
+    <template id="template_results-table__body--empty">
+      <tbody class="results-table-row">
+        <tr id="not-found-message">
+          <td colspan="5">No results found. Check the filters.</th>
+        </tr>
+    </template>
+    <template id="template_results-table__tbody">
+      <tbody class="results-table-row">
+        <tr class="collapsible">
+        </tr>
+        <tr class="extras-row">
+          <td class="extra" colspan="5">
+            <div class="extraHTML"></div>
+            <div class="media">
+              <div class="media-container">
+                  <div class="media-container__nav--left"><</div>
+                  <div class="media-container__viewport">
+                    <img src="" />
+                    <video controls>
+                      <source src="" type="video/mp4">
+                    </video>
+                  </div>
+                  <div class="media-container__nav--right">></div>
+                </div>
+                <div class="media__name"></div>
+                <div class="media__counter"></div>
+            </div>
+            <div class="logwrapper">
+              <div class="logexpander"></div>
+              <div class="log"></div>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </template>
+    <!-- END TEMPLATES -->
+    <div class="summary">
+      <div class="summary__data">
+        <h2>Summary</h2>
+        <div class="additional-summary prefix">
+        </div>
+        <p class="run-count">8 tests took 00:08:26.</p>
+        <p class="filter">(Un)check the boxes to filter the results.</p>
+        <div class="summary__reload">
+          <div class="summary__reload__button hidden" onclick="location.reload()">
+            <div>There are still tests running. <br />Reload this page to get the latest results!</div>
+          </div>
+        </div>
+        <div class="summary__spacer"></div>
+        <div class="controls">
+          <div class="filters">
+            <input checked="true" class="filter" name="filter_checkbox" type="checkbox" data-test-result="failed" disabled/>
+            <span class="failed">0 Failed,</span>
+            <input checked="true" class="filter" name="filter_checkbox" type="checkbox" data-test-result="passed" />
+            <span class="passed">1 Passed,</span>
+            <input checked="true" class="filter" name="filter_checkbox" type="checkbox" data-test-result="skipped" disabled/>
+            <span class="skipped">0 Skipped,</span>
+            <input checked="true" class="filter" name="filter_checkbox" type="checkbox" data-test-result="xfailed" />
+            <span class="xfailed">7 Expected failures,</span>
+            <input checked="true" class="filter" name="filter_checkbox" type="checkbox" data-test-result="xpassed" disabled/>
+            <span class="xpassed">0 Unexpected passes,</span>
+            <input checked="true" class="filter" name="filter_checkbox" type="checkbox" data-test-result="error" disabled/>
+            <span class="error">0 Errors,</span>
+            <input checked="true" class="filter" name="filter_checkbox" type="checkbox" data-test-result="rerun" disabled/>
+            <span class="rerun">0 Reruns</span>
+          </div>
+          <div class="collapse">
+            <button id="show_all_details">Show all details</button>&nbsp;/&nbsp;<button id="hide_all_details">Hide all details</button>
+          </div>
+        </div>
+      </div>
+      <div class="additional-summary summary">
+      </div>
+      <div class="additional-summary postfix">
+      </div>
+    </div>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable" data-column-type="result">Result</th>
+          <th class="sortable" data-column-type="testId">Test</th>
+          <th>XFail Reason</th>
+          <th class="sortable" data-column-type="duration">Duration</th>
+          <th>Links</th>
+        </tr>
+      </thead>
+    </table>
+  </body>
+  <footer>
+    <div id="data-container" data-jsonblob="{&#34;environment&#34;: {&#34;Python&#34;: &#34;3.11.10&#34;, &#34;Platform&#34;: &#34;Linux-5.15.0-124-generic-x86_64-with-glibc2.35&#34;, &#34;Packages&#34;: {&#34;pytest&#34;: &#34;8.0.0&#34;, &#34;pluggy&#34;: &#34;1.5.0&#34;}, &#34;Plugins&#34;: {&#34;anyio&#34;: &#34;4.6.2.post1&#34;, &#34;xdist&#34;: &#34;3.5.0&#34;, &#34;html&#34;: &#34;4.1.1&#34;, &#34;metadata&#34;: &#34;3.1.1&#34;}, &#34;CI&#34;: &#34;true&#34;}, &#34;tests&#34;: {&#34;tests/evaluate/perplexity_torch_test.py::PerplexityTest::test_llama3_405B_fp8&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;XFailed&#34;, &#34;testId&#34;: &#34;tests/evaluate/perplexity_torch_test.py::PerplexityTest::test_llama3_405B_fp8&#34;, &#34;duration&#34;: &#34;1 ms&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;XFailed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;tests/evaluate/perplexity_torch_test.py::PerplexityTest::test_llama3_405B_fp8&lt;/td&gt;&#34;, &#34;&lt;td&gt;Non-decomposed attention is not supported yet&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;1 ms&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;[gw2] linux -- Python 3.11.10 /home/nod/actions-runner-llama/_work/_tool/Python/3.11.10/x64/bin/python\n\nself = &amp;lt;tests.evaluate.perplexity_torch_test.PerplexityTest testMethod=test_llama3_405B_fp8&amp;gt;\n\n    @pytest.mark.xfail(\n        reason=&amp;quot;Non-decomposed attention is not supported yet&amp;quot;,\n    )\n    @longrun\n    def test_llama3_405B_fp8(self):\n    \n        # Llama 3.1 405B non-decomposed\n    \n        model_name = &amp;quot;llama3_405B_fp8&amp;quot;\n&amp;gt;       baseline_perplexity = self.baseline_perplexity[model_name]\nE       KeyError: &amp;#x27;llama3_405B_fp8&amp;#x27;\n\nsharktank/tests/evaluate/perplexity_torch_test.py:249: KeyError\n&#34;}], &#34;tests/evaluate/perplexity_torch_test.py::PerplexityTest::test_llama3_8B_fp8&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;XFailed&#34;, &#34;testId&#34;: &#34;tests/evaluate/perplexity_torch_test.py::PerplexityTest::test_llama3_8B_fp8&#34;, &#34;duration&#34;: &#34;2 ms&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;XFailed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;tests/evaluate/perplexity_torch_test.py::PerplexityTest::test_llama3_8B_fp8&lt;/td&gt;&#34;, &#34;&lt;td&gt;Non-decomposed attention is not supported yet&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;2 ms&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;[gw6] linux -- Python 3.11.10 /home/nod/actions-runner-llama/_work/_tool/Python/3.11.10/x64/bin/python\n\nself = &amp;lt;tests.evaluate.perplexity_torch_test.PerplexityTest testMethod=test_llama3_8B_fp8&amp;gt;\n\n    @pytest.mark.xfail(\n        reason=&amp;quot;Non-decomposed attention is not supported yet&amp;quot;,\n    )\n    @longrun\n    def test_llama3_8B_fp8(self):\n    \n        # Llama 3.1 8B non-decomposed\n    \n        model_name = &amp;quot;llama3_8B_fp8&amp;quot;\n&amp;gt;       baseline_perplexity = self.baseline_perplexity[model_name]\nE       KeyError: &amp;#x27;llama3_8B_fp8&amp;#x27;\n\nsharktank/tests/evaluate/perplexity_torch_test.py:124: KeyError\n&#34;}], &#34;tests/evaluate/perplexity_torch_test.py::PerplexityTest::test_llama3_405B_f16&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;XFailed&#34;, &#34;testId&#34;: &#34;tests/evaluate/perplexity_torch_test.py::PerplexityTest::test_llama3_405B_f16&#34;, &#34;duration&#34;: &#34;1 ms&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;XFailed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;tests/evaluate/perplexity_torch_test.py::PerplexityTest::test_llama3_405B_f16&lt;/td&gt;&#34;, &#34;&lt;td&gt;Non-decomposed attention is not supported yet&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;1 ms&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;[gw0] linux -- Python 3.11.10 /home/nod/actions-runner-llama/_work/_tool/Python/3.11.10/x64/bin/python\n\nself = &amp;lt;tests.evaluate.perplexity_torch_test.PerplexityTest testMethod=test_llama3_405B_f16&amp;gt;\n\n    @pytest.mark.xfail(\n        reason=&amp;quot;Non-decomposed attention is not supported yet&amp;quot;,\n    )\n    @longrun\n    def test_llama3_405B_f16(self):\n    \n        # Llama 3.1 405B non-decomposed\n    \n        model_name = &amp;quot;llama3_405B_f16&amp;quot;\n&amp;gt;       baseline_perplexity = self.baseline_perplexity[model_name]\nE       KeyError: &amp;#x27;llama3_405B_f16&amp;#x27;\n\nsharktank/tests/evaluate/perplexity_torch_test.py:186: KeyError\n&#34;}], &#34;tests/evaluate/perplexity_torch_test.py::PerplexityTest::test_llama3_8B_f16&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;XFailed&#34;, &#34;testId&#34;: &#34;tests/evaluate/perplexity_torch_test.py::PerplexityTest::test_llama3_8B_f16&#34;, &#34;duration&#34;: &#34;2 ms&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;XFailed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;tests/evaluate/perplexity_torch_test.py::PerplexityTest::test_llama3_8B_f16&lt;/td&gt;&#34;, &#34;&lt;td&gt;Non-decomposed attention is not supported yet&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;2 ms&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;[gw4] linux -- Python 3.11.10 /home/nod/actions-runner-llama/_work/_tool/Python/3.11.10/x64/bin/python\n\nself = &amp;lt;tests.evaluate.perplexity_torch_test.PerplexityTest testMethod=test_llama3_8B_f16&amp;gt;\n\n    @pytest.mark.xfail(\n        reason=&amp;quot;Non-decomposed attention is not supported yet&amp;quot;,\n    )\n    @longrun\n    def test_llama3_8B_f16(self):\n    \n        # Llama 3.1 8B non-decomposed\n    \n        model_name = &amp;quot;llama3_8B_f16&amp;quot;\n&amp;gt;       baseline_perplexity = self.baseline_perplexity[model_name]\nE       KeyError: &amp;#x27;llama3_8B_f16&amp;#x27;\n\nsharktank/tests/evaluate/perplexity_torch_test.py:63: KeyError\n&#34;}], &#34;tests/evaluate/perplexity_torch_test.py::PerplexityTest::test_llama3_405B_fp8_decomposed&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;XFailed&#34;, &#34;testId&#34;: &#34;tests/evaluate/perplexity_torch_test.py::PerplexityTest::test_llama3_405B_fp8_decomposed&#34;, &#34;duration&#34;: &#34;1 ms&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;XFailed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;tests/evaluate/perplexity_torch_test.py::PerplexityTest::test_llama3_405B_fp8_decomposed&lt;/td&gt;&#34;, &#34;&lt;td&gt;FP8 model is unsupported&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;1 ms&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;[gw3] linux -- Python 3.11.10 /home/nod/actions-runner-llama/_work/_tool/Python/3.11.10/x64/bin/python\n\nself = &amp;lt;tests.evaluate.perplexity_torch_test.PerplexityTest testMethod=test_llama3_405B_fp8_decomposed&amp;gt;\n\n    @pytest.mark.xfail(\n        reason=&amp;quot;FP8 model is unsupported&amp;quot;,\n    )\n    @longrun\n    def test_llama3_405B_fp8_decomposed(self):\n    \n        # Llama 3.1 405B decomposed\n    \n        model_name = &amp;quot;llama3_405B_fp8_decomposed&amp;quot;\n&amp;gt;       baseline_perplexity = self.baseline_perplexity[model_name]\nE       KeyError: &amp;#x27;llama3_405B_fp8_decomposed&amp;#x27;\n\nsharktank/tests/evaluate/perplexity_torch_test.py:218: KeyError\n&#34;}], &#34;tests/evaluate/perplexity_torch_test.py::PerplexityTest::test_llama3_8B_fp8_decomposed&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;XFailed&#34;, &#34;testId&#34;: &#34;tests/evaluate/perplexity_torch_test.py::PerplexityTest::test_llama3_8B_fp8_decomposed&#34;, &#34;duration&#34;: &#34;2 ms&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;XFailed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;tests/evaluate/perplexity_torch_test.py::PerplexityTest::test_llama3_8B_fp8_decomposed&lt;/td&gt;&#34;, &#34;&lt;td&gt;FP8 model is unsupported&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;2 ms&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;[gw7] linux -- Python 3.11.10 /home/nod/actions-runner-llama/_work/_tool/Python/3.11.10/x64/bin/python\n\nself = &amp;lt;tests.evaluate.perplexity_torch_test.PerplexityTest testMethod=test_llama3_8B_fp8_decomposed&amp;gt;\n\n    @pytest.mark.xfail(\n        reason=&amp;quot;FP8 model is unsupported&amp;quot;,\n    )\n    @longrun\n    def test_llama3_8B_fp8_decomposed(self):\n    \n        # Llama 3.1 8B decomposed\n    \n        model_name = &amp;quot;llama3_8B_fp8_decomposed&amp;quot;\n&amp;gt;       baseline_perplexity = self.baseline_perplexity[model_name]\nE       KeyError: &amp;#x27;llama3_8B_fp8_decomposed&amp;#x27;\n\nsharktank/tests/evaluate/perplexity_torch_test.py:94: KeyError\n&#34;}], &#34;tests/evaluate/perplexity_torch_test.py::PerplexityTest::test_llama3_405B_f16_decomposed&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;XFailed&#34;, &#34;testId&#34;: &#34;tests/evaluate/perplexity_torch_test.py::PerplexityTest::test_llama3_405B_f16_decomposed&#34;, &#34;duration&#34;: &#34;2 ms&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;XFailed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;tests/evaluate/perplexity_torch_test.py::PerplexityTest::test_llama3_405B_f16_decomposed&lt;/td&gt;&#34;, &#34;&lt;td&gt;Sharding needs to be fixed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;2 ms&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;[gw1] linux -- Python 3.11.10 /home/nod/actions-runner-llama/_work/_tool/Python/3.11.10/x64/bin/python\n\nself = &amp;lt;tests.evaluate.perplexity_torch_test.PerplexityTest testMethod=test_llama3_405B_f16_decomposed&amp;gt;\n\n    @pytest.mark.xfail(\n        reason=&amp;quot;Sharding needs to be fixed&amp;quot;,\n    )\n    @longrun\n    def test_llama3_405B_f16_decomposed(self):\n    \n        # Llama 3.1 405B decomposed\n    \n        model_name = &amp;quot;llama3_405B_f16_decomposed&amp;quot;\n        baseline_perplexity = self.baseline_perplexity[model_name]\n    \n&amp;gt;       current_perplexity = perplexity_torch.main(\n            [\n                f&amp;quot;--irpa-file={self.llama3_405b_f16_model}&amp;quot;,\n                f&amp;quot;--tokenizer-config-json={self.llama3_405b_tokenizer}&amp;quot;,\n                f&amp;quot;--tensor-parallelism-size={self.tensor_parallelism_size}&amp;quot;,\n            ]\n        )\n\nsharktank/tests/evaluate/perplexity_torch_test.py:157: \n_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \nsharktank/sharktank/evaluate/perplexity_torch.py:324: in main\n    dataset = cli.get_input_dataset(args)\nsharktank/sharktank/utils/cli.py:125: in get_input_dataset\n    return Dataset.load(data_files[&amp;quot;irpa&amp;quot;], file_type=&amp;quot;irpa&amp;quot;)\nsharktank/sharktank/types/theta.py:347: in load\n    ds = _dataset_load_helper(path, file_type=file_type, mmap=mmap)\n_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \n\npath = PosixPath(&amp;#x27;None&amp;#x27;)\n\n    def _dataset_load_helper(\n        path: Union[str, Path],\n        *,\n        file_type: Optional[str] = None,\n        mmap: bool = True,\n    ) -&amp;gt; Dataset:\n        path = Path(path)\n        suffixes = path.suffixes\n&amp;gt;       if file_type == &amp;quot;gguf&amp;quot; or suffixes[-1] == &amp;quot;.gguf&amp;quot;:\nE       IndexError: list index out of range\n\nsharktank/sharktank/types/theta.py:533: IndexError\n&#34;}], &#34;tests/evaluate/perplexity_torch_test.py::PerplexityTest::test_llama3_8B_f16_decomposed&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;Passed&#34;, &#34;testId&#34;: &#34;tests/evaluate/perplexity_torch_test.py::PerplexityTest::test_llama3_8B_f16_decomposed&#34;, &#34;duration&#34;: &#34;00:08:26&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;Passed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;tests/evaluate/perplexity_torch_test.py::PerplexityTest::test_llama3_8B_f16_decomposed&lt;/td&gt;&#34;, &#34;&lt;td&gt;&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;00:08:26&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;[gw5] linux -- Python 3.11.10 /home/nod/actions-runner-llama/_work/_tool/Python/3.11.10/x64/bin/python\n\n------------------------------ Captured log call -------------------------------\nINFO     eval:perplexity_torch.py:81  load_model:  687.5429153442383 ms\nINFO     eval:perplexity_torch.py:149  num_test_prompts: 4\nINFO     eval:perplexity_torch.py:81  get_prompts: 0:00:04\nINFO     eval:perplexity_torch.py:161  Prompts for Evaluation:\nINFO     eval:perplexity_torch.py:163  Prompt 0: \nTokens: b&amp;quot; Manila has six legislative districts that serve as the constituencies for the election of the city &amp;#x27;s representatives to the lower house of the Congress of the Philippines and of the regular members to the Sangguniang Panlungsod ( SP ; City Council ) . Each district elects one representative to the House of Representatives and six SP members to the council . The city , along with the rest of the nation , elects 12 senators as one at @-@ large district .&amp;quot;\nToken ids: [57664, 706, 4848, 27743, 27536, 430, 8854, 439, 279, 31605, 6072, 369, 279, 6355, 315, 279, 3363, 364, 82, 24005, 311, 279, 4827, 3838, 315, 279, 8151, 315, 279, 26363, 323, 315, 279, 5912, 3697, 311, 279, 52022, 13562, 28323, 11233, 75, 29222, 347, 320, 9440, 2652, 4409, 9251, 883, 662, 9062, 9474, 4135, 82, 832, 18740, 311, 279, 4783, 315, 40845, 323, 4848, 9440, 3697, 311, 279, 15177, 662, 578, 3363, 1174, 3235, 449, 279, 2800, 315, 279, 7140, 1174, 4135, 82, 220, 717, 40020, 439, 832, 520, 571, 12, 31, 3544, 9474, 662, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]\n\nINFO     eval:perplexity_torch.py:163  Prompt 1: \nTokens: b&amp;#x27; The cover was later satirized by Barry Blitt for the cover of The New Yorker on October 6 , 2008 . The cover featured Sarah Palin looking out of her window seeing only Alaska , with Russia in the far background .&amp;#x27;\nToken ids: [578, 3504, 574, 3010, 7731, 404, 1534, 555, 31858, 2563, 1468, 369, 279, 3504, 315, 578, 1561, 64874, 389, 6664, 220, 21, 1174, 220, 17, 15, 15, 23, 662, 578, 3504, 15109, 21077, 78421, 3411, 704, 315, 1077, 3321, 9298, 1193, 28366, 1174, 449, 8524, 304, 279, 3117, 4092, 662, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]\n\nINFO     eval:perplexity_torch.py:163  Prompt 2: \nTokens: b&amp;quot; The Mediterranean U @-@ boat Campaign lasted approximately from 21 September 1941 to May 1944 . The Kriegsmarine tried to isolate Gibraltar , Malta , and Suez and disrupt Britain &amp;#x27;s trade routes . More than sixty U @-@ boats were sent to interdict Allied shipping in the Mediterranean Sea . Many of these U @-@ boats were themselves attacked negotiating the Strait of Gibraltar controlled by Britain . Nine U @-@ boats were sunk while attempting passage and ten more were damaged .&amp;quot;\nToken ids: [578, 38785, 549, 571, 12, 31, 15688, 27643, 36513, 13489, 505, 220, 1691, 6250, 220, 6393, 16, 311, 3297, 220, 6393, 19, 662, 578, 735, 83591, 3647, 75314, 6818, 311, 43223, 99903, 1174, 61750, 1174, 323, 328, 28700, 323, 24927, 13527, 364, 82, 6696, 11543, 662, 4497, 1109, 53474, 549, 571, 12, 31, 32731, 1051, 3288, 311, 958, 8644, 61855, 11862, 304, 279, 38785, 15379, 662, 9176, 315, 1521, 549, 571, 12, 31, 32731, 1051, 5694, 18855, 44725, 279, 83163, 315, 99903, 14400, 555, 13527, 662, 38166, 549, 571, 12, 31, 32731, 1051, 68265, 1418, 19969, 21765, 323, 5899, 810, 1051, 20727, 662, 0, 0, 0, 0, 0, 0, 0, 0, 0]\n\nINFO     eval:perplexity_torch.py:163  Prompt 3: \nTokens: b&amp;#x27; United Kingdom Area , headed by a director and responsible for Channel Islands , Faroe Islands , Iceland , Ireland , Isle of Man and the United Kingdom&amp;#x27;\nToken ids: [3723, 15422, 12299, 1174, 19946, 555, 264, 7690, 323, 8647, 369, 13740, 23028, 1174, 13759, 4748, 23028, 1174, 39496, 1174, 14990, 1174, 55365, 315, 2418, 323, 279, 3723, 15422, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]\n\nINFO     eval:perplexity_torch.py:81  get_logits: 0:08:18\nINFO     eval:perplexity_torch.py:81  compute_perplexity:  148.301362991333 ms\nINFO     eval:perplexity_torch.py:81  Total time: 0:08:19\nINFO     eval:perplexity_torch.py:336 \n{\n  &amp;quot;perplexities&amp;quot;: [\n    6.67737,\n    21.807926,\n    15.424342,\n    17.332422\n  ],\n  &amp;quot;mean_perplexity&amp;quot;: 15.310515\n}\n\n&#34;}]}, &#34;renderCollapsed&#34;: [&#34;passed&#34;], &#34;initialSort&#34;: &#34;result&#34;, &#34;title&#34;: &#34;index.html&#34;}"></div>
+    <script>
+      (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
+const { getCollapsedCategory, setCollapsedIds } = require('./storage.js')
+
+class DataManager {
+    setManager(data) {
+        const collapsedCategories = [...getCollapsedCategory(data.renderCollapsed)]
+        const collapsedIds = []
+        const tests = Object.values(data.tests).flat().map((test, index) => {
+            const collapsed = collapsedCategories.includes(test.result.toLowerCase())
+            const id = `test_${index}`
+            if (collapsed) {
+                collapsedIds.push(id)
+            }
+            return {
+                ...test,
+                id,
+                collapsed,
+            }
+        })
+        const dataBlob = { ...data, tests }
+        this.data = { ...dataBlob }
+        this.renderData = { ...dataBlob }
+        setCollapsedIds(collapsedIds)
+    }
+
+    get allData() {
+        return { ...this.data }
+    }
+
+    resetRender() {
+        this.renderData = { ...this.data }
+    }
+
+    setRender(data) {
+        this.renderData.tests = [...data]
+    }
+
+    toggleCollapsedItem(id) {
+        this.renderData.tests = this.renderData.tests.map((test) =>
+            test.id === id ? { ...test, collapsed: !test.collapsed } : test,
+        )
+    }
+
+    set allCollapsed(collapsed) {
+        this.renderData = { ...this.renderData, tests: [...this.renderData.tests.map((test) => (
+            { ...test, collapsed }
+        ))] }
+    }
+
+    get testSubset() {
+        return [...this.renderData.tests]
+    }
+
+    get environment() {
+        return this.renderData.environment
+    }
+
+    get initialSort() {
+        return this.data.initialSort
+    }
+}
+
+module.exports = {
+    manager: new DataManager(),
+}
+
+},{"./storage.js":8}],2:[function(require,module,exports){
+const mediaViewer = require('./mediaviewer.js')
+const templateEnvRow = document.getElementById('template_environment_row')
+const templateResult = document.getElementById('template_results-table__tbody')
+
+function htmlToElements(html) {
+    const temp = document.createElement('template')
+    temp.innerHTML = html
+    return temp.content.childNodes
+}
+
+const find = (selector, elem) => {
+    if (!elem) {
+        elem = document
+    }
+    return elem.querySelector(selector)
+}
+
+const findAll = (selector, elem) => {
+    if (!elem) {
+        elem = document
+    }
+    return [...elem.querySelectorAll(selector)]
+}
+
+const dom = {
+    getStaticRow: (key, value) => {
+        const envRow = templateEnvRow.content.cloneNode(true)
+        const isObj = typeof value === 'object' && value !== null
+        const values = isObj ? Object.keys(value).map((k) => `${k}: ${value[k]}`) : null
+
+        const valuesElement = htmlToElements(
+            values ? `<ul>${values.map((val) => `<li>${val}</li>`).join('')}<ul>` : `<div>${value}</div>`)[0]
+        const td = findAll('td', envRow)
+        td[0].textContent = key
+        td[1].appendChild(valuesElement)
+
+        return envRow
+    },
+    getResultTBody: ({ testId, id, log, extras, resultsTableRow, tableHtml, result, collapsed }) => {
+        const resultBody = templateResult.content.cloneNode(true)
+        resultBody.querySelector('tbody').classList.add(result.toLowerCase())
+        resultBody.querySelector('tbody').id = testId
+        resultBody.querySelector('.collapsible').dataset.id = id
+
+        resultsTableRow.forEach((html) => {
+            const t = document.createElement('template')
+            t.innerHTML = html
+            resultBody.querySelector('.collapsible').appendChild(t.content)
+        })
+
+        if (log) {
+            // Wrap lines starting with "E" with span.error to color those lines red
+            const wrappedLog = log.replace(/^E.*$/gm, (match) => `<span class="error">${match}</span>`)
+            resultBody.querySelector('.log').innerHTML = wrappedLog
+        } else {
+            resultBody.querySelector('.log').remove()
+        }
+
+        if (collapsed) {
+            resultBody.querySelector('.collapsible > td')?.classList.add('collapsed')
+            resultBody.querySelector('.extras-row').classList.add('hidden')
+        } else {
+            resultBody.querySelector('.collapsible > td')?.classList.remove('collapsed')
+        }
+
+        const media = []
+        extras?.forEach(({ name, format_type, content }) => {
+            if (['image', 'video'].includes(format_type)) {
+                media.push({ path: content, name, format_type })
+            }
+
+            if (format_type === 'html') {
+                resultBody.querySelector('.extraHTML').insertAdjacentHTML('beforeend', `<div>${content}</div>`)
+            }
+        })
+        mediaViewer.setup(resultBody, media)
+
+        // Add custom html from the pytest_html_results_table_html hook
+        tableHtml?.forEach((item) => {
+            resultBody.querySelector('td[class="extra"]').insertAdjacentHTML('beforeend', item)
+        })
+
+        return resultBody
+    },
+}
+
+module.exports = {
+    dom,
+    htmlToElements,
+    find,
+    findAll,
+}
+
+},{"./mediaviewer.js":6}],3:[function(require,module,exports){
+const { manager } = require('./datamanager.js')
+const { doSort } = require('./sort.js')
+const storageModule = require('./storage.js')
+
+const getFilteredSubSet = (filter) =>
+    manager.allData.tests.filter(({ result }) => filter.includes(result.toLowerCase()))
+
+const doInitFilter = () => {
+    const currentFilter = storageModule.getVisible()
+    const filteredSubset = getFilteredSubSet(currentFilter)
+    manager.setRender(filteredSubset)
+}
+
+const doFilter = (type, show) => {
+    if (show) {
+        storageModule.showCategory(type)
+    } else {
+        storageModule.hideCategory(type)
+    }
+
+    const currentFilter = storageModule.getVisible()
+    const filteredSubset = getFilteredSubSet(currentFilter)
+    manager.setRender(filteredSubset)
+
+    const sortColumn = storageModule.getSort()
+    doSort(sortColumn, true)
+}
+
+module.exports = {
+    doFilter,
+    doInitFilter,
+}
+
+},{"./datamanager.js":1,"./sort.js":7,"./storage.js":8}],4:[function(require,module,exports){
+const { redraw, bindEvents, renderStatic } = require('./main.js')
+const { doInitFilter } = require('./filter.js')
+const { doInitSort } = require('./sort.js')
+const { manager } = require('./datamanager.js')
+const data = JSON.parse(document.getElementById('data-container').dataset.jsonblob)
+
+function init() {
+    manager.setManager(data)
+    doInitFilter()
+    doInitSort()
+    renderStatic()
+    redraw()
+    bindEvents()
+}
+
+init()
+
+},{"./datamanager.js":1,"./filter.js":3,"./main.js":5,"./sort.js":7}],5:[function(require,module,exports){
+const { dom, find, findAll } = require('./dom.js')
+const { manager } = require('./datamanager.js')
+const { doSort } = require('./sort.js')
+const { doFilter } = require('./filter.js')
+const {
+    getVisible,
+    getCollapsedIds,
+    setCollapsedIds,
+    getSort,
+    getSortDirection,
+    possibleFilters,
+} = require('./storage.js')
+
+const removeChildren = (node) => {
+    while (node.firstChild) {
+        node.removeChild(node.firstChild)
+    }
+}
+
+const renderStatic = () => {
+    const renderEnvironmentTable = () => {
+        const environment = manager.environment
+        const rows = Object.keys(environment).map((key) => dom.getStaticRow(key, environment[key]))
+        const table = document.getElementById('environment')
+        removeChildren(table)
+        rows.forEach((row) => table.appendChild(row))
+    }
+    renderEnvironmentTable()
+}
+
+const addItemToggleListener = (elem) => {
+    elem.addEventListener('click', ({ target }) => {
+        const id = target.parentElement.dataset.id
+        manager.toggleCollapsedItem(id)
+
+        const collapsedIds = getCollapsedIds()
+        if (collapsedIds.includes(id)) {
+            const updated = collapsedIds.filter((item) => item !== id)
+            setCollapsedIds(updated)
+        } else {
+            collapsedIds.push(id)
+            setCollapsedIds(collapsedIds)
+        }
+        redraw()
+    })
+}
+
+const renderContent = (tests) => {
+    const sortAttr = getSort(manager.initialSort)
+    const sortAsc = JSON.parse(getSortDirection())
+    const rows = tests.map(dom.getResultTBody)
+    const table = document.getElementById('results-table')
+    const tableHeader = document.getElementById('results-table-head')
+
+    const newTable = document.createElement('table')
+    newTable.id = 'results-table'
+
+    // remove all sorting classes and set the relevant
+    findAll('.sortable', tableHeader).forEach((elem) => elem.classList.remove('asc', 'desc'))
+    tableHeader.querySelector(`.sortable[data-column-type="${sortAttr}"]`)?.classList.add(sortAsc ? 'desc' : 'asc')
+    newTable.appendChild(tableHeader)
+
+    if (!rows.length) {
+        const emptyTable = document.getElementById('template_results-table__body--empty').content.cloneNode(true)
+        newTable.appendChild(emptyTable)
+    } else {
+        rows.forEach((row) => {
+            if (!!row) {
+                findAll('.collapsible td:not(.col-links', row).forEach(addItemToggleListener)
+                find('.logexpander', row).addEventListener('click',
+                    (evt) => evt.target.parentNode.classList.toggle('expanded'),
+                )
+                newTable.appendChild(row)
+            }
+        })
+    }
+
+    table.replaceWith(newTable)
+}
+
+const renderDerived = () => {
+    const currentFilter = getVisible()
+    possibleFilters.forEach((result) => {
+        const input = document.querySelector(`input[data-test-result="${result}"]`)
+        input.checked = currentFilter.includes(result)
+    })
+}
+
+const bindEvents = () => {
+    const filterColumn = (evt) => {
+        const { target: element } = evt
+        const { testResult } = element.dataset
+
+        doFilter(testResult, element.checked)
+        const collapsedIds = getCollapsedIds()
+        const updated = manager.renderData.tests.map((test) => {
+            return {
+                ...test,
+                collapsed: collapsedIds.includes(test.id),
+            }
+        })
+        manager.setRender(updated)
+        redraw()
+    }
+
+    const header = document.getElementById('environment-header')
+    header.addEventListener('click', () => {
+        const table = document.getElementById('environment')
+        table.classList.toggle('hidden')
+        header.classList.toggle('collapsed')
+    })
+
+    findAll('input[name="filter_checkbox"]').forEach((elem) => {
+        elem.addEventListener('click', filterColumn)
+    })
+
+    findAll('.sortable').forEach((elem) => {
+        elem.addEventListener('click', (evt) => {
+            const { target: element } = evt
+            const { columnType } = element.dataset
+            doSort(columnType)
+            redraw()
+        })
+    })
+
+    document.getElementById('show_all_details').addEventListener('click', () => {
+        manager.allCollapsed = false
+        setCollapsedIds([])
+        redraw()
+    })
+    document.getElementById('hide_all_details').addEventListener('click', () => {
+        manager.allCollapsed = true
+        const allIds = manager.renderData.tests.map((test) => test.id)
+        setCollapsedIds(allIds)
+        redraw()
+    })
+}
+
+const redraw = () => {
+    const { testSubset } = manager
+
+    renderContent(testSubset)
+    renderDerived()
+}
+
+module.exports = {
+    redraw,
+    bindEvents,
+    renderStatic,
+}
+
+},{"./datamanager.js":1,"./dom.js":2,"./filter.js":3,"./sort.js":7,"./storage.js":8}],6:[function(require,module,exports){
+class MediaViewer {
+    constructor(assets) {
+        this.assets = assets
+        this.index = 0
+    }
+
+    nextActive() {
+        this.index = this.index === this.assets.length - 1 ? 0 : this.index + 1
+        return [this.activeFile, this.index]
+    }
+
+    prevActive() {
+        this.index = this.index === 0 ? this.assets.length - 1 : this.index -1
+        return [this.activeFile, this.index]
+    }
+
+    get currentIndex() {
+        return this.index
+    }
+
+    get activeFile() {
+        return this.assets[this.index]
+    }
+}
+
+
+const setup = (resultBody, assets) => {
+    if (!assets.length) {
+        resultBody.querySelector('.media').classList.add('hidden')
+        return
+    }
+
+    const mediaViewer = new MediaViewer(assets)
+    const container = resultBody.querySelector('.media-container')
+    const leftArrow = resultBody.querySelector('.media-container__nav--left')
+    const rightArrow = resultBody.querySelector('.media-container__nav--right')
+    const mediaName = resultBody.querySelector('.media__name')
+    const counter = resultBody.querySelector('.media__counter')
+    const imageEl = resultBody.querySelector('img')
+    const sourceEl = resultBody.querySelector('source')
+    const videoEl = resultBody.querySelector('video')
+
+    const setImg = (media, index) => {
+        if (media?.format_type === 'image') {
+            imageEl.src = media.path
+
+            imageEl.classList.remove('hidden')
+            videoEl.classList.add('hidden')
+        } else if (media?.format_type === 'video') {
+            sourceEl.src = media.path
+
+            videoEl.classList.remove('hidden')
+            imageEl.classList.add('hidden')
+        }
+
+        mediaName.innerText = media?.name
+        counter.innerText = `${index + 1} / ${assets.length}`
+    }
+    setImg(mediaViewer.activeFile, mediaViewer.currentIndex)
+
+    const moveLeft = () => {
+        const [media, index] = mediaViewer.prevActive()
+        setImg(media, index)
+    }
+    const doRight = () => {
+        const [media, index] = mediaViewer.nextActive()
+        setImg(media, index)
+    }
+    const openImg = () => {
+        window.open(mediaViewer.activeFile.path, '_blank')
+    }
+    if (assets.length === 1) {
+        container.classList.add('media-container--fullscreen')
+    } else {
+        leftArrow.addEventListener('click', moveLeft)
+        rightArrow.addEventListener('click', doRight)
+    }
+    imageEl.addEventListener('click', openImg)
+}
+
+module.exports = {
+    setup,
+}
+
+},{}],7:[function(require,module,exports){
+const { manager } = require('./datamanager.js')
+const storageModule = require('./storage.js')
+
+const genericSort = (list, key, ascending, customOrder) => {
+    let sorted
+    if (customOrder) {
+        sorted = list.sort((a, b) => {
+            const aValue = a.result.toLowerCase()
+            const bValue = b.result.toLowerCase()
+
+            const aIndex = customOrder.findIndex((item) => item.toLowerCase() === aValue)
+            const bIndex = customOrder.findIndex((item) => item.toLowerCase() === bValue)
+
+            // Compare the indices to determine the sort order
+            return aIndex - bIndex
+        })
+    } else {
+        sorted = list.sort((a, b) => a[key] === b[key] ? 0 : a[key] > b[key] ? 1 : -1)
+    }
+
+    if (ascending) {
+        sorted.reverse()
+    }
+    return sorted
+}
+
+const durationSort = (list, ascending) => {
+    const parseDuration = (duration) => {
+        if (duration.includes(':')) {
+            // If it's in the format "HH:mm:ss"
+            const [hours, minutes, seconds] = duration.split(':').map(Number)
+            return (hours * 3600 + minutes * 60 + seconds) * 1000
+        } else {
+            // If it's in the format "nnn ms"
+            return parseInt(duration)
+        }
+    }
+    const sorted = list.sort((a, b) => parseDuration(a['duration']) - parseDuration(b['duration']))
+    if (ascending) {
+        sorted.reverse()
+    }
+    return sorted
+}
+
+const doInitSort = () => {
+    const type = storageModule.getSort(manager.initialSort)
+    const ascending = storageModule.getSortDirection()
+    const list = manager.testSubset
+    const initialOrder = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed', 'Skipped', 'Passed']
+
+    storageModule.setSort(type)
+    storageModule.setSortDirection(ascending)
+
+    if (type?.toLowerCase() === 'original') {
+        manager.setRender(list)
+    } else {
+        let sortedList
+        switch (type) {
+        case 'duration':
+            sortedList = durationSort(list, ascending)
+            break
+        case 'result':
+            sortedList = genericSort(list, type, ascending, initialOrder)
+            break
+        default:
+            sortedList = genericSort(list, type, ascending)
+            break
+        }
+        manager.setRender(sortedList)
+    }
+}
+
+const doSort = (type, skipDirection) => {
+    const newSortType = storageModule.getSort(manager.initialSort) !== type
+    const currentAsc = storageModule.getSortDirection()
+    let ascending
+    if (skipDirection) {
+        ascending = currentAsc
+    } else {
+        ascending = newSortType ? false : !currentAsc
+    }
+    storageModule.setSort(type)
+    storageModule.setSortDirection(ascending)
+
+    const list = manager.testSubset
+    const sortedList = type === 'duration' ? durationSort(list, ascending) : genericSort(list, type, ascending)
+    manager.setRender(sortedList)
+}
+
+module.exports = {
+    doInitSort,
+    doSort,
+}
+
+},{"./datamanager.js":1,"./storage.js":8}],8:[function(require,module,exports){
+const possibleFilters = [
+    'passed',
+    'skipped',
+    'failed',
+    'error',
+    'xfailed',
+    'xpassed',
+    'rerun',
+]
+
+const getVisible = () => {
+    const url = new URL(window.location.href)
+    const settings = new URLSearchParams(url.search).get('visible')
+    const lower = (item) => {
+        const lowerItem = item.toLowerCase()
+        if (possibleFilters.includes(lowerItem)) {
+            return lowerItem
+        }
+        return null
+    }
+    return settings === null ?
+        possibleFilters :
+        [...new Set(settings?.split(',').map(lower).filter((item) => item))]
+}
+
+const hideCategory = (categoryToHide) => {
+    const url = new URL(window.location.href)
+    const visibleParams = new URLSearchParams(url.search).get('visible')
+    const currentVisible = visibleParams ? visibleParams.split(',') : [...possibleFilters]
+    const settings = [...new Set(currentVisible)].filter((f) => f !== categoryToHide).join(',')
+
+    url.searchParams.set('visible', settings)
+    window.history.pushState({}, null, unescape(url.href))
+}
+
+const showCategory = (categoryToShow) => {
+    if (typeof window === 'undefined') {
+        return
+    }
+    const url = new URL(window.location.href)
+    const currentVisible = new URLSearchParams(url.search).get('visible')?.split(',').filter(Boolean) ||
+        [...possibleFilters]
+    const settings = [...new Set([categoryToShow, ...currentVisible])]
+    const noFilter = possibleFilters.length === settings.length || !settings.length
+
+    noFilter ? url.searchParams.delete('visible') : url.searchParams.set('visible', settings.join(','))
+    window.history.pushState({}, null, unescape(url.href))
+}
+
+const getSort = (initialSort) => {
+    const url = new URL(window.location.href)
+    let sort = new URLSearchParams(url.search).get('sort')
+    if (!sort) {
+        sort = initialSort || 'result'
+    }
+    return sort
+}
+
+const setSort = (type) => {
+    const url = new URL(window.location.href)
+    url.searchParams.set('sort', type)
+    window.history.pushState({}, null, unescape(url.href))
+}
+
+const getCollapsedCategory = (renderCollapsed) => {
+    let categories
+    if (typeof window !== 'undefined') {
+        const url = new URL(window.location.href)
+        const collapsedItems = new URLSearchParams(url.search).get('collapsed')
+        switch (true) {
+        case !renderCollapsed && collapsedItems === null:
+            categories = ['passed']
+            break
+        case collapsedItems?.length === 0 || /^["']{2}$/.test(collapsedItems):
+            categories = []
+            break
+        case /^all$/.test(collapsedItems) || collapsedItems === null && /^all$/.test(renderCollapsed):
+            categories = [...possibleFilters]
+            break
+        default:
+            categories = collapsedItems?.split(',').map((item) => item.toLowerCase()) || renderCollapsed
+            break
+        }
+    } else {
+        categories = []
+    }
+    return categories
+}
+
+const getSortDirection = () => JSON.parse(sessionStorage.getItem('sortAsc')) || false
+const setSortDirection = (ascending) => sessionStorage.setItem('sortAsc', ascending)
+
+const getCollapsedIds = () => JSON.parse(sessionStorage.getItem('collapsedIds')) || []
+const setCollapsedIds = (list) => sessionStorage.setItem('collapsedIds', JSON.stringify(list))
+
+module.exports = {
+    getVisible,
+    hideCategory,
+    showCategory,
+    getCollapsedIds,
+    setCollapsedIds,
+    getSort,
+    setSort,
+    getSortDirection,
+    setSortDirection,
+    getCollapsedCategory,
+    possibleFilters,
+}
+
+},{}]},{},[4]);
+    </script>
+  </footer>
+</html>
