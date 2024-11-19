@@ -178,3 +178,17 @@ def start_llm_server(
     # Wait for server to start
     wait_for_server(f"http://localhost:{port}", timeout)
     return server_process
+
+
+def start_log_group(headline):
+    # check if we are in github ci
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        return f"\n::group::{headline}"
+    return ""
+
+
+def end_log_group():
+    # check if we are in github ci
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        return "\n::endgroup::"
+    return ""
