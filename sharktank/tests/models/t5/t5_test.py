@@ -85,7 +85,6 @@ class T5EncoderTest(TestCase):
         self.runTestV1_1Fp32CompareTorchEagerAgainstHuggingFace("google/t5-v1_1-small")
 
     @with_t5_data
-    @longrun
     def testV1_1XxlFp32CompareTorchEagerAgainstHuggingFace(self):
         self.runTestV1_1Fp32CompareTorchEagerAgainstHuggingFace("google/t5-v1_1-xxl")
 
