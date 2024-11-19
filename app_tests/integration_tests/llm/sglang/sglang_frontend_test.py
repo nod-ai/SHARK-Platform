@@ -1,0 +1,297 @@
+# Copyright 2024 Advanced Micro Devices, Inc.
+#
+# Licensed under the Apache License v2.0 with LLVM Exceptions.
+# See https://llvm.org/LICENSE.txt for license information.
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+
+import logging
+import re
+import pytest
+
+from ..utils import (
+    AccuracyValidationException,
+)
+
+pytest.importorskip("sglang")
+import sglang as sgl
+from sglang.lang.chat_template import get_chat_template
+
+pytest.importorskip("sentence_transformers")
+from sentence_transformers import SentenceTransformer, util
+
+logger = logging.getLogger(__name__)
+
+DEVICE_SETTINGS = {
+    "device_flags": [
+        "--iree-hal-target-backends=rocm",
+        "--iree-hip-target=gfx942",
+    ],
+    "device": "hip",
+}
+
+ACCEPTED_THRESHOLD = 0.8
+
+
+def compute_similarity(model: SentenceTransformer, sentence_1: str, sentence_2: str):
+    embeddings = model.encode([sentence_1, sentence_2])
+    return util.pytorch_cos_sim(embeddings[0], embeddings[1]).item()
+
+
+@sgl.function
+def multi_turn_question(s, question_1, question_2):
+    s += sgl.user(question_1)
+    s += sgl.assistant(sgl.gen("answer_1", max_tokens=50, temperature=1.0))
+    s += sgl.user(question_2)
+    s += sgl.assistant(sgl.gen("answer_2", max_tokens=50, temperature=1.0))
+
+
+@sgl.function
+def tip_suggestion(s):
+    s += (
+        "Here are two tips for staying healthy: "
+        "1. Balanced Diet. 2. Regular Exercise.\n\n"
+    )
+
+    forks = s.fork(2)
+    for i, f in enumerate(forks):
+        f += f"Now, expand tip {i+1} into a paragraph:\n"
+        f += sgl.gen(f"detailed_tip", max_tokens=50, temperature=1.0)
+
+    s += "Tip 1:" + forks[0]["detailed_tip"] + "\n"
+    s += "Tip 2:" + forks[1]["detailed_tip"] + "\n"
+    s += "In summary" + sgl.gen("summary")
+
+
+@pytest.mark.parametrize(
+    "pre_process_model,start_server",
+    [
+        (
+            {"device_settings": DEVICE_SETTINGS},
+            {"device_settings": DEVICE_SETTINGS},
+        )
+    ],
+    indirect=True,
+)
+def test_multi_turn_qa(load_comparison_model, start_server, register_shortfin_backend):
+    model = load_comparison_model
+
+    logger.debug("Starting Multi-Turn Question Test...")
+    state = multi_turn_question.run(
+        question_1="Name the capital city of the USA.",
+        question_2="The Smithsonian is in this location.",
+    )
+
+    logger.debug("Obtaining messages...")
+    messages = state.messages()
+    logger.debug("Messages Obtained...")
+
+    logger.debug("Checking first Q&A turn...")
+    assert messages[0] == {
+        "role": "user",
+        "content": "Name the capital city of the USA.",
+    }
+    assert messages[1]["role"] == "assistant"
+
+    ideal_answer = "The capital city of the United States of America is Washington, D.C. (short for District of Columbia).assistant\n\nWould you like to know more about Washington, D.C. or is there something else I can help you with?"
+    first_q_answer = messages[1]["content"]
+    logger.debug("Computing Similarity Score...")
+
+    score = compute_similarity(model, ideal_answer, first_q_answer)
+    if not score > ACCEPTED_THRESHOLD:
+        raise AccuracyValidationException(
+            f"Accuracy error between {expected_answer} and {first_q_answer}:\n SCORE: {score}"
+        )
+
+    assert messages[2] == {
+        "role": "user",
+        "content": "The Smithsonian is in this location.",
+    }
+    assert messages[3]["role"] == "assistant"
+
+    expected_answer = "The Smithsonian Institution is indeed located in Washington, D.C. and is one of the world's largest and most comprehensive museums and research complexes. It was founded in 1846 and is named after British scientist James Smithson, who left a bequest to"
+    second_q_answer = messages[3]["content"]
+    score = compute_similarity(model, expected_answer, second_q_answer)
+    if not score > ACCEPTED_THRESHOLD:
+        raise AccuracyValidationException(
+            f"Accuracy error between {expected_answer} and {second_q_answer}:\n SCORE: {score}"
+        )
+
+
+@pytest.mark.parametrize(
+    "pre_process_model,start_server",
+    [
+        (
+            {"device_settings": DEVICE_SETTINGS},
+            {"device_settings": DEVICE_SETTINGS},
+        )
+    ],
+    indirect=True,
+)
+def test_stream_multi_turn_qa(
+    load_comparison_model, start_server, register_shortfin_backend
+):
+    def clean_message(message: str):
+        """Remove chat tags from message before comparison.
+
+        Args:
+            message (str): Message to clean.
+
+        Returns:
+            str: Message without tags (i.e. <|start_header_id|>)
+        """
+        pattern = r"<\|.*?\|>"
+        return re.sub(pattern, "", message)
+
+    model = load_comparison_model
+    question_1 = "Name the capital city of the USA."
+    question_2 = "The Smithsonian is in this location."
+    expected_answer_1 = "The capital city of the United States of America is Washington, D.C. (short for District of Columbia).assistant\n\nWould you like to know more about Washington, D.C. or is there something else I can help you with?"
+    expected_answer_2 = "The Smithsonian Institution is indeed located in Washington, D.C. and is one of the world's largest and most comprehensive museums and research complexes. It was founded in 1846 and is named after British scientist James Smithson, who left a bequest to"
+
+    logger.debug("Starting Multi-Turn Question Test...")
+    state = multi_turn_question.run(
+        question_1=question_1,
+        question_2=question_2,
+        stream=True,
+    )
+
+    logger.debug("Obtaining messages...")
+    messages = ""
+    for chunk in state.text_iter():
+        messages += chunk
+    logger.debug("Messages Obtained...")
+    expected_result = f"user: {question_1}\nassistant: {expected_answer_1}\nuser: {question_2}\nassistant: {expected_answer_2}"
+    cleaned_messages = clean_message(messages)
+    score = compute_similarity(model, cleaned_messages, expected_result)
+    if not score > ACCEPTED_THRESHOLD:
+        raise AccuracyValidationException(
+            f"Accuracy error between {expected_result} and {messages}:\n SCORE: {score}"
+        )
+
+    logger.debug(f"Stream Messages: {messages}")
+
+
+@pytest.mark.parametrize(
+    "pre_process_model,start_server",
+    [
+        (
+            {"device_settings": DEVICE_SETTINGS},
+            {"device_settings": DEVICE_SETTINGS},
+        )
+    ],
+    indirect=True,
+)
+def test_batch_multi_turn_qa(
+    load_comparison_model, start_server, register_shortfin_backend
+):
+    model = load_comparison_model
+
+    question_1_1 = "Name the capital city of the USA."
+    question_1_2 = "The Smithsonian is in this location."
+    expected_answer_1_1 = "The capital city of the United States of America is Washington, D.C. (short for District of Columbia).assistant\n\nWould you like to know more about Washington, D.C. or is there something else I can help you with?"
+    expected_answer_1_2 = "The Smithsonian Institution is indeed located in Washington, D.C. and is one of the world's largest and most comprehensive museums and research complexes. It was founded in 1846 and is named after British scientist James Smithson, who left a bequest to"
+
+    question_2_1 = "Name the largest city in the USA."
+    question_2_2 = "The Empire State Building is in this location."
+    expected_answer_2_1 = "The largest city in the USA is New York City, with a population of over 8.4 million people, according to the United States Census Bureau (2020 estimates).assistant\n\nHowever, I should note that the largest city in the"
+    expected_answer_2_2 = "That's correct, the iconic Empire State Building is located in Midtown Manhattan, New York City. It's one of the most recognizable landmarks in the world and a symbol of the city's grandeur and history.assistant\n\nAnd, by"
+
+    states = multi_turn_question.run_batch(
+        [
+            {
+                "question_1": question_1_1,
+                "question_2": question_1_2,
+            },
+            {
+                "question_1": question_2_1,
+                "question_2": question_2_2,
+            },
+        ]
+    )
+
+    first_qa = states[0]
+    second_qa = states[1]
+
+    first_messages = first_qa.messages()
+    second_messages = second_qa.messages()
+    assert first_messages[0] == {
+        "role": "user",
+        "content": question_1_1,
+    }
+
+    assert first_messages[1]["role"] == "assistant"
+    first_answer = first_messages[1]["content"]
+    expected_answer = expected_answer_1_1
+    score = compute_similarity(model, expected_answer, first_answer.lower())
+    if not score > ACCEPTED_THRESHOLD:
+        raise AccuracyValidationException(
+            f"Accuracy error between {expected_answer} and {first_answer}:\n SCORE: {score}"
+        )
+
+    assert first_messages[2] == {
+        "role": "user",
+        "content": question_1_2,
+    }
+    first_messages[3]["role"] = "assistant"
+    second_answer = first_messages[3]["content"]
+    expected_answer = expected_answer_1_2
+    score = compute_similarity(model, expected_answer, second_answer)
+    if not score > ACCEPTED_THRESHOLD:
+        raise AccuracyValidationException(
+            f"Accuracy error between {expected_answer} and {second_answer}:\n SCORE: {score}"
+        )
+
+    second_messages = second_qa.messages()
+    assert second_messages[0] == {
+        "role": "user",
+        "content": question_2_1,
+    }
+
+    assert second_messages[1]["role"] == "assistant"
+    first_answer = second_messages[1]["content"]
+    expected_answer = expected_answer_2_1
+    score = compute_similarity(model, expected_answer, first_answer.lower())
+    if not score > ACCEPTED_THRESHOLD:
+        raise AccuracyValidationException(
+            f"Accuracy error between {expected_answer} and {first_answer}:\n SCORE: {score}"
+        )
+
+    assert second_messages[2] == {
+        "role": "user",
+        "content": question_2_2,
+    }
+    second_messages[3]["role"] = "assistant"
+    second_answer = second_messages[3]["content"]
+    expected_answer = expected_answer_2_2
+    score = compute_similarity(model, expected_answer, second_answer)
+    if not score > ACCEPTED_THRESHOLD:
+        raise AccuracyValidationException(
+            f"Accuracy error between {expected_answer} and {second_answer}:\n SCORE: {score}"
+        )
+
+
+@pytest.mark.parametrize(
+    "pre_process_model,start_server",
+    [
+        (
+            {"device_settings": DEVICE_SETTINGS},
+            {"device_settings": DEVICE_SETTINGS},
+        )
+    ],
+    indirect=True,
+)
+def test_fork(load_comparison_model, start_server, register_shortfin_backend):
+    model = load_comparison_model
+
+    state = tip_suggestion.run()
+    result = state.text()
+    expected_answer = """Here are two tips for staying healthy: 1. Balanced Diet. 2. Regular Exercise.
+    Tip 1:A balanced diet is essential for maintaining good health. It involves consuming a variety of foods from different food groups, including fruits, vegetables, whole grains, lean proteins, and healthy fats. A balanced diet provides the body with the necessary nutrients, vitamins, and
+    Tip 2:Regular exercise is essential for maintaining a healthy body. It helps to improve cardiovascular health, increase strength and flexibility, and boost the immune system. Regular physical activity can also reduce the risk of chronic diseases such as heart disease, diabetes, and certain types of cancer
+    In summary, a balanced diet and regular exercise are two of the most important tips for staying healthy. By following these tips, you can maintain a healthy body and reduce the risk of chronic diseases.
+    """
+    score = compute_similarity(model, result, expected_answer)
+    if not score > ACCEPTED_THRESHOLD:
+        raise AccuracyValidationException(
+            f"Accuracy error between {expected_answer} and {result}:\n SCORE: {score}"
+        )
