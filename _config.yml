@@ -7,5 +7,5 @@ relative_links:
   enabled: true
   collections: true
 include:
-  - *.html
-  - *.md
+  - index.html
+  - index.md
