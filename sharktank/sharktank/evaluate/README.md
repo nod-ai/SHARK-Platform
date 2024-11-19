@@ -35,6 +35,6 @@ python -m  sharktank.evaluate.perplexity \
 
 #### LLaMA 3.1
 
-|Models   |Model size (GB) |Torch      |IREE       |
-|:--------|:---------------|:----------|:----------|
-|8B f16   |16.07           |14.930181  |14.991893  |
+|Models                 |Model size (GB) |Torch score   |IREE score    |
+|:----------------------|:---------------|:-------------|:-------------|
+|8B FP16 TP1 decomposed |16.07           |14.930181     |14.991893     |
