@@ -83,4 +83,4 @@ jobs:
         run: pip install sentence_transformers
 
       - name: Run Integration Tests
-        run: pytest -v app_tests/integration_tests/sglang --log-cli-level=INFO
+        run: pytest -v app_tests/integration_tests/llm/sglang --log-cli-level=INFO
