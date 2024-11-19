@@ -1,0 +1,11 @@
+#remote_theme: pages-themes/slate@v0.2.0
+#remote_theme: pages-themes/tactile@v0.2.0
+#remote_theme: pages-themes/modernist@v0.2.0
+remote_theme: pages-themes/cayman@v0.2.0
+#remote_theme: pages-themes/midnight@v0.2.0
+relative_links:
+  enabled: true
+  collections: true
+include:
+  - *.html
+  - *.md
