@@ -19,6 +19,8 @@ from .utils import (
     compile_model,
     find_available_port,
     start_llm_server,
+    start_log_group,
+    end_log_group,
 )
 
 logger = logging.getLogger(__name__)
@@ -40,7 +42,9 @@ def model_test_dir(request, tmp_path_factory):
     Yields:
         Tuple[Path, Path]: The paths to the Hugging Face home and the temp dir.
     """
-    logger.info("Preparing model artifacts...")
+    logger.info(
+        "Preparing model artifacts..." + start_log_group("Preparing model artifacts")
+    )
 
     repo_id = request.param["repo_id"]
     model_file = request.param["model_file"]
@@ -85,7 +89,7 @@ def model_test_dir(request, tmp_path_factory):
         logger.info(f"Config: {json.dumps(config, indent=2)}")
         with open(edited_config_path, "w") as f:
             json.dump(config, f)
-        logger.info("Model artifacts setup successfully")
+        logger.info("Model artifacts setup successfully" + end_log_group())
         yield hf_home, tmp_dir
     finally:
         shutil.rmtree(tmp_dir)
@@ -110,7 +114,7 @@ def llm_server(request, model_test_dir, available_port):
     Yields:
         subprocess.Popen: The server process that was started.
     """
-    logger.info("Starting LLM server...")
+    logger.info("Starting LLM server..." + start_log_group("Starting LLM server"))
     hf_home, tmp_dir = model_test_dir
     model_file = request.param["model_file"]
     settings = request.param["settings"]
@@ -129,6 +133,7 @@ def llm_server(request, model_test_dir, available_port):
         parameters_path,
         settings,
     )
+    logger.info("LLM server started!" + end_log_group())
     yield server_process
     # Teardown: kill the server
     server_process.terminate()
