@@ -143,13 +143,21 @@ def pytest_addoption(parser):
         help="Llama3.1 405b fp8 model path",
     )
 
+    # To obtain a T5 GGUF file you can use llama.cpp's convert_hf_to_gguf.py.
+    # https://github.com/ggerganov/llama.cpp/blob/9abe9eeae98b11fa93b82632b264126a010225ff/convert_hf_to_gguf.py
+    # E.g.
+    # git lfs install
+    # git clone https://huggingface.co/google/t5-v1_1-small
+    # convert_hf_to_gguf.py \
+    #     --outfile t5-v1_1-small.gguf \
+    #     --outtype=f32 \
+    #     t5-v1_1-small
     parser.addoption(
         "--google-t5-v1-1-small-fp32-model-path",
         type=Path,
         default="/data/t5/small/google__t5-v1_1-small_fp32.gguf",
         help="Google T5 v1.1 small fp32 model path",
     )
-
     parser.addoption(
         "--google-t5-v1-1-xxl-fp32-model-path",
         type=Path,
