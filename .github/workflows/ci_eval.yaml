@@ -183,7 +183,7 @@ jobs:
 
       - name: Run long running tests
         run: |
-          pytest
+          pytest \
             --longrun \
             --with-t5-data \
             sharktank/tests/models/t5/t5_test.py
