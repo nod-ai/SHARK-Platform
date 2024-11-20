@@ -9,6 +9,7 @@ import logging
 import json
 import time
 import random
+import re
 from datetime import timedelta
 from tqdm import tqdm
 
@@ -83,11 +84,18 @@ class Perplexity:
             start = time.time()
             result = func(*args, **kwargs)
             end = time.time()
-            seconds = end - start
-            time_taken = abs(timedelta(seconds=round(seconds)))
+            total_seconds = end - start
+            time_taken = abs(timedelta(seconds=total_seconds))
+            hours, minutes, seconds = re.split(":", str(time_taken))
 
-            if seconds < 1:
-                time_taken = f" {seconds * 1000} ms"
+            if total_seconds < 1:
+                time_taken = f" {round(total_seconds * 1000, 3)} ms"
+            elif total_seconds < 60:
+                time_taken = "{:.2f} secs".format(round(float(total_seconds), 2))
+            else:
+                time_taken = "{:02d} hrs : {:02d} mins : {:.2f} secs".format(
+                    int(hours), int(minutes), round(float(seconds), 2)
+                )
 
             func_name = func.__name__
             if func_name == "get_perplexity":
@@ -183,7 +191,7 @@ class Perplexity:
             s.replace("\n", "").rstrip()
             for s in test_prompts
             if s != "" and len(s.split()) >= 20 and s.count("=") < 2
-        ][0:4]
+        ]
 
         self.bs = len(test_prompts)
 
