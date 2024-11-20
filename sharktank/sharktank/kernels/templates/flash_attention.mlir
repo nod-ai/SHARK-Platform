@@ -7,6 +7,7 @@
 !q_type = tensor<?x?x{{l}}x{{d}}x{{i_type}}>
 !k_type = tensor<?x?x{{s}}x{{d}}x{{i_type}}>
 !v_type = tensor<?x?x{{s}}x{{e}}x{{i_type}}>
+!trans_v_type = tensor<?x?x{{e}}x{{s}}x{{i_type}}>
 !o_type = tensor<?x?x{{l}}x{{e}}x{{o_type}}>
 !o_dyn_type = tensor<?x?x?x?x{{o_type}}>
 !s_type = tensor<{{scale_type}}>
@@ -32,16 +33,19 @@ util.func private @sharktank_flash_attention_{{l}}_{{s}}_{{d}}_{{e}}_{{i_type}}_
 
         %scale = tensor.extract %s[] : !s_type
 
+        %init_trans_v = tensor.empty(%b0, %b1) : !trans_v_type
+        %transpose_v = linalg.transpose ins(%v: !v_type) outs(%init_trans_v: !trans_v_type) permutation = [0, 1, 3, 2]
+
         %empty_dyn = tensor.empty(%b0, %b1, %l, %e) : !o_dyn_type
         %empty = tensor.cast %empty_dyn : !o_dyn_type to !o_type
 
         %atten = iree_linalg_ext.attention {indexing_maps = [
                     affine_map<(d0, d1, d2, d3, d4, d5) -> (d0, d1, d2, d3)>,
-                    affine_map<(d0, d1, d2, d3, d4, d5) -> (d0, d1, d4, d3)>,
+                    affine_map<(d0, d1, d2, d3, d4, d5) -> (d0, d1, d5, d3)>,
                     affine_map<(d0, d1, d2, d3, d4, d5) -> (d0, d1, d4, d5)>,
                     affine_map<(d0, d1, d2, d3, d4, d5) -> ()>,
-                    affine_map<(d0, d1, d2, d3, d4, d5) -> (d0, d1, d2, d5)>]}
-                    ins(%q, %k, %v, %scale : !q_type, !k_type, !v_type, {{scale_type}}) outs(%empty : !o_type) {
+                    affine_map<(d0, d1, d2, d3, d4, d5) -> (d0, d1, d2, d4)>]}
+                    ins(%q, %k, %transpose_v, %scale : !q_type, !k_type, !v_type, {{scale_type}}) outs(%empty : !o_type) {
                       ^bb0(%score: f32):
                         iree_linalg_ext.yield %score : f32
                     } -> !o_type
