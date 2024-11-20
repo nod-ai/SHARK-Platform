@@ -11,7 +11,9 @@ import math
 import re
 from abc import ABCMeta, abstractmethod
 
+from .op_matchers import *
 from .common import *
+from iree.turbine.transforms.rewriter import *
 
 
 def get_mmt_tile_sizes(configuration: Configuration):
@@ -58,10 +60,31 @@ class DispatchParser(metaclass=ABCMeta):
         """Extract problem size of the operation."""
         pass
 
+def walk_get_func_ops(op: ir.Operation, func_ops: list[ir.Operation]) -> ir.WalkResult:
+    if op.name == "func.func":
+        func_ops.append(op)
+    return ir.WalkResult.ADVANCE
 
 class MmtParser(DispatchParser):
     def supports(self, op_name: str) -> bool:
         return "matmul_transpose_b" in op_name
+
+    def get_mmt_operation(
+        self,
+        ir_module: ir.Module,
+    ) -> Optional[ir.Operation]:
+        func_ops: list[ir.Operation] = []
+        for op in ir_module.body.operations:
+            op.walk(
+                lambda op: walk_get_func_ops(op, func_ops),
+                ir.WalkOrder.POST_ORDER,
+            )
+        if len(func_ops) != 1:
+            return None
+        mmt_ops: list[OpMatchResult] = match_children(func_ops[0].operation, MmtMatcher(Builder(ir_module.context)))
+        if len(mmt_ops) != 1:
+            return None
+        return mmt_ops[0].op
 
     def get_shapes(self, template: list[str]) -> ProblemSize:
         mmt_re = None
@@ -117,6 +140,23 @@ class MmtParser(DispatchParser):
 class ConvParser(DispatchParser):
     def supports(self, op_name: str) -> bool:
         return "conv_2d_nhwc_hwcf" in op_name
+
+    def get_conv_operation(
+        self,
+        ir_module: ir.Module,
+    ) -> Optional[ir.Operation]:
+        func_ops: list[ir.Operation] = []
+        for op in ir_module.body.operations:
+            op.walk(
+                lambda op: walk_get_func_ops(op, func_ops),
+                ir.WalkOrder.POST_ORDER,
+            )
+        if len(func_ops) != 1:
+            return None
+        conv_ops: list[OpMatchResult] = match_children(func_ops[0].operation, NamedOpMatcher("linalg.conv_2d_nhwc_hwcf"))
+        if len(conv_ops) != 1:
+            return None
+        return conv_ops[0].op
 
     def get_conv_tile_sizes(self, configuration: Configuration) -> list[int]:
         m, n, k = configuration.tile_sizes
