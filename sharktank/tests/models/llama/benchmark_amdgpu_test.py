@@ -55,9 +55,11 @@ class BaseBenchmarkTest(unittest.TestCase):
             "--iree-opt-aggressively-propagate-transposes=true",
             "--iree-opt-data-tiling=false",
             "--iree-preprocessing-pass-pipeline='builtin.module(util.func(iree-preprocessing-generalize-linalg-matmul-experimental))'",
-            "--iree-hal-force-indirect-command-buffers=true",
             "--iree-stream-resource-memory-model=discrete",
             "--iree-hip-legacy-sync=false",
+            "--iree-hal-indirect-command-buffers=true",
+            "--iree-hal-memoization=true",
+            "--iree-opt-strip-assertions",
         ]
 
 
@@ -446,11 +448,6 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
             f"--input=@{self.decode_args_fp8}/cache_state_f16.npy",
             "--benchmark_repetitions=3",
         ]
-        self.compile_args += [
-            "--iree-hal-force-indirect-command-buffers=true",
-            "--iree-stream-resource-memory-model=discrete",
-            "--iree-hip-legacy-sync=false",
-        ]
 
     @pytest.mark.xfail(
         reason="Benchmarking Error", strict=True, raises=IreeBenchmarkException
@@ -512,6 +509,7 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
         output_vmfb = self.llama70b_f16_torch_sdpa_artifacts.create_file(
             suffix=".vmfb", prefix=output_file_name
         )
+        self.llama70b_f16_torch_sdpa_artifacts.attention_kernel = "torch"
         output_shard_file_name = (
             self.artifacts_dir
             / f"fp16/tp8/llama3.1_70b_fp16_tp{self.tensor_parallelism_size}_parameters.irpa"
@@ -794,6 +792,7 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
         output_vmfb = self.llama405b_f16_torch_sdpa_artifacts.create_file(
             suffix=".vmfb", prefix=output_file_name
         )
+        self.llama405b_f16_torch_sdpa_artifacts.attention_kernel = "torch"
         output_shard_file_name = (
             self.artifacts_dir
             / f"fp16/tp8/llama3.1_405b_fp16_tp{self.tensor_parallelism_size}_parameters.irpa"
@@ -803,6 +802,7 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
         export_return_code = self.llama405b_f16_torch_sdpa_artifacts.export_to_mlir(
             mlir_path=output_mlir,
             json_path=output_json,
+            skip_decode=True,
         )
         self.llama405b_f16_torch_sdpa_artifacts.compile_to_vmfb(
             mlir_path=str(output_mlir),
