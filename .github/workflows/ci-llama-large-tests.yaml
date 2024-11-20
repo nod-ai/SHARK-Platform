@@ -22,6 +22,7 @@ concurrency:
 
 jobs:
   test_llama_large:
+    if: ${{ github.repository_owner == 'nod-ai' || github.event_name != 'schedule' }}
     name: "Llama Benchmarking Tests"
     strategy:
       matrix:
