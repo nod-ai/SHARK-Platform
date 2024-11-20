@@ -14,12 +14,9 @@ import torch
 from typing import Any, Callable
 from operator import eq
 from collections.abc import Iterable
-import pytest
 import gc
 
 from ..types import *
-
-longrun = pytest.mark.skipif("not config.getoption('longrun')")
 
 # Range of torch.rand() is [0,1)
 # Range of torch.rand() * 2 - 1 is [-1, 1), includes negative values

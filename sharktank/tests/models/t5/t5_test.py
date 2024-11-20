@@ -25,7 +25,7 @@ from sharktank.models.t5.t5 import (
     T5Encoder,
     T5LayerFF,
 )
-from sharktank.utils.testing import make_rand_torch, longrun
+from sharktank.utils.testing import make_rand_torch
 from sharktank.utils.hf_datasets import get_dataset
 
 with_t5_data = pytest.mark.skipif("not config.getoption('with_t5_data')")
