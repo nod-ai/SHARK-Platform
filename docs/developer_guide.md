@@ -6,14 +6,10 @@ projects, these instructions should help you get started:
 
 ### Prepare your system
 
-(these instructions are tested on Ubuntu 24.04)
+(these instructions are tested on Ubuntu 24.04 which has clang-18 and python3.12 by default)
 
 ```
-sudo apt update
-sudo apt install python-is-python3 # Shortfin expects Python 3 to be available as python
-sudo apt install python3.12-venv # For the next step
-sudo apt install python3-dev # Required by Shortfin
-sudo apt install clang lld
+sudo apt update && sudo apt install -y python-is-python3 python3.12-venv python3-dev clang lld
 ```
 ### Setup a venv
 
