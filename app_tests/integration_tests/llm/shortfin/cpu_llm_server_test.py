@@ -10,7 +10,7 @@ import pytest
 import requests
 import uuid
 
-from .utils import AccuracyValidationException
+from ..utils import AccuracyValidationException, start_log_group, end_log_group
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ def do_generate(prompt, port):
     # Create a GenerateReqInput-like structure
     data = {
         "text": prompt,
-        "sampling_params": {"max_completion_tokens": 50, "temperature": 0.7},
+        "sampling_params": {"max_completion_tokens": 15, "temperature": 0.7},
         "rid": uuid.uuid4().hex,
         "return_logprob": False,
         "logprob_start_len": -1,
@@ -82,10 +82,23 @@ def test_llm_server(llm_server, available_port):
     # Here you would typically make requests to your server
     # and assert on the responses
     assert llm_server.poll() is None
-    output = do_generate("1 2 3 4 5 ", available_port)
-    logger.info(output)
+    PROMPT = "1 2 3 4 5 "
     expected_output_prefix = "6 7 8"
+    logger.info(
+        "Sending HTTP Generation Request"
+        + start_log_group("Sending HTTP Generation Request")
+    )
+    output = do_generate(PROMPT, available_port)
+    # log to GITHUB_STEP_SUMMARY if we are in a GitHub Action
+    if "GITHUB_ACTION" in os.environ:
+        with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
+            # log prompt
+            f.write("LLM results:\n")
+            f.write(f"- llm_prompt:`{PROMPT}`\n")
+            f.write(f"- llm_output:`{output}`\n")
+    logger.info(output)
     if not output.startswith(expected_output_prefix):
         raise AccuracyValidationException(
             f"Expected '{output}' to start with '{expected_output_prefix}'"
         )
+    logger.info("HTTP Generation Request Successful" + end_log_group())

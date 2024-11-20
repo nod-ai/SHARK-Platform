@@ -7,6 +7,7 @@
 import logging
 import multiprocessing
 import os
+from pathlib import Path
 import subprocess
 import sys
 import time
@@ -34,6 +35,31 @@ def download_huggingface_model(local_dir, repo_id, model_file):
         logger.info(f"Model downloaded to {model_path}")
     else:
         logger.info("Using cached model")
+
+
+def download_with_hf_datasets(local_dir: Path | str, model_name: str):
+    """Download a model using `sharktank.utils.hf_datasets` script.
+
+    Args:
+        local_dir (Path | str): Local directory to download model to.
+        model_name (str): Name of model to download.
+    """
+    if isinstance(local_dir, Path):
+        local_dir = str(local_dir)
+
+    logger.info(f"Download model {model_name} with `hf_datasets` to {local_dir}...")
+    subprocess.run(
+        [
+            "python",
+            "-m",
+            "sharktank.utils.hf_datasets",
+            model_name,
+            "--local-dir",
+            local_dir,
+        ],
+        check=True,
+    )
+    logger.info(f"Model {model_name} successfully downloaded.")
 
 
 def download_tokenizer(local_dir, tokenizer_id):
@@ -178,3 +204,17 @@ def start_llm_server(
     # Wait for server to start
     wait_for_server(f"http://localhost:{port}", timeout)
     return server_process
+
+
+def start_log_group(headline):
+    # check if we are in github ci
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        return f"\n::group::{headline}"
+    return ""
+
+
+def end_log_group():
+    # check if we are in github ci
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        return "\n::endgroup::"
+    return ""
