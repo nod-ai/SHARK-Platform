@@ -73,7 +73,7 @@ jobs:
 
 
   test_with_data:
-    timeout-minutes: 1000
+    timeout-minutes: 30
     name: "Data-dependent Tests"
     strategy:
       matrix:
