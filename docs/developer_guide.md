@@ -3,6 +3,18 @@
 Each sub-project has its own developer guide. If you would like to work across
 projects, these instructions should help you get started:
 
+
+### Prepare your system
+
+(these instructions are tested on Ubuntu 24.04)
+
+```
+sudo apt update
+sudo apt install python-is-python3 # Shortfin expects Python 3 to be available as python
+sudo apt install python3.12-venv # For the next step
+sudo apt install python3-dev # Required by Shortfin
+sudo apt install clang lld
+```
 ### Setup a venv
 
 We recommend setting up a Python
