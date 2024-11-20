@@ -11,6 +11,7 @@ import math
 import re
 from abc import ABCMeta, abstractmethod
 
+from .op_matchers import *
 from .common import *
 
 
@@ -69,6 +70,19 @@ def parse_mlir(mlir_text: str, ctx: TunerContext) -> ir.Module:
     return mlir_module
 
 
+def find_root_op(
+        ir_module: ir.Module,
+        matcher: NamedOpMatcher,
+    ) -> Optional[ir.Operation]:
+        func_ops: list[ir.Operation] = get_named_ops(ir_module, "func.func")
+        if len(func_ops) != 1:
+            return None
+        matched_ops = matcher.get_matched_ops(func_ops[0].operation)
+        if len(matched_ops) != 1:
+            return None
+        return matched_ops[0]
+
+
 class DispatchParser(metaclass=ABCMeta):
     @abstractmethod
     def supports(self, op_name: str) -> bool:
@@ -85,6 +99,14 @@ class MmtParser(DispatchParser):
     def supports(self, op_name: str) -> bool:
         return "matmul_transpose_b" in op_name
 
+    def get_mmt_operation(
+        self,
+        ir_module: ir.Module,
+    ) -> Optional[ir.Operation]:
+        return find_root_op(ir_module, MmtOpMatcher())
+
+    # TODO(Max191): Use bindings with get_mmt_operation instead of string
+    # string parsing to get the shapes here.
     def get_shapes(self, template: list[str]) -> ProblemSize:
         mmt_re = None
         dps = None
@@ -140,6 +162,12 @@ class ConvParser(DispatchParser):
     def supports(self, op_name: str) -> bool:
         return "conv_2d_nhwc_hwcf" in op_name
 
+    def get_conv_operation(
+        self,
+        ir_module: ir.Module,
+    ) -> Optional[ir.Operation]:
+        return find_root_op(ir_module, Conv2dNHWCOpMatcher())
+
     def get_conv_tile_sizes(self, configuration: Configuration) -> list[int]:
         m, n, k = configuration.tile_sizes
         batch = 1
@@ -153,6 +181,8 @@ class ConvParser(DispatchParser):
         ic = k
         return [batch, oh, ow, oc, fh, fw, ic]
 
+    # TODO(Max191): Use bindings with get_conv_operation instead of string
+    # string parsing to get the shapes here.
     def get_shapes(self, template: list[str]) -> ProblemSize:
         for line in template:
             if "linalg.conv_2d_nhwc_hwcf" not in line:

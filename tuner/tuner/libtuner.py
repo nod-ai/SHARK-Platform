@@ -62,6 +62,7 @@ DEVICE_ID_PLACEHOLDER = "!DEVICE_ID!"
 @dataclass
 class CandidateTracker:
     candidate_id: int
+    mlir_path: Optional[Path] = None
     dispatch_mlir_path: Optional[Path] = None
     dispatch_config_path: Optional[Path] = None
     configuration: Optional[candidate_gen.Configuration] = None
@@ -746,6 +747,7 @@ def append_to_file(lines: list[str], filepath: Path, title: str = "") -> None:
         file.write("\n")
 
 
+# TODO(Max191): Remove in favor of using generate_candidate_specs.
 def generate_candidates(
     args: argparse.Namespace,
     path_config: PathConfig,
@@ -821,6 +823,72 @@ def generate_candidates(
     )
 
     logging.info(f"Generated [{len(candidates)}] candidates")
+
+    return candidates
+
+
+def generate_candidate_specs(
+    args: argparse.Namespace,
+    path_config: PathConfig,
+    candidate_trackers: list[CandidateTracker],
+) -> list[int]:
+    """Generate candidate transform dialect specs for tuning. Returns the list of candidate indexes"""
+    logging.debug("generate_candidate_specs()")
+
+    shutil.copy(args.input_file, path_config.template_mlir)
+    path_config.specs_dir.mkdir(parents=True, exist_ok=True)
+
+    # Generate transform dialect specs.
+    specs = []
+    try:
+        logging.debug("Captured messages from candidate_gen.py:")
+        candidate_gen.tune_with_td(
+            input=str(path_config.template_mlir),
+            output=str(path_config.candidates_dir),
+            limit=args.num_candidates,
+            num_subgroups=args.num_subgroups,
+            lhs_dims=args.lhs_dims,
+            rhs_dims=args.rhs_dims,
+            tile_dims=args.tile_dims,
+        )
+        specs = sorted(
+            path_config.candidates_dir.glob("*.mlir"), key=numerical_sort_key
+        )
+    except Exception as e:
+        logging.error("An error occurred during candidates generation: %s", str(e))
+        # Capture and log debug messages from candidate_gen.py
+        tune_logger = logging.getLogger("tune_with_td")
+        for handler in logging.getLogger().handlers:
+            if isinstance(handler, logging.FileHandler):
+                tune_logger.handlers.append(handler)
+        tune_logger.exception("Error in candidate_gen.py:")
+        raise
+    logging.debug("candidate_gen.py ends")
+
+    candidate_configs = load_pickle(path_config.candidate_configs_pkl)
+
+    # Create candidate trackers.
+    assert len(specs) == len(candidate_configs)
+    candidates = []
+    for spec in specs:
+        candidate_num = int(spec.stem.split("_spec")[0])
+        candidates.append(candidate_num)
+        # Move the specs to the canonical path_config location.
+        spec_path = path_config.specs_dir / path_config.get_candidate_spec_filename(candidate_num)
+        shutil.move(spec, spec_path)
+        new_candidate = CandidateTracker(
+            mlir_path=path_config.template_mlir,
+            candidate_id=candidate_num,
+            spec_path=spec_path,
+            configuration=candidate_configs[candidate_num],
+        )
+        candidate_trackers.append(new_candidate)
+
+    handle_error(
+        condition=(len(candidates) <= 1), msg="Failed to generate any candidates"
+    )
+
+    logging.info(f"Generated [{len(candidates) - 1}] candidates")
 
     return candidates
 

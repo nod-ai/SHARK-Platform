@@ -35,6 +35,7 @@ from iree.compiler.dialects import iree_codegen  # type: ignore
 from .common import *
 from .dispatch_constraints import *
 from .dispatch_parser import *
+from .spec_builder import *
 
 tune_logger = logging.getLogger("tune")
 
@@ -86,6 +87,14 @@ class DispatchTuner(DispatchParser):
     ) -> MLIRTransformation:
         """Apply parameter transformations to the operation."""
         pass
+    @abstractmethod
+    def get_td_spec(
+        self,
+        ir_module: ir.Module,
+        configuration: Configuration,
+    ) -> ir.Module:
+        """Generate a transform dialect spec module for the funcOp."""
+        pass
 
 
 class DispatchTunerRegistry:
@@ -134,7 +143,7 @@ class MmtTuner(DispatchTuner, MmtParser):
         {{mma_schedule = #iree_gpu.mma_schedule<
             intrinsic = #iree_gpu.mma_layout<{configuration.intrinsic}>,
             subgroup_m_count = {configuration.subgroup_m_count}, subgroup_n_count = {configuration.subgroup_n_count}>
-        {extra_config}}}>
+        , {extra_config}}}>
         > -> !transform.any_param
     transform.yield %matmul, %config : !transform.any_op, !transform.any_param
     }}
@@ -161,6 +170,43 @@ class MmtTuner(DispatchTuner, MmtParser):
             "  ",
         )
         return MLIRTransformation(template, modified, embeddable)
+
+    def get_reduction_tile_sizes(self, configuration: Configuration):
+        tile_sizes = [0, 0]
+        tile_sizes.append(configuration.tile_sizes[2])
+        return tile_sizes
+
+    def get_workgroup_tile_sizes(self, configuration: Configuration):
+        tile_sizes = configuration.tile_sizes[:2]
+        tile_sizes.append(0)
+        return tile_sizes
+
+    def get_td_spec(
+        self,
+        ir_module: ir.Module,
+        configuration: Configuration,
+    ) -> ir.Module:
+        mmt_op: ir.Operation = self.get_mmt_operation(ir_module)
+        reduction_tile_sizes = self.get_reduction_tile_sizes(configuration)
+        workgroup_tile_sizes = self.get_workgroup_tile_sizes(configuration)
+        lowering_config = build_vector_distribute_lowering_config(
+            configuration,
+            reduction_tile_sizes,
+            workgroup_tile_sizes,
+            ir_module.context,
+        )
+        translation_info = build_vector_distribute_translation_info(
+            configuration,
+            ir_module.context
+        )
+        lhs_type = ir.ShapedType(mmt_op.operands[0].type)
+        rhs_type = ir.ShapedType(mmt_op.operands[1].type)
+        acc_type = ir.ShapedType(mmt_op.operands[2].type)
+        M = acc_type.get_dim_size(0)
+        N = acc_type.get_dim_size(1)
+        K = lhs_type.get_dim_size(1)
+        func_name = f"match_mmt_{M}x{N}x{K}_{lhs_type.element_type}x{rhs_type.element_type}x{acc_type.element_type}"
+        return build_td_spec(ir_module.context, mmt_op, lowering_config, translation_info, func_name)
 
 
 class ConvTuner(DispatchTuner, ConvParser):
@@ -207,7 +253,7 @@ class ConvTuner(DispatchTuner, ConvParser):
             {{mma_schedule = #iree_gpu.mma_schedule<
                 intrinsic = #iree_gpu.mma_layout<{configuration.intrinsic}>,
                 subgroup_m_count = {configuration.subgroup_m_count}, subgroup_n_count = {configuration.subgroup_n_count}>
-            {extra_config}}}>
+            , {extra_config}}}>
         > -> !transform.any_param
     transform.yield %conv, %config : !transform.any_op, !transform.any_param
     }}
@@ -237,6 +283,49 @@ class ConvTuner(DispatchTuner, ConvParser):
         )
         return MLIRTransformation(template, modified, embeddable)
 
+    def get_reduction_tile_sizes(self, configuration: Configuration):
+        conv_tile_sizes = self.get_conv_tile_sizes(configuration)
+        tile_sizes = [0, 0, 0, 0]
+        tile_sizes.extend(conv_tile_sizes[4:])
+        return tile_sizes
+
+    def get_workgroup_tile_sizes(self, configuration: Configuration):
+        conv_tile_sizes = self.get_conv_tile_sizes(configuration)
+        tile_sizes = conv_tile_sizes[:4]
+        tile_sizes.extend([0, 0, 0])
+        return tile_sizes
+
+    def get_td_spec(
+        self,
+        ir_module: ir.Module,
+        configuration: Configuration,
+    ) -> ir.Module:
+        conv_op: ir.Operation = self.get_conv_operation(ir_module)
+        reduction_tile_sizes = self.get_reduction_tile_sizes(configuration)
+        workgroup_tile_sizes = self.get_workgroup_tile_sizes(configuration)
+        lowering_config = build_vector_distribute_lowering_config(
+            configuration,
+            reduction_tile_sizes,
+            workgroup_tile_sizes,
+            ir_module.context,
+        )
+        translation_info = build_vector_distribute_translation_info(
+            configuration,
+            ir_module.context
+        )
+        lhs_type = ir.ShapedType(conv_op.operands[0].type)
+        rhs_type = ir.ShapedType(conv_op.operands[1].type)
+        acc_type = ir.ShapedType(conv_op.operands[2].type)
+        N = acc_type.get_dim_size(0)
+        H = acc_type.get_dim_size(1)
+        W = acc_type.get_dim_size(2)
+        C = rhs_type.get_dim_size(2)
+        P = rhs_type.get_dim_size(0)
+        Q = rhs_type.get_dim_size(1)
+        F = rhs_type.get_dim_size(3)
+        conv_type = conv_op.name.split(".")[-1]
+        func_name = f"match_{conv_type}_{N}x{H}x{W}x{C}x{P}x{Q}x{F}_{lhs_type.element_type}x{rhs_type.element_type}x{acc_type.element_type}"
+        return build_td_spec(ir_module.context, conv_op, lowering_config, translation_info, func_name)
 
 class ContractionTuner(DispatchTuner, ContractionParser):
     def get_transform_function_broadcast_rhs_mmt(
@@ -268,7 +357,7 @@ transform.iree.match.cast_compatible_type %rhs = tensor<{problem_size.rhs_type}>
     {{mma_schedule = #iree_gpu.mma_schedule<
         intrinsic = #iree_gpu.mma_layout<{configuration.intrinsic}>,
         subgroup_m_count = {configuration.subgroup_m_count}, subgroup_n_count = {configuration.subgroup_n_count}>
-    {extra_config}}}>
+    , {extra_config}}}>
     > -> !transform.any_param
 transform.yield %generic, %config : !transform.any_op, !transform.any_param
 }}
@@ -321,6 +410,12 @@ transform.yield %generic, %config : !transform.any_op, !transform.any_param
             "",
         )
 
+    def get_td_spec(
+        self,
+        ir_module: ir.Module,
+        configuration: Configuration,
+    ) -> ir.Module:
+        pass
 
 class BatchMmtTuner(DispatchTuner, BatchMmtParser):
     def get_transform_function_batch_mmt(
@@ -348,7 +443,7 @@ transform.iree.match.cast_compatible_type %rhs = tensor<{problem_size.rhs_type}>
     {{mma_schedule = #iree_gpu.mma_schedule<
         intrinsic = #iree_gpu.mma_layout<{configuration.intrinsic}>,
         subgroup_m_count = {configuration.subgroup_m_count}, subgroup_n_count = {configuration.subgroup_n_count}>
-    {extra_config}}}>
+    , {extra_config}}}>
     > -> !transform.any_param
 transform.yield %generic, %config : !transform.any_op, !transform.any_param
 }}
@@ -380,6 +475,12 @@ transform.yield %generic, %config : !transform.any_op, !transform.any_param
         )
         return MLIRTransformation(template, modified, embeddable)
 
+    def get_td_spec(
+        self,
+        ir_module: ir.Module,
+        configuration: Configuration,
+    ) -> ir.Module:
+        pass
 
 class BatchMatmulTuner(DispatchTuner, BatchMatmulParser):
     def get_transform_function_batch_matmul(
@@ -416,7 +517,7 @@ class BatchMatmulTuner(DispatchTuner, BatchMatmulParser):
             {{mma_schedule = #iree_gpu.mma_schedule<
                 intrinsic = #iree_gpu.mma_layout<{configuration.intrinsic}>,
                 subgroup_m_count = {configuration.subgroup_m_count}, subgroup_n_count = {configuration.subgroup_n_count}>
-            {extra_config}}}>
+            , {extra_config}}}>
         > -> !transform.any_param
     transform.yield %batch_matmul, %config : !transform.any_op, !transform.any_param
     }}
@@ -452,6 +553,12 @@ class BatchMatmulTuner(DispatchTuner, BatchMatmulParser):
         )
         return MLIRTransformation(template, modified, embeddable)
 
+    def get_td_spec(
+        self,
+        ir_module: ir.Module,
+        configuration: Configuration,
+    ) -> ir.Module:
+        pass
 
 @dataclass
 class OpWalkResult:
@@ -495,6 +602,7 @@ def get_default_output_dir() -> str:
     return "tuning_" + datetime.now().strftime("%Y_%m_%d_%H_%M")
 
 
+# TODO(Max191): Remove in favor of using tune_with_td.
 def tune(
     input: str,  # Path to the mlir file to be tuned
     output: str = "",  # Path to the output directory, auto creates one if not given
@@ -565,6 +673,78 @@ def tune(
         # TODO: Fix pickling for ir types.
         # with open(path.join(output, "configs.pkl"), "wb") as file:
         #    pickle.dump(configs, file)
+
+        tune_logger.info(f"Generated {len(configs)} candidates")
+        tune_logger.info(f"Configurations .pkl is stored in {output}/configs.pkl")
+
+
+def tune_with_td(
+    input: str,  # Path to the mlir file to be tuned
+    output: str = "",  # Path to the output directory, auto creates one if not given
+    limit: int = 4096,  # Max candidates to be generated
+    num_subgroups: int = 4,  # GPU spec, used to determine candidate generation constraints
+    lhs_dims: str = "mk",  # Dimensions for the left-hand side operand in matrix operations
+    rhs_dims: str = "nk",  # Dimensions for the right-hand side operand in matrix operations
+    tile_dims: str = "mnk",  # Dimensions for the tile size
+):
+    input_file = str(input)
+
+    if not output:
+        output = get_default_output_dir()
+
+    # Create the directory if it does not exist
+    makedirs(str(output), exist_ok=True)
+
+    tune_logger.debug(f"Output directory {output}")
+    tune_logger.debug(f"Processing {input_file}")
+    mlir_template = read_input_mlir(input_file)
+    mlir_text = "".join(mlir_template)
+
+    with ir.Context() as ctx:
+        tuner_context = TunerContext(ctx, tune_logger)
+        mlir_module: ir.Module = parse_mlir(mlir_text, tuner_context)
+
+        dispatch_tuner_registry = DispatchTunerRegistry()
+        dispatch_tuner_registry.register(
+            [
+                MmtTuner(),
+                ConvTuner(),
+                # NYI: ContractionTuner, BatchMmtTuner, and BatchMatmulTuner
+                # ContractionTuner(lhs_dims, rhs_dims, tile_dims),
+                # BatchMmtTuner(),
+                # BatchMatmulTuner(lhs_dims, rhs_dims, tile_dims),
+            ]
+        )
+
+        walk_result: OpWalkResult = walk_mlir_op(mlir_module, dispatch_tuner_registry)
+
+        dispatch_tuner = walk_result.dispatch_tuner
+        assert dispatch_tuner, "No suitable dispatch tuner found"
+        problem_size: ProblemSize = dispatch_tuner.get_shapes(mlir_template)
+        tune_logger.debug(str(problem_size))
+
+        # Save an empty module as the first candidate, and set its config to
+        # None.
+        with open(path.join(output, f"0_spec.mlir"), "w") as f:
+            default_td_spec = "module {}"
+            f.write(default_td_spec)
+
+        configs = [None]
+        for i, config in enumerate(
+            generate_solutions(tuner_context, problem_size, num_subgroups)
+        ):
+            if i >= limit:
+                break
+            tune_logger.info(f"Solution #{i+1}: {config}")
+            configs.append(config)
+            tf_spec = dispatch_tuner.get_td_spec(mlir_module, config)
+            if tf_spec is None:
+                continue
+            with open(path.join(output, f"{i+1}_spec.mlir"), "w") as f:
+                f.write(str(tf_spec))
+
+        with open(path.join(output, "configs.pkl"), "wb") as file:
+            pickle.dump(configs, file)
 
         tune_logger.info(f"Generated {len(configs)} candidates")
         tune_logger.info(f"Configurations .pkl is stored in {output}/configs.pkl")

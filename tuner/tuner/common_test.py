@@ -87,13 +87,13 @@ def test_get_pipeline_config(mlir_ctx: ir.Context) -> None:
 
     config.waves_per_eu = 4
     config2_str: str = common.get_pipeline_config(config)
-    assert config2_str == ', llvm_func_attrs = {"amdgpu-waves-per-eu" = "4"}'
+    assert config2_str == 'llvm_func_attrs = {"amdgpu-waves-per-eu" = "4"}'
 
     config.gpu_pipeline_options.prefetch_shared_memory = True
     config3_str = common.get_pipeline_config(config)
     assert (
         config3_str
-        == ', gpu_pipeline_options = #iree_gpu.pipeline_options<prefetch_shared_memory = true>, llvm_func_attrs = {"amdgpu-waves-per-eu" = "4"}'
+        == 'gpu_pipeline_options = #iree_gpu.pipeline_options<prefetch_shared_memory = true>, llvm_func_attrs = {"amdgpu-waves-per-eu" = "4"}'
     )
 
 
