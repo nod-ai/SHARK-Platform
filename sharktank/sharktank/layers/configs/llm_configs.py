@@ -189,6 +189,7 @@ class T5Config:
     is_encoder_decoder: bool = True
     is_decoder: bool = False
     vocab_size: int = 32128
+    context_length: int = 512
     d_model: int = 512
     d_kv: int = 64
     d_ff: int = 2048
@@ -206,6 +207,7 @@ class T5Config:
     pad_token_id: int = 0
     eos_token_id: int = 1
     decoder_start_token_id: int = 0
+    context_length_padding_block_size: int = 16
 
     def __post_init__(self):
         self.is_gated_act = self.feed_forward_proj.startswith("gated-")
@@ -226,6 +228,7 @@ class T5Config:
         )
 
         gguf_to_config_names_map = {
+            "t5.context_length": ["context_length"],
             "t5.embedding_length": ["d_model"],
             "t5.feed_forward_length": ["d_ff"],
             "t5.block_count": ["num_layers", "num_decoder_layers"],
@@ -245,6 +248,8 @@ class T5Config:
                 for config_name in config_names
             }
         )
+        if "tokenizer.ggml.tokens" in properties:
+            all_kwargs["vocab_size"] = len(properties["tokenizer.ggml.tokens"])
         all_kwargs.update(kwargs)
 
         return T5Config(**all_kwargs)
