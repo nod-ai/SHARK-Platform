@@ -554,8 +554,9 @@ def tune(
             with open(path.join(output, f"{i+1}_config.mlir"), "w") as f:
                 f.write(tf_mlir.embeddable)
 
-        with open(path.join(output, "configs.pkl"), "wb") as file:
-            pickle.dump(configs, file)
+        # TODO: Fix pickling for ir types.
+        # with open(path.join(output, "configs.pkl"), "wb") as file:
+        #    pickle.dump(configs, file)
 
         tune_logger.info(f"Generated {len(configs)} candidates")
         tune_logger.info(f"Configurations .pkl is stored in {output}/configs.pkl")
