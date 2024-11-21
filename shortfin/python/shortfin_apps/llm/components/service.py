@@ -350,7 +350,10 @@ class InferenceExecutorProcess(sf.Process):
                 with tokens_host.view(i).map(discard=True) as m:
                     m.fill(0)
                     if i < req_count:
-                        m.items = self.exec_requests[i].input_token_ids
+                        if self.phase == InferencePhase.PREFILL:
+                            m.items = self.exec_requests[i].input_token_ids
+                        elif self.phase == InferencePhase.DECODE:
+                            m.items = self.exec_requests[i].input_token_ids[-1:]
             tokens_host.copy_to(tokens)
 
             # For prefill, populate seq_lens
@@ -417,7 +420,7 @@ class InferenceExecutorProcess(sf.Process):
             # Return results.
             for i in range(req_count):
                 req = self.exec_requests[i]
-                sl = len(req.input_token_ids)
+                sl = 1 if is_decode else len(req.input_token_ids)
                 if req.return_all_logits:
                     logits_item = logits.view(i, slice(0, sl))
                 else:
