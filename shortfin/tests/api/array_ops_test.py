@@ -276,7 +276,7 @@ def test_elementwise_forms(device):
     # relying on a parametric test for actual behavior.
     with pytest.raises(
         ValueError,
-        match="Elementwsie operators require at least one argument to be a device_array",
+        match="Elementwise operators require at least one argument to be a device_array",
     ):
         sfnp.multiply(2, 2)
 

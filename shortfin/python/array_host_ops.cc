@@ -429,7 +429,7 @@ DType PromoteArithmeticTypes(std::optional<DType> lhs_dtype,
                              std::optional<DType> rhs_dtype) {
   if (!lhs_dtype && !rhs_dtype) {
     throw std::invalid_argument(
-        "Elementwsie operators require at least one argument to be a "
+        "Elementwise operators require at least one argument to be a "
         "device_array");
   }
 
