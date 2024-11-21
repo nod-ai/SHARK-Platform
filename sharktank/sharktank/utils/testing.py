@@ -14,6 +14,7 @@ import torch
 from typing import Any, Callable
 from operator import eq
 from collections.abc import Iterable
+import gc
 
 from ..types import *
 
@@ -28,6 +29,7 @@ class TempDirTestBase(unittest.TestCase):
         self._temp_dir = Path(tempfile.mkdtemp(type(self).__qualname__))
 
     def tearDown(self):
+        gc.collect()
         shutil.rmtree(self._temp_dir, ignore_errors=True)
 
 

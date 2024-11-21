@@ -22,6 +22,7 @@ concurrency:
 
 jobs:
   sglang_bench_serve:
+    if: ${{ github.repository_owner == 'nod-ai' || github.event_name != 'schedule' }}
     name: "SGLang Serving Benchmark Tests"
     strategy:
       matrix:
