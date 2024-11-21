@@ -14,6 +14,7 @@ from sharktank.utils.export_artifacts import (
     IreeCompileException,
 )
 
+is_mi300x = pytest.mark.skipif("config.getoption('iree_hip_target') != 'gfx942'")
 skipif_run_quick_llama_test = pytest.mark.skipif(
     'config.getoption("run-quick-llama-test") and not config.getoption("run-nightly-llama-tests")',
     reason="Skipping large tests when --run-quick-llama-test is set",
@@ -26,6 +27,7 @@ skipif_run_quick_llama_test = pytest.mark.skipif(
     "tensor_parallelism_size",
     "baseline_perplexity_scores",
 )
+@is_mi300x
 class PerplexityTest(unittest.TestCase):
     def setUp(self):
         self.current_perplexity_all = {}
