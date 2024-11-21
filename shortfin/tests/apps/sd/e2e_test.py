@@ -158,23 +158,18 @@ def test_sd_server_bs512_dense_fpd8(sd_server_fpd8):
     assert status_code == 200
 
 
-import shlex
-
-
 class ServerRunner:
     def __init__(self, args):
         port = str(find_free_port())
         self.url = "http://0.0.0.0:" + port
         env = os.environ.copy()
         env["PYTHONUNBUFFERED"] = "1"
-        all_args = [
-            *args,
-            "--port=" + port,
-            "--device=amdgpu",
-        ]
-        print(f"EXECUTE SERVER: {shlex.join(all_args)}")
         self.process = subprocess.Popen(
-            all_args,
+            [
+                *args,
+                "--port=" + port,
+                "--device=amdgpu",
+            ],
             env=env,
             # TODO: Have a more robust way of forking a subprocess.
             stdout=sys.stdout,
@@ -234,11 +229,11 @@ def send_json_file(url="http://0.0.0.0:8000", num_copies=1):
             height = getbatched(request, idx, "height")
             img = bytes_to_img(item.encode("utf-8"), idx, width, height)
             imgs.append(img)
-        return imgs, response.status_code
 
     except requests.exceptions.RequestException as e:
         print(f"Error sending the request: {e}")
-        return [], 500
+
+    return imgs, response.status_code
 
 
 def getbatched(req, idx, key):
