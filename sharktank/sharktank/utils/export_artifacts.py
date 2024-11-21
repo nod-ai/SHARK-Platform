@@ -180,13 +180,13 @@ class ExportArtifacts:
         cwd = self.sharktank_dir
         cmd = subprocess.list2cmdline(export_args)
 
-        logger.info(f"Exporting mlir:\n" f"cd {cwd} && {cmd}")
+        logger.info(f" Exporting mlir:\n" f"cd {cwd} && {cmd}")
 
         proc = subprocess.run(cmd, shell=True, capture_output=True, cwd=cwd, text=True)
         if proc.returncode != 0:
             raise ExportMlirException(proc, cwd)
         else:
-            logger.info(f"Exported to mlir successfully:\n" f"{proc.stdout}")
+            logger.info(f" Exported to mlir successfully:\n" f"{proc.stdout}")
 
         return proc.returncode
 
@@ -223,7 +223,7 @@ class ExportArtifacts:
             compile_args += args
         cmd = subprocess.list2cmdline(compile_args)
 
-        logging.getLogger().info(f"Launching compile command:\n" f"cd {cwd} && {cmd}")
+        logger.info(f" Launching compile command:\n" f"cd {cwd} && {cmd}")
         proc = subprocess.run(cmd, shell=True, capture_output=True, cwd=cwd)
         return_code = proc.returncode
         if return_code != 0:
@@ -277,7 +277,7 @@ class ExportArtifacts:
         benchmark_args += devices
         benchmark_args += args
         cmd = subprocess.list2cmdline(benchmark_args)
-        logging.getLogger().info(f"Launching run command:\n" f"cd {cwd} && {cmd}")
+        logger.info(f" Launching run command:\n" f"cd {cwd} && {cmd}")
         proc = subprocess.run(cmd, shell=True, stdout=sys.stdout, cwd=cwd)
         return_code = proc.returncode
         if return_code != 0:
