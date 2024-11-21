@@ -49,6 +49,7 @@ def test_image_to_bytes(device):
     images_planar = sfnp.convert(images_planar, dtype=sfnp.float16)
 
     # Extract and convert each image to interleaved RGB bytes.
+    images = []
     for idx in range(images_planar.shape[0]):
         image_planar = images_planar.view(idx)
         assert image_planar.shape == [1, 3, 16, 12]
@@ -56,6 +57,8 @@ def test_image_to_bytes(device):
         assert image_interleaved.shape == [1, 16, 12, 3]
         image_scaled = sfnp.multiply(image_interleaved, 255)
         image = sfnp.round(image_scaled, dtype=sfnp.uint8)
-        print(image)
         image_bytes = bytes(image.map(read=True))
-        print(image_bytes)
+        images.append(image_bytes)
+
+    assert images[0] == b"\x00\x1a3" * 192
+    assert images[1] == b"Mf\x80" * 192

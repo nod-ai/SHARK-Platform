@@ -441,10 +441,38 @@ DType PromoteArithmeticTypes(std::optional<DType> lhs_dtype,
 
   int lhs_rank = DTypePromotionRank(*lhs_dtype);
   int rhs_rank = DTypePromotionRank(*rhs_dtype);
-  if (lhs_rank < rhs_rank)
-    return *rhs_dtype;
-  else
-    return *lhs_dtype;
+  DType promoted_dtype = lhs_rank < rhs_rank ? *rhs_dtype : *lhs_dtype;
+
+  // If mismatched signed/unsigned, then need to promote to the next signed
+  // dtype.
+  if (promoted_dtype.is_integer()) {
+    bool lhs_unsigned = iree_all_bits_set(
+        lhs_dtype->numerical_type(), IREE_HAL_NUMERICAL_TYPE_INTEGER_UNSIGNED);
+    bool rhs_unsigned = iree_all_bits_set(
+        rhs_dtype->numerical_type(), IREE_HAL_NUMERICAL_TYPE_INTEGER_UNSIGNED);
+    if ((lhs_unsigned || rhs_unsigned) && !(lhs_unsigned && rhs_unsigned)) {
+      // Signed/unsigned mismatch. Promote to next.
+      switch (promoted_dtype) {
+        case DType::uint8():
+        case DType::int8():
+          return DType::int16();
+        case DType::uint16():
+        case DType::int16():
+          return DType::int32();
+        case DType::uint32():
+        case DType::int32():
+          return DType::int64();
+        default:
+          // Jax's type promotion chart says this goes to a weak FP type, but
+          // we don't implement such a construct and I don't really see how
+          // that makes sense in a system setting like this, so we just saturate
+          // to 64bit.
+          return DType::int64();
+      }
+    }
+  }
+
+  return promoted_dtype;
 }
 
 // ---------------------------------------------------------------------------//
