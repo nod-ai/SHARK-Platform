@@ -4,12 +4,19 @@ Each sub-project has its own developer guide. If you would like to work across
 projects, these instructions should help you get started:
 
 
-### Prepare your system
+### Install Dependencies
 
-(these instructions are tested on Ubuntu 24.04 which has clang-18 and python3.12 by default)
-
+Install shortfin dependencies
 ```bash
-sudo apt update && sudo apt install -y python-is-python3 python3-venv python3-dev clang lld
+sudo apt update && sudo apt install -y clang lld
+```
+
+### Prepare your python environment
+
+Install:
+
+```
+python-is-python3 python3-venv python3-dev
 ```
 
 <details>
@@ -37,13 +44,14 @@ eval "$(pyenv init -)"
 Finally, install a pyenv-managed version of python
 
 ```bash
-pyenv install 3.12 # or your python version
-pyenv local 3.12 # or whichever python version you'd like
+pyenv install 3.12 # or whichever python version you'd like
+pyenv local 3.12
 ```
 
 Now, your python, pip, and venv should be managed by pyenv instead.
 
 </details>
+
 ### Setup a venv
 
 We recommend setting up a Python
