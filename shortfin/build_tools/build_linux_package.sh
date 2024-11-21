@@ -14,9 +14,10 @@
 # Build everything (all python versions):
 #   sudo ./build_tools/build_linux_package.sh
 #
-# Build specific Python versions to custom directory:
+# Build specific Python versions to custom directory, with tracing enabled:
 #   OVERRIDE_PYTHON_VERSIONS="cp312-cp312 cp313-cp313" \
 #   OUTPUT_DIR="/tmp/wheelhouse" \
+#   SHORTFIN_ENABLE_TRACING="ON" \
 #   sudo -E ./build_tools/build_linux_package.sh
 #
 # Valid Python versions match a subdirectory under /opt/python in the docker
@@ -43,6 +44,8 @@ ARCH="$(uname -m)"
 MANYLINUX_DOCKER_IMAGE="${MANYLINUX_DOCKER_IMAGE:-quay.io/pypa/manylinux2014_${ARCH}:latest}"
 PYTHON_VERSIONS="${OVERRIDE_PYTHON_VERSIONS:-cp311-cp311 cp312-cp312 cp313-cp313}"
 OUTPUT_DIR="${OUTPUT_DIR:-${THIS_DIR}/wheelhouse}"
+CACHE_DIR="${CACHE_DIR:-}"
+SHORTFIN_ENABLE_TRACING="${SHORTFIN_ENABLE_TRACING:-ON}"
 
 function run_on_host() {
   echo "Running on host"
@@ -53,12 +56,23 @@ function run_on_host() {
   OUTPUT_DIR="$(cd "${OUTPUT_DIR}" && pwd)"
   echo "Outputting to ${OUTPUT_DIR}"
   mkdir -p "${OUTPUT_DIR}"
+
+  # Setup cache as needed.
+  extra_args=""
+  if ! [ -z "$CACHE_DIR" ]; then
+    echo "Setting up host cache dir ${CACHE_DIR}"
+    mkdir -p "${CACHE_DIR}/ccache"
+    extra_args="${extra_args} -v ${CACHE_DIR}:${CACHE_DIR} -e CACHE_DIR=${CACHE_DIR}"
+  fi
+
   docker run --rm \
     -v "${REPO_ROOT}:${REPO_ROOT}" \
     -v "${OUTPUT_DIR}:${OUTPUT_DIR}" \
     -e __MANYLINUX_BUILD_WHEELS_IN_DOCKER=1 \
     -e "OVERRIDE_PYTHON_VERSIONS=${PYTHON_VERSIONS}" \
     -e "OUTPUT_DIR=${OUTPUT_DIR}" \
+    -e "SHORTFIN_ENABLE_TRACING=${SHORTFIN_ENABLE_TRACING}" \
+    ${extra_args} \
     "${MANYLINUX_DOCKER_IMAGE}" \
     -- ${THIS_DIR}/${SCRIPT_NAME}
 
@@ -75,6 +89,23 @@ function run_in_docker() {
   echo "Using python versions: ${PYTHON_VERSIONS}"
   local orig_path="${PATH}"
 
+  # Configure caching.
+  if [ -z "$CACHE_DIR" ]; then
+    echo "Cache directory not configured. No caching will take place."
+  else
+    # TODO: include this in the dockerfile we use so it gets cached
+    install_ccache
+
+    # TODO: debug low cache hit rate (~30% hits out of 98% cacheable) on CI
+    mkdir -p "${CACHE_DIR}"
+    CACHE_DIR="$(cd ${CACHE_DIR} && pwd)"
+    echo "Caching build artifacts to ${CACHE_DIR}"
+    export CCACHE_DIR="${CACHE_DIR}/ccache"
+    export CCACHE_MAXSIZE="2G"
+    export CMAKE_C_COMPILER_LAUNCHER=ccache
+    export CMAKE_CXX_COMPILER_LAUNCHER=ccache
+  fi
+
   # Build phase.
   echo "******************** BUILDING PACKAGE ********************"
   for python_version in ${PYTHON_VERSIONS}; do
@@ -85,14 +116,44 @@ function run_in_docker() {
     fi
     export PATH="${python_dir}/bin:${orig_path}"
     echo ":::: Python version $(python --version)"
+
     clean_wheels "shortfin" "${python_version}"
     build_shortfin
     run_audit_wheel "shortfin" "${python_version}"
+
+    if ! [ -z "$CACHE_DIR" ]; then
+      echo "ccache stats:"
+      ccache --show-stats
+    fi
   done
 }
 
+function install_ccache() {
+  # This gets an old version.
+  # yum install -y ccache
+
+  CCACHE_VERSION="4.10.2"
+
+  if [[ "${ARCH}" == "x86_64" ]]; then
+    curl --silent --fail --show-error --location \
+        "https://github.com/ccache/ccache/releases/download/v${CCACHE_VERSION}/ccache-${CCACHE_VERSION}-linux-${ARCH}.tar.xz" \
+        --output ccache.tar.xz
+
+    tar xf ccache.tar.xz
+    cp ccache-${CCACHE_VERSION}-linux-${ARCH}/ccache /usr/local/bin
+  elif [[ "${ARCH}" == "aarch64" ]]; then
+    # Latest version of ccache is not released for arm64, built it
+    git clone --depth 1 --branch "v${CCACHE_VERSION}" https://github.com/ccache/ccache.git
+    mkdir -p ccache/build && cd "$_"
+    cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Release ..
+    ninja
+    cp ccache /usr/bin/
+  fi
+}
+
 function build_shortfin() {
-  export SHORTFIN_ENABLE_TRACING=ON
+  # Note: The SHORTFIN_ENABLE_TRACING environment variable should have been
+  # forwarded from the host environment into Docker above.
   python -m pip wheel --disable-pip-version-check -v -w "${OUTPUT_DIR}" "${REPO_ROOT}/shortfin"
 }
 

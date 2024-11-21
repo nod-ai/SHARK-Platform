@@ -1,0 +1,71 @@
+# Copyright 2024 Advanced Micro Devices, Inc.
+#
+# Licensed under the Apache License v2.0 with LLVM Exceptions.
+# See https://llvm.org/LICENSE.txt for license information.
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+
+name: PkgCI Build Packages
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  build_packages:
+    runs-on: ubuntu-24.04
+    env:
+      CACHE_DIR: ${{ github.workspace }}/.shark-ai-cache
+      OUTPUT_DIR: "${{ github.workspace }}/bindist"
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+    - name: Setup Python
+      uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+      with:
+        python-version: 3.12
+
+    # Setup metadata.
+    - name: Install Python packages
+      run: pip install packaging
+    - name: Generate dev package versions
+      id: version_rc
+      run: |
+        version_suffix=".dev+${{ github.sha }}"
+        echo "version_suffix=${version_suffix}" >> $GITHUB_ENV
+        sharktank_package_version=$(python3 build_tools/python_deploy/compute_local_version.py --version-suffix=${version_suffix} sharktank)
+        shortfin_package_version=$(python3 build_tools/python_deploy/compute_local_version.py --version-suffix=${version_suffix} shortfin)
+        sharkai_package_version=$(python3 build_tools/python_deploy/compute_common_version.py -rc --version-suffix=${version_suffix} --write-json)
+
+    - name: Enable cache
+      uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4.1.2
+      with:
+        path: ${{ env.CACHE_DIR }}
+        key: shark-ai-pkgci-linux-packages-x86_64-v1-${{ github.sha }}
+        restore-keys: |
+          shark-ai-pkgci-linux-packages-x86_64-v1-
+
+    # Build dev packages.
+    - name: Build sharktank
+      run: |
+        ./sharktank/build_tools/build_linux_package.sh
+    - name: Build shortfin
+      env:
+        OVERRIDE_PYTHON_VERSIONS: cp311-cp311
+        SHORTFIN_ENABLE_TRACING: "OFF"
+      run: |
+        ./shortfin/build_tools/build_linux_package.sh
+    - name: Build shark-ai
+      run: |
+        ./build_tools/python_deploy/write_requirements.py --version-suffix=${version_suffix}
+        ./shark-ai/build_tools/build_linux_package.sh
+
+    # Upload.
+    - name: Upload python wheels
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+      with:
+        if-no-files-found: error
+        name: linux_x86_64_dev_packages
+        path: bindist
