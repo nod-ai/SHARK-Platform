@@ -8,9 +8,42 @@ projects, these instructions should help you get started:
 
 (these instructions are tested on Ubuntu 24.04 which has clang-18 and python3.12 by default)
 
+```bash
+sudo apt update && sudo apt install -y python-is-python3 python3-venv python3-dev clang lld
 ```
-sudo apt update && sudo apt install -y python-is-python3 python3.12-venv python3-dev clang lld
+
+<details>
+
+<summary> Or, alternatively, use `pyenv` to manage your python installation: </summary>
+
+
+First, install pyenv and its dependencies.
+
+```bash
+sudo apt update; sudo apt install build-essential libssl-dev zlib1g-dev \
+libbz2-dev libreadline-dev libsqlite3-dev curl git \
+libncursesw5-dev xz-utils tk-dev libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev
+curl https://pyenv.run | bash
 ```
+
+Then, make pyenv available by adding the below to your `~/.bashrc`:
+
+```bash
+export PYENV_ROOT="$HOME/.pyenv"
+command -v pyenv >/dev/null || export PATH="$PYENV_ROOT/bin:$PATH"
+eval "$(pyenv init -)"
+```
+
+Finally, install a pyenv-managed version of python
+
+```bash
+pyenv install 3.12 # or your python version
+pyenv local 3.12 # or whichever python version you'd like
+```
+
+Now, your python, pip, and venv should be managed by pyenv instead.
+
+</details>
 ### Setup a venv
 
 We recommend setting up a Python
