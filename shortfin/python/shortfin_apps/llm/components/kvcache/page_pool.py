@@ -24,7 +24,8 @@ class PageInfo:
     pool: PagePool
     token_offset: int  # Offset within the page
     token_count: int  # Number of tokens stored in this page
-    ref_count: int = 0  # Number of references to this page in the radix tree
+    writing: bool = False
+    read_ref_count: int = 0  # Number of threads that still need to read this page. When this reaches 0, page is eligible for release
 
 
 @dataclass
