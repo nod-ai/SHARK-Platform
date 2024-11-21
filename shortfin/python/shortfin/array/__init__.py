@@ -48,7 +48,9 @@ ceil = _sfl.array.ceil
 convert = _sfl.array.convert
 fill_randn = _sfl.array.fill_randn
 floor = _sfl.array.floor
+mul = _sfl.array.mul
 round = _sfl.array.round
+transpose = _sfl.array.transpose
 trunc = _sfl.array.trunc
 RandomGenerator = _sfl.array.RandomGenerator
 
@@ -91,7 +93,9 @@ __all__ = [
     "convert",
     "fill_randn",
     "floor",
+    "mul",
     "round",
+    "transpose",
     "trunc",
     "RandomGenerator",
 ]
