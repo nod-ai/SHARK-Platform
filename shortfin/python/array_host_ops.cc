@@ -447,6 +447,10 @@ DType PromoteArithmeticTypes(std::optional<DType> lhs_dtype,
     return *lhs_dtype;
 }
 
+// ---------------------------------------------------------------------------//
+// Elementwise support
+// ---------------------------------------------------------------------------//
+
 // Python element type scalar conversion functions.
 uint8_t ConvertPyToEltTy(py::handle py_value, uint8_t zero) {
   return py::cast<uint8_t>(py_value);
@@ -491,6 +495,107 @@ double ConvertPyToEltTy(py::handle py_value, double zero) {
 half_float::half ConvertPyToEltTy(py::handle py_value, half_float::half zero) {
   // Python can't cast directly to half so first go to double.
   return static_cast<half_float::half>(py::cast<double>(py_value));
+}
+
+struct AddFunctor {
+  template <typename Lhs, typename Rhs>
+  static auto Invoke(Lhs &&lhs, Rhs &&rhs) {
+    return lhs + rhs;
+  }
+};
+
+struct DivideFunctor {
+  template <typename Lhs, typename Rhs>
+  static auto Invoke(Lhs &&lhs, Rhs &&rhs) {
+    return lhs / rhs;
+  }
+};
+
+struct MultiplyFunctor {
+  template <typename Lhs, typename Rhs>
+  static auto Invoke(Lhs &&lhs, Rhs &&rhs) {
+    return lhs * rhs;
+  }
+};
+
+struct SubtractFunctor {
+  template <typename Lhs, typename Rhs>
+  static auto Invoke(Lhs &&lhs, Rhs &&rhs) {
+    return lhs - rhs;
+  }
+};
+
+template <typename ElementwiseFunctor>
+device_array ElementwiseOperation(py::handle lhs, py::handle rhs,
+                                  std::optional<device_array> out,
+                                  bool device_visible) {
+  std::optional<device_array> lhs_array;
+  OptionalArrayCast(lhs, lhs_array);
+  std::optional<device_array> rhs_array;
+  OptionalArrayCast(rhs, rhs_array);
+  auto dtype = PromoteArithmeticTypes(
+      lhs_array ? std::optional<DType>(lhs_array->dtype()) : std::nullopt,
+      rhs_array ? std::optional<DType>(rhs_array->dtype()) : std::nullopt);
+  if (lhs_array && lhs_array->dtype() != dtype) {
+    auto converted = GenericElementwiseConvert<ConvertFunctor>(
+        *lhs_array, dtype, /*out=*/std::nullopt,
+        /*device_visible=*/false);
+    lhs_array.reset();
+    lhs_array.emplace(std::move(converted));
+  }
+  if (rhs_array && rhs_array->dtype() != dtype) {
+    auto converted = GenericElementwiseConvert<ConvertFunctor>(
+        *rhs_array, dtype, /*out=*/std::nullopt,
+        /*device_visible=*/false);
+    rhs_array.reset();
+    rhs_array.emplace(std::move(converted));
+  }
+
+  auto compute = [&]<typename EltTy>() -> device_array {
+    auto handle_result = [&]<typename D, typename A>(
+                             D &&device, A &&result) -> device_array {
+      if (!out) {
+        out.emplace(device_array::for_host(device, result.shape(), dtype,
+                                           device_visible));
+      }
+      auto out_t = out->map_xtensor_w<EltTy>();
+      *out_t = result;
+      return *out;
+    };
+    if (!rhs_array) {
+      auto lhs_t = lhs_array->map_xtensor<EltTy>();
+      xt::xarray<EltTy> rhs_scalar = ConvertPyToEltTy(rhs, EltTy());
+      return handle_result(lhs_array->device(),
+                           ElementwiseFunctor::Invoke(*lhs_t, rhs_scalar));
+    } else if (!lhs_array) {
+      xt::xarray<EltTy> lhs_scalar = ConvertPyToEltTy(lhs, EltTy());
+      auto rhs_t = rhs_array->map_xtensor<EltTy>();
+      return handle_result(rhs_array->device(),
+                           ElementwiseFunctor::Invoke(lhs_scalar, *rhs_t));
+    } else {
+      auto lhs_t = lhs_array->map_xtensor<EltTy>();
+      auto rhs_t = rhs_array->map_xtensor<EltTy>();
+      return handle_result(lhs_array->device(),
+                           ElementwiseFunctor::Invoke(*lhs_t, *rhs_t));
+    }
+  };
+
+  switch (dtype) {
+    SF_UNARY_FUNCTION_CASE(float16, half_float::half);
+    SF_UNARY_FUNCTION_CASE(float32, float);
+    SF_UNARY_FUNCTION_CASE(float64, double);
+    SF_UNARY_FUNCTION_CASE(uint8, uint8_t);
+    SF_UNARY_FUNCTION_CASE(int8, int8_t);
+    SF_UNARY_FUNCTION_CASE(uint16, uint16_t);
+    SF_UNARY_FUNCTION_CASE(int16, int16_t);
+    SF_UNARY_FUNCTION_CASE(uint32, uint32_t);
+    SF_UNARY_FUNCTION_CASE(int32, uint32_t);
+    SF_UNARY_FUNCTION_CASE(uint64, uint64_t);
+    SF_UNARY_FUNCTION_CASE(int64, int64_t);
+    default:
+      throw std::invalid_argument(fmt::format(
+          "Unsupported dtype({}) for in elementwise op", dtype.name()));
+  }
 }
 
 }  // namespace
@@ -600,79 +705,14 @@ void BindArrayHostOps(py::module_ &m) {
       py::arg("input"), py::arg("permutation"), py::arg("out") = py::none(),
       py::arg("device_visible") = false, DOCSTRING_TRANSPOSE);
 
-  // Elementwise.
-  m.def(
-      "mul",
-      [](py::object lhs, py::object rhs, std::optional<device_array> out,
-         bool device_visible) {
-        std::optional<device_array> lhs_array;
-        OptionalArrayCast(lhs, lhs_array);
-        std::optional<device_array> rhs_array;
-        OptionalArrayCast(rhs, rhs_array);
-        auto dtype = PromoteArithmeticTypes(
-            lhs_array ? std::optional<DType>(lhs_array->dtype()) : std::nullopt,
-            rhs_array ? std::optional<DType>(rhs_array->dtype())
-                      : std::nullopt);
-        if (lhs_array && lhs_array->dtype() != dtype) {
-          auto converted = GenericElementwiseConvert<ConvertFunctor>(
-              *lhs_array, dtype, /*out=*/std::nullopt,
-              /*device_visible=*/false);
-          lhs_array.reset();
-          lhs_array.emplace(std::move(converted));
-        }
-        if (rhs_array && rhs_array->dtype() != dtype) {
-          auto converted = GenericElementwiseConvert<ConvertFunctor>(
-              *rhs_array, dtype, /*out=*/std::nullopt,
-              /*device_visible=*/false);
-          rhs_array.reset();
-          rhs_array.emplace(std::move(converted));
-        }
-
-        auto compute = [&]<typename EltTy>() -> device_array {
-          auto handle_result = [&]<typename D, typename A>(
-                                   D &&device, A &&result) -> device_array {
-            if (!out) {
-              out.emplace(device_array::for_host(device, result.shape(), dtype,
-                                                 device_visible));
-            }
-            auto out_t = out->map_xtensor_w<EltTy>();
-            *out_t = result;
-            return *out;
-          };
-          if (!rhs_array) {
-            auto lhs_t = lhs_array->map_xtensor<EltTy>();
-            xt::xarray<EltTy> rhs_scalar = ConvertPyToEltTy(rhs, EltTy());
-            return handle_result(lhs_array->device(), *lhs_t * rhs_scalar);
-          } else if (!lhs_array) {
-            xt::xarray<EltTy> lhs_scalar = ConvertPyToEltTy(lhs, EltTy());
-            auto rhs_t = rhs_array->map_xtensor<EltTy>();
-            return handle_result(rhs_array->device(), lhs_scalar * *rhs_t);
-          } else {
-            auto lhs_t = lhs_array->map_xtensor<EltTy>();
-            auto rhs_t = rhs_array->map_xtensor<EltTy>();
-            return handle_result(lhs_array->device(), *lhs_t * *rhs_t);
-          }
-        };
-
-        switch (dtype) {
-          SF_UNARY_FUNCTION_CASE(float16, half_float::half);
-          SF_UNARY_FUNCTION_CASE(float32, float);
-          SF_UNARY_FUNCTION_CASE(float64, double);
-          SF_UNARY_FUNCTION_CASE(uint8, uint8_t);
-          SF_UNARY_FUNCTION_CASE(int8, int8_t);
-          SF_UNARY_FUNCTION_CASE(uint16, uint16_t);
-          SF_UNARY_FUNCTION_CASE(int16, int16_t);
-          SF_UNARY_FUNCTION_CASE(uint32, uint32_t);
-          SF_UNARY_FUNCTION_CASE(int32, uint32_t);
-          SF_UNARY_FUNCTION_CASE(uint64, uint64_t);
-          SF_UNARY_FUNCTION_CASE(int64, int64_t);
-          default:
-            throw std::invalid_argument(fmt::format(
-                "Unsupported dtype({}) for in elementwise op", dtype.name()));
-        }
-      },
-      py::arg("lhs"), py::arg("rhs"), py::kw_only(),
-      py::arg("out") = py::none(), py::arg("device_visible") = false);
+// Elementwise.
+#define SF_DEF_ELEMENTWISE(py_name, target)                             \
+  m.def(py_name, target, py::arg("lhs"), py::arg("rhs"), py::kw_only(), \
+        py::arg("out") = py::none(), py::arg("device_visible") = false)
+  SF_DEF_ELEMENTWISE("add", ElementwiseOperation<AddFunctor>);
+  SF_DEF_ELEMENTWISE("divide", ElementwiseOperation<DivideFunctor>);
+  SF_DEF_ELEMENTWISE("multiply", ElementwiseOperation<MultiplyFunctor>);
+  SF_DEF_ELEMENTWISE("subtract", ElementwiseOperation<SubtractFunctor>);
 
 }  // namespace shortfin::python
 

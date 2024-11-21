@@ -54,7 +54,7 @@ def test_image_to_bytes(device):
         assert image_planar.shape == [1, 3, 16, 12]
         image_interleaved = sfnp.transpose(image_planar, (0, 2, 3, 1))
         assert image_interleaved.shape == [1, 16, 12, 3]
-        image_scaled = sfnp.mul(image_interleaved, 255)
+        image_scaled = sfnp.multiply(image_interleaved, 255)
         image = sfnp.round(image_scaled, dtype=sfnp.uint8)
         print(image)
         image_bytes = bytes(image.map(read=True))
