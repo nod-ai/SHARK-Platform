@@ -10,6 +10,10 @@
 import z3  # type: ignore
 from typing import Iterator
 
+
+from iree.compiler import ir
+from iree.compiler.dialects import iree_codegen, iree_gpu
+
 from .common import *
 
 
@@ -18,8 +22,9 @@ def get_mfma_intrinsic_constraints(
     intrinsic_m: z3.ArithRef,
     intrinsic_n: z3.ArithRef,
     intrinsic_k: z3.ArithRef,
+    mma_intrinsics: Optional[list[iree_gpu.MMAIntrinsic]] = None,
 ) -> z3.BoolRef:
-    compatible_intrinsics = get_compatible_mfma_intrinsics(problem_size)
+    compatible_intrinsics = get_compatible_mfma_intrinsics(problem_size, mma_intrinsics)
     assert len(compatible_intrinsics) > 0, "No compatible intrinsics found"
     return z3.Or(
         *(
@@ -68,6 +73,7 @@ def generate_constraints(
     subgroup_m_count,
     subgroup_n_count,
     waves_per_eu,
+    mma_intrinsics: Optional[list[iree_gpu.MMAIntrinsic]] = None,
 ):
     M, N, K = (
         problem_size.matmul_size.M,
@@ -82,7 +88,7 @@ def generate_constraints(
     constraints += [subgroup_size == 64, wg_threads <= 1024]
     constraints += [
         get_mfma_intrinsic_constraints(
-            problem_size, intrinsic_mn, intrinsic_mn, intrinsic_k
+            problem_size, intrinsic_mn, intrinsic_mn, intrinsic_k, mma_intrinsics
         )
     ]
     subgroup_k_count = 1
@@ -130,7 +136,10 @@ def generate_constraints(
 
 
 def generate_solutions(
-    logger: logging.Logger, problem_size: ProblemSize, num_subgrups: int
+    logger: logging.Logger,
+    problem_size: ProblemSize,
+    num_subgrups: int,
+    mma_intrinsics: Optional[list[iree_gpu.MMAIntrinsic]] = None,
 ) -> Iterator[Configuration]:
     M, N, K = problem_size.MNK
     logger.info(f"{M},{N},{K}")
@@ -168,6 +177,7 @@ def generate_solutions(
         sg_m_cnt,
         sg_n_cnt,
         waves_per_eu,
+        mma_intrinsics,
     )
     solver.add(z3.simplify(z3.And(constraints)))
     logger.debug(f"Initial constraints: {solver}")

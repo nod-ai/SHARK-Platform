@@ -30,6 +30,8 @@ from abc import abstractmethod
 
 from iree.compiler import ir  # type: ignore
 
+from iree.compiler.dialects import iree_codegen
+
 from .common import *
 from .dispatch_constraints import *
 from .dispatch_parser import *
@@ -535,13 +537,19 @@ def tune(
 
         walk_result: OpWalkResult = walk_mlir_op(mlir_module, dispatch_tuner_registry)
 
+        variant_op_list = iree_codegen.get_executable_variant_ops(mlir_module)
+        assert len(variant_op_list) == 1, "Support only one op in one disptach"
+        variant_op = variant_op_list[0]
+        # Get the MMA intrinisic intructions supported by the target.
+        mma_list = iree_codegen.query_mma_intrinsics(variant_op)
+
         dispatch_tuner = walk_result.dispatch_tuner
         assert dispatch_tuner, "No suitable dispatch tuner found"
         problem_size: ProblemSize = dispatch_tuner.get_shapes(mlir_template)
         tune_logger.debug(str(problem_size))
         configs = []
         for i, config in enumerate(
-            generate_solutions(tune_logger, problem_size, num_subgroups)
+            generate_solutions(tune_logger, problem_size, num_subgroups, mma_list)
         ):
             if i >= limit:
                 break
