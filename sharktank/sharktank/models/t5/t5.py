@@ -26,7 +26,19 @@ from ...layers import (
 )
 from ... import ops
 from ...types.theta import Theta
+from ...types.tensors import AnyTensor
 from ...layers import FFN, T5Config
+
+__all__ = [
+    "T5Config",
+    "T5LayerFF",
+    "T5Attention",
+    "T5SelfAttention",
+    "T5CrossAttention",
+    "T5Block",
+    "T5Stack",
+    "T5Encoder",
+]
 
 logger = logging.getLogger(__name__)
 
@@ -1042,6 +1054,22 @@ class T5Encoder(BaseLayer):
         encoder_config.is_encoder_decoder = False
         self.encoder = T5Stack(
             theta=theta, config=encoder_config, embed_tokens=self.token_embedding
+        )
+
+    @property
+    def config(self):
+        return self.encoder.config
+
+    def sample_inputs(self, batch_size: int) -> OrderedDict[str, AnyTensor]:
+        return OrderedDict(
+            [
+                (
+                    "input_ids",
+                    torch.empty(
+                        size=[batch_size, self.config.context_length], dtype=torch.long
+                    ),
+                )
+            ]
         )
 
     def forward(
