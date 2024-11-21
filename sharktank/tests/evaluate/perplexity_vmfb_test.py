@@ -10,7 +10,10 @@ import json
 
 from sharktank.evaluate import perplexity_vmfb
 
-longrun = pytest.mark.skipif("not config.getoption('longrun')")
+skipif_run_quick_llama_test = pytest.mark.skipif(
+    'config.getoption("run-quick-llama-test") and not config.getoption("run-nightly-llama-tests")',
+    reason="Skipping large tests when --run-quick-llama-test is set",
+)
 
 
 @pytest.mark.usefixtures(
@@ -27,7 +30,6 @@ class PerplexityTest(unittest.TestCase):
         with open(self.baseline_perplexity_scores, "r") as f:
             self.baseline_perplexity = json.load(f)
 
-    @longrun
     def test_llama3_8B_f16_decomposed(self):
 
         # Llama 3.1 8B decomposed
@@ -62,7 +64,7 @@ class PerplexityTest(unittest.TestCase):
     @pytest.mark.xfail(
         reason="Non-decomposed attention is not supported yet",
     )
-    @longrun
+    @skipif_run_quick_llama_test
     def test_llama3_8B_f16(self):
 
         # Llama 3.1 8B non-decomposed
@@ -97,7 +99,7 @@ class PerplexityTest(unittest.TestCase):
     @pytest.mark.xfail(
         reason="FP8 model is unsupported",
     )
-    @longrun
+    @skipif_run_quick_llama_test
     def test_llama3_8B_fp8_decomposed(self):
 
         # Llama 3.1 8B decomposed
@@ -132,7 +134,7 @@ class PerplexityTest(unittest.TestCase):
     @pytest.mark.xfail(
         reason="FP8 model is unsupported",
     )
-    @longrun
+    @skipif_run_quick_llama_test
     def test_llama3_8B_fp8(self):
 
         # Llama 3.1 8B non-decomposed
@@ -167,7 +169,7 @@ class PerplexityTest(unittest.TestCase):
     @pytest.mark.xfail(
         reason="Sharding is unsupported",
     )
-    @longrun
+    @skipif_run_quick_llama_test
     def test_llama3_405B_f16_decomposed(self):
 
         # Llama 3.1 405B decomposed
@@ -202,7 +204,7 @@ class PerplexityTest(unittest.TestCase):
     @pytest.mark.xfail(
         reason="Non-decomposed attention is not supported yet",
     )
-    @longrun
+    @skipif_run_quick_llama_test
     def test_llama3_405B_f16(self):
 
         # Llama 3.1 405B non-decomposed
@@ -237,7 +239,7 @@ class PerplexityTest(unittest.TestCase):
     @pytest.mark.xfail(
         reason="FP8 model is unsupported",
     )
-    @longrun
+    @skipif_run_quick_llama_test
     def test_llama3_405B_fp8_decomposed(self):
 
         # Llama 3.1 405B decomposed
@@ -272,7 +274,7 @@ class PerplexityTest(unittest.TestCase):
     @pytest.mark.xfail(
         reason="FP8 model is unsupported",
     )
-    @longrun
+    @skipif_run_quick_llama_test
     def test_llama3_405B_fp8(self):
 
         # Llama 3.1 405B non-decomposed
