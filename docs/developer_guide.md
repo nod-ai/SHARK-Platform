@@ -14,7 +14,7 @@ sudo apt update && sudo apt install -y python-is-python3 python3-venv python3-de
 
 <details>
 
-<summary> Or, alternatively, use `pyenv` to manage your python installation: </summary>
+<summary> Or, alternatively, use `pyenv` to manage a separate python installation for more control over its version: </summary>
 
 
 First, install pyenv and its dependencies.
@@ -95,8 +95,10 @@ See also: [nightly_releases.md](nightly_releases.md).
 ### Running tests
 
 ```bash
+pip install -r shortfin/requirements-tests.txt
 pytest sharktank
 pytest shortfin
+pytest app_tests/integration_tests
 ```
 
 ### Optional: pre-commits and developer settings
