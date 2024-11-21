@@ -9,6 +9,10 @@ import pytest
 import json
 
 from sharktank.evaluate import perplexity_vmfb
+from sharktank.utils.export_artifacts import (
+    ExportMlirException,
+    IreeCompileException,
+)
 
 skipif_run_quick_llama_test = pytest.mark.skipif(
     'config.getoption("run-quick-llama-test") and not config.getoption("run-nightly-llama-tests")',
@@ -46,6 +50,7 @@ class PerplexityTest(unittest.TestCase):
                 f"--iree-hip-target={self.iree_hip_target}",
                 f"--tensor-parallelism-size=1",
                 f"--attention-kernel=decomposed",
+                f"--num-prompts=5",
             ]
         )
 
@@ -61,10 +66,8 @@ class PerplexityTest(unittest.TestCase):
             msg=f"Current perplexity deviates baseline by {perplexity_difference}",
         )
 
-    @pytest.mark.xfail(
-        reason="Non-decomposed attention is not supported yet",
-    )
     @skipif_run_quick_llama_test
+    @pytest.mark.xfail(reason="Compile Error", strict=True, raises=IreeCompileException)
     def test_llama3_8B_f16(self):
 
         # Llama 3.1 8B non-decomposed
@@ -96,10 +99,8 @@ class PerplexityTest(unittest.TestCase):
             msg=f"Current perplexity deviates baseline by {perplexity_difference}",
         )
 
-    @pytest.mark.xfail(
-        reason="FP8 model is unsupported",
-    )
     @skipif_run_quick_llama_test
+    @pytest.mark.xfail(reason="Compile Error", strict=True, raises=IreeCompileException)
     def test_llama3_8B_fp8_decomposed(self):
 
         # Llama 3.1 8B decomposed
@@ -131,10 +132,8 @@ class PerplexityTest(unittest.TestCase):
             msg=f"Current perplexity deviates baseline by {perplexity_difference}",
         )
 
-    @pytest.mark.xfail(
-        reason="FP8 model is unsupported",
-    )
     @skipif_run_quick_llama_test
+    @pytest.mark.xfail(reason="Compile Error", strict=True, raises=IreeCompileException)
     def test_llama3_8B_fp8(self):
 
         # Llama 3.1 8B non-decomposed
@@ -166,10 +165,10 @@ class PerplexityTest(unittest.TestCase):
             msg=f"Current perplexity deviates baseline by {perplexity_difference}",
         )
 
+    @skipif_run_quick_llama_test
     @pytest.mark.xfail(
         reason="Sharding is unsupported",
     )
-    @skipif_run_quick_llama_test
     def test_llama3_405B_f16_decomposed(self):
 
         # Llama 3.1 405B decomposed
@@ -201,10 +200,8 @@ class PerplexityTest(unittest.TestCase):
             msg=f"Current perplexity deviates baseline by {perplexity_difference}",
         )
 
-    @pytest.mark.xfail(
-        reason="Non-decomposed attention is not supported yet",
-    )
     @skipif_run_quick_llama_test
+    @pytest.mark.xfail(reason="Compile Error", strict=True, raises=IreeCompileException)
     def test_llama3_405B_f16(self):
 
         # Llama 3.1 405B non-decomposed
@@ -236,10 +233,8 @@ class PerplexityTest(unittest.TestCase):
             msg=f"Current perplexity deviates baseline by {perplexity_difference}",
         )
 
-    @pytest.mark.xfail(
-        reason="FP8 model is unsupported",
-    )
     @skipif_run_quick_llama_test
+    @pytest.mark.xfail(reason="Compile Error", strict=True, raises=IreeCompileException)
     def test_llama3_405B_fp8_decomposed(self):
 
         # Llama 3.1 405B decomposed
@@ -271,10 +266,8 @@ class PerplexityTest(unittest.TestCase):
             msg=f"Current perplexity deviates baseline by {perplexity_difference}",
         )
 
-    @pytest.mark.xfail(
-        reason="FP8 model is unsupported",
-    )
     @skipif_run_quick_llama_test
+    @pytest.mark.xfail(reason="Compile Error", strict=True, raises=IreeCompileException)
     def test_llama3_405B_fp8(self):
 
         # Llama 3.1 405B non-decomposed
