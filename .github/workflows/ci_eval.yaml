@@ -22,6 +22,7 @@ concurrency:
 
 jobs:
   test_perplexity_vmfb:
+    if: ${{ github.repository_owner == 'nod-ai' || github.event_name != 'schedule' }}
     timeout-minutes: 1000
     name: "IREE/vmfb"
     strategy:
@@ -77,6 +78,7 @@ jobs:
         run:  pytest -n 8 -v -s sharktank/tests/evaluate/perplexity_vmfb_test.py --run-nightly-llama-tests --iree-device='hip://7' --iree-hip-target=gfx942 --iree-hal-target-backends=rocm --llama3-8b-f16-model-path=/data/llama3.1/8b/llama8b_f16.irpa --llama3-8b-tokenizer-path=/data/llama3.1/8b/tokenizer_config.json
 
   test_perplexity_torch:
+    if: ${{ github.repository_owner == 'nod-ai' || github.event_name != 'schedule' }}
     timeout-minutes: 1000
     name: "Torch/eager mode"
     strategy:
