@@ -77,14 +77,14 @@ jobs:
             iree-base-runtime
 
       - name: Run llama tests
-        run: pytest sharktank/tests/models/llama/benchmark_amdgpu_test.py -v -s --run-nightly-llama-tests --iree-hip-target=gfx942 --html=--html=out/llm/llama/benchmarks
+        run: pytest sharktank/tests/models/llama/benchmark_amdgpu_test.py -v -s --run-nightly-llama-tests --iree-hip-target=gfx942 --html=--html=out/llm/llama/benchmark
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@4f9cc6602d3f66b9c108549d475ec49e8ef4d45e # v4.0.0
         with:
           github_token: ${{ secrets.SHARK_PLATFORM_GH_TOKEN }}
-          publish_dir: ./out/llm/llama/benchmarks
-          destination_dir: ./llm/llama/benchmarks
+          publish_dir: ./out/llm/llama/benchmark
+          destination_dir: ./llm/llama/benchmark
           keep_files: true
 
       - name: Upload llama executable files
