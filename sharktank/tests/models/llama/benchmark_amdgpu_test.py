@@ -197,7 +197,6 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
         )
 
     @skipif_run_quick_llama_test
-    @pytest.mark.xfail(reason="Compile Error", strict=True, raises=IreeCompileException)
     def testBenchmark8B_f16_Non_Decomposed_Prefill(self):
         output_file_name = self.dir_path_8b / "f16_torch_prefill"
         output_mlir = self.llama8b_f16_torch_sdpa_artifacts.create_file(
@@ -828,7 +827,9 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
             cwd=self.repo_root,
         )
 
-    @pytest.mark.xfail(reason="Compile Error", strict=True, raises=IreeCompileException)
+    @pytest.mark.xfail(
+        reason="KeyError in theta.py", strict=True, raises=ExportMlirException
+    )
     def testBenchmark405B_fp8_TP8_Decomposed(self):
         output_file_name = self.dir_path_405b / "fp8_decomposed"
         output_mlir = self.llama405b_fp8_decomposed_artifacts.create_file(
@@ -874,7 +875,9 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
             cwd=self.repo_root,
         )
 
-    @pytest.mark.xfail(reason="Compile Error", strict=True, raises=IreeCompileException)
+    @pytest.mark.xfail(
+        reason="KeyError in theta.py", strict=True, raises=ExportMlirException
+    )
     def testBenchmark405B_fp8_TP8_Non_Decomposed(self):
         output_file_name = self.dir_path_405b / "fp8_torch"
         output_mlir = self.llama405b_fp8_torch_sdpa_artifacts.create_file(
