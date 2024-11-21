@@ -20,6 +20,7 @@ jobs:
   # workflow. For cross platform builds, it's useful to just generate the
   # metadata on Linux and pass that to later jobs using artifacts.
   setup_metadata:
+    if: ${{ github.repository_owner == 'nod-ai' || github.event_name != 'schedule' }}
     runs-on: ubuntu-24.04
     outputs:
       shark_package_version: ${{ steps.version.outputs.shark_package_version }}
