@@ -9,20 +9,6 @@ import shortfin.amdgpu
 logger = logging.getLogger(__name__)
 
 
-@pytest.fixture(
-    params=[("cpu", sf.host.CPUSystemBuilder), ("gpu", sf.amdgpu.SystemBuilder)]
-)
-def setup_system(request):
-    system_type, builder_class = request.param
-    logger.info(f"=== Setting up {system_type.upper()} system ===")
-    sc = builder_class()
-    lsys = sc.create_system()
-    fiber = lsys.create_fiber()
-    devices = fiber.devices_dict.values()
-    yield system_type, lsys, devices
-    lsys.shutdown()
-
-
 @pytest.fixture
 def setup_pool(generic_device):
     pool = PagePool(

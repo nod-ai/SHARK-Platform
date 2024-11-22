@@ -52,13 +52,13 @@ def pytest_runtest_setup(item):
 
 # Dynamic Parameterization for lsys Fixture
 def pytest_generate_tests(metafunc):
-    if "lsys" in metafunc.fixturenames:
+    if "generic_lsys" in metafunc.fixturenames:
         system = metafunc.config.getoption("--system")
         if system == "amdgpu":
             params = ["cpu", "amdgpu"]
         else:
             params = [system]
-        metafunc.parametrize("lsys", params, indirect=True)
+        metafunc.parametrize("generic_lsys", params, indirect=True)
 
 
 # Keys that will be cleaned project wide prior to and after each test run.
