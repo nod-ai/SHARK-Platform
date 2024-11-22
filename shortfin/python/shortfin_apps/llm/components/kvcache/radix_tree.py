@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import List, Dict, Optional, Tuple, TypeVar, Generic
 from dataclasses import dataclass
 from page_pool import PagePool
+
 T = TypeVar("T")  # Generic type for page data
 
 
@@ -73,9 +74,7 @@ class RadixTree(Generic[T]):
         ```
     """
 
-    def __init__(
-        self, page_pool: PagePool, tokens_per_page: int
-    ) -> None:
+    def __init__(self, page_pool: PagePool, tokens_per_page: int) -> None:
         """Initialize the radix tree.
 
         Args:
