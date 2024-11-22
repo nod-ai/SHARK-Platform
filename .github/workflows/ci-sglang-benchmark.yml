@@ -14,7 +14,7 @@ on:
     # Weekdays at 6:00 AM UTC = 11:00 PM PST.
     # This is a pretty GPU intensive test, so want to avoid conflicting
     # with other potentially scheduled tests.
-    - cron: "0 6 * * 1-5"
+    - cron: "0 4 * * 1-5"
 
 concurrency:
   # A PR number if a pull request and otherwise the commit hash. This cancels
@@ -33,7 +33,7 @@ jobs:
   #     matrix:
   #       version: [3.11]
   #     fail-fast: false
-  #   runs-on: llama-mi300x-4
+  #   runs-on: mi300x-4
   #   defaults:
   #     run:
   #       shell: bash
@@ -103,7 +103,7 @@ jobs:
       matrix:
         version: [3.11]
       fail-fast: false
-    runs-on: llama-mi300x-4
+    runs-on: mi300x-4
     defaults:
       run:
         shell: bash
