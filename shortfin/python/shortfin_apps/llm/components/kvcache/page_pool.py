@@ -20,7 +20,7 @@ class PageInfo:
     Page index with some metadata about its contents.
     """
 
-    page_index: int
+    index: int
     pool: PagePool
     token_offset: int  # Offset within the page
     token_count: int  # Number of tokens stored in this page
@@ -78,7 +78,7 @@ class PagePool:
         # Setup accounting structs.
         self.attn_page_entries = [
             PageInfo(
-                page_index=i,
+                index=i,
                 pool=self,
                 token_offset=0,
                 token_count=0,
@@ -136,8 +136,8 @@ class PagePool:
         # Copy the data on each device
         for page_table in self.page_tables:
             # View of source and destination pages
-            src_view = page_table.view(src_page.page_index)
-            dst_view = page_table.view(dst_page.page_index)
+            src_view = page_table.view(src_page.index)
+            dst_view = page_table.view(dst_page.index)
             # Copy the data
             dst_view.copy_from(src_view)
 
