@@ -169,6 +169,7 @@ jobs:
       - name: Run SGLang Server
         run: |
           docker run -d --rm  \
+            --name=sglang-server \
             --device=/dev/kfd \
             --device=/dev/dri \
             --ipc=host \
@@ -187,7 +188,8 @@ jobs:
             --host 0.0.0.0 \
             --port 30000 \
             --tp 1 \
-            --dtype float16
+            --dtype float16 \
+            --disable-cuda-graph
 
       - name: Run SGLang Benchmark Tests
         run: |
