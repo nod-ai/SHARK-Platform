@@ -6,7 +6,8 @@ from .. import ops
 from .base import Theta, ThetaLayer
 from .linear import LinearLayer
 
-class ModulationOut():
+
+class ModulationOut:
     def __init__(self, shift, scale, gate):
         self.shift = shift
         self.scale = scale

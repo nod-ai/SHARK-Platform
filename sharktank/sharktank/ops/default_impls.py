@@ -303,6 +303,7 @@ def interpolate_default(
         antialias=antialias,
     )
 
+
 def layer_norm_default(input, weight, bias, *, eps):
     input = unbox_tensor(input)
     if weight is not None:
@@ -316,6 +317,7 @@ def layer_norm_default(input, weight, bias, *, eps):
     return F.layer_norm(
         input, normalized_shape=weight.shape, weight=weight, bias=bias, eps=eps
     )
+
 
 layer_norm.override(Tensor)(layer_norm_default)
 layer_norm.override(Tensor, Tensor)(layer_norm_default)
@@ -402,7 +404,6 @@ def rms_norm_default(x, weight, *, epsilon: float) -> Tensor:
     variance = x.pow(2).mean(-1, keepdim=True)
     output = x * elementwise(torch.rsqrt, variance + epsilon)
     # The cast here is to match the hf implementation, affects numerics
-    print(x.shape, weight.shape)
     output = elementwise(torch.mul, weight, to(output, weight.dtype))
     return output
 
