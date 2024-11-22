@@ -107,7 +107,7 @@ def clean_env():
     kill()
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def generic_lsys(request):
     system_type = request.param
     if system_type == "cpu" or system_type == "hostcpu":
