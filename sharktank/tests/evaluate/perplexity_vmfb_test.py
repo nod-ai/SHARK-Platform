@@ -7,6 +7,7 @@
 import unittest
 import pytest
 import json
+import numpy as np
 
 from sharktank.evaluate import perplexity_vmfb
 from sharktank.utils.export_artifacts import (
@@ -52,18 +53,20 @@ class PerplexityTest(unittest.TestCase):
                 f"--iree-hip-target={self.iree_hip_target}",
                 f"--tensor-parallelism-size=1",
                 f"--attention-kernel=decomposed",
-                f"--num-prompts=5",
+                f"--num-prompts={self.bs}",
             ]
         )
 
-        perplexity_difference = (
-            current_perplexity["mean_perplexity"]
-            - baseline_perplexity["mean_perplexity"]
+        baseline_mean_perplexity = round(
+            np.mean(baseline_perplexity["perplexities"][0 : self.bs]), 6
         )
+        current_mean_perplexity = round(current_perplexity["mean_perplexity"], 6)
+
+        perplexity_difference = current_mean_perplexity - baseline_mean_perplexity
 
         self.assertAlmostEqual(
-            baseline_perplexity["mean_perplexity"],
-            current_perplexity["mean_perplexity"],
+            baseline_mean_perplexity,
+            current_mean_perplexity,
             delta=self.delta,
             msg=f"Current perplexity deviates baseline by {perplexity_difference}",
         )
@@ -86,17 +89,20 @@ class PerplexityTest(unittest.TestCase):
                 f"--iree-hip-target={self.iree_hip_target}",
                 f"--tensor-parallelism-size=1",
                 f"--attention-kernel=torch_sdpa",
+                f"--num-prompts={self.bs}",
             ]
         )
 
-        perplexity_difference = (
-            current_perplexity["mean_perplexity"]
-            - baseline_perplexity["mean_perplexity"]
+        baseline_mean_perplexity = round(
+            np.mean(baseline_perplexity["perplexities"][0 : self.bs]), 6
         )
+        current_mean_perplexity = round(current_perplexity["mean_perplexity"], 6)
+
+        perplexity_difference = current_mean_perplexity - baseline_mean_perplexity
 
         self.assertAlmostEqual(
-            baseline_perplexity["mean_perplexity"],
-            current_perplexity["mean_perplexity"],
+            baseline_mean_perplexity,
+            current_mean_perplexity,
             delta=self.delta,
             msg=f"Current perplexity deviates baseline by {perplexity_difference}",
         )
@@ -119,17 +125,20 @@ class PerplexityTest(unittest.TestCase):
                 f"--iree-hip-target={self.iree_hip_target}",
                 f"--tensor-parallelism-size=1",
                 f"--attention-kernel=decomposed",
+                f"--num-prompts={self.bs}",
             ]
         )
 
-        perplexity_difference = (
-            current_perplexity["mean_perplexity"]
-            - baseline_perplexity["mean_perplexity"]
+        baseline_mean_perplexity = round(
+            np.mean(baseline_perplexity["perplexities"][0 : self.bs]), 6
         )
+        current_mean_perplexity = round(current_perplexity["mean_perplexity"], 6)
+
+        perplexity_difference = current_mean_perplexity - baseline_mean_perplexity
 
         self.assertAlmostEqual(
-            baseline_perplexity["mean_perplexity"],
-            current_perplexity["mean_perplexity"],
+            baseline_mean_perplexity,
+            current_mean_perplexity,
             delta=self.delta,
             msg=f"Current perplexity deviates baseline by {perplexity_difference}",
         )
@@ -152,17 +161,20 @@ class PerplexityTest(unittest.TestCase):
                 f"--iree-hip-target={self.iree_hip_target}",
                 f"--tensor-parallelism-size=1",
                 f"--attention-kernel=torch_sdpa",
+                f"--num-prompts={self.bs}",
             ]
         )
 
-        perplexity_difference = (
-            current_perplexity["mean_perplexity"]
-            - baseline_perplexity["mean_perplexity"]
+        baseline_mean_perplexity = round(
+            np.mean(baseline_perplexity["perplexities"][0 : self.bs]), 6
         )
+        current_mean_perplexity = round(current_perplexity["mean_perplexity"], 6)
+
+        perplexity_difference = current_mean_perplexity - baseline_mean_perplexity
 
         self.assertAlmostEqual(
-            baseline_perplexity["mean_perplexity"],
-            current_perplexity["mean_perplexity"],
+            baseline_mean_perplexity,
+            current_mean_perplexity,
             delta=self.delta,
             msg=f"Current perplexity deviates baseline by {perplexity_difference}",
         )
@@ -187,17 +199,20 @@ class PerplexityTest(unittest.TestCase):
                 f"--iree-hip-target={self.iree_hip_target}",
                 f"--tensor-parallelism-size={self.tensor_parallelism_size}",
                 f"--attention-kernel=decomposed",
+                f"--num-prompts={self.bs}",
             ]
         )
 
-        perplexity_difference = (
-            current_perplexity["mean_perplexity"]
-            - baseline_perplexity["mean_perplexity"]
+        baseline_mean_perplexity = round(
+            np.mean(baseline_perplexity["perplexities"][0 : self.bs]), 6
         )
+        current_mean_perplexity = round(current_perplexity["mean_perplexity"], 6)
+
+        perplexity_difference = current_mean_perplexity - baseline_mean_perplexity
 
         self.assertAlmostEqual(
-            baseline_perplexity["mean_perplexity"],
-            current_perplexity["mean_perplexity"],
+            baseline_mean_perplexity,
+            current_mean_perplexity,
             delta=self.delta,
             msg=f"Current perplexity deviates baseline by {perplexity_difference}",
         )
@@ -220,17 +235,20 @@ class PerplexityTest(unittest.TestCase):
                 f"--iree-hip-target={self.iree_hip_target}",
                 f"--tensor-parallelism-size={self.tensor_parallelism_size}",
                 f"--attention-kernel=torch_sdpa",
+                f"--num-prompts={self.bs}",
             ]
         )
 
-        perplexity_difference = (
-            current_perplexity["mean_perplexity"]
-            - baseline_perplexity["mean_perplexity"]
+        baseline_mean_perplexity = round(
+            np.mean(baseline_perplexity["perplexities"][0 : self.bs]), 6
         )
+        current_mean_perplexity = round(current_perplexity["mean_perplexity"], 6)
+
+        perplexity_difference = current_mean_perplexity - baseline_mean_perplexity
 
         self.assertAlmostEqual(
-            baseline_perplexity["mean_perplexity"],
-            current_perplexity["mean_perplexity"],
+            baseline_mean_perplexity,
+            current_mean_perplexity,
             delta=self.delta,
             msg=f"Current perplexity deviates baseline by {perplexity_difference}",
         )
@@ -253,17 +271,20 @@ class PerplexityTest(unittest.TestCase):
                 f"--iree-hip-target={self.iree_hip_target}",
                 f"--tensor-parallelism-size={self.tensor_parallelism_size}",
                 f"--attention-kernel=decomposed",
+                f"--num-prompts={self.bs}",
             ]
         )
 
-        perplexity_difference = (
-            current_perplexity["mean_perplexity"]
-            - baseline_perplexity["mean_perplexity"]
+        baseline_mean_perplexity = round(
+            np.mean(baseline_perplexity["perplexities"][0 : self.bs]), 6
         )
+        current_mean_perplexity = round(current_perplexity["mean_perplexity"], 6)
+
+        perplexity_difference = current_mean_perplexity - baseline_mean_perplexity
 
         self.assertAlmostEqual(
-            baseline_perplexity["mean_perplexity"],
-            current_perplexity["mean_perplexity"],
+            baseline_mean_perplexity,
+            current_mean_perplexity,
             delta=self.delta,
             msg=f"Current perplexity deviates baseline by {perplexity_difference}",
         )
@@ -286,17 +307,20 @@ class PerplexityTest(unittest.TestCase):
                 f"--iree-hip-target={self.iree_hip_target}",
                 f"--tensor-parallelism-size={self.tensor_parallelism_size}",
                 f"--attention-kernel=torch_sdpa",
+                f"--num-prompts={self.bs}",
             ]
         )
 
-        perplexity_difference = (
-            current_perplexity["mean_perplexity"]
-            - baseline_perplexity["mean_perplexity"]
+        baseline_mean_perplexity = round(
+            np.mean(baseline_perplexity["perplexities"][0 : self.bs]), 6
         )
+        current_mean_perplexity = round(current_perplexity["mean_perplexity"], 6)
+
+        perplexity_difference = current_mean_perplexity - baseline_mean_perplexity
 
         self.assertAlmostEqual(
-            baseline_perplexity["mean_perplexity"],
-            current_perplexity["mean_perplexity"],
+            baseline_mean_perplexity,
+            current_mean_perplexity,
             delta=self.delta,
             msg=f"Current perplexity deviates baseline by {perplexity_difference}",
         )
