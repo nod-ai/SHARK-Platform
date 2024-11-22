@@ -33,7 +33,7 @@ jobs:
     - name: Generate dev package versions
       id: version_rc
       run: |
-        version_suffix=".dev+${{ github.sha }}"
+        version_suffix=".dev0+${{ github.sha }}"
         echo "version_suffix=${version_suffix}" >> $GITHUB_ENV
         sharktank_package_version=$(python3 build_tools/python_deploy/compute_local_version.py --version-suffix=${version_suffix} sharktank)
         shortfin_package_version=$(python3 build_tools/python_deploy/compute_local_version.py --version-suffix=${version_suffix} shortfin)
