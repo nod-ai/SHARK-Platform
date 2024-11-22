@@ -72,4 +72,4 @@ jobs:
             iree-base-runtime
 
       - name: Run LLM Integration Tests
-        run: pytest -v app_tests/integration_tests/llm --log-cli-level=INFO
+        run: pytest -v app_tests/integration_tests/llm/shortfin --log-cli-level=INFO

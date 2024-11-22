@@ -63,7 +63,7 @@ class GenerateItemProcess(sf.Process):
             exec.start_position = len(self.input_token_ids) - 1
             for i in range(self.max_completion_tokens):
                 exec.reset(InferencePhase.DECODE)
-                exec.input_token_ids = [token_int]
+                exec.input_token_ids.append(token_int)
                 exec.start_position += 1
                 self.client.batcher.submit(exec)
                 await exec.done

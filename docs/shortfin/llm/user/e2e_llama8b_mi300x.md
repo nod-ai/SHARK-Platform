@@ -64,7 +64,7 @@ We will use the `hf_datasets` module in `sharktank` to download a
 LLama3.1 8b f16 model.
 
 ```bash
-python -m sharktank.utils.hf_datasets amd-shark/llama3.1-8B --local-dir $EXPORT_DIR
+python -m sharktank.utils.hf_datasets llama3_8B_fp16 --local-dir $EXPORT_DIR
 ```
 
 ### Define environment variables

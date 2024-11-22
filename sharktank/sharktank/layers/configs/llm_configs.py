@@ -14,11 +14,11 @@ When in question, we draw from the vocabulary and normalization they have done
 (and indeed, can bootstrap these off of GGUF files).
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Optional
 import torch
 
-__all__ = ["LlamaHParams", "LlamaModelConfig"]
+__all__ = ["LlamaHParams", "LlamaModelConfig", "T5Config"]
 
 
 @dataclass
@@ -179,3 +179,77 @@ class LlamaModelConfig:
     # be the difference of many gigabytes of static data being embedded in
     # the program and not.
     static_tables: bool = True
+
+
+@dataclass
+class T5Config:
+    return_dict: bool = True
+    output_hidden_states: bool = False
+    output_attentions: bool = False
+    is_encoder_decoder: bool = True
+    is_decoder: bool = False
+    vocab_size: int = 32128
+    context_length: int = 512
+    d_model: int = 512
+    d_kv: int = 64
+    d_ff: int = 2048
+    num_layers: int = 6
+    num_decoder_layers: int = 6
+    num_heads: int = 8
+    relative_attention_num_buckets: int = 32
+    relative_attention_max_distance: int = 128
+    layer_norm_epsilon: float = 1e-6
+    feed_forward_proj: str = "relu"
+    is_gated_act: bool = field(init=False)
+    activation_dtype: torch.dtype = torch.float32
+    dense_act_fn: str = field(init=False)
+    use_cache: bool = True
+    pad_token_id: int = 0
+    eos_token_id: int = 1
+    decoder_start_token_id: int = 0
+    context_length_padding_block_size: int = 16
+
+    def __post_init__(self):
+        self.is_gated_act = self.feed_forward_proj.startswith("gated-")
+        self.dense_act_fn = (
+            self.feed_forward_proj.split("-")[1]
+            if "-" in self.feed_forward_proj
+            else self.feed_forward_proj
+        )
+        if self.dense_act_fn == "gelu":
+            self.dense_act_fn = "gelu_new"
+
+    @staticmethod
+    def from_gguf_properties(properties: dict[str, Any], **kwargs):
+        assert properties["general.architecture"] == "t5"
+        assert (
+            properties["t5.attention.layer_norm_epsilon"]
+            == properties["t5.attention.layer_norm_rms_epsilon"]
+        )
+
+        gguf_to_config_names_map = {
+            "t5.context_length": ["context_length"],
+            "t5.embedding_length": ["d_model"],
+            "t5.feed_forward_length": ["d_ff"],
+            "t5.block_count": ["num_layers", "num_decoder_layers"],
+            "t5.attention.head_count": ["num_heads"],
+            "t5.attention.key_length": ["d_kv"],
+            "t5.attention.layer_norm_epsilon": ["layer_norm_epsilon"],
+            "t5.attention.relative_buckets_count": ["relative_attention_num_buckets"],
+            "t5.decoder_start_token_id": ["decoder_start_token_id"],
+            "tokenizer.ggml.eos_token_id": ["eos_token_id"],
+            "tokenizer.ggml.padding_token_id": ["pad_token_id"],
+        }
+        all_kwargs = {"vocab_size": None, "feed_forward_proj": None}
+        all_kwargs.update(
+            {
+                config_name: properties[gguf_name]
+                for gguf_name, config_names in gguf_to_config_names_map.items()
+                for config_name in config_names
+            }
+        )
+        if "tokenizer.ggml.tokens" in properties:
+            all_kwargs["vocab_size"] = len(properties["tokenizer.ggml.tokens"])
+        all_kwargs.update(kwargs)
+
+        return T5Config(**all_kwargs)

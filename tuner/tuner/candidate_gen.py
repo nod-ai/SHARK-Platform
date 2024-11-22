@@ -30,6 +30,8 @@ from abc import abstractmethod
 
 from iree.compiler import ir  # type: ignore
 
+from iree.compiler.dialects import iree_codegen  # type: ignore
+
 from .common import *
 from .dispatch_constraints import *
 from .dispatch_parser import *
@@ -517,52 +519,55 @@ def tune(
 
     with ir.Context() as ctx:
         tuner_context = TunerContext(ctx, tune_logger)
-        with parse_mlir(mlir_text, tuner_context) as mlir_module:
-            # Save the input file as the first candidate.
-            with open(path.join(output, f"0.mlir"), "w") as f:
-                f.write(mlir_text)
+        mlir_module = parse_mlir(mlir_text, tuner_context)
+        # Save the input file as the first candidate.
+        with open(path.join(output, f"0.mlir"), "w") as f:
+            f.write(mlir_text)
 
-            dispatch_tuner_registry = DispatchTunerRegistry()
-            dispatch_tuner_registry.register(
-                [
-                    MmtTuner(),
-                    ConvTuner(),
-                    ContractionTuner(lhs_dims, rhs_dims, tile_dims),
-                    BatchMmtTuner(),
-                    BatchMatmulTuner(lhs_dims, rhs_dims, tile_dims),
-                ]
-            )
+        dispatch_tuner_registry = DispatchTunerRegistry()
+        dispatch_tuner_registry.register(
+            [
+                MmtTuner(),
+                ConvTuner(),
+                ContractionTuner(lhs_dims, rhs_dims, tile_dims),
+                BatchMmtTuner(),
+                BatchMatmulTuner(lhs_dims, rhs_dims, tile_dims),
+            ]
+        )
 
-            walk_result: OpWalkResult = walk_mlir_op(
-                mlir_module, dispatch_tuner_registry
-            )
+        walk_result: OpWalkResult = walk_mlir_op(mlir_module, dispatch_tuner_registry)
 
-            dispatch_tuner = walk_result.dispatch_tuner
-            assert dispatch_tuner, "No suitable dispatch tuner found"
-            problem_size: ProblemSize = dispatch_tuner.get_shapes(mlir_template)
-            tune_logger.debug(str(problem_size))
-            configs = []
-            for i, config in enumerate(
-                generate_solutions(tune_logger, problem_size, num_subgroups)
-            ):
-                if i >= limit:
-                    break
-                tune_logger.info(f"Solution #{i+1}: {config}")
-                configs.append(config)
-                tf_mlir = dispatch_tuner.apply_params(
-                    problem_size, mlir_template, config
-                )
+        variant_op_list = iree_codegen.get_executable_variant_ops(mlir_module)
+        assert len(variant_op_list) == 1, "Expect one executable variant op"
+        variant_op = variant_op_list[0]
+        # Get the MMA intrinisic intructions supported by the target.
+        mma_list = iree_codegen.query_mma_intrinsics(variant_op)
 
-                with open(path.join(output, f"{i+1}.mlir"), "w") as f:
-                    f.write(tf_mlir.modified)
-                with open(path.join(output, f"{i+1}_config.mlir"), "w") as f:
-                    f.write(tf_mlir.embeddable)
+        dispatch_tuner = walk_result.dispatch_tuner
+        assert dispatch_tuner, "No suitable dispatch tuner found"
+        problem_size: ProblemSize = dispatch_tuner.get_shapes(mlir_template)
+        tune_logger.debug(str(problem_size))
+        configs = []
+        for i, config in enumerate(
+            generate_solutions(tune_logger, problem_size, num_subgroups, mma_list)
+        ):
+            if i >= limit:
+                break
+            tune_logger.info(f"Solution #{i+1}: {config}")
+            configs.append(config)
+            tf_mlir = dispatch_tuner.apply_params(problem_size, mlir_template, config)
 
-            with open(path.join(output, "configs.pkl"), "wb") as file:
-                pickle.dump(configs, file)
+            with open(path.join(output, f"{i+1}.mlir"), "w") as f:
+                f.write(tf_mlir.modified)
+            with open(path.join(output, f"{i+1}_config.mlir"), "w") as f:
+                f.write(tf_mlir.embeddable)
 
-            tune_logger.info(f"Generated {len(configs)} candidates")
-            tune_logger.info(f"Configurations .pkl is stored in {output}/configs.pkl")
+        # TODO: Fix pickling for ir types.
+        # with open(path.join(output, "configs.pkl"), "wb") as file:
+        #    pickle.dump(configs, file)
+
+        tune_logger.info(f"Generated {len(configs)} candidates")
+        tune_logger.info(f"Configurations .pkl is stored in {output}/configs.pkl")
 
 
 def main():

@@ -6,7 +6,6 @@
 
 import iree.runtime
 from typing import List, Tuple, Optional, Union
-from copy import deepcopy
 from pathlib import Path
 import torch
 import numpy as np
@@ -91,14 +90,7 @@ def run_iree_module_function(
     )
     if trace_path_prefix is not None:
         for i, arg in enumerate(args):
-            # iree.runtime.DeviceArray.to_host() will cache the result and reuse it.
-            # In the meantime the "actual" device array may have changed.
-            # It kinda assumes immutable arrays.
-            # This should probably not be its behavior.
-            # See https://github.com/iree-org/iree/issues/18870.
-            # deepcopy also returns an numpy ndarray instead of DeviceArray.
-            arg_copy = deepcopy(arg)
-            np.save(f"{trace_path_prefix}{function_name}_arg{i}.npy", arg_copy)
+            np.save(f"{trace_path_prefix}{function_name}_arg{i}.npy", arg.to_host())
     results = invoker(*args)
     if isinstance(results, iree.runtime.DeviceArray):
         results = (results,)
@@ -107,10 +99,10 @@ def run_iree_module_function(
         for i, arg in enumerate(args):
             np.save(
                 f"{trace_path_prefix}{function_name}_arg{i}_post_call.npy",
-                deepcopy(arg),
+                arg.to_host(),
             )
         for i, arg in enumerate(results):
-            np.save(f"{trace_path_prefix}{function_name}_result{i}.npy", deepcopy(arg))
+            np.save(f"{trace_path_prefix}{function_name}_result{i}.npy", arg.to_host())
     return results
 
 
@@ -197,4 +189,4 @@ def call_torch_module_function(
 
 
 def iree_to_torch(*tensors: iree.runtime.DeviceArray) -> List[torch.Tensor]:
-    return [torch.tensor(deepcopy(tensor)) for tensor in tensors]
+    return [torch.tensor(tensor.to_host()) for tensor in tensors]

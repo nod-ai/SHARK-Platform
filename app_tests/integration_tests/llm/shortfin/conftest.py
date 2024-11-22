@@ -12,7 +12,7 @@ import pytest
 import shutil
 
 pytest.importorskip("transformers")
-from .utils import (
+from ..utils import (
     download_huggingface_model,
     download_tokenizer,
     export_paged_llm_v1,

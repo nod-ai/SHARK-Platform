@@ -9,6 +9,7 @@ import sys
 import subprocess
 import logging
 import time
+import re
 from pathlib import Path
 from datetime import timedelta
 from typing import List, Optional
@@ -107,11 +108,18 @@ class ExportArtifacts:
             start = time.time()
             result = func(*args, **kwargs)
             end = time.time()
-            seconds = end - start
-            time_taken = abs(timedelta(seconds=round(seconds)))
+            total_seconds = end - start
+            time_taken = abs(timedelta(seconds=total_seconds))
+            hours, minutes, seconds = re.split(":", str(time_taken))
 
-            if seconds < 1:
-                time_taken = f" {seconds * 1000} ms"
+            if total_seconds < 1:
+                time_taken = f" {round(total_seconds * 1000, 3)} ms"
+            elif total_seconds < 60:
+                time_taken = "{:.2f} secs".format(round(float(total_seconds), 2))
+            else:
+                time_taken = "{:02d} hrs : {:02d} mins : {:.2f} secs".format(
+                    int(hours), int(minutes), round(float(seconds), 2)
+                )
 
             func_name = func.__name__
             logger.info(f" {func_name}: {time_taken}")
@@ -123,15 +131,15 @@ class ExportArtifacts:
     def shard_irpa_file(
         self,
         *,
-        gguf_file: str,
+        irpa_file: str,
         output_irpa: str,
     ):
         shard_irpa_args = [
             "python3",
             "-m",
             "sharktank.examples.sharding.shard_llm_dataset",
-            "--gguf-file",
-            gguf_file,
+            "--irpa-file",
+            irpa_file,
             "--output-irpa-file",
             output_irpa,
             "--tensor-parallelism-size",
@@ -160,6 +168,7 @@ class ExportArtifacts:
         *,
         mlir_path: str,
         json_path: str,
+        skip_decode: Optional[bool] = None,
     ):
         export_args = [
             "python3",
@@ -170,6 +179,8 @@ class ExportArtifacts:
             f"--output-config={json_path}",
             f"--bs={str(self.batch_size)}",
         ]
+        if skip_decode:
+            export_args.append("--skip-decode")
         if self.attention_kernel in ["decomposed", "torch"]:
             export_args.append("--attention-kernel")
             export_args.append(self.attention_kernel)
@@ -195,6 +206,7 @@ class ExportArtifacts:
         vmfb_path,
         cwd,
         hal_dump_path: Optional[Path] = None,
+        args: Optional[List[str]] = None,
     ):
         # TODO: Control flag to enable multiple backends
         compile_args = [
@@ -214,7 +226,9 @@ class ExportArtifacts:
             compile_args += [
                 f"--iree-hal-dump-executable-files-to={hal_dump_path}/files"
             ]
-
+        # Append optional arguments if provided
+        if args:
+            compile_args += args
         cmd = subprocess.list2cmdline(compile_args)
 
         logging.getLogger().info(f"Launching compile command:\n" f"cd {cwd} && {cmd}")
