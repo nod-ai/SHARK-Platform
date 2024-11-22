@@ -48,7 +48,6 @@ class BaseBenchmarkTest(unittest.TestCase):
             cls.directory_created = True
 
     def setUp(self):
-        self.hip_device_id = os.getenv("HIP_DEVICE_ID", default="0")
         self.compile_args = [
             "--iree-dispatch-creation-enable-aggressive-fusion=true",
             "--iree-global-opt-propagate-transposes=true",
@@ -181,7 +180,7 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
         )
         # benchmark prefill
         self.llama8b_f16_decomposed_artifacts.iree_benchmark_vmfb(
-            hip_device_id=self.hip_device_id,
+            hip_device_id=self.iree_device,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path,
             args=self.iree_run_prefill_args,
@@ -189,7 +188,7 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
         )
         # benchmark decode
         self.llama8b_f16_decomposed_artifacts.iree_benchmark_vmfb(
-            hip_device_id=self.hip_device_id,
+            hip_device_id=self.iree_device,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path,
             args=self.iree_run_decode_args,
@@ -223,7 +222,7 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
         )
         # benchmark prefill
         self.llama8b_f16_torch_sdpa_artifacts.iree_benchmark_vmfb(
-            hip_device_id=self.hip_device_id,
+            hip_device_id=self.iree_device,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path,
             args=self.iree_run_prefill_nondecomposed_args_fp16,
@@ -257,7 +256,7 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
         )
         # benchmark prefill
         self.llama8b_f16_torch_sdpa_artifacts.iree_benchmark_vmfb(
-            hip_device_id=self.hip_device_id,
+            hip_device_id=self.iree_device,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path,
             args=self.iree_run_prefill_args,
@@ -265,7 +264,7 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
         )
         # benchmark decode
         self.llama8b_f16_torch_sdpa_artifacts.iree_benchmark_vmfb(
-            hip_device_id=self.hip_device_id,
+            hip_device_id=self.iree_device,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path,
             args=self.iree_run_decode_args,
@@ -297,7 +296,7 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
         )
         # benchmark prefill
         self.llama8b_fp8_decomposed_artifacts.iree_benchmark_vmfb(
-            hip_device_id=self.hip_device_id,
+            hip_device_id=self.iree_device,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path_fp8,
             args=self.iree_run_prefill_args,
@@ -305,7 +304,7 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
         )
         # benchmark decode
         self.llama8b_fp8_decomposed_artifacts.iree_benchmark_vmfb(
-            hip_device_id=self.hip_device_id,
+            hip_device_id=self.iree_device,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path_fp8,
             args=self.iree_run_decode_args,
@@ -337,7 +336,7 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
         )
         # benchmark prefill
         self.llama8b_fp8_torch_sdpa_artifacts.iree_benchmark_vmfb(
-            hip_device_id=self.hip_device_id,
+            hip_device_id=self.iree_device,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path_fp8,
             args=self.iree_run_prefill_args,
@@ -345,7 +344,7 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
         )
         # benchmark decode
         self.llama8b_fp8_torch_sdpa_artifacts.iree_benchmark_vmfb(
-            hip_device_id=self.hip_device_id,
+            hip_device_id=self.iree_device,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path_fp8,
             args=self.iree_run_decode_args,
@@ -481,7 +480,7 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
         )
         # benchmark prefill
         self.llama70b_f16_decomposed_artifacts.iree_benchmark_vmfb(
-            hip_device_id=self.hip_device_id,
+            hip_device_id=self.iree_device,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path,
             args=self.iree_run_prefill_args,
@@ -489,7 +488,7 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
         )
         # benchmark decode
         self.llama70b_f16_decomposed_artifacts.iree_benchmark_vmfb(
-            hip_device_id=self.hip_device_id,
+            hip_device_id=self.iree_device,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path,
             args=self.iree_run_decode_args,
@@ -528,7 +527,7 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
         )
         # benchmark prefill
         self.llama70b_f16_torch_sdpa_artifacts.iree_benchmark_vmfb(
-            hip_device_id=self.hip_device_id,
+            hip_device_id=self.iree_device,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path,
             args=self.iree_run_prefill_args,
@@ -536,7 +535,7 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
         )
         # benchmark decode
         self.llama70b_f16_torch_sdpa_artifacts.iree_benchmark_vmfb(
-            hip_device_id=self.hip_device_id,
+            hip_device_id=self.iree_device,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path,
             args=self.iree_run_decode_args,
@@ -574,7 +573,7 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
         )
         # benchmark prefill
         self.llama70b_fp8_decomposed_artifacts.iree_benchmark_vmfb(
-            hip_device_id=self.hip_device_id,
+            hip_device_id=self.iree_device,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path_fp8,
             args=self.iree_run_prefill_args,
@@ -582,7 +581,7 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
         )
         # benchmark decode
         self.llama70b_fp8_decomposed_artifacts.iree_benchmark_vmfb(
-            hip_device_id=self.hip_device_id,
+            hip_device_id=self.iree_device,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path_fp8,
             args=self.iree_run_decode_args,
@@ -620,7 +619,7 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
         )
         # benchmark prefill
         self.llama70b_fp8_torch_sdpa_artifacts.iree_benchmark_vmfb(
-            hip_device_id=self.hip_device_id,
+            hip_device_id=self.iree_device,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path_fp8,
             args=self.iree_run_prefill_args,
@@ -628,7 +627,7 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
         )
         # benchmark decode
         self.llama70b_fp8_torch_sdpa_artifacts.iree_benchmark_vmfb(
-            hip_device_id=self.hip_device_id,
+            hip_device_id=self.iree_device,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path_fp8,
             args=self.iree_run_decode_args,
@@ -764,7 +763,7 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
         )
         # benchmark prefill
         self.llama405b_f16_decomposed_artifacts.iree_benchmark_vmfb(
-            hip_device_id=self.hip_device_id,
+            hip_device_id=self.iree_device,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path,
             args=self.iree_run_prefill_args,
@@ -772,7 +771,7 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
         )
         # benchmark decode
         self.llama405b_f16_decomposed_artifacts.iree_benchmark_vmfb(
-            hip_device_id=self.hip_device_id,
+            hip_device_id=self.iree_device,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path,
             args=self.iree_run_decode_args,
@@ -814,7 +813,7 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
         )
         # benchmark prefill
         self.llama405b_f16_torch_sdpa_artifacts.iree_benchmark_vmfb(
-            hip_device_id=self.hip_device_id,
+            hip_device_id=self.iree_device,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path,
             args=self.iree_run_prefill_args,
@@ -822,7 +821,7 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
         )
         # benchmark decode
         self.llama405b_f16_torch_sdpa_artifacts.iree_benchmark_vmfb(
-            hip_device_id=self.hip_device_id,
+            hip_device_id=self.iree_device,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path,
             args=self.iree_run_decode_args,
@@ -862,7 +861,7 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
         )
         # benchmark prefill
         self.llama405b_fp8_decomposed_artifacts.iree_benchmark_vmfb(
-            hip_device_id=self.hip_device_id,
+            hip_device_id=self.iree_device,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path_fp8,
             args=self.iree_run_prefill_args,
@@ -870,7 +869,7 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
         )
         # benchmark decode
         self.llama405b_fp8_decomposed_artifacts.iree_benchmark_vmfb(
-            hip_device_id=self.hip_device_id,
+            hip_device_id=self.iree_device,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path_fp8,
             args=self.iree_run_decode_args,
@@ -910,7 +909,7 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
         )
         # benchmark prefill
         self.llama405b_fp8_torch_sdpa_artifacts.iree_benchmark_vmfb(
-            hip_device_id=self.hip_device_id,
+            hip_device_id=self.iree_device,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path_fp8,
             args=self.iree_run_prefill_args,
@@ -918,7 +917,7 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
         )
         # benchmark decode
         self.llama405b_fp8_torch_sdpa_artifacts.iree_benchmark_vmfb(
-            hip_device_id=self.hip_device_id,
+            hip_device_id=self.iree_device,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path_fp8,
             args=self.iree_run_decode_args,
