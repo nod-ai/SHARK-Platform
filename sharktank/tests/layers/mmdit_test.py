@@ -95,7 +95,7 @@ class MMDITTest(unittest.TestCase):
 
         @fxb.export_program(name="mmdit", args=(img, txt, vec, rot), strict=False)
         def _(model, img, txt, vec, rot) -> torch.Tensor:
-            return mod(img, txt, vec, rot)
+            return model(img, txt, vec, rot)
 
         output = aot.export(fxb)
         output.verify()
