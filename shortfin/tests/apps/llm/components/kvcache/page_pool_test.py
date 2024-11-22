@@ -14,8 +14,6 @@ logger = logging.getLogger(__name__)
 )
 def setup_system(request):
     system_type, builder_class = request.param
-    if system_type == "gpu" and not "gpu" in pytest.config.getoption("--system"):
-        pytest.skip("Skipping GPU-specific test")
     logger.info(f"=== Setting up {system_type.upper()} system ===")
     sc = builder_class()
     lsys = sc.create_system()
@@ -26,40 +24,34 @@ def setup_system(request):
 
 
 @pytest.fixture
-def setup_pool(setup_system):
-    system_type, _, devices = setup_system
-    logger.info(f"Creating PagePool for {system_type.upper()} system")
+def setup_pool(generic_device):
     pool = PagePool(
-        devices=devices,
+        devices=[generic_device],
         config=PagePoolConfig(
             alloc_page_count=256,
             dtype=sfnp.float16,
             paged_kv_block_size_elements=393216,
         ),
     )
-    return system_type, pool
+    return pool
 
 
 def test_page_acquisition(setup_pool):
-    system_type, pool = setup_pool
-    logger.info(
-        f"=== Running page acquisition test on {system_type.upper()} system ==="
-    )
+    pool = setup_pool
+    logger.info(f"=== Running page acquisition test on system ===")
     page0 = pool.acquire_free_pages(1)
-    assert page0 is not None, f"Failed to acquire a free page on {system_type} system"
-    logger.info(f"Successfully acquired page on {system_type.upper()} system")
+    assert page0 is not None, f"Failed to acquire a free page on system"
+    logger.info(f"Successfully acquired page on system")
 
 
 def test_page_copy(setup_pool):
-    system_type, pool = setup_pool
-    logger.info(f"=== Running page copy test on {system_type.upper()} system ===")
+    pool = setup_pool
+    logger.info(f"=== Running page copy test on system ===")
     (page0,) = pool.acquire_free_pages(1)
     page1 = pool.copy_page(page0)
-    assert page1 is not None, f"Failed to copy a page on {system_type} system"
-    assert (
-        page0 != page1
-    ), f"Copied page should be different from original on {system_type} system"
-    logger.info(f"Successfully copied page on {system_type.upper()} system")
+    assert page1 is not None, f"Failed to copy a page on system"
+    assert page0 != page1, f"Copied page should be different from original on system"
+    logger.info(f"Successfully copied page on system")
 
 
 @pytest.fixture(autouse=True)
