@@ -167,11 +167,12 @@ def main():
             model, llama_config.tensor_parallelism_size
         )
 
-        # We need to offset the indices for the cache
-        arg_affinities = {key + 3: arg_affinities[key] for key in arg_affinities}
+        if llama_config.tensor_parallelism_size > 1:
+            # We need to offset the indices for the cache
+            arg_affinities = {key + 3: arg_affinities[key] for key in arg_affinities}
 
-        for i in range(3):
-            arg_affinities[i] = DeviceAffinity("0")
+            for i in range(3):
+                arg_affinities[i] = DeviceAffinity("0")
 
         dynamic_shapes = {
             "tokens": {1: sl_dim},
@@ -244,12 +245,13 @@ def main():
             arg_affinities,
         ) = setup_cache(model, llama_config.tensor_parallelism_size)
 
-        # We need to offset the indices for the cache
-        arg_affinities = {key + 4: arg_affinities[key] for key in arg_affinities}
+        if llama_config.tensor_parallelism_size > 1:
+            # We need to offset the indices for the cache
+            arg_affinities = {key + 4: arg_affinities[key] for key in arg_affinities}
 
-        # Inputs have default affinity 0
-        for i in range(4):
-            arg_affinities[i] = DeviceAffinity("0")
+            # Inputs have default affinity 0
+            for i in range(4):
+                arg_affinities[i] = DeviceAffinity("0")
 
         dynamic_shapes = {
             "tokens": {},

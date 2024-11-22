@@ -49,6 +49,9 @@ class SHORTFIN_API DType {
   bool is_integer_bitwidth(size_t bitwidth) const {
     return iree_hal_element_type_is_integer(et_, bitwidth);
   }
+  uint32_t numerical_type() const {
+    return iree_hal_element_numerical_type(et_);
+  }
 
   // Computes the size in bytes required to store densely packed nd-dims.
   // This presently only supports byte aligned dtypes. In the future, when
