@@ -37,7 +37,9 @@ def test_generate_solutions(tuner_ctx: common.TunerContext) -> None:
     problem_size = common.ProblemSize(
         matmul_size, lhs_type, rhs_type, res_type, common.DispatchKind.mmt
     )
-    configs = dispatch_constraints.generate_solutions(tuner_ctx.logger, problem_size, 4)
+    configs = dispatch_constraints.generate_solutions(
+        tuner_ctx.logger, problem_size, 4, []
+    )
     assert configs is not None
 
 
@@ -115,6 +117,7 @@ def test_generate_constraints_valid_input(tuner_ctx: common.TunerContext) -> Non
         sg_m_cnt,
         sg_n_cnt,
         waves_per_eu,
+        [],
     )
 
     solver = z3.Solver()
@@ -160,6 +163,7 @@ def test_generate_constraints_invalid_input(tuner_ctx: common.TunerContext) -> N
         sg_m_cnt,
         sg_n_cnt,
         waves_per_eu,
+        [],
     )
     constraints.append(m > 1000)  # Adding an additional unsatisfiable constraint
 

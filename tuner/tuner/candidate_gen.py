@@ -30,7 +30,7 @@ from abc import abstractmethod
 
 from iree.compiler import ir  # type: ignore
 
-from iree.compiler.dialects import iree_codegen
+from iree.compiler.dialects import iree_codegen  # type: ignore
 
 from .common import *
 from .dispatch_constraints import *
@@ -538,7 +538,7 @@ def tune(
         walk_result: OpWalkResult = walk_mlir_op(mlir_module, dispatch_tuner_registry)
 
         variant_op_list = iree_codegen.get_executable_variant_ops(mlir_module)
-        assert len(variant_op_list) == 1, "Support only one op in one disptach"
+        assert len(variant_op_list) == 1, "Expect one executable variant op"
         variant_op = variant_op_list[0]
         # Get the MMA intrinisic intructions supported by the target.
         mma_list = iree_codegen.query_mma_intrinsics(variant_op)

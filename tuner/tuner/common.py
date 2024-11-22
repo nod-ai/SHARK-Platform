@@ -12,7 +12,7 @@ from typing import Optional
 
 from iree.compiler import ir  # type: ignore
 
-from iree.compiler.dialects import iree_gpu
+from iree.compiler.dialects import iree_gpu  # type: ignore
 
 
 class CommonTypes:
@@ -134,9 +134,9 @@ class MfmaIntrinsic:
 
 def get_compatible_mfma_intrinsics(
     problem_size: ProblemSize,
-    mma_intrinsics: Optional[list[iree_gpu.MMAIntrinsic]] = None,
+    mma_intrinsics: list[iree_gpu.MMAIntrinsic],
 ) -> list[MfmaIntrinsic]:
-    mma_list_target = {str(mma) for mma in mma_intrinsics} if mma_intrinsics else None
+    available_mma_intrinsics = [str(mma) for mma in mma_intrinsics]
 
     def is_compatible(intrinsic: MfmaIntrinsic) -> bool:
         if problem_size.res_type.element_type != intrinsic.output_type:
@@ -147,7 +147,7 @@ def get_compatible_mfma_intrinsics(
             if problem_size.rhs_type.element_type != intrinsic.input_type:
                 return False
 
-        if mma_list_target is not None and str(intrinsic) not in mma_list_target:
+        if available_mma_intrinsics and str(intrinsic) not in available_mma_intrinsics:
             return False
 
         return True

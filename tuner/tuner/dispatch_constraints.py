@@ -11,8 +11,7 @@ import z3  # type: ignore
 from typing import Iterator
 
 
-from iree.compiler import ir
-from iree.compiler.dialects import iree_codegen, iree_gpu
+from iree.compiler.dialects import iree_gpu  # type: ignore
 
 from .common import *
 
@@ -22,7 +21,7 @@ def get_mfma_intrinsic_constraints(
     intrinsic_m: z3.ArithRef,
     intrinsic_n: z3.ArithRef,
     intrinsic_k: z3.ArithRef,
-    mma_intrinsics: Optional[list[iree_gpu.MMAIntrinsic]] = None,
+    mma_intrinsics: list[iree_gpu.MMAIntrinsic],
 ) -> z3.BoolRef:
     compatible_intrinsics = get_compatible_mfma_intrinsics(problem_size, mma_intrinsics)
     assert len(compatible_intrinsics) > 0, "No compatible intrinsics found"
@@ -73,7 +72,7 @@ def generate_constraints(
     subgroup_m_count,
     subgroup_n_count,
     waves_per_eu,
-    mma_intrinsics: Optional[list[iree_gpu.MMAIntrinsic]] = None,
+    mma_intrinsics: list[iree_gpu.MMAIntrinsic],
 ):
     M, N, K = (
         problem_size.matmul_size.M,
@@ -139,7 +138,7 @@ def generate_solutions(
     logger: logging.Logger,
     problem_size: ProblemSize,
     num_subgrups: int,
-    mma_intrinsics: Optional[list[iree_gpu.MMAIntrinsic]] = None,
+    mma_intrinsics: list[iree_gpu.MMAIntrinsic],
 ) -> Iterator[Configuration]:
     M, N, K = problem_size.MNK
     logger.info(f"{M},{N},{K}")

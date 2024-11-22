@@ -109,7 +109,8 @@ def test_get_compatible_mfma_intrinsics(tuner_ctx: common.TunerContext) -> None:
             common.ShapedType([1280, 1280], tuner_ctx.type.f16),
             common.ShapedType([2048, 1280], tuner_ctx.type.f32),
             common.DispatchKind.mmt,
-        )
+        ),
+        [],
     ) == [
         common.MfmaIntrinsic.mfma_f32_16x16x16_f16(),
         common.MfmaIntrinsic.mfma_f32_32x32x8_f16(),
@@ -122,7 +123,8 @@ def test_get_compatible_mfma_intrinsics(tuner_ctx: common.TunerContext) -> None:
             common.ShapedType([1280, 1280], tuner_ctx.type.i8),
             common.ShapedType([2048, 1280], tuner_ctx.type.i32),
             common.DispatchKind.mmt,
-        )
+        ),
+        [],
     ) == [
         common.MfmaIntrinsic.mfma_i32_16x16x32_i8(),
         common.MfmaIntrinsic.mfma_i32_32x32x16_i8(),
@@ -135,7 +137,8 @@ def test_get_compatible_mfma_intrinsics(tuner_ctx: common.TunerContext) -> None:
             common.ShapedType([64, 640, 320], tuner_ctx.type.f32),
             common.ShapedType([64, 968, 320], tuner_ctx.type.f32),
             common.DispatchKind.batch_matmul,
-        )
+        ),
+        [],
     ) == [
         common.MfmaIntrinsic.mfma_f32_16x16x16_f16(),
         common.MfmaIntrinsic.mfma_f32_32x32x8_f16(),
