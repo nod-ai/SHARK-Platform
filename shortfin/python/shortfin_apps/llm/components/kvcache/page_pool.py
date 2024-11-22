@@ -82,7 +82,6 @@ class PagePool:
                 pool=self,
                 token_offset=0,
                 token_count=0,
-                ref_count=0,
             )
             for i in range(self.config.alloc_page_count)
         ]

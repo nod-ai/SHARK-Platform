@@ -10,7 +10,12 @@ logger = logging.getLogger(__name__)
 
 
 @pytest.fixture(
-    params=[("cpu", sf.host.CPUSystemBuilder), ("gpu", sf.amdgpu.SystemBuilder)]
+    params=[
+        pytest.param("cpu", sf.host.CPUSystemBuilder, marks=[]),
+        pytest.param(
+            "gpu", sf.amdgpu.SystemBuilder, marks=[pytest.mark.system("amdgpu")]
+        ),
+    ]
 )
 def setup_system(request):
     system_type, builder_class = request.param
