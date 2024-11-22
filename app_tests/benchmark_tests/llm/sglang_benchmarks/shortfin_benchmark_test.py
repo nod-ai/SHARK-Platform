@@ -15,7 +15,7 @@ from unittest.mock import patch
 pytest.importorskip("sglang")
 from sglang import bench_serving
 
-from app_tests.benchmark_tests.llm.sglang_benchmarks.utils import (
+from .utils import (
     SGLangBenchmarkArgs,
     log_jsonl_result,
 )

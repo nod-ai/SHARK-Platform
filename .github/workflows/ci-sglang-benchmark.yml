@@ -25,64 +25,65 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  benchmark_shortfin:
-    if: ${{ github.repository_owner == 'nod-ai' || github.event_name != 'schedule' }}
-    name: "SGLang Serving Benchmark With Shortfin"
-    strategy:
-      matrix:
-        version: [3.11]
-      fail-fast: false
-    runs-on: llama-mi300x-3
-    defaults:
-      run:
-        shell: bash
-    env:
-      PIP_CACHE_DIR: "${{ github.workspace }}/.pip-cache"
-    steps:
-      - name: Get Current Date
-        id: date
-        run: echo "::set-output name=date::$(date +'%Y-%m-%d')"
+  # TODO: Uncomment after verification
+  # benchmark_shortfin:
+  #   if: ${{ github.repository_owner == 'nod-ai' || github.event_name != 'schedule' }}
+  #   name: "SGLang Serving Benchmark With Shortfin"
+  #   strategy:
+  #     matrix:
+  #       version: [3.11]
+  #     fail-fast: false
+  #   runs-on: llama-mi300x-3
+  #   defaults:
+  #     run:
+  #       shell: bash
+  #   env:
+  #     PIP_CACHE_DIR: "${{ github.workspace }}/.pip-cache"
+  #   steps:
+  #     - name: Get Current Date
+  #       id: date
+  #       run: echo "::set-output name=date::$(date +'%Y-%m-%d')"
 
-      - name: "Setting up Python"
-        id: setup_python
-        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
-        with:
-          python-version: ${{matrix.version}}
+  #     - name: "Setting up Python"
+  #       id: setup_python
+  #       uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+  #       with:
+  #         python-version: ${{matrix.version}}
 
-      - name: "Checkout Code"
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+  #     - name: "Checkout Code"
+  #       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      - name: Cache Pip Packages
-        uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4.1.2
-        id: cache-pip
-        with:
-          path: ${{ env.PIP_CACHE_DIR }}
-          key: pip-${{ steps.setup_python.outputs.python-version }}-${{ hashFiles('*requirements.txt') }}
+  #     - name: Cache Pip Packages
+  #       uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4.1.2
+  #       id: cache-pip
+  #       with:
+  #         path: ${{ env.PIP_CACHE_DIR }}
+  #         key: pip-${{ steps.setup_python.outputs.python-version }}-${{ hashFiles('*requirements.txt') }}
 
-      - name: Install pip deps
-        run: |
-          python -m pip install --no-compile --upgrade pip
-          # Note: We install in three steps in order to satisfy requirements
-          # from non default locations first. Installing the PyTorch CPU
-          # wheels saves multiple minutes and a lot of bandwidth on runner setup.
-          pip install --no-compile -r pytorch-cpu-requirements.txt
-          pip install --no-compile -f https://iree.dev/pip-release-links.html --src deps \
-            -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
-          pip install --no-compile -r requirements.txt -e sharktank/ shortfin/
+  #     - name: Install pip deps
+  #       run: |
+  #         python -m pip install --no-compile --upgrade pip
+  #         # Note: We install in three steps in order to satisfy requirements
+  #         # from non default locations first. Installing the PyTorch CPU
+  #         # wheels saves multiple minutes and a lot of bandwidth on runner setup.
+  #         pip install --no-compile -r pytorch-cpu-requirements.txt
+  #         pip install --no-compile -f https://iree.dev/pip-release-links.html --src deps \
+  #           -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
+  #         pip install --no-compile -r requirements.txt -e sharktank/ shortfin/
 
-          # Try with the latest nightly releases, not what iree-turbine pins.
-          # We could also pin to a known working or stable version.
-          # This should eventually stabilize. Do the best we can for now.
-          pip install -f https://iree.dev/pip-release-links.html --upgrade \
-            iree-base-compiler==3.0.0rc20241118 \
-            iree-base-runtime==3.0.0rc20241118 \
-            "numpy<2.0"
+  #         # Try with the latest nightly releases, not what iree-turbine pins.
+  #         # We could also pin to a known working or stable version.
+  #         # This should eventually stabilize. Do the best we can for now.
+  #         pip install -f https://iree.dev/pip-release-links.html --upgrade \
+  #           iree-base-compiler==3.0.0rc20241118 \
+  #           iree-base-runtime==3.0.0rc20241118 \
+  #           "numpy<2.0"
 
-      - name: Install SGLang
-        run: pip install "git+https://github.com/nod-ai/sglang.git#subdirectory=python"
+  #     - name: Install SGLang
+  #       run: pip install "git+https://github.com/nod-ai/sglang.git#subdirectory=python"
 
-      - name: Run Shortfin Benchmark Tests
-        run: pytest -v app_tests/benchmark_tests/llm/sglang_benchmarks/shortfin_benchmark_test.py --log-cli-level=INFO --html=out/llm/shortfin/index.html
+  #     - name: Run Shortfin Benchmark Tests
+  #       run: pytest -v app_tests/benchmark_tests/llm/sglang_benchmarks/shortfin_benchmark_test.py --log-cli-level=INFO --html=out/llm/shortfin/index.html
 
       # TODO: Uncomment after verification
       # - name: Deploy to GitHub Pages
@@ -96,7 +97,8 @@ jobs:
   benchmark_sglang:
     if: ${{ github.repository_owner == 'nod-ai' || github.event_name != 'schedule' }}
     name: "SGLang Serving Benchmark With SGLang"
-    needs: benchmark_shortfin
+    # TODO: Uncomment after verifying
+    # needs: benchmark_shortfin
     strategy:
       matrix:
         version: [3.11]
