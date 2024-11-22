@@ -147,7 +147,7 @@ def get_compatible_mfma_intrinsics(
             if problem_size.rhs_type.element_type != intrinsic.input_type:
                 return False
 
-        if available_mma_intrinsics and str(intrinsic) not in available_mma_intrinsics:
+        if str(intrinsic) not in available_mma_intrinsics:
             return False
 
         return True
