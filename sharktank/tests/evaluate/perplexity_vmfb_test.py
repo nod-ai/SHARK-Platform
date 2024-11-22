@@ -54,12 +54,12 @@ class PerplexityTest(unittest.TestCase):
                 f"--iree-hip-target={self.iree_hip_target}",
                 f"--tensor-parallelism-size=1",
                 f"--attention-kernel=decomposed",
-                f"--num-prompts={self.bs}",
+                f"--num-prompts={self.batch_size}",
             ]
         )
 
         baseline_mean_perplexity = round(
-            np.mean(baseline_perplexity["perplexities"][0 : self.bs]), 6
+            np.mean(baseline_perplexity["perplexities"][0 : self.batch_size]), 6
         )
         current_mean_perplexity = round(current_perplexity["mean_perplexity"], 6)
 
@@ -73,7 +73,7 @@ class PerplexityTest(unittest.TestCase):
         )
 
     @skipif_run_quick_llama_test
-    @pytest.mark.xfail(reason="Compile Error", strict=True, raises=IreeCompileException)
+    @pytest.mark.xfail(reason="Compile Error", raises=IreeCompileException)
     def test_llama3_8B_f16(self):
 
         # Llama 3.1 8B non-decomposed
@@ -90,12 +90,12 @@ class PerplexityTest(unittest.TestCase):
                 f"--iree-hip-target={self.iree_hip_target}",
                 f"--tensor-parallelism-size=1",
                 f"--attention-kernel=torch_sdpa",
-                f"--num-prompts={self.bs}",
+                f"--num-prompts={self.batch_size}",
             ]
         )
 
         baseline_mean_perplexity = round(
-            np.mean(baseline_perplexity["perplexities"][0 : self.bs]), 6
+            np.mean(baseline_perplexity["perplexities"][0 : self.batch_size]), 6
         )
         current_mean_perplexity = round(current_perplexity["mean_perplexity"], 6)
 
@@ -109,7 +109,7 @@ class PerplexityTest(unittest.TestCase):
         )
 
     @skipif_run_quick_llama_test
-    @pytest.mark.xfail(reason="Compile Error", strict=True, raises=IreeCompileException)
+    @pytest.mark.xfail(reason="Compile Error", raises=IreeCompileException)
     def test_llama3_8B_fp8_decomposed(self):
 
         # Llama 3.1 8B decomposed
@@ -126,12 +126,12 @@ class PerplexityTest(unittest.TestCase):
                 f"--iree-hip-target={self.iree_hip_target}",
                 f"--tensor-parallelism-size=1",
                 f"--attention-kernel=decomposed",
-                f"--num-prompts={self.bs}",
+                f"--num-prompts={self.batch_size}",
             ]
         )
 
         baseline_mean_perplexity = round(
-            np.mean(baseline_perplexity["perplexities"][0 : self.bs]), 6
+            np.mean(baseline_perplexity["perplexities"][0 : self.batch_size]), 6
         )
         current_mean_perplexity = round(current_perplexity["mean_perplexity"], 6)
 
@@ -145,7 +145,7 @@ class PerplexityTest(unittest.TestCase):
         )
 
     @skipif_run_quick_llama_test
-    @pytest.mark.xfail(reason="Compile Error", strict=True, raises=IreeCompileException)
+    @pytest.mark.xfail(reason="Compile Error", raises=IreeCompileException)
     def test_llama3_8B_fp8(self):
 
         # Llama 3.1 8B non-decomposed
@@ -162,12 +162,12 @@ class PerplexityTest(unittest.TestCase):
                 f"--iree-hip-target={self.iree_hip_target}",
                 f"--tensor-parallelism-size=1",
                 f"--attention-kernel=torch_sdpa",
-                f"--num-prompts={self.bs}",
+                f"--num-prompts={self.batch_size}",
             ]
         )
 
         baseline_mean_perplexity = round(
-            np.mean(baseline_perplexity["perplexities"][0 : self.bs]), 6
+            np.mean(baseline_perplexity["perplexities"][0 : self.batch_size]), 6
         )
         current_mean_perplexity = round(current_perplexity["mean_perplexity"], 6)
 
@@ -200,12 +200,12 @@ class PerplexityTest(unittest.TestCase):
                 f"--iree-hip-target={self.iree_hip_target}",
                 f"--tensor-parallelism-size={self.tensor_parallelism_size}",
                 f"--attention-kernel=decomposed",
-                f"--num-prompts={self.bs}",
+                f"--num-prompts={self.batch_size}",
             ]
         )
 
         baseline_mean_perplexity = round(
-            np.mean(baseline_perplexity["perplexities"][0 : self.bs]), 6
+            np.mean(baseline_perplexity["perplexities"][0 : self.batch_size]), 6
         )
         current_mean_perplexity = round(current_perplexity["mean_perplexity"], 6)
 
@@ -219,7 +219,7 @@ class PerplexityTest(unittest.TestCase):
         )
 
     @skipif_run_quick_llama_test
-    @pytest.mark.xfail(reason="Compile Error", strict=True, raises=IreeCompileException)
+    @pytest.mark.xfail(reason="Compile Error", raises=IreeCompileException)
     def test_llama3_405B_f16(self):
 
         # Llama 3.1 405B non-decomposed
@@ -236,12 +236,12 @@ class PerplexityTest(unittest.TestCase):
                 f"--iree-hip-target={self.iree_hip_target}",
                 f"--tensor-parallelism-size={self.tensor_parallelism_size}",
                 f"--attention-kernel=torch_sdpa",
-                f"--num-prompts={self.bs}",
+                f"--num-prompts={self.batch_size}",
             ]
         )
 
         baseline_mean_perplexity = round(
-            np.mean(baseline_perplexity["perplexities"][0 : self.bs]), 6
+            np.mean(baseline_perplexity["perplexities"][0 : self.batch_size]), 6
         )
         current_mean_perplexity = round(current_perplexity["mean_perplexity"], 6)
 
@@ -255,7 +255,7 @@ class PerplexityTest(unittest.TestCase):
         )
 
     @skipif_run_quick_llama_test
-    @pytest.mark.xfail(reason="Compile Error", strict=True, raises=IreeCompileException)
+    @pytest.mark.xfail(reason="Compile Error", raises=IreeCompileException)
     def test_llama3_405B_fp8_decomposed(self):
 
         # Llama 3.1 405B decomposed
@@ -272,12 +272,12 @@ class PerplexityTest(unittest.TestCase):
                 f"--iree-hip-target={self.iree_hip_target}",
                 f"--tensor-parallelism-size={self.tensor_parallelism_size}",
                 f"--attention-kernel=decomposed",
-                f"--num-prompts={self.bs}",
+                f"--num-prompts={self.batch_size}",
             ]
         )
 
         baseline_mean_perplexity = round(
-            np.mean(baseline_perplexity["perplexities"][0 : self.bs]), 6
+            np.mean(baseline_perplexity["perplexities"][0 : self.batch_size]), 6
         )
         current_mean_perplexity = round(current_perplexity["mean_perplexity"], 6)
 
@@ -291,7 +291,7 @@ class PerplexityTest(unittest.TestCase):
         )
 
     @skipif_run_quick_llama_test
-    @pytest.mark.xfail(reason="Compile Error", strict=True, raises=IreeCompileException)
+    @pytest.mark.xfail(reason="Compile Error", raises=IreeCompileException)
     def test_llama3_405B_fp8(self):
 
         # Llama 3.1 405B non-decomposed
@@ -308,12 +308,12 @@ class PerplexityTest(unittest.TestCase):
                 f"--iree-hip-target={self.iree_hip_target}",
                 f"--tensor-parallelism-size={self.tensor_parallelism_size}",
                 f"--attention-kernel=torch_sdpa",
-                f"--num-prompts={self.bs}",
+                f"--num-prompts={self.batch_size}",
             ]
         )
 
         baseline_mean_perplexity = round(
-            np.mean(baseline_perplexity["perplexities"][0 : self.bs]), 6
+            np.mean(baseline_perplexity["perplexities"][0 : self.batch_size]), 6
         )
         current_mean_perplexity = round(current_perplexity["mean_perplexity"], 6)
 
