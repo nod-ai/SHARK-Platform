@@ -2,6 +2,37 @@
 
 This doc includes basic steps for hooking up sglang with a running Shortfin server.
 
+## Current Support Status
+
+| Feature     | Description | Enabled    | Reference |
+| ----------- | ----------- | ---------- | ------------ |
+| `gen`       | Generate shortfin completion, given a prompt | ✅ | [Shortfin Implementation](https://github.com/nod-ai/sglang/blob/main/python/sglang/lang/backend/shortfin.py) |
+| `streaming` | Stream shortfin completion, given a prompt | ✅ | [Streaming](https://sgl-project.github.io/frontend/frontend.html#streaming) |
+| `run_batch` | Run batch of disjoint requests with continous batching | ✅ | [Batching](https://sgl-project.github.io/frontend/frontend.html#batching) |
+| `fork`      | Generate sections of the same prompt in parallel | ✅ | [Fork Docs](https://sgl-project.github.io/frontend/frontend.html#parallelism) |
+| `choices`   | Given set of choices, generate response based on best log probs | ❌ | [Choices Methods](https://sgl-project.github.io/frontend/choices_methods.html#choices-methods-in-sglang) |
+| `image`     | Pass image as part of multi-modal prompt | ❌ | [sgl.image](https://sgl-project.github.io/frontend/frontend.html#multi-modality) |
+| `regex`     | Specify regular expression as decoding constraint | ❌ | [Regex](https://sgl-project.github.io/frontend/frontend.html#constrained-decoding) |
+
+## Prerequisites
+
+For this tutorial, you will need to meet the following prerequisites:
+
+### Software
+
+- Python >= 3.11
+    - You can check out [pyenv](https://github.com/pyenv/pyenv)
+    as a good tool to be able to manage multiple versions of python
+    on the same system.
+- A running `shortfin` LLM server as described [below](#installstart-shortfin-llm-server)
+  - We will use the shortfin server as the `backend` to generate completions
+    from SGLang's `frontend language`. In this tutorial, you can think of
+    `sglang` as the client and `shortfin` as the server.
+
+### Hardware
+
+- This tutorial is designed to run on an [AMD MI300X GPU](https://www.amd.com/en/products/accelerators/instinct/mi300/mi300x.html)
+
 ## Install/Start `shortfin` LLM server
 
 Follow the steps [here](https://github.com/nod-ai/shark-ai/blob/main/docs/shortfin/llm/user/e2e_llama8b_mi300x.md)
