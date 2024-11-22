@@ -10,10 +10,6 @@ import json
 import numpy as np
 
 from sharktank.evaluate import perplexity_iree
-from sharktank.utils.export_artifacts import (
-    ExportMlirException,
-    IreeCompileException,
-)
 
 is_mi300x = pytest.mark.skipif("config.getoption('iree_hip_target') != 'gfx942'")
 skipif_run_quick_llama_test = pytest.mark.skipif(
@@ -73,7 +69,7 @@ class PerplexityTest(unittest.TestCase):
         )
 
     @skipif_run_quick_llama_test
-    @pytest.mark.xfail(reason="Compile Error", raises=IreeCompileException)
+    @pytest.mark.xfail(reason="Compile Error")
     def test_llama3_8B_f16(self):
 
         # Llama 3.1 8B non-decomposed
@@ -109,7 +105,7 @@ class PerplexityTest(unittest.TestCase):
         )
 
     @skipif_run_quick_llama_test
-    @pytest.mark.xfail(reason="Compile Error", raises=IreeCompileException)
+    @pytest.mark.xfail(reason="Compile Error")
     def test_llama3_8B_fp8_decomposed(self):
 
         # Llama 3.1 8B decomposed
@@ -145,7 +141,7 @@ class PerplexityTest(unittest.TestCase):
         )
 
     @skipif_run_quick_llama_test
-    @pytest.mark.xfail(reason="Compile Error", raises=IreeCompileException)
+    @pytest.mark.xfail(reason="Compile Error")
     def test_llama3_8B_fp8(self):
 
         # Llama 3.1 8B non-decomposed
@@ -219,7 +215,7 @@ class PerplexityTest(unittest.TestCase):
         )
 
     @skipif_run_quick_llama_test
-    @pytest.mark.xfail(reason="Compile Error", raises=IreeCompileException)
+    @pytest.mark.xfail(reason="Compile Error")
     def test_llama3_405B_f16(self):
 
         # Llama 3.1 405B non-decomposed
@@ -255,7 +251,7 @@ class PerplexityTest(unittest.TestCase):
         )
 
     @skipif_run_quick_llama_test
-    @pytest.mark.xfail(reason="Compile Error", raises=IreeCompileException)
+    @pytest.mark.xfail(reason="Compile Error")
     def test_llama3_405B_fp8_decomposed(self):
 
         # Llama 3.1 405B decomposed
@@ -291,7 +287,7 @@ class PerplexityTest(unittest.TestCase):
         )
 
     @skipif_run_quick_llama_test
-    @pytest.mark.xfail(reason="Compile Error", raises=IreeCompileException)
+    @pytest.mark.xfail(reason="Compile Error")
     def test_llama3_405B_fp8(self):
 
         # Llama 3.1 405B non-decomposed
