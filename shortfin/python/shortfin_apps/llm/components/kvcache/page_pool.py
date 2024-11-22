@@ -151,7 +151,7 @@ class PagePool:
         free_pages = len(self.attn_page_free)
         total_pages = len(self.attn_page_entries)
         return (
-            f"AttnPageCache({total_pages - free_pages}/{total_pages} pages in use: "
+            f"PagePool({total_pages - free_pages}/{total_pages} pages in use: "
             f"{100.0 * free_pages / total_pages}% free)"
         )
 

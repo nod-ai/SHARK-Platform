@@ -11,7 +11,7 @@ from pathlib import Path
 import shortfin as sf
 import shortfin.array as sfnp
 
-from .cache import AttnPageCache
+from .cache import BasePagedAttentionCache
 from .config_struct import ModelParams
 from .manager import SystemManager
 from .messages import InferenceExecRequest, InferencePhase, StrobeMessage
@@ -54,7 +54,7 @@ class GenerateService:
 
         # Scope dependent objects.
         self.batcher = BatcherProcess(self)
-        self.page_cache = AttnPageCache(
+        self.page_cache = BasePagedAttentionCache(
             devices=self.main_fiber.devices_dict.values(), model_params=model_params
         )
 
@@ -200,7 +200,7 @@ class BatcherProcess(sf.Process):
         self.pending_prefills.clear()
         logger.debug("Post boarding cache state: %r", cache)
 
-    def board_prefills(self, cache: AttnPageCache):
+    def board_prefills(self, cache: BasePagedAttentionCache):
         # Fill prefill flights.
         pending_prefills = self.pending_prefills
         if len(pending_prefills) == 0:
@@ -209,7 +209,7 @@ class BatcherProcess(sf.Process):
             self.service,
             InferencePhase.PREFILL,
             self.page_seq_stride,
-            cache.page_tables,
+            cache.page_pool.page_tables,
         )
         for prefill_request in pending_prefills:
             assert prefill_request.phase == InferencePhase.PREFILL
@@ -240,13 +240,16 @@ class BatcherProcess(sf.Process):
             # And takeoff.
             exec_process.launch()
 
-    def board_decodes(self, cache: AttnPageCache):
+    def board_decodes(self, cache: BasePagedAttentionCache):
         # Fill decode flights.
         pending_decodes = self.pending_decodes
         if len(pending_decodes) == 0:
             return
         exec_process = InferenceExecutorProcess(
-            self.service, InferencePhase.DECODE, self.page_seq_stride, cache.page_tables
+            self.service,
+            InferencePhase.DECODE,
+            self.page_seq_stride,
+            cache.page_pool.page_tables,
         )
         for decode_request in pending_decodes:
             assert decode_request.phase == InferencePhase.DECODE

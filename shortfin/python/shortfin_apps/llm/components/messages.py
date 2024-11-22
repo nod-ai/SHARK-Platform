@@ -9,7 +9,7 @@ from enum import Enum
 import shortfin as sf
 import shortfin.array as sfnp
 
-from .cache import AttnPageCache, AttnPageEntry
+from .cache import BasePagedAttentionCache, AttnPageEntry
 
 
 class InferencePhase(Enum):
@@ -41,7 +41,7 @@ class InferenceExecRequest(sf.Message):
         self.result_logits: sfnp.device_array | None = None
 
         # Cache pages that have been locked for this request.
-        self._cache: AttnPageCache | None = None
+        self._cache: BasePagedAttentionCache | None = None
         self.locked_pages: list[AttnPageEntry] | None = None
 
     def reset(self, phase: InferencePhase):
@@ -66,16 +66,18 @@ class InferenceExecRequest(sf.Message):
             pages = self.locked_pages
             self._cache = None
             self.locked_pages = None
-            cache.release_pages(pages)
+            cache.release_pages(self.input_token_ids, pages)
 
     def lock_initial_cache_pages(
-        self, cache: AttnPageCache, pages: list[AttnPageEntry]
+        self, cache: BasePagedAttentionCache, pages: list[AttnPageEntry]
     ):
         assert not self._cache
         self._cache = cache
         self.locked_pages = pages
 
-    def lock_new_cache_pages(self, cache: AttnPageCache, pages: list[AttnPageEntry]):
+    def lock_new_cache_pages(
+        self, cache: BasePagedAttentionCache, pages: list[AttnPageEntry]
+    ):
         assert self._cache is cache
         self.locked_pages.extend(pages)
 
