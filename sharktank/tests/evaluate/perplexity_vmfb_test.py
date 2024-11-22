@@ -27,6 +27,7 @@ skipif_run_quick_llama_test = pytest.mark.skipif(
     "get_iree_flags",
     "tensor_parallelism_size",
     "baseline_perplexity_scores",
+    "batch_size",
 )
 @is_mi300x
 class PerplexityTest(unittest.TestCase):
