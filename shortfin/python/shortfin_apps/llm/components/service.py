@@ -11,7 +11,8 @@ from pathlib import Path
 import shortfin as sf
 import shortfin.array as sfnp
 
-from .cache import BasePagedAttentionCache
+from .kvcache.base_attention_cache import BasePagedAttentionCache
+from .kvcache.page_pool import PagePoolConfig, PagePool
 from .config_struct import ModelParams
 from .manager import SystemManager
 from .messages import InferenceExecRequest, InferencePhase, StrobeMessage
@@ -54,8 +55,17 @@ class GenerateService:
 
         # Scope dependent objects.
         self.batcher = BatcherProcess(self)
+        page_pool_config = PagePoolConfig(
+            dtype=model_params.attn_dtype,
+            alloc_page_count=model_params.paged_kv_cache.device_block_count,
+            paged_kv_block_size_elements=model_params.paged_kv_block_size_elements,
+        )
+        page_pool = PagePool(
+            devices=self.main_fiber.devices_dict.values(), config=page_pool_config
+        )
         self.page_cache = BasePagedAttentionCache(
-            devices=self.main_fiber.devices_dict.values(), model_params=model_params
+            page_pool=page_pool,
+            tokens_per_page=model_params.paged_kv_cache.block_seq_stride,
         )
 
         self.program_isolation = PROG_ISOLATIONS[program_isolation]

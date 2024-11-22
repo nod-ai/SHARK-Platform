@@ -10,10 +10,7 @@ import shortfin as sf
 import shortfin.array as sfnp
 
 from .kvcache.base_attention_cache import BasePagedAttentionCache
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from .kvcache.page_pool import PageInfo
+from .kvcache.page_pool import PageInfo
 
 
 class InferencePhase(Enum):

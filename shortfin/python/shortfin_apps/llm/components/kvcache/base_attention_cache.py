@@ -9,7 +9,7 @@ Base class for kv caches.
 """
 
 from typing import List
-from attention_paging import PageInfo
+from .page_pool import PageInfo
 import math
 
 
@@ -53,7 +53,7 @@ class BasePagedAttentionCache:
 
         No token at idx < n_cached_token should be written to. TODO: consider enforcing this.
         """
-        pages_needed = math.ceil(len(tokens + extra_token_slots) / self.tokens_per_page)
+        pages_needed = math.ceil(len(tokens) + extra_token_slots / self.tokens_per_page)
         pages = self.page_pool.acquire_free_pages(pages_needed)
 
         n_cached_tokens = 0
