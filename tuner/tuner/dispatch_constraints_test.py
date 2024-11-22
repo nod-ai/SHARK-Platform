@@ -39,8 +39,17 @@ def test_generate_solutions(tuner_ctx: common.TunerContext) -> None:
         matmul_size, lhs_type, rhs_type, res_type, common.DispatchKind.mmt
     )
     configs = dispatch_constraints.generate_solutions(
-        tuner_ctx.logger, problem_size, 4, []
+        tuner_ctx.logger,
+        problem_size,
+        4,
+        [
+            iree_gpu.MMAIntrinsic.MFMA_F32_16x16x16_F16,
+            iree_gpu.MMAIntrinsic.MFMA_F32_32x32x8_F16,
+            iree_gpu.MMAIntrinsic.MFMA_I32_16x16x32_I8,
+            iree_gpu.MMAIntrinsic.MFMA_I32_32x32x16_I8,
+        ],
     )
+
     assert configs is not None
 
 

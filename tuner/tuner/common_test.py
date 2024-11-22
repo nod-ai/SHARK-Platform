@@ -153,3 +153,35 @@ def test_get_compatible_mfma_intrinsics(tuner_ctx: common.TunerContext) -> None:
         common.MfmaIntrinsic.mfma_f32_16x16x16_f16(),
         common.MfmaIntrinsic.mfma_f32_32x32x8_f16(),
     ]
+
+    assert common.get_compatible_mfma_intrinsics(
+        common.ProblemSize(
+            common.MatmulSize(968, 320, 640, 64),
+            common.ShapedType([64, 968, 640], tuner_ctx.type.f32),
+            common.ShapedType([64, 640, 320], tuner_ctx.type.f32),
+            common.ShapedType([64, 968, 320], tuner_ctx.type.f32),
+            common.DispatchKind.batch_matmul,
+        ),
+        [
+            iree_gpu.MMAIntrinsic.MFMA_F32_32x32x8_F16,
+        ],
+    ) == [
+        common.MfmaIntrinsic.mfma_f32_32x32x8_f16(),
+    ]
+
+    assert (
+        common.get_compatible_mfma_intrinsics(
+            common.ProblemSize(
+                common.MatmulSize(968, 320, 640, 64),
+                common.ShapedType([64, 968, 640], tuner_ctx.type.f32),
+                common.ShapedType([64, 640, 320], tuner_ctx.type.f32),
+                common.ShapedType([64, 968, 320], tuner_ctx.type.f32),
+                common.DispatchKind.batch_matmul,
+            ),
+            [
+                iree_gpu.MMAIntrinsic.MFMA_I32_16x16x32_I8,
+                iree_gpu.MMAIntrinsic.MFMA_I32_32x32x16_I8,
+            ],
+        )
+        == []
+    )
