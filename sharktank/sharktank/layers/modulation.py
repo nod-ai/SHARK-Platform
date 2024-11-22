@@ -20,7 +20,7 @@ class ModulationLayer(ThetaLayer):
 
         self.is_double = double
         self.multiplier = 6 if double else 3
-        self.lin = LinearLayer(theta("lin"))
+        self.add_module("lin", LinearLayer(theta("lin")))
 
     def forward(self, vec: torch.Tensor) -> tuple[ModulationOut, ModulationOut | None]:
         silu_result = ops.elementwise(F.silu, vec)
