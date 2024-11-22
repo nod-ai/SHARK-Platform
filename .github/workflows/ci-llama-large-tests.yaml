@@ -22,6 +22,7 @@ concurrency:
 
 jobs:
   test_llama_large:
+    if: ${{ github.repository_owner == 'nod-ai' || github.event_name != 'schedule' }}
     name: "Llama Benchmarking Tests"
     strategy:
       matrix:
@@ -64,24 +65,26 @@ jobs:
           pip install --no-compile -r pytorch-cpu-requirements.txt
           pip install --no-compile -r requirements.txt -r sharktank/requirements-tests.txt -e sharktank/
 
-          # Install latest iree-tubrine.
+          # Install latest iree-turbine.
           pip install --no-compile -f https://iree.dev/pip-release-links.html --src deps \
             -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
 
-          # Test with pinned nightly releases, not what iree-turbine uses.
-          pip install -f https://iree.dev/pip-release-links.html --upgrade \
-            iree-base-compiler==2.9.0rc20241108 \
-            iree-base-runtime==2.9.0rc20241108 \
-            "numpy<2.0"
+
+          # Test with nightly releases, not what iree-turbine uses.
+          pip install -f https://iree.dev/pip-release-links.html --upgrade --pre \
+            iree-base-compiler \
+            iree-base-runtime
 
       - name: Run llama tests
-        run: pytest sharktank/tests/models/llama/benchmark_amdgpu_test.py -v -s --run-all-llama --iree-hip-target=gfx942 --html=out/index.html
+        run: pytest sharktank/tests/models/llama/benchmark_amdgpu_test.py -v -s --run-nightly-llama-tests --iree-hip-target=gfx942 --html=out/index.html
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@4f9cc6602d3f66b9c108549d475ec49e8ef4d45e # v4.0.0
         with:
           github_token: ${{ secrets.SHARK_PLATFORM_GH_TOKEN }}
-          publish_dir: ./out
+          publish_dir: ./out/llm/llama/benchmarks
+          destination_dir: ./llm/llama/benchmarks
+          keep_files: true
 
       - name: Upload llama executable files
         uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3

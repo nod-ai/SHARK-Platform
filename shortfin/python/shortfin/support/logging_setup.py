@@ -38,7 +38,7 @@ native_handler = NativeHandler()
 native_handler.setFormatter(NativeFormatter())
 
 # TODO: Source from env vars.
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.WARNING)
 logger.addHandler(native_handler)
 
 

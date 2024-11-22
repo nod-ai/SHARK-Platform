@@ -1,20 +1,13 @@
 # Nightly releases
 
-> [!WARNING]
-> This is still under development! See
-> https://github.com/nod-ai/SHARK-Platform/issues/400.
->
-> These instructions will be converted into a user guide once stable packages
-> are published to PyPI: <https://github.com/nod-ai/SHARK-Platform/issues/359>.
-
 Nightly releases are uploaded to
-https://github.com/nod-ai/SHARK-Platform/releases/tag/dev-wheels.
+https://github.com/nod-ai/shark-ai/releases/tag/dev-wheels.
 
 * The "expanded_assets" version of a release page is compatible with the
   `-f, --find-links <url>` options of `pip install`
   ([docs here](https://pip.pypa.io/en/stable/cli/pip_install/#cmdoption-f)).
   For the "dev-wheels" release above, that page is:
-  <https://github.com/nod-ai/SHARK-Platform/releases/expanded_assets/dev-wheels>
+  <https://github.com/nod-ai/shark-ai/releases/expanded_assets/dev-wheels>
 * These releases are generated using
   [`.github/workflows/build_package.yml`](../.github/workflows/build_packages.yml)
 * That workflow runs the
@@ -23,7 +16,7 @@ https://github.com/nod-ai/SHARK-Platform/releases/tag/dev-wheels.
 [`shortfin/build_tools/build_linux_package.sh`](../shortfin/build_tools/build_linux_package.sh)
   scripts
 * Workflow history can be viewed at
-  <https://github.com/nod-ai/SHARK-Platform/actions/workflows/build_packages.yml>
+  <https://github.com/nod-ai/shark-ai/actions/workflows/build_packages.yml>
 
 ## Prerequisites
 
@@ -38,7 +31,7 @@ source builds.
 You will need a recent version of Python.
 
 * As of Nov 1, 2024, sharktank is compatible with Python 3.11. See
-  https://github.com/nod-ai/SHARK-Platform/issues/349 for Python 3.12 support.
+  https://github.com/nod-ai/shark-ai/issues/349 for Python 3.12 support.
 * As of Nov 4, 2024, shortfin publishes packages for Python 3.11, 3.12, 3.13,
   and 3.13t
 
@@ -51,11 +44,9 @@ which python3.11
 # /usr/bin/python3.11
 ```
 
-> [!NOTE]
-> Tip: manage multiple Python versions using `pyenv`
-> (<https://github.com/pyenv/pyenv>), or `update-alternatives` on Linux
-> ([guide here](https://linuxconfig.org/how-to-change-from-default-to-alternative-python-version-on-debian-linux))
-> , or the
+> [!TIP]
+> Manage multiple Python versions using `pyenv`
+> (<https://github.com/pyenv/pyenv>), or the
 > [Python Launcher for Windows](https://docs.python.org/3/using/windows.html#python-launcher-for-windows)
 > on Windows.
 
@@ -67,7 +58,7 @@ python3.11 -m venv 3.11.venv
 source 3.11.venv/bin/activate
 
 # Install 'sharktank' package from nightly releases.
-python -m pip install sharktank -f https://github.com/nod-ai/SHARK-Platform/releases/expanded_assets/dev-wheels
+pip install sharktank -f https://github.com/nod-ai/shark-ai/releases/expanded_assets/dev-wheels
 
 # Test the installation.
 python -c "from sharktank import ops; print('Sanity check passed')"
@@ -84,7 +75,7 @@ python3.11 -m venv 3.11.venv
 source 3.11.venv/bin/activate
 
 # Install 'shortfin' package from nightly releases.
-python -m pip install shortfin -f https://github.com/nod-ai/SHARK-Platform/releases/expanded_assets/dev-wheels
+pip install shortfin -f https://github.com/nod-ai/shark-ai/releases/expanded_assets/dev-wheels
 
 # Test the installation.
 python -c "import shortfin as sf; print('Sanity check passed')"
@@ -98,7 +89,7 @@ deactivate
 To install the `iree-turbine` package from the latest source:
 
 ```bash
-python -m pip install --src deps \
+pip install --src deps \
   -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
 ```
 
@@ -106,14 +97,117 @@ To install the `iree-base-compiler` and `iree-base-runtime` packages from
 nightly releases:
 
 ```bash
-python -m pip install -f https://iree.dev/pip-release-links.html --upgrade \
+pip install -f https://iree.dev/pip-release-links.html --upgrade --pre \
   iree-base-compiler iree-base-runtime
 ```
 
 To install all three packages together:
 
 ```bash
-python -m pip install -f https://iree.dev/pip-release-links.html --upgrade \
+pip install -f https://iree.dev/pip-release-links.html --upgrade --pre \
   iree-base-compiler iree-base-runtime --src deps \
   -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
 ```
+
+## Switching between stable and nightly channels
+
+The [`shark-ai` package on PyPI](https://pypi.org/project/shark-ai/) is a
+meta-package that pins specific stable versions of each package that share
+at least their major and minor versions:
+
+```bash
+pip install shark-ai==2.9.1
+
+pip freeze
+# ...
+# iree-base-compiler==2.9.0
+# iree-base-runtime==2.9.0
+# iree-turbine==2.9.0
+# ...
+# shark-ai==2.9.1
+# shortfin==2.9.1
+# ...
+```
+
+If you attempt to update any individual package outside of those supported
+versions, pip will log an error but continue anyway:
+
+```bash
+pip install --upgrade --pre \
+  -f https://github.com/nod-ai/shark-ai/releases/expanded_assets/dev-wheels \
+  shortfin==3.0.0rc20241118
+
+# Looking in links: https://github.com/nod-ai/shark-ai/releases/expanded_assets/dev-wheels
+# Collecting shortfin==3.0.0rc20241118
+#   Downloading https://github.com/nod-ai/shark-ai/releases/download/dev-wheels/shortfin-3.0.0rc20241118-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (2.5 MB)
+#      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.5/2.5 MB 24.3 MB/s eta 0:00:00
+# Installing collected packages: shortfin
+#   Attempting uninstall: shortfin
+#     Found existing installation: shortfin 2.9.1
+#     Uninstalling shortfin-2.9.1:
+#       Successfully uninstalled shortfin-2.9.1
+# ERROR: pip's dependency resolver does not currently take into account all the packages that are installed. This behaviour is the source of the following dependency conflicts.
+# shark-ai 2.9.1 requires shortfin==2.9.1, but you have shortfin 3.0.0rc20241118 which is incompatible.
+# Successfully installed shortfin-3.0.0rc20241118
+
+pip freeze
+# ...
+# shark-ai==2.9.1
+# shortfin==3.0.0rc20241118
+# ...
+```
+
+Installing the `shark-ai` package again should get back to aligned versions:
+
+```bash
+pip install shark-ai==2.9.1
+# ...
+# Installing collected packages: shortfin
+#   Attempting uninstall: shortfin
+#     Found existing installation: shortfin 3.0.0rc20241118
+#     Uninstalling shortfin-3.0.0rc20241118:
+#       Successfully uninstalled shortfin-3.0.0rc20241118
+# Successfully installed shortfin-2.9.1
+
+pip freeze
+# ...
+# shark-ai==2.9.1
+# shortfin==2.9.1
+# ...
+```
+
+You can also uninstall the `shark-ai` package to bypass the error and take full
+control of package versions yourself:
+
+```bash
+pip uninstall shark-ai
+
+pip freeze
+# ...
+# (note: no shark-ai package)
+# shortfin==2.9.1
+# ...
+
+pip install --upgrade --pre \
+  -f https://github.com/nod-ai/shark-ai/releases/expanded_assets/dev-wheels \
+  shortfin==3.0.0rc20241118
+
+# Looking in links: https://github.com/nod-ai/shark-ai/releases/expanded_assets/dev-wheels
+# Collecting shortfin==3.0.0rc20241118
+#   Using cached https://github.com/nod-ai/shark-ai/releases/download/dev-wheels/shortfin-3.0.0rc20241118-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (2.5 MB)
+# Installing collected packages: shortfin
+#   Attempting uninstall: shortfin
+#     Found existing installation: shortfin 2.9.1
+#     Uninstalling shortfin-2.9.1:
+#       Successfully uninstalled shortfin-2.9.1
+# Successfully installed shortfin-3.0.0rc20241118
+
+pip freeze
+# ...
+# (note: no shark-ai package)
+# shortfin==3.0.0rc20241118
+# ...
+```
+
+If you ever get stuck, consider creating a fresh
+[virtual environment](https://docs.python.org/3/library/venv.html).

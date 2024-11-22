@@ -5,23 +5,21 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 from typing import Any
-
 import argparse
 import logging
 from pathlib import Path
 import sys
 import os
-import io
 import copy
 import subprocess
+from contextlib import asynccontextmanager
+import uvicorn
 
 # Import first as it does dep checking and reporting.
 from shortfin.interop.fastapi import FastAPIResponder
-
-from contextlib import asynccontextmanager
+from shortfin.support.logging_setup import native_handler
 
 from fastapi import FastAPI, Request, Response
-import uvicorn
 
 from .components.generate import ClientGenerateBatchProcess
 from .components.config_struct import ModelParams
@@ -29,16 +27,40 @@ from .components.io_struct import GenerateReqInput
 from .components.manager import SystemManager
 from .components.service import GenerateService
 from .components.tokenizer import Tokenizer
-from .components.builders import sdxl
 
-from shortfin.support.logging_setup import native_handler, configure_main_logger
 
 logger = logging.getLogger("shortfin-sd")
 logger.addHandler(native_handler)
-logger.setLevel(logging.INFO)
 logger.propagate = False
 
 THIS_DIR = Path(__file__).resolve().parent
+
+UVICORN_LOG_CONFIG = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "default": {
+            "()": "uvicorn.logging.DefaultFormatter",
+            "format": "[{asctime}] {message}",
+            "datefmt": "%Y-%m-%d %H:%M:%S",
+            "style": "{",
+            "use_colors": True,
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "default",
+        },
+    },
+    "loggers": {
+        "uvicorn": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+    },
+}
 
 
 @asynccontextmanager
@@ -46,8 +68,8 @@ async def lifespan(app: FastAPI):
     sysman.start()
     try:
         for service_name, service in services.items():
-            logging.info("Initializing service '%s':", service_name)
-            logging.info(str(service))
+            logger.info("Initializing service '%s':", service_name)
+            logger.info(str(service))
             service.start()
     except:
         sysman.shutdown()
@@ -55,7 +77,7 @@ async def lifespan(app: FastAPI):
     yield
     try:
         for service_name, service in services.items():
-            logging.info("Shutting down service '%s'", service_name)
+            logger.info("Shutting down service '%s'", service_name)
             service.shutdown()
     finally:
         sysman.shutdown()
@@ -83,11 +105,14 @@ app.post("/generate")(generate_request)
 app.put("/generate")(generate_request)
 
 
-def configure(args) -> SystemManager:
+def configure_sys(args) -> SystemManager:
     # Setup system (configure devices, etc).
     model_config, topology_config, flagfile, tuning_spec, args = get_configs(args)
     sysman = SystemManager(args.device, args.device_ids, args.amdgpu_async_allocations)
+    return sysman, model_config, flagfile, tuning_spec
 
+
+def configure_service(args, sysman, model_config, flagfile, tuning_spec):
     # Setup each service we are hosting.
     tokenizers = []
     for idx, tok_name in enumerate(args.tokenizers):
@@ -163,13 +188,13 @@ def get_configs(args):
                         try:
                             val = int(val)
                         except ValueError:
-                            continue
+                            val = val
                 elif len(arglist) == 2:
                     value = arglist[-1]
                     try:
                         value = int(value)
                     except ValueError:
-                        continue
+                        value = value
                 else:
                     # It's a boolean arg.
                     value = True
@@ -178,7 +203,6 @@ def get_configs(args):
                 # It's an env var.
                 arglist = spec.split("=")
                 os.environ[arglist[0]] = arglist[1]
-
     return model_config, topology_config, flagfile, tuning_spec, args
 
 
@@ -207,6 +231,7 @@ def get_modules(args, model_config, flagfile, td_spec):
     filenames = []
     for modelname in vmfbs.keys():
         ireec_args = model_flags["all"] + model_flags[modelname]
+        ireec_extra_args = " ".join(ireec_args)
         builder_args = [
             sys.executable,
             "-m",
@@ -220,8 +245,12 @@ def get_modules(args, model_config, flagfile, td_spec):
             f"--model={modelname}",
             f"--iree-hal-target-device={args.device}",
             f"--iree-hip-target={args.target}",
-            f"--iree-compile-extra-args={' '.join(ireec_args)}",
+            f"--iree-compile-extra-args={ireec_extra_args}",
         ]
+        logger.info(f"Preparing runtime artifacts for {modelname}...")
+        logger.debug(
+            "COMMAND LINE EQUIVALENT: " + " ".join([str(argn) for argn in builder_args])
+        )
         output = subprocess.check_output(builder_args).decode()
 
         output_paths = output.splitlines()
@@ -229,25 +258,17 @@ def get_modules(args, model_config, flagfile, td_spec):
     for name in filenames:
         for key in vmfbs.keys():
             if key in name.lower():
-                if any([x in name for x in [".irpa", ".safetensors", ".gguf"]]):
+                if any(x in name for x in [".irpa", ".safetensors", ".gguf"]):
                     params[key].extend([name])
                 elif "vmfb" in name:
                     vmfbs[key].extend([name])
     return vmfbs, params
 
 
-def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
-    from pathlib import Path
-
+def main(argv, log_config=UVICORN_LOG_CONFIG):
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", type=str, default=None)
     parser.add_argument("--port", type=int, default=8000)
-    parser.add_argument(
-        "--root-path",
-        type=str,
-        default=None,
-        help="Root path to use for installing behind path based proxy.",
-    )
     parser.add_argument(
         "--timeout-keep-alive", type=int, default=5, help="Keep alive timeout"
     )
@@ -263,7 +284,7 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
         type=str,
         required=False,
         default="gfx942",
-        choices=["gfx942", "gfx1100"],
+        choices=["gfx942", "gfx1100", "gfx90a"],
         help="Primary inferencing device LLVM target arch.",
     )
     parser.add_argument(
@@ -303,7 +324,7 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
     parser.add_argument(
         "--isolation",
         type=str,
-        default="per_fiber",
+        default="per_call",
         choices=["per_fiber", "per_call", "none"],
         help="Concurrency control -- How to isolate programs.",
     )
@@ -355,7 +376,7 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
     parser.add_argument(
         "--tuning_spec",
         type=str,
-        default="",
+        default=None,
         help="Path to transform dialect spec if compiling an executable with tunings.",
     )
     parser.add_argument(
@@ -371,15 +392,17 @@ def main(argv, log_config=uvicorn.config.LOGGING_CONFIG):
         default=1,
         help="Use tunings for attention and matmul ops. 0 to disable.",
     )
-
     args = parser.parse_args(argv)
     if not args.artifacts_dir:
         home = Path.home()
         artdir = home / ".cache" / "shark"
         args.artifacts_dir = str(artdir)
+    else:
+        args.artifacts_dir = Path(args.artifacts_dir).resolve()
 
     global sysman
-    sysman = configure(args)
+    sysman, model_config, flagfile, tuning_spec = configure_sys(args)
+    configure_service(args, sysman, model_config, flagfile, tuning_spec)
     uvicorn.run(
         app,
         host=args.host,
@@ -394,27 +417,5 @@ if __name__ == "__main__":
     main(
         sys.argv[1:],
         # Make logging defer to the default shortfin logging config.
-        log_config={
-            "version": 1,
-            "disable_existing_loggers": False,
-            "formatters": {
-                "default": {
-                    "format": "%(asctime)s - %(levelname)s - %(message)s",
-                    "datefmt": "%Y-%m-%d %H:%M:%S",
-                },
-            },
-            "handlers": {
-                "console": {
-                    "class": "logging.StreamHandler",
-                    "formatter": "default",
-                },
-            },
-            "loggers": {
-                "uvicorn": {
-                    "handlers": ["console"],
-                    "level": "INFO",
-                    "propagate": False,
-                },
-            },
-        },
+        log_config=UVICORN_LOG_CONFIG,
     )

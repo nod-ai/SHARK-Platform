@@ -2,7 +2,7 @@ iree-turbine
 
 # Runtime deps.
 gguf==0.6.0
-numpy==1.26.3
+numpy<2.0
 
 # Needed for newer gguf versions (TODO: remove when gguf package includes this)
 # sentencepiece>=0.1.98,<=0.2.0

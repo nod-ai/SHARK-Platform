@@ -73,19 +73,29 @@ def pytest_addoption(parser):
     )
 
     parser.addoption(
-        "--run-8b-llama",
+        "--run-quick-llama-test",
         action="store_true",
-        dest="run-8b-llama",
+        dest="run-quick-llama-test",
         default=False,
-        help="Enable llama 8b benchmarking tests",
+        help="Enable llama 8b f16 decomposed benchmarking test",
     )
 
     parser.addoption(
-        "--run-all-llama",
+        "--run-nightly-llama-tests",
         action="store_true",
-        dest="run-all-llama",
+        dest="run-nightly-llama-tests",
         default=False,
         help="Enable all llama benchmarking tests",
+    )
+
+    parser.addoption(
+        "--with-t5-data",
+        action="store_true",
+        default=False,
+        help=(
+            "Enable tests that use T5 data like models that is not a part of the source "
+            "code. The user is expected to provide the data"
+        ),
     )
 
     # TODO: Remove all hardcoded paths in CI tests
@@ -131,6 +141,28 @@ def pytest_addoption(parser):
         action="store",
         default=None,
         help="Llama3.1 405b fp8 model path",
+    )
+
+    # To obtain a T5 GGUF file you can use llama.cpp's convert_hf_to_gguf.py.
+    # https://github.com/ggerganov/llama.cpp/blob/9abe9eeae98b11fa93b82632b264126a010225ff/convert_hf_to_gguf.py
+    # E.g.
+    # git lfs install
+    # git clone https://huggingface.co/google/t5-v1_1-small
+    # convert_hf_to_gguf.py \
+    #     --outfile t5-v1_1-small.gguf \
+    #     --outtype=f32 \
+    #     t5-v1_1-small
+    parser.addoption(
+        "--google-t5-v1-1-small-fp32-model-path",
+        type=Path,
+        default="/data/t5/small/google__t5-v1_1-small_fp32.gguf",
+        help="Google T5 v1.1 small fp32 model path",
+    )
+    parser.addoption(
+        "--google-t5-v1-1-xxl-fp32-model-path",
+        type=Path,
+        default="/data/t5/xxl/google__t5-v1_1-xxl_fp32.gguf",
+        help="Google T5 v1.1 XXL fp32 model path",
     )
 
     parser.addoption(
@@ -255,6 +287,16 @@ def get_model_artifacts(request: FixtureRequest):
     )
     model_path["llama3_405b_fp8_model_path"] = set_fixture_from_cli_option(
         request, "--llama3-405b-fp8-model-path", "llama3_405b_fp8_model"
+    )
+    model_path["google__t5_v1_1_small_fp32_model_path"] = set_fixture_from_cli_option(
+        request,
+        "--google-t5-v1-1-small-fp32-model-path",
+        "google__t5_v1_1_small_fp32_model",
+    )
+    model_path["google__t5_v1_1_xxl_fp32_model_path"] = set_fixture_from_cli_option(
+        request,
+        "--google-t5-v1-1-xxl-fp32-model-path",
+        "google__t5_v1_1_xxl_fp32_model",
     )
     return model_path
 

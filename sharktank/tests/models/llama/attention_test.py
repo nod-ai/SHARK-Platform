@@ -59,7 +59,7 @@ class AttentionBlockTest(unittest.TestCase):
             head_dim=head_dim,
             head_count_kv=head_count_kv,
             rms_epsilon=rms_epsilon,
-            attention_kernel="torch",
+            attention_kernel="decomposed",
         )
         attention_embedding = RotaryEmbeddingLayer(
             rope_dimension_count=rope_dimension_count,

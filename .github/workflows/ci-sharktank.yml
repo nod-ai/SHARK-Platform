@@ -62,7 +62,7 @@ jobs:
           pip install --no-compile -r requirements.txt -r sharktank/requirements-tests.txt -e sharktank/
 
           # Update to the latest iree packages.
-          pip install -f https://iree.dev/pip-release-links.html --upgrade \
+          pip install -f https://iree.dev/pip-release-links.html --upgrade --pre \
             iree-base-compiler iree-base-runtime --src deps \
             -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
 
@@ -70,3 +70,62 @@ jobs:
         if: ${{ !cancelled() }}
         run: |
           pytest -n 4 sharktank/
+
+
+  test_with_data:
+    name: "Data-dependent Tests"
+    strategy:
+      matrix:
+        version: [3.11]
+        runs-on: [llama-mi300x-3]
+      fail-fast: false
+    runs-on: ${{matrix.runs-on}}
+    defaults:
+      run:
+        shell: bash
+    env:
+      PIP_CACHE_DIR: "${{ github.workspace }}/.pip-cache"
+      HF_HOME: "/data/huggingface"
+      SHARK_PLATFORM_REPO_ROOT: ${{ github.workspace }}
+    steps:
+      - name: "Setting up Python"
+        id: setup_python
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+        with:
+          python-version: ${{matrix.version}}
+
+      - name: "Checkout Code"
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Cache Pip Packages
+        uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4.1.2
+        id: cache-pip
+        with:
+          path: ${{ env.PIP_CACHE_DIR }}
+          key: pip-${{ steps.setup_python.outputs.python-version }}-${{ hashFiles('*requirements*.txt','sharktank/requirements*.txt') }}
+
+      - name: Install sharktank deps
+        run: |
+          python -m pip install --no-compile --upgrade pip
+          # Note: We install in three steps in order to satisfy requirements
+          # from non default locations first. Installing the PyTorch CPU
+          # wheels saves multiple minutes and a lot of bandwidth on runner setup.
+          pip install --no-compile -r pytorch-cpu-requirements.txt
+          pip install --no-compile -r requirements.txt -r sharktank/requirements-tests.txt -e sharktank/
+
+          # Install latest iree-tubrine.
+          pip install --no-compile -f https://iree.dev/pip-release-links.html --src deps \
+            -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
+
+          # Try with the latest IREE nightly releases, not what iree-turbine pins.
+          # We could also pin to a known working or stable version.
+          # This should eventually stabilize. Do the best we can for now.
+          pip install -f https://iree.dev/pip-release-links.html --upgrade --pre \
+            iree-base-compiler \
+            iree-base-runtime
+
+      - name: Run tests
+        run: |
+          pytest \
+            --with-t5-data \
+            sharktank/tests/models/t5/t5_test.py

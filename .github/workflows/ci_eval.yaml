@@ -22,6 +22,7 @@ concurrency:
 
 jobs:
   test_perplexity_vmfb:
+    if: ${{ github.repository_owner == 'nod-ai' || github.event_name != 'schedule' }}
     timeout-minutes: 1000
     name: "IREE/vmfb"
     strategy:
@@ -69,15 +70,15 @@ jobs:
           # Try with the latest IREE nightly releases, not what iree-turbine pins.
           # We could also pin to a known working or stable version.
           # This should eventually stabilize. Do the best we can for now.
-          pip install -f https://iree.dev/pip-release-links.html --upgrade \
+          pip install -f https://iree.dev/pip-release-links.html --upgrade --pre \
             iree-base-compiler \
-            iree-base-runtime \
-            "numpy<2.0"
+            iree-base-runtime
 
       - name: Run perplexity test with vmfb
         run:  pytest -n 8 -v -s sharktank/tests/evaluate/perplexity_vmfb_test.py --longrun --iree-device='hip://7' --iree-hip-target=gfx942 --iree-hal-target-backends=rocm --llama3-8b-f16-model-path=/data/llama3.1/8b/llama8b_f16.irpa --llama3-8b-tokenizer-path=/data/llama3.1/8b/tokenizer_config.json
 
   test_perplexity_torch:
+    if: ${{ github.repository_owner == 'nod-ai' || github.event_name != 'schedule' }}
     timeout-minutes: 1000
     name: "Torch/eager mode"
     strategy:

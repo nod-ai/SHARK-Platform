@@ -14,3 +14,4 @@ from .batch_matmul_transpose_b import *
 from .conv_2d_nchw_fchw import *
 from .pooling_nchw_sum import *
 from .base import *
+from .bitcast import *
