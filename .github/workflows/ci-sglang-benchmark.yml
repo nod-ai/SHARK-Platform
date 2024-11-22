@@ -7,10 +7,14 @@
 name: SGLang Llama Benchmarking Tests
 
 on:
+  # TODO: Remove PR trigger after verification
+  pull_request:
   workflow_dispatch:
   schedule:
-    # Weekdays at 4:00 AM UTC = 9:00 PM PST.
-    - cron: "0 4 * * 1-5"
+    # Weekdays at 6:00 AM UTC = 11:00 PM PST.
+    # This is a pretty GPU intensive test, so want to avoid conflicting
+    # with other potentially scheduled tests.
+    - cron: "0 6 * * 1-5"
 
 concurrency:
   # A PR number if a pull request and otherwise the commit hash. This cancels
@@ -21,9 +25,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  sglang_bench_serve:
+  benchmark_shortfin:
     if: ${{ github.repository_owner == 'nod-ai' || github.event_name != 'schedule' }}
-    name: "SGLang Serving Benchmark Tests"
+    name: "SGLang Serving Benchmark With Shortfin"
     strategy:
       matrix:
         version: [3.11]
@@ -77,13 +81,98 @@ jobs:
       - name: Install SGLang
         run: pip install "git+https://github.com/nod-ai/sglang.git#subdirectory=python"
 
-      - name: Launch Shortfin Server
-        run: pytest -v app_tests/benchmark_tests/llm/sglang_benchmark_test.py --log-cli-level=INFO --html=out/llm/sglang/index.html
+      - name: Run Shortfin Benchmark Tests
+        run: pytest -v app_tests/benchmark_tests/llm/sglang_benchmarks/shortfin_benchmark_test.py --log-cli-level=INFO --html=out/llm/shortfin/index.html
 
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@4f9cc6602d3f66b9c108549d475ec49e8ef4d45e # v4.0.0
+      # TODO: Uncomment after verification
+      # - name: Deploy to GitHub Pages
+      #   uses: peaceiris/actions-gh-pages@4f9cc6602d3f66b9c108549d475ec49e8ef4d45e # v4.0.0
+      #   with:
+      #     github_token: ${{ secrets.SHARK_PLATFORM_GH_TOKEN }}
+      #     publish_dir: ./out/llm/sgl_benchmark/shortfin
+      #     destination_dir: ./llm/sgl_benchmark/shortfin
+      #     keep_files: true
+
+  benchmark_sglang:
+    if: ${{ github.repository_owner == 'nod-ai' || github.event_name != 'schedule' }}
+    name: "SGLang Serving Benchmark With SGLang"
+    needs: benchmark_shortfin
+    strategy:
+      matrix:
+        version: [3.11]
+      fail-fast: false
+    runs-on: llama-mi300x-3
+    defaults:
+      run:
+        shell: bash
+    env:
+      PIP_CACHE_DIR: "${{ github.workspace }}/.pip-cache"
+    steps:
+      - name: Get Current Date
+        id: date
+        run: echo "::set-output name=date::$(date +'%Y-%m-%d')"
+
+      - name: "Setting up Python"
+        id: setup_python
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
         with:
-          github_token: ${{ secrets.SHARK_PLATFORM_GH_TOKEN }}
-          publish_dir: ./out/llm/sglang
-          destination_dir: ./llm/sglang
-          keep_files: true
+          python-version: ${{matrix.version}}
+
+      - name: Install SGLang
+        run: pip install "git+https://github.com/nod-ai/sglang.git#subdirectory=python"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Instruction for SGLang image sourced from here:
+      #   https://sgl-project.github.io/start/install.html#method-3-using-docker
+      # We have to run in a docker container due to their vLLM dependency.
+      # From their pyproject.toml:
+      #   HIP (Heterogeneous-computing Interface for Portability) for AMD
+      #   => base docker rocm/vllm-dev:20241022, not from public vllm whl
+      #   srt_hip = ["sglang[runtime_common]", "torch", "vllm==0.6.3.dev13"]
+      - name: Pull SGLang Image (Had issues with sglang:v0.3.5.post1-rocm620)
+        run: |
+          docker pull lmsysorg/sglang:v0.3.5.post1-rocm620
+
+      - name: Run SGLang Server
+        run: |
+          docker run -d --rm  \
+            --device=/dev/kfd \
+            --device=/dev/dri \
+            --ipc=host \
+            --shm-size 16G \
+            --group-add video \
+            --cap-add=SYS_PTRACE \
+            --security-opt seccomp=unconfined \
+            -v $HOME/dockerx:/dockerx \
+            -v /data:/data \
+            -p 30000:30000 \
+            -v ~/.cache/huggingface:/root/.cache/huggingface \
+            --env "HF_TOKEN={{ secrets.HF_TOKEN }}" \
+            lmsysorg/sglang:v0.3.5.post1-rocm620 \
+            python3 -m sglang.launch_server \
+            --model-path meta-llama/Llama-3.1-8b \
+            --host 0.0.0.0 \
+            --port 30000 \
+            --tp 1 \
+            --dtype float16
+
+      - name: Run SGLang Benchmark Tests
+        run: |
+          pytest -v app_tests/benchmark_tests/llm/sglang_benchmarks/sglang_benchmark_test.py --port 30000 --log-cli-level=INFO --html=out/llm/sglang/index.html
+
+      - name: Stop sglang-server
+        run: docker stop sglang-server || true # Stop container if it's running
+
+      - name: Cleanup SGLang Image
+        run: docker image rm lmsysorg/sglang:v0.3.5.post1-rocm620
+
+      # TODO: Uncomment after verifying
+      # - name: Deploy to GitHub Pages
+      #   uses: peaceiris/actions-gh-pages@4f9cc6602d3f66b9c108549d475ec49e8ef4d45e # v4.0.0
+      #   with:
+      #     github_token: ${{ secrets.SHARK_PLATFORM_GH_TOKEN }}
+      #     publish_dir: ./out/llm/sgl_benchmark/sglang
+      #     destination_dir: ./llm/sgl_benchmark/sglang
+      #     keep_files: true

@@ -9,7 +9,9 @@ import os
 import pytest
 import sys
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+sys.path.append(
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+)
 from integration_tests.llm.utils import compile_model, export_paged_llm_v1
 
 
@@ -44,3 +46,17 @@ def pre_process_model(request, tmp_path_factory):
     compile_model(mlir_path, vmfb_path, settings)
 
     return tmp_dir
+
+
+def pytest_addoption(parser):
+    parser.addoption(
+        "--port",
+        action="store",
+        default="30000",
+        help="Port that SGLang server is running on",
+    )
+
+
+@pytest.fixture(scope="module")
+def sglang_args(request):
+    return request.config.getoption("--port")

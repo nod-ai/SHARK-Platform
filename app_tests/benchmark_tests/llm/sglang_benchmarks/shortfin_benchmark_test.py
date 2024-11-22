@@ -4,7 +4,6 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-import json
 import logging
 import multiprocessing
 import os
@@ -16,14 +15,17 @@ from unittest.mock import patch
 pytest.importorskip("sglang")
 from sglang import bench_serving
 
-from utils import SGLangBenchmarkArgs
+from app_tests.benchmark_tests.llm.sglang_benchmarks.utils import (
+    SGLangBenchmarkArgs,
+    log_jsonl_result,
+)
 
 from integration_tests.llm.utils import (
     find_available_port,
     start_llm_server,
 )
 
-logger = logging.getLogger("__name__")
+logger = logging.getLogger(__name__)
 
 device_settings = {
     "device_flags": [
@@ -36,15 +38,6 @@ device_settings = {
 # TODO: Download on demand instead of assuming files exist at this path
 MODEL_PATH = Path("/data/llama3.1/8b/llama8b_f16.irpa")
 TOKENIZER_DIR = Path("/data/llama3.1/8b/")
-
-
-def log_jsonl_result(file_path):
-    with open(file_path, "r") as file:
-        json_string = file.readline().strip()
-
-    json_data = json.loads(json_string)
-    for key, val in json_data.items():
-        logger.info(f"{key.upper()}: {val}")
 
 
 @pytest.mark.parametrize(
@@ -64,7 +57,7 @@ def log_jsonl_result(file_path):
     ],
     indirect=True,
 )
-def test_sglang_benchmark_server(request_rate, pre_process_model):
+def test_shortfin_benchmark(request_rate, pre_process_model):
     # TODO: Remove when multi-device is fixed
     os.environ["ROCR_VISIBLE_DEVICES"] = "1"
 
@@ -116,7 +109,7 @@ def test_sglang_benchmark_server(request_rate, pre_process_model):
         logger.info("======== RESULTS ========")
         log_jsonl_result(benchmark_args.output_file)
     except Exception as e:
-        logger.info(e)
+        logger.error(e)
 
     server_process.terminate()
     server_process.wait()
