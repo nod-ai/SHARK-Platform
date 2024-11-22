@@ -1,7 +1,7 @@
 iree-turbine
 
 # Runtime deps.
-gguf==0.6.0
+gguf==0.10.0
 numpy<2.0
 
 # Needed for newer gguf versions (TODO: remove when gguf package includes this)

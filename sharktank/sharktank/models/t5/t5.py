@@ -684,7 +684,9 @@ class T5Stack(BaseLayer):
         self.add_module(
             "final_layer_norm",
             RMSNormLayer(
-                theta(f"{theta_prefix}.output_norm"), epsilon=config.layer_norm_epsilon
+                theta(f"{theta_prefix}.output_norm"),
+                epsilon=config.layer_norm_epsilon,
+                dtype=config.activation_dtype,
             ),
         )
 
@@ -1046,7 +1048,9 @@ class T5Encoder(BaseLayer):
         super().__init__()
         self.add_module(
             "token_embedding",
-            TokenEmbeddingLayer(theta("token_embd"), dtype=config.activation_dtype),
+            TokenEmbeddingLayer(
+                theta("token_embd"), dtype=theta("token_embd").tensor("weight").dtype
+            ),
         )
 
         encoder_config = copy.deepcopy(config)
