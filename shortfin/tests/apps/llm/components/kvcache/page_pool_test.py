@@ -10,15 +10,12 @@ logger = logging.getLogger(__name__)
 
 
 @pytest.fixture(
-    params=[
-        pytest.param("cpu", sf.host.CPUSystemBuilder, marks=[]),
-        pytest.param(
-            "gpu", sf.amdgpu.SystemBuilder, marks=[pytest.mark.system("amdgpu")]
-        ),
-    ]
+    params=[("cpu", sf.host.CPUSystemBuilder), ("gpu", sf.amdgpu.SystemBuilder)]
 )
 def setup_system(request):
     system_type, builder_class = request.param
+    if system_type == "gpu" and not "gpu" in pytest.config.getoption("--system"):
+        pytest.skip("Skipping GPU-specific test")
     logger.info(f"=== Setting up {system_type.upper()} system ===")
     sc = builder_class()
     lsys = sc.create_system()
