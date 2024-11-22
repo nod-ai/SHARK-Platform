@@ -40,31 +40,35 @@ class MMDITDoubleBlock(ThetaLayer):
         super().__init__(theta)
 
         self.num_heads = num_heads
-        self.img_mod = ModulationLayer(theta("img_mod"), double=True)
-        self.img_attn_qkv = LinearLayer(theta("img_attn.qkv"))
-        self.img_attn_norm_q = RMSNormLayer(
-            theta("img_attn.norm.query_norm"), epsilon=1e-6
+        self.add_module("img_mod", ModulationLayer(theta("img_mod"), double=True))
+        self.add_module("img_attn_qkv", LinearLayer(theta("img_attn.qkv")))
+        self.add_module(
+            "img_attn_norm_q",
+            RMSNormLayer(theta("img_attn.norm.query_norm"), epsilon=1e-6),
         )
-        self.img_attn_norm_k = RMSNormLayer(
-            theta("img_attn.norm.key_norm"), epsilon=1e-6
+        self.add_module(
+            "img_attn_norm_k",
+            RMSNormLayer(theta("img_attn.norm.key_norm"), epsilon=1e-6),
         )
-        self.img_attn_proj = LinearLayer(theta("img_attn.proj"))
+        self.add_module("img_attn_proj", LinearLayer(theta("img_attn.proj")))
 
-        self.img_mlp1 = LinearLayer(theta("img_mlp.0"))
-        self.img_mlp2 = LinearLayer(theta("img_mlp.2"))
+        self.add_module("img_mlp1", LinearLayer(theta("img_mlp.0")))
+        self.add_module("img_mlp2", LinearLayer(theta("img_mlp.2")))
 
-        self.txt_mod = ModulationLayer(theta("txt_mod"), double=True)
-        self.txt_attn_qkv = LinearLayer(theta("txt_attn.qkv"))
-        self.txt_attn_norm_q = RMSNormLayer(
-            theta("txt_attn.norm.query_norm"), epsilon=1e-6
+        self.add_module("txt_mod", ModulationLayer(theta("txt_mod"), double=True))
+        self.add_module("txt_attn_qkv", LinearLayer(theta("txt_attn.qkv")))
+        self.add_module(
+            "txt_attn_norm_q",
+            RMSNormLayer(theta("txt_attn.norm.query_norm"), epsilon=1e-6),
         )
-        self.txt_attn_norm_k = RMSNormLayer(
-            theta("txt_attn.norm.key_norm"), epsilon=1e-6
+        self.add_module(
+            "txt_attn_norm_k",
+            RMSNormLayer(theta("txt_attn.norm.key_norm"), epsilon=1e-6),
         )
-        self.txt_attn_proj = LinearLayer(theta("txt_attn.proj"))
+        self.add_module("txt_attn_proj", LinearLayer(theta("txt_attn.proj")))
 
-        self.txt_mlp1 = LinearLayer(theta("txt_mlp.0"))
-        self.txt_mlp2 = LinearLayer(theta("txt_mlp.2"))
+        self.add_module("txt_mlp1", LinearLayer(theta("txt_mlp.0")))
+        self.add_module("txt_mlp2", LinearLayer(theta("txt_mlp.2")))
 
     def forward(
         self, img: Tensor, txt: Tensor, vec: Tensor, pe: Tensor
