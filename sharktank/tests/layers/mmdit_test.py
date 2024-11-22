@@ -28,19 +28,9 @@ class MMDITTest(unittest.TestCase):
         torch.manual_seed(12345)
         self.hidden_size = 3072
         self.num_heads = 24
-        self.block_seqlen = 7
-        self.block_seq_stride = 17
-        self.max_seqlen = self.block_seq_stride * self.block_seqlen
         self.batch_size = 3
 
     def testExport(self):
-        dtype = torch.float32
-
-        txt_ids = torch.rand([self.batch_size, 3, self.max_seqlen, 3])
-        img_ids = torch.rand([self.batch_size, 3, self.max_seqlen, 3])
-        pe_dim = self.hidden_size // self.num_heads
-        axes_dim = [16, 56, 56]
-        theta = 10000
 
         theta = make_mmdit_block_theta()
         mmdit = MMDITDoubleBlock(
