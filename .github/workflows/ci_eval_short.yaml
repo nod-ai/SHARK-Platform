@@ -4,7 +4,7 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-name: Llama3.1 8B perplexity test
+name: CI - sharktank IREE perplexity
 
 on:
   workflow_dispatch:
@@ -23,7 +23,7 @@ concurrency:
 
 jobs:
   test_perplexity_iree:
-    name: "IREE-Perplexity short test"
+    name: "Llama3.1 8B FP16"
     strategy:
       matrix:
         version: [3.11]
