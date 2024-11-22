@@ -15,19 +15,21 @@ from sglang import bench_serving
 
 from .utils import SGLangBenchmarkArgs, log_jsonl_result
 
-from integration_tests.llm.utils import wait_for_server
+from integration_tests.llm.utils import wait_for_server, download_with_hf_datasets
 
 logger = logging.getLogger(__name__)
 
-TOKENIZER_DIR = Path("/data/llama3.1/8b/")
-
 
 @pytest.mark.parametrize(
-    "request_rate",
-    [1, 2, 4, 8, 16, 32],
+    "request_rate,model_name",
+    [(req_rate, "llama3_8b_f16") for req_rate in [1, 2, 4, 8, 16, 32]],
 )
-def test_sglang_benchmark(request_rate, sglang_args, tmp_path_factory):
+def test_sglang_benchmark(request_rate, model_name, sglang_args, tmp_path_factory):
     tmp_dir = tmp_path_factory.mktemp("sglang_benchmark_test")
+
+    # Download tokenizer for llama3_8b_f16
+    download_with_hf_datasets(tmp_dir, model_name)
+
     logger.info("Beginning SGLang benchmark test...")
 
     port = sglang_args
@@ -41,7 +43,7 @@ def test_sglang_benchmark(request_rate, sglang_args, tmp_path_factory):
         backend="sglang",
         num_prompt=10,
         base_url=f"http://localhost:{port}",
-        tokenizer=TOKENIZER_DIR,
+        tokenizer=tmp_dir,
         request_rate=request_rate,
     )
     output_file = (
