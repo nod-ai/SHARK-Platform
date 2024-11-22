@@ -218,7 +218,11 @@ class BatcherProcess(sf.Process):
             needed_pages = math.ceil(
                 len(prefill_request.input_token_ids) / self.page_seq_stride
             )
-            pages = cache.acquire_free_pages(needed_pages)
+            # allocate kv cache pages
+            pages, cache_hit_prefix_length = cache.acquire_pages_for_tokens(
+                prefill_request.input_token_ids,
+                extra_token_slots=0,  # prefill needs no extra kvcache slots to write to
+            )
             if pages is None:
                 logger.debug("Cannot fulfill request for %d pages", needed_pages)
                 continue
@@ -254,7 +258,11 @@ class BatcherProcess(sf.Process):
                 / self.page_seq_stride
             )
             if needed_pages > len(decode_request.locked_pages):
-                pages = cache.acquire_free_pages(needed_pages)
+                # allocate kv cache pages
+                pages, cache_hit_prefix_length = cache.acquire_pages_for_tokens(
+                    decode_request.input_token_ids,
+                    extra_token_slots=1,  # need 1 extra slot to write result.
+                )
                 if pages is None:
                     logger.debug(
                         "Cannot fulfill decode request for %d pages", needed_pages
