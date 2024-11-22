@@ -22,12 +22,12 @@ logger = logging.getLogger(__name__)
 
 @pytest.mark.parametrize(
     "request_rate,model_name",
-    [(req_rate, "llama3_8b_f16") for req_rate in [1, 2, 4, 8, 16, 32]],
+    [(req_rate, "llama3_8B_fp16") for req_rate in [1, 2, 4, 8, 16, 32]],
 )
 def test_sglang_benchmark(request_rate, model_name, sglang_args, tmp_path_factory):
     tmp_dir = tmp_path_factory.mktemp("sglang_benchmark_test")
 
-    # Download tokenizer for llama3_8b_f16
+    # Download tokenizer for llama3_8B_fp16
     download_with_hf_datasets(tmp_dir, model_name)
 
     logger.info("Beginning SGLang benchmark test...")
