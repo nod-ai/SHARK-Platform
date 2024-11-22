@@ -4,7 +4,7 @@ This doc includes basic steps for hooking up sglang with a running Shortfin serv
 
 ## Install/Start `shortfin` LLM server
 
-Follow the steps [here](https://github.com/nod-ai/SHARK-Platform/blob/main/docs/shortfin/llm/user/e2e_llama8b_mi300x.md)
+Follow the steps [here](https://github.com/nod-ai/shark-ai/blob/main/docs/shortfin/llm/user/e2e_llama8b_mi300x.md)
 to export a model with `sharktank` and start a `shortfin` LLM server
 with that model.
 
@@ -46,19 +46,20 @@ You can copy and paste the following example into your interpreter:
 ```python
 import sglang as sgl
 
-backend = sgl.Shortfin(base_url="http://localhost:8000") # Change base_url if running at different address
+from sglang.lang.chat_template import get_chat_template
+
+backend = sgl.Shortfin(chat_template=get_chat_template("llama-3-instruct"), base_url="http://localhost:8000", ) # Change base_url if running at different address
 
 sgl.set_default_backend(backend)
 
 @sgl.function
 def multi_turn_question(s, question_1, question_2):
-     s += sgl.system("You are a helpful assistant.")
      s += sgl.user(question_1)
      s += sgl.assistant(sgl.gen("answer_1", max_tokens=256))
      s += sgl.user(question_2)
      s += sgl.assistant(sgl.gen("answer_2", max_tokens=256))
 
-state = multi_turn_question.run(question_1="What is the capital of the united states?", question_2="List two local attractions")
+state = multi_turn_question.run(question_1="Name the capital city of the USA.", question_2="The Smithsonian is in this location.")
 
 for m in state.messages():
     print(m["role"], m["content"])
@@ -68,17 +69,13 @@ for m in state.messages():
 
 You should see an output similar to this:
 
-<!-- NOTE: Cleaned up output to make docs look better.
-Still need improvements in Shortfin LLM output.-->
-
 ```text
 ========== single ==========
 
-system : You are a helpful assistant.
-user : What is the capital of the United States?
-assistant : Washington, D.C.
-user : List two local attractions.
-assistant : The Smithsonian Museums and The National Mall.
+user : Name the capital city of the USA
+assistant : The capital city of the United States of America is Washington, D.C. (short for District of Columbia).
+user : The Smithsonian is in this location.
+assistant : The Smithsonian Institution is indeed located in Washington, D.C. and is one of the world's largest and most comprehensive museums and research complexes.
 ```
 
 ## Fork example
@@ -99,7 +96,9 @@ You can copy and paste the following example into your interpreter:
 ```python
 import sglang as sgl
 
-backend = sgl.Shortfin(base_url="http://localhost:8000") # Change base_url if running at different address
+from sglang.lang.chat_template import get_chat_template
+
+backend = sgl.Shortfin(chat_template=get_chat_template("llama-3-instruct"), base_url="http://localhost:8000") # Change base_url if running at different address
 
 sgl.set_default_backend(backend)
 
