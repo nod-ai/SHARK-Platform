@@ -91,6 +91,18 @@ static const char DOCSTRING_RANDOM_GENERATOR[] =
       fixed number.
   )";
 
+static const char DOCSTRING_TRANSPOSE[] =
+    R"(Transposes axes of an array according to a permutation vector.
+
+Args:
+  input: Array to transpose.
+  permutation: New sequence of axes. Must have same number of elements as the
+    rank of input.
+  out: If given, then the results are written to this array.
+  device_visible: Whether to make the result array visible to devices. Defaults
+    to False.
+)";
+
 #define SF_UNARY_FUNCTION_CASE(dtype_name, cpp_type) \
   case DType::dtype_name():                          \
     return compute.template operator()<cpp_type>()
@@ -99,6 +111,25 @@ static const char DOCSTRING_RANDOM_GENERATOR[] =
   case DType::dtype_name():                       \
     compute.template operator()<cpp_type>();      \
     break
+
+#define SF_MOVEMENT_OP_SWITCH(dtype)                                     \
+  if (!dtype.is_byte_aligned())                                          \
+    throw std::invalid_argument(                                         \
+        "data movement ops are only defined for byte aligned dtypes");   \
+  switch (dtype.dense_byte_count()) {                                    \
+    case 1:                                                              \
+      return compute.template operator()<uint8_t>();                     \
+    case 2:                                                              \
+      return compute.template operator()<uint16_t>();                    \
+    case 4:                                                              \
+      return compute.template operator()<uint32_t>();                    \
+    case 8:                                                              \
+      return compute.template operator()<uint64_t>();                    \
+    default:                                                             \
+      throw std::invalid_argument(                                       \
+          "data movement ops are only defined for dtypes of size 1, 2, " \
+          "4, 8");                                                       \
+  }
 
 struct PyRandomGenerator {
  public:
@@ -374,6 +405,227 @@ struct ConvertTruncFunctor {
   }
 };
 
+void OptionalArrayCast(py::handle handle,
+                       std::optional<device_array> &maybe_array) {
+  if (py::isinstance<device_array>(handle)) {
+    maybe_array.emplace(py::cast<device_array>(handle));
+  }
+}
+
+int DTypePromotionRank(DType dtype) {
+  int rank = 1;
+  if (dtype.is_boolean())
+    rank *= 1000;
+  else if (dtype.is_integer())
+    rank *= 2000;
+  else if (dtype.is_float())
+    rank *= 4000;
+  else if (dtype.is_complex())
+    rank *= 8000;
+  return rank + dtype.bit_count();
+}
+
+DType PromoteArithmeticTypes(std::optional<DType> lhs_dtype,
+                             std::optional<DType> rhs_dtype) {
+  if (!lhs_dtype && !rhs_dtype) {
+    throw std::invalid_argument(
+        "Elementwise operators require at least one argument to be a "
+        "device_array");
+  }
+
+  // One not an array: promote to the array type.
+  if (!lhs_dtype)
+    return *rhs_dtype;
+  else if (!rhs_dtype)
+    return *lhs_dtype;
+
+  int lhs_rank = DTypePromotionRank(*lhs_dtype);
+  int rhs_rank = DTypePromotionRank(*rhs_dtype);
+  DType promoted_dtype = lhs_rank < rhs_rank ? *rhs_dtype : *lhs_dtype;
+
+  // If mismatched signed/unsigned, then need to promote to the next signed
+  // dtype.
+  if (promoted_dtype.is_integer()) {
+    bool lhs_unsigned = iree_all_bits_set(
+        lhs_dtype->numerical_type(), IREE_HAL_NUMERICAL_TYPE_INTEGER_UNSIGNED);
+    bool rhs_unsigned = iree_all_bits_set(
+        rhs_dtype->numerical_type(), IREE_HAL_NUMERICAL_TYPE_INTEGER_UNSIGNED);
+    if ((lhs_unsigned || rhs_unsigned) && !(lhs_unsigned && rhs_unsigned)) {
+      // Signed/unsigned mismatch. Promote to next.
+      switch (promoted_dtype) {
+        case DType::uint8():
+        case DType::int8():
+          return DType::int16();
+        case DType::uint16():
+        case DType::int16():
+          return DType::int32();
+        case DType::uint32():
+        case DType::int32():
+          return DType::int64();
+        default:
+          // Jax's type promotion chart says this goes to a weak FP type, but
+          // we don't implement such a construct and I don't really see how
+          // that makes sense in a system setting like this, so we just saturate
+          // to 64bit.
+          return DType::int64();
+      }
+    }
+  }
+
+  return promoted_dtype;
+}
+
+// ---------------------------------------------------------------------------//
+// Elementwise support
+// ---------------------------------------------------------------------------//
+
+// Python element type scalar conversion functions.
+uint8_t ConvertPyToEltTy(py::handle py_value, uint8_t zero) {
+  return py::cast<uint8_t>(py_value);
+}
+
+int8_t ConvertPyToEltTy(py::handle py_value, int8_t zero) {
+  return py::cast<int8_t>(py_value);
+}
+
+uint16_t ConvertPyToEltTy(py::handle py_value, uint16_t zero) {
+  return py::cast<uint16_t>(py_value);
+}
+
+int16_t ConvertPyToEltTy(py::handle py_value, int16_t zero) {
+  return py::cast<int16_t>(py_value);
+}
+
+uint32_t ConvertPyToEltTy(py::handle py_value, uint32_t zero) {
+  return py::cast<uint32_t>(py_value);
+}
+
+int32_t ConvertPyToEltTy(py::handle py_value, int32_t zero) {
+  return py::cast<int32_t>(py_value);
+}
+
+uint64_t ConvertPyToEltTy(py::handle py_value, uint64_t zero) {
+  return py::cast<uint64_t>(py_value);
+}
+
+int64_t ConvertPyToEltTy(py::handle py_value, int64_t zero) {
+  return py::cast<int64_t>(py_value);
+}
+
+float ConvertPyToEltTy(py::handle py_value, float zero) {
+  return py::cast<float>(py_value);
+}
+
+double ConvertPyToEltTy(py::handle py_value, double zero) {
+  return py::cast<double>(py_value);
+}
+
+half_float::half ConvertPyToEltTy(py::handle py_value, half_float::half zero) {
+  // Python can't cast directly to half so first go to double.
+  return static_cast<half_float::half>(py::cast<double>(py_value));
+}
+
+struct AddFunctor {
+  template <typename Lhs, typename Rhs>
+  static auto Invoke(Lhs &&lhs, Rhs &&rhs) {
+    return lhs + rhs;
+  }
+};
+
+struct DivideFunctor {
+  template <typename Lhs, typename Rhs>
+  static auto Invoke(Lhs &&lhs, Rhs &&rhs) {
+    return lhs / rhs;
+  }
+};
+
+struct MultiplyFunctor {
+  template <typename Lhs, typename Rhs>
+  static auto Invoke(Lhs &&lhs, Rhs &&rhs) {
+    return lhs * rhs;
+  }
+};
+
+struct SubtractFunctor {
+  template <typename Lhs, typename Rhs>
+  static auto Invoke(Lhs &&lhs, Rhs &&rhs) {
+    return lhs - rhs;
+  }
+};
+
+template <typename ElementwiseFunctor>
+device_array ElementwiseOperation(py::handle lhs, py::handle rhs,
+                                  std::optional<device_array> out,
+                                  bool device_visible) {
+  std::optional<device_array> lhs_array;
+  OptionalArrayCast(lhs, lhs_array);
+  std::optional<device_array> rhs_array;
+  OptionalArrayCast(rhs, rhs_array);
+  auto dtype = PromoteArithmeticTypes(
+      lhs_array ? std::optional<DType>(lhs_array->dtype()) : std::nullopt,
+      rhs_array ? std::optional<DType>(rhs_array->dtype()) : std::nullopt);
+  if (lhs_array && lhs_array->dtype() != dtype) {
+    auto converted = GenericElementwiseConvert<ConvertFunctor>(
+        *lhs_array, dtype, /*out=*/std::nullopt,
+        /*device_visible=*/false);
+    lhs_array.reset();
+    lhs_array.emplace(std::move(converted));
+  }
+  if (rhs_array && rhs_array->dtype() != dtype) {
+    auto converted = GenericElementwiseConvert<ConvertFunctor>(
+        *rhs_array, dtype, /*out=*/std::nullopt,
+        /*device_visible=*/false);
+    rhs_array.reset();
+    rhs_array.emplace(std::move(converted));
+  }
+
+  auto compute = [&]<typename EltTy>() -> device_array {
+    auto handle_result = [&]<typename D, typename A>(
+                             D &&device, A &&result) -> device_array {
+      if (!out) {
+        out.emplace(device_array::for_host(device, result.shape(), dtype,
+                                           device_visible));
+      }
+      auto out_t = out->map_xtensor_w<EltTy>();
+      *out_t = result;
+      return *out;
+    };
+    if (!rhs_array) {
+      auto lhs_t = lhs_array->map_xtensor<EltTy>();
+      xt::xarray<EltTy> rhs_scalar = ConvertPyToEltTy(rhs, EltTy());
+      return handle_result(lhs_array->device(),
+                           ElementwiseFunctor::Invoke(*lhs_t, rhs_scalar));
+    } else if (!lhs_array) {
+      xt::xarray<EltTy> lhs_scalar = ConvertPyToEltTy(lhs, EltTy());
+      auto rhs_t = rhs_array->map_xtensor<EltTy>();
+      return handle_result(rhs_array->device(),
+                           ElementwiseFunctor::Invoke(lhs_scalar, *rhs_t));
+    } else {
+      auto lhs_t = lhs_array->map_xtensor<EltTy>();
+      auto rhs_t = rhs_array->map_xtensor<EltTy>();
+      return handle_result(lhs_array->device(),
+                           ElementwiseFunctor::Invoke(*lhs_t, *rhs_t));
+    }
+  };
+
+  switch (dtype) {
+    SF_UNARY_FUNCTION_CASE(float16, half_float::half);
+    SF_UNARY_FUNCTION_CASE(float32, float);
+    SF_UNARY_FUNCTION_CASE(float64, double);
+    SF_UNARY_FUNCTION_CASE(uint8, uint8_t);
+    SF_UNARY_FUNCTION_CASE(int8, int8_t);
+    SF_UNARY_FUNCTION_CASE(uint16, uint16_t);
+    SF_UNARY_FUNCTION_CASE(int16, int16_t);
+    SF_UNARY_FUNCTION_CASE(uint32, uint32_t);
+    SF_UNARY_FUNCTION_CASE(int32, uint32_t);
+    SF_UNARY_FUNCTION_CASE(uint64, uint64_t);
+    SF_UNARY_FUNCTION_CASE(int64, int64_t);
+    default:
+      throw std::invalid_argument(fmt::format(
+          "Unsupported dtype({}) for in elementwise op", dtype.name()));
+  }
+}
+
 }  // namespace
 
 void BindArrayHostOps(py::module_ &m) {
@@ -457,6 +709,39 @@ void BindArrayHostOps(py::module_ &m) {
   SF_DEF_CONVERT("floor", GenericElementwiseConvert<ConvertFloorFunctor>);
   SF_DEF_CONVERT("round", GenericElementwiseConvert<ConvertRoundFunctor>);
   SF_DEF_CONVERT("trunc", GenericElementwiseConvert<ConvertTruncFunctor>);
-}
+
+  // Transpose.
+  m.def(
+      "transpose",
+      [](device_array input, std::vector<size_t> permutation,
+         std::optional<device_array> out, bool device_visible) {
+        auto compute = [&]<typename EltTy>() -> device_array {
+          auto input_t = input.map_xtensor<EltTy>();
+          auto permuted_t =
+              xt::transpose(*input_t, permutation, xt::check_policy::full());
+          if (!out) {
+            out.emplace(device_array::for_host(input.device(),
+                                               permuted_t.shape(),
+                                               input.dtype(), device_visible));
+          }
+          auto out_t = out->map_xtensor_w<EltTy>();
+          *out_t = permuted_t;
+          return *out;
+        };
+        SF_MOVEMENT_OP_SWITCH(input.dtype());
+      },
+      py::arg("input"), py::arg("permutation"), py::arg("out") = py::none(),
+      py::arg("device_visible") = false, DOCSTRING_TRANSPOSE);
+
+// Elementwise.
+#define SF_DEF_ELEMENTWISE(py_name, target)                             \
+  m.def(py_name, target, py::arg("lhs"), py::arg("rhs"), py::kw_only(), \
+        py::arg("out") = py::none(), py::arg("device_visible") = false)
+  SF_DEF_ELEMENTWISE("add", ElementwiseOperation<AddFunctor>);
+  SF_DEF_ELEMENTWISE("divide", ElementwiseOperation<DivideFunctor>);
+  SF_DEF_ELEMENTWISE("multiply", ElementwiseOperation<MultiplyFunctor>);
+  SF_DEF_ELEMENTWISE("subtract", ElementwiseOperation<SubtractFunctor>);
+
+}  // namespace shortfin::python
 
 }  // namespace shortfin::python
