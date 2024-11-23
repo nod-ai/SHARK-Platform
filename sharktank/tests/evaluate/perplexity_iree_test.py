@@ -13,8 +13,8 @@ from sharktank.evaluate import perplexity_iree
 
 is_mi300x = pytest.mark.skipif("config.getoption('iree_hip_target') != 'gfx942'")
 skipif_run_quick_llama_test = pytest.mark.skipif(
-    'config.getoption("run-quick-llama-test") and not config.getoption("run-nightly-llama-tests")',
-    reason="Skipping large tests when --run-quick-llama-test is set",
+    'not config.getoption("run-nightly-llama-tests")',
+    reason="Run large tests if --run-nightly-llama-tests is passed",
 )
 
 
