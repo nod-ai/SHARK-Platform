@@ -4,7 +4,7 @@ Author: Jakub Kuderski @kuhar
 
 Date: 2024-06-24
 
-Last Update: 2024-08-22
+Last Update: 2024-11-22
 
 ## Introduction
 
@@ -308,23 +308,23 @@ Here's a brief introduction of these instructions. Please check out [this blog](
 actually write to an LDS location. But it still needs `s_waitcnt` instruction to determine
 when data is returned to `dest` VGPR.
 
-The instruction syntax is like(take `ds_bpermute` as an example):
+Example:
 ```nasm
 ds_bpermute_b32 dest, addr, src [offset:addr_offset]
 ```
 
 ### ds_swizzle
 
-Comparing to `ds_bpermute`, `ds_swizzle` instruction doesn't require
-additional VGPR for offset, since it's embedded in the instruction.
+Compared to `ds_bpermute`, the `ds_swizzle` instruction doesn't require
+an additional VGPR for offset since it's encoded in the instruction.
 
-And it's likely to have less address generation instructions than `ds_bpermute`
+`ds_swizzle` is likely to have less address generation instructions required than `ds_bpermute`.
 
-The cons are
-1. It only supports limited patterns
-2. Similar to `ds_bpermute`, `s_waitcnt` is still required to wait for `dest` VGPR.
+The cons are:
+1. It only supports limited patterns.
+2. Similar to `ds_bpermute`, `s_waitcnt` is required to wait for the `dest` VGPR.
 
-The instruction syntax:
+Example:
 ```nasm
 ds_swizzle_b32 dest, src offset:ds_pattern
 ```
@@ -333,33 +333,33 @@ ds_swizzle_b32 dest, src offset:ds_pattern
 
 DPP is a 32-bit instruction modifier appended to the normal VALU instructions. It
 allows VALU instructions to access data in neighboring lanes directly, which means
-it doesn't need LDS hardware anymore, so no `s_waitcnt` instructions are required.
+it doesn't need LDS hardware anymore, hence `s_waitcnt` instructions are **not required**.
 
 Unfortunately, it also supported limited patterns like `ds_swizzle`. And there are
 some instructions that can't be modified by DPP.
 
-The instruction syntax:
+Example:
 ```nasm
-; Normal inst
+; Normal VALU instruction.
 v_add_f32
 
-; Inst modified by dpp
+; Instruction modified by DPP.
 v_add_f32_dpp
 ```
 
-It's worth mentioning that DPP has different names and syntaxes on different architectures.
-- CDNA: DPP
-- RDNA: DPP8/DPP16
+It's worth mentioning that DPP has different names and syntaxes on different architectures:
+* CDNA: DPP
+* RDNA: DPP8/DPP16
 
-For details, please check [MI300 ISA Reference Guide](https://www.amd.com/content/dam/amd/en/documents/instinct-tech-docs/instruction-set-architectures/amd-instinct-mi300-cdna3-instruction-set-architecture.pdf) and
-[RDNA3 ISA Reference Guide](https://www.amd.com/content/dam/amd/en/documents/radeon-tech-docs/instruction-set-architectures/rdna3-shader-instruction-set-architecture-feb-2023_0.pdf)
+For details, please check the [MI300 ISA Reference Guide](https://www.amd.com/content/dam/amd/en/documents/instinct-tech-docs/instruction-set-architectures/amd-instinct-mi300-cdna3-instruction-set-architecture.pdf) and the
+[RDNA3 ISA Reference Guide](https://www.amd.com/content/dam/amd/en/documents/radeon-tech-docs/instruction-set-architectures/rdna3-shader-instruction-set-architecture-feb-2023_0.pdf).
 
 ### How to use them in MLIR
 
-Each instruction has its corresponding Op in MLIR(except `ds_permute`):
-- `ds_bpermute`: `rocdl.ds_bpermute`
-- `ds_swizzle`: `rocdl.ds_swizzle`
-- DPP: `rocdl.update.dpp`, `amdgpu.dpp`(a slim wrapper of `rocdl.update.dpp` with more comprehensive user interface)
+Each instruction has a corresponding Op in MLIR (except for `ds_permute`, this one is not implemented at the time of writing):
+* `ds_bpermute`: `rocdl.ds_bpermute`
+* `ds_swizzle`: `rocdl.ds_swizzle`
+* DPP: `rocdl.update.dpp`, `amdgpu.dpp` (a thin wrapper around `rocdl.update.dpp` with more comprehensive user interface, e.g., replace magic numbers with enums)
 
 The first 2 are straightforward, while DPP follows a different fashion.
 
@@ -372,23 +372,22 @@ For example, `v_mov_b32_dpp` + `v_add_f32_e32` might be fused into `v_add_f32_dp
 
 There are plenty of constraints stopping an instruction from being merged.
 For example, if either the `bank_mask` or the `row_mask` is not `0xf`, it can't be fused.
-You can check the [GCNDPPCombine::combineDPPMov](https://github.com/llvm/llvm-project/blob/llvmorg-19.1.3/llvm/lib/Target/AMDGPU/GCNDPPCombine.cpp#L522) function to see how it works.
+You can check the [GCNDPPCombine::combineDPPMov](https://github.com/llvm/llvm-project/blob/ab51eccf88f5321e7c60591c5546b254b6afab99/llvm/lib/Target/AMDGPU/GCNDPPCombine.cpp#L522) function to see how it works.
 
 ### Comparison
 
-To summarize, there's no free lunch. You can't have both performance and generality
-at the same time.
+To summarize, there's no free lunch: instruction's expressivity comes at the expense of performance.
 
-The performance ranking is like:
+The relative performance of cross-lane instructions is as follows:
 
-DPP > `ds_swizzle` >= `ds_permute`/`ds_bpermute`
+DPP > `ds_swizzle` >= `ds_permute` > `ds_bpermute`
 
-while the generality ranking is the opposite:
+while the generality ranking is the reverse:
 
-DPP < `ds_swizzle` < `ds_permute`/`ds_bpermute`
+DPP < `ds_swizzle` < `ds_permute` < `ds_bpermute`
 
-This table summarized some useful facts. The latency data is collected from an experiment
-on Fused Softmax kernel with [rocprofv2](https://github.com/ROCm/rocprofiler?tab=readme-ov-file#plugin-support):
+This table presents the approximate instruction latency, collected experimentally
+on Fused Softmax kernel with [rocprofv2](https://github.com/ROCm/rocprofiler?tab=readme-ov-file#plugin-support) on MI300 GPU:
 
 | Instructions           | MLIR Op                      | Hardware     | latency/#cycles |
 | ---------------------- | ---------------------------- | ------------ | --------------- |
@@ -396,5 +395,5 @@ on Fused Softmax kernel with [rocprofv2](https://github.com/ROCm/rocprofiler?tab
 | ds_swizzle             | rocdl.ds_swizzle             | LDS hardware | ~50*            |
 | DPP                    | rocdl.update.dpp, amdgpu.dpp | VALU         | 4~12            |
 
-*: For ds_permute/ds_bpermute and ds_swizzle, the latency includes the instruction itself
-and its according `s_waitcnt` instruction.
+*: For `ds_permute`/`ds_bpermute` and `ds_swizzle`, the latency includes the instruction itself
+and its corresponding `s_waitcnt` instruction.
