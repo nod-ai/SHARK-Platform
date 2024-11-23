@@ -33,12 +33,14 @@ class BaseCausalLMModel(ThetaLayer):
         device: Optional[torch.device] = None,
         activation_dtype: torch.dtype = torch.float32,
         attention_dtype: torch.dtype = torch.float32,
+        fake_quant: bool = True,
     ):
         super().__init__(theta)
         self.device = device
         self.activation_dtype = activation_dtype
         self.attention_dtype = attention_dtype
         self.context_length = context_length
+        self.fake_quant = fake_quant
 
         if static_tables:
             self.register_buffer(
@@ -89,16 +91,15 @@ class BaseCausalLMModel(ThetaLayer):
         masked.
         """
         range_vector = torch.arange(0, batch_seqlen, 1, device=self.device)
-        matrix = torch.unsqueeze(seq_lens, dim=-1)
+        matrix = seq_lens.unsqueeze(dim=-1)
         mask = range_vector >= matrix
         return mask
 
     def decode_attention_mask(self, boolean_input_mask: torch.Tensor):
         dtype = self.attention_dtype
-        numeric_mask = torch.zeros_like(boolean_input_mask, dtype=dtype)
-        numeric_mask.masked_fill_(
-            boolean_input_mask, self._maximally_negative_value(dtype)
-        )
+        numeric_mask = torch.where(
+            boolean_input_mask, self._maximally_negative_value(dtype), 0
+        ).to(dtype)
         return numeric_mask.unsqueeze(1).unsqueeze(1).to(self.device)
 
     def attention_mask(
@@ -127,9 +128,10 @@ class BaseCausalLMModel(ThetaLayer):
         dtype = self.attention_dtype
         _, batch_seq_len = input_mask.shape
         causal_mask = causal_context_mask[:, :, :batch_seq_len, :batch_seq_len]
-        boolean_mask = causal_mask + input_mask[:, None, None, :]
-        numeric_mask = torch.zeros_like(boolean_mask, dtype=dtype)
-        numeric_mask.masked_fill_(boolean_mask, self._maximally_negative_value(dtype))
+        boolean_mask = torch.logical_or(causal_mask, input_mask[:, None, None, :])
+        numeric_mask = torch.where(
+            boolean_mask, self._maximally_negative_value(dtype), 0
+        ).to(dtype)
         return numeric_mask.to(self.device)
 
     def extract_tokens_from_logits(

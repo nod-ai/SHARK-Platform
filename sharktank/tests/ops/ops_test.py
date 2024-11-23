@@ -115,7 +115,7 @@ class MatmulTest(unittest.TestCase):
         ):
             ops.matmul(1, 2)
 
-    @unittest.skip("https://github.com/nod-ai/sharktank/issues/44")
+    @unittest.skip("https://github.com/nod-ai/shark-ai/issues/44")
     def testTorchImplTransposedRHS(self):
         ops._registry._test_enable_last_op_dispatch(True)
         t1 = torch.rand(32, 16, dtype=torch.float32)
@@ -128,7 +128,7 @@ class MatmulTest(unittest.TestCase):
             ops.custom_impls.matmul_mmtfp_tensor_tensor,
         )
 
-    @unittest.skip("https://github.com/nod-ai/sharktank/issues/44")
+    @unittest.skip("https://github.com/nod-ai/shark-ai/issues/44")
     def testTorchImplNonTransposedRHS(self):
         ops._registry._test_enable_last_op_dispatch(True)
         t1 = torch.rand(32, 16, dtype=torch.float32)
@@ -141,7 +141,7 @@ class MatmulTest(unittest.TestCase):
             ops.custom_impls.matmul_mmtfp_tensor_tensor,
         )
 
-    @unittest.skip("https://github.com/nod-ai/sharktank/issues/44")
+    @unittest.skip("https://github.com/nod-ai/shark-ai/issues/44")
     def testTorchImplTransposedPrimitiveRHS(self):
         ops._registry._test_enable_last_op_dispatch(True)
         t1 = torch.rand(32, 16, dtype=torch.float32)
@@ -154,6 +154,15 @@ class MatmulTest(unittest.TestCase):
             ops._registry._test_get_last_op_dispatch(),
             ops.custom_impls.matmul_mmtfp_tensor_tensor,
         )
+
+    def testTorchImplImplicitBatch(self):
+        ops._registry._test_enable_last_op_dispatch(True)
+        t1 = torch.rand(4, 32, 16, dtype=torch.float32)
+        t2 = torch.rand(48, 16, dtype=torch.float16)
+        t2_pt = DefaultPrimitiveTensor(data=t2)
+        result = ops.matmul(t1, t2_pt.T)
+        expected = torch.matmul(t1, t2.T.to(torch.float32))
+        torch.testing.assert_close(result, expected)
 
     def testTorchImplTransposedQuantizedRHS_BlockScaledLayout(self):
         ops._registry._test_enable_last_op_dispatch(True)

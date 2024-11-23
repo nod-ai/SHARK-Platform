@@ -62,10 +62,8 @@ class PlanarQuantizedTensorTest(unittest.TestCase):
 
 class ShardedTensorTest(unittest.TestCase):
     def testReplicatedTensorSaveLoad(self):
-        tensor = torch.rand([2, 3, 4], dtype=torch.float32)
-        replicated_tensor = ReplicatedTensor(
-            ts=tensor, shard_count=3, name="the_tensor"
-        )
+        tensor = [torch.rand([2, 3, 4], dtype=torch.float32)] * 3
+        replicated_tensor = ReplicatedTensor(ts=tensor, name="the_tensor")
         theta = Theta([replicated_tensor])
         dataset = Dataset({}, theta)
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -139,6 +137,34 @@ class ShardedTensorTest(unittest.TestCase):
         assert isinstance(sharded_slice, SplitPrimitiveTensor)
         actual_result = ops.reshard_like(sharded_slice, expected_result)
         assert ops.equal(expected_result, actual_result)
+
+    def testSplitTensorExtractSliceWithEllipsis(self):
+        tensor = torch.rand([2, 3, 4, 5])
+        sharded_tensor = ops.reshard_split(tensor, dim=2, count=2)
+        expected_result = tensor[0, ..., 1:3]
+        expected_sharded_result = ops.reshard_split(expected_result, dim=1, count=2)
+        actual_sharded_result = sharded_tensor[0, ..., 1:3]
+        assert ops.equal(actual_sharded_result, expected_sharded_result)
+
+    def testSplitTensorInsertSliceOfAllDimsWithEllipsis(self):
+        dst = torch.rand([2, 3, 4])
+        src = torch.rand([2, 3, 4])
+        sharded_dst = ops.reshard_split(dst.clone(), dim=1, count=3)
+        sharded_src = ops.reshard_like(src, like=sharded_dst)
+        dst[...] = src
+        sharded_dst[...] = sharded_src
+        actual_result = ops.unshard(sharded_dst)
+        assert ops.equal(actual_result, dst)
+
+    def testSplitTensorInsertSliceWithEllipsis(self):
+        dst = torch.rand([2, 3, 4, 5])
+        src = torch.rand([3, 4, 2])
+        sharded_dst = ops.reshard_split(dst.clone(), dim=2, count=2)
+        sharded_src = ops.reshard_split(src, dim=1, count=2)
+        dst[0, ..., 1:3] = src
+        sharded_dst[0, ..., 1:3] = sharded_src
+        actual_result = ops.unshard(sharded_dst)
+        assert ops.equal(actual_result, dst)
 
 
 if __name__ == "__main__":

@@ -38,8 +38,8 @@ from .tensors import (
     QuantizedTensor,
     UnnamedTensorName,
     register_inference_tensor,
-    _serialized_name_to_dtype,
-    _dtype_to_serialized_name,
+    serialized_name_to_dtype,
+    dtype_to_serialized_name,
 )
 
 __all__ = [
@@ -131,6 +131,25 @@ class StaticScaledQuantizer(QuantizerTensor):
         else:
             assert len(self._scale.shape) == 0, "Expected per-tensor scale to be 0D"
 
+    def dequantize_raw_tensor(
+        self, t: torch.Tensor, to: torch.dtype, *, name: str
+    ) -> torch.Tensor:
+        return (
+            PlanarQuantizedTensor(
+                shape=t.shape,
+                name=t.name,
+                layout=TensorScaledLayout(
+                    shape=t.shape,
+                    d=self._reciprocal_scale,
+                    qs=t,
+                    m=self.offset,
+                    dtype=to,
+                ),
+            )
+            .unpack()
+            .dequant()
+        )
+
     def _quantize_raw_tensor(self, t: torch.Tensor, *, name: str) -> QuantizedTensor:
         """Performs a quantizing transformation on t, returning a QuantizeTensor."""
         shape = list(t.shape)
@@ -139,14 +158,15 @@ class StaticScaledQuantizer(QuantizerTensor):
         if axis is None:
             # Per tensor.
             if offset is None:
+                # Changed to t/reciprocal because narrow float types are garbage
                 qs = saturate_cast(
-                    t * self._scale,
+                    t / self._reciprocal_scale,
                     dtype=self.dtype,
                     disable_saturate=self._disable_saturate,
                 )
             else:
                 qs = saturate_cast(
-                    t * self._scale + offset,
+                    t / self._reciprocal_scale + offset,
                     dtype=self.dtype,
                     disable_saturate=self._disable_saturate,
                 )
@@ -245,7 +265,7 @@ class StaticScaledQuantizer(QuantizerTensor):
             raise IOError("Missing property") from e
         axis = int(extra_properties["axis"]) if "axis" in extra_properties else None
         disable_saturate = bool(extra_properties.get("disable_saturate"))
-        dtype = _serialized_name_to_dtype(dtype_name)
+        dtype = serialized_name_to_dtype(dtype_name)
         return cls(
             name=name,
             scale=scale,
@@ -271,7 +291,7 @@ class StaticScaledQuantizer(QuantizerTensor):
         scale_name = f"{self.name}:scale"
         rscale_name = f"{self.name}:rscale"
         offset_name = f"{self.name}:offset"
-        extra_properties = {"dtype": _dtype_to_serialized_name(self._dtype)}
+        extra_properties = {"dtype": dtype_to_serialized_name(self._dtype)}
         if self._axis is not None:
             extra_properties["axis"] = self._axis
         if self._disable_saturate:
@@ -387,7 +407,7 @@ class DynamicScaledQuantizer(QuantizerTensor):
             dtype_name = extra_properties["dtype"]
         except KeyError as e:
             raise IOError("Missing property") from e
-        dtype = _serialized_name_to_dtype(dtype_name)
+        dtype = serialized_name_to_dtype(dtype_name)
         return cls(
             name=name,
             dtype=dtype,
@@ -399,7 +419,7 @@ class DynamicScaledQuantizer(QuantizerTensor):
 
     def add_to_archive(self, builder: ShardedArchiveBuilder) -> InferenceTensorMetadata:
         """Adds this tensor to the global archive."""
-        extra_properties = {"dtype": _dtype_to_serialized_name(self._dtype)}
+        extra_properties = {"dtype": dtype_to_serialized_name(self._dtype)}
         raw_tensors = {}
         return InferenceTensorMetadata(
             self.serialized_name(),

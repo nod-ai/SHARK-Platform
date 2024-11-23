@@ -1,0 +1,10 @@
+# Used for managing pre-commit flows.
+pre-commit
+
+# Type checking
+mypy==1.8.0
+types-requests==2.31.0.20240125
+
+# Testing
+pytest==8.0.0
+pytest-xdist==3.5.0

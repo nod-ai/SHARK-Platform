@@ -8,6 +8,8 @@
 
 from typing import Optional
 
+from safetensors import safe_open
+
 import math
 import sys
 
@@ -16,11 +18,15 @@ import torch
 from ..layers import *
 from ..types import *
 
+from ..ops import replicate, unshard
+
 # TODO: Should be using a base class with the protocol supported.
 from ..models.mixtral.mixtral import *
+from ..models.grok.grok import *
 from ..models.llama.llama import *
+from ..models.llama.sharding import shard_theta
 from ..utils.debugging import trace_tensor
-from ..utils.tokenizer import InferenceTokenizer, load_tokenizer
+from ..utils.tokenizer import InferenceTokenizer
 
 
 class TorchGenerator:
@@ -38,9 +44,9 @@ class TorchGenerator:
         self.tokenizer = tokenizer
         if model.cache.is_paged:
             self.shared_cache_state = model.cache.paged.allocate(page_cache_size)
+            self.free_pages = list(range(1, page_cache_size))
         else:
             self.shared_cache_state = None
-        self.free_pages = list(range(1, 128))
         self.end_token = end_token
 
     @property
@@ -51,6 +57,7 @@ class TorchGenerator:
         token_ids, seq_lens = self.tokenizer.encode(
             prompts, pad_to_multiple_of=self.model.cache.pad_sequence_stride
         )
+
         token_ids = torch.tensor(token_ids, device=self.model.device)
         seq_lens = torch.tensor(seq_lens, device=self.model.device)
         if self.shared_cache_state is not None:
@@ -145,12 +152,22 @@ class Batch:
         trace_tensor("prefill.token_ids", self.token_ids)
         trace_tensor("prefill.seq_block_ids", seq_block_ids_tensor)
         trace_tensor("prefill.attention_mask", attention_mask)
+
+        token_ids = self.token_ids
+        if model.config.tensor_parallelism_size != 1:
+            tp = model.config.tensor_parallelism_size
+            token_ids = replicate(token_ids, tp)
+            attention_mask = replicate(attention_mask, tp)
+            seq_block_ids_tensor = replicate(seq_block_ids_tensor, tp)
+
         logits = model.prefill(
-            self.token_ids,
+            token_ids,
             attention_mask=attention_mask,
             seq_block_ids=seq_block_ids_tensor,
             cache_state=self.cache_state,
         )
+
+        logits = unshard(logits)
 
         # TODO: Generalize the sampling and don't make it swap on/off cpu.
         # TODO: Normalize the output of extract_tokens_from_logits into
@@ -179,6 +196,14 @@ class Batch:
         trace_tensor("decode.start_positions", start_positions)
         trace_tensor("decode.seq_block_ids", seq_block_ids_tensor)
         trace_tensor("decode.attention_mask", decode_attention_mask)
+
+        if model.config.tensor_parallelism_size != 1:
+            tp = model.config.tensor_parallelism_size
+            self.next_tokens = replicate(self.next_tokens, tp)
+            start_positions = replicate(start_positions, tp)
+            seq_block_ids_tensor = replicate(seq_block_ids_tensor, tp)
+            decode_attention_mask = replicate(decode_attention_mask, tp)
+
         logits = model.decode(
             self.next_tokens,
             attention_mask=decode_attention_mask,
@@ -186,6 +211,8 @@ class Batch:
             seq_block_ids=seq_block_ids_tensor,
             cache_state=self.cache_state,
         )
+
+        logits = unshard(logits)
         trace_tensor("decode.logits", logits)
         # TODO: Normalize the output of extract_tokens_from_logits into
         # tensor [bs, 1].
@@ -218,17 +245,28 @@ def main():
         help="DType to use for activations in the model",
         default="float32",
     )
+    parser.add_argument(
+        "--use-hf",
+        action="store_true",
+        default=False,
+    )
+    parser.add_argument(
+        "--tensor-parallelism-size",
+        type=int,
+        default=1,
+        help="How many devices are involved for tensor parallel sharding.",
+    )
     cli.add_input_dataset_options(parser)
     cli.add_tokenizer_options(parser)
+    cli.add_quantization_options(parser)
+    cli.add_model_options(parser)
     args = cli.parse(parser)
-
     device = torch.device(args.device) if args.device else None
     activation_dtype = getattr(torch, args.activation_dtype)
     assert isinstance(activation_dtype, torch.dtype)
     dataset = cli.get_input_dataset(args)
     tokenizer = cli.get_tokenizer(args)
     prompts = args.prompt
-
     config = LlamaModelConfig(
         hp=configs.LlamaHParams.from_gguf_props(dataset.properties),
         block_seq_stride=16,
@@ -236,13 +274,22 @@ def main():
         device=device,
         activation_dtype=activation_dtype,
         attention_dtype=activation_dtype,
+        attention_kernel=args.attention_kernel,
+        use_hf=args.use_hf,
+        tensor_parallelism_size=args.tensor_parallelism_size,
+        fake_quant=args.fake_quant,
     )
+    if config.tensor_parallelism_size > 1:
+        dataset.root_theta = shard_theta(dataset.root_theta, config)
 
     if config.hp.expert_count:
-        model = PagedMixtralModelV1(dataset.root_theta, config)
+        if config.hp.model_arch == "grok":
+            model = PagedGrokModelV1(dataset.root_theta, config)
+        else:
+            model = PagedMixtralModelV1(dataset.root_theta, config)
     else:
         model = PagedLlamaModelV1(dataset.root_theta, config)
-  
+
     if args.save_intermediates_path:
         from ..utils.patching import SaveModuleResultTensorsPatch
 
@@ -272,6 +319,7 @@ def main():
             )
         print(f":: Result tokens: {batch.results}")
         batch.print_current_results()
+        counter += 1
 
 
 if __name__ == "__main__":

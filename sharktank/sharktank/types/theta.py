@@ -15,7 +15,7 @@ import warnings
 import torch
 import torch.nn.functional as F
 
-from shark_turbine.aot import (
+from iree.turbine.aot import (
     ExternalTensorTrait,
     ParameterArchive,
     ParameterArchiveEntry,
@@ -109,6 +109,18 @@ class Theta:
 
     def to(self, *, device: Optional[Union[str, torch.device]] = None) -> "Theta":
         return self.transform(InferenceTensorTransforms.to_device(device))
+
+    def pop(self, *name_path: str | int) -> "Theta":
+        # prune a subtree from the tree and return it as a new Theta object
+        name_path = ".".join(_norm_name_path(name_path))
+        flat = self.flatten()
+        accum = {}
+        key_list = list(flat.keys())
+        for key in key_list:
+            if key.startswith(name_path):
+                accum[key] = flat.pop(key)
+        self._tree = flat_to_nested_dict(flat)
+        return Theta(flat_to_nested_dict(accum))
 
     def flatten(self) -> dict[str, InferenceTensor]:
         results = {}

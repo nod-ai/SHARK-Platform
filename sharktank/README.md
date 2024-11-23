@@ -10,6 +10,10 @@ This sub-project is a work in progress. It is intended to be a repository of
 layers, model recipes, and conversion tools from popular LLM quantization
 tooling.
 
+## Project Status
+
+[![CI - Perplexity](https://github.com/nod-ai/shark-ai/actions/workflows/ci_eval.yaml/badge.svg?branch=main&event=schedule)](https://github.com/nod-ai/shark-ai/actions/workflows/ci_eval.yaml)
+
 ## Examples
 
 The repository will ultimately grow a curated set of models and tools for
@@ -40,3 +44,30 @@ python -m sharktank.examples.export_paged_llm_v1 \
 ```shell
 python -m sharktank.tools.dump_gguf --hf-dataset=open_llama_3b_v2_f16_gguf
 ```
+
+## Package Python Release Builds
+
+* To build wheels for Linux:
+
+    ```bash
+    ./build_tools/build_linux_package.sh
+    ```
+
+    That should produce
+    `build_tools/wheelhouse/sharktank-{X.Y.Z}.dev0-py3-none-any.whl`, which can
+    then be installed with
+
+    ```bash
+    python3 -m pip install build_tools/wheelhouse/sharktank-{X.Y.Z}.dev0-py3-none-any.whl
+    ```
+
+* To build a wheel for your host OS/arch manually:
+
+    ```bash
+    # Build sharktank.*.whl into the dist/ directory
+    #   e.g. `sharktank-3.0.0.dev0-py3-none-any.whl`
+    python3 -m pip wheel -v -w dist .
+
+    # Install the built wheel.
+    python3 -m pip install dist/*.whl
+    ```

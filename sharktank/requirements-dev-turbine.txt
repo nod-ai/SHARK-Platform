@@ -1,0 +1,1 @@
+-e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"

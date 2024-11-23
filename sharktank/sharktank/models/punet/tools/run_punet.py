@@ -9,7 +9,7 @@ import sys
 
 import torch
 
-from shark_turbine import aot
+from iree.turbine import aot
 
 from ..model import Unet2DConditionModel, ClassifierFreeGuidanceUnetModel
 from ....utils.patching import SaveModuleResultTensorsPatch

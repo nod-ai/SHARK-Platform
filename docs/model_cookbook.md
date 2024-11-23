@@ -1,7 +1,7 @@
 # Model cookbook
 
-Note: These are early notes and commands that the sharktank team is using and
-will turn into proper docs later.
+Note: These are early notes and commands that the shark-ai team is using
+and will turn into proper docs later.
 
 ## Diagrams
 
@@ -165,18 +165,13 @@ tokenizer_config.json: 100%|█████████████████�
 
 Setup (from [README.md](../README.md)):
 
-* TODO: this could be replaced with `pip install iree-turbine` or
-  `pip install sharktank` at some point. For now these are dev packages.
-
 ```bash
 # Setup venv.
 python -m venv --prompt sharktank .venv
 source .venv/bin/activate
 
-# Install requirements.
+# (Optional) Install PyTorch for CPU only, to save on download time.
 pip install -r pytorch-cpu-requirements.txt
-pip install -f https://iree.dev/pip-release-links.html --src deps \
-  -e "git+https://github.com/iree-org/iree-turbine.git#egg=shark-turbine"
 
 # Install local projects.
 pip install -r requirements.txt -e sharktank/ shortfin/
@@ -255,6 +250,21 @@ iree-run-module \
   --input=4x1xi64=0,1,2,3 \
   --input=1x2662400xf16 \
   --parameters=model=/tmp/open_llama_3b_v2/open-llama-3b-v2-f16.gguf
+```
+
+## Evaluation pipeline
+
+Run perplexity test:
+
+```bash
+pytest sharktank/tests/evaluate/perplexity_test.py  --longrun
+```
+
+Run perplexity for a new model:
+```bash
+python -m  sharktank.evaluate.perplexity \
+  --gguf-file=llama8b_f16.gguf \
+  --tokenizer-config-json=tokenizer_config.json
 ```
 
 ## Generating data for llama models

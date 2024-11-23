@@ -12,10 +12,10 @@ import unittest
 from parameterized import parameterized
 
 import torch
+import torch.nn.functional as F
 
-from shark_turbine import aot
+from iree.turbine import aot
 from sharktank import kernels
-from sharktank.ops.qconv_impls import _pad_last_2d
 
 
 class pooling_nchw_sum_test(unittest.TestCase):
@@ -34,7 +34,7 @@ class pooling_nchw_sum_test(unittest.TestCase):
         a = (torch.randint(0, 100, (2, 1, 128, 128))).to(torch.float32)
         padding = [1, 1]
         extended_list = [item for item in padding for _ in range(2)]
-        inputs_pad = _pad_last_2d(a, extended_list)
+        inputs_pad = F.pad(a, pad=extended_list)
         weight_shape = [3, 3]
         stride = [1, 1]
         dilations = [1, 1]
@@ -62,7 +62,7 @@ class pooling_nchw_sum_test(unittest.TestCase):
         inputs = torch.rand([2, 1, 128, 128]) * 64
         padding = [1, 1]
         extended_list = [item for item in padding for _ in range(2)]
-        inputs_pad = _pad_last_2d(inputs, extended_list)
+        inputs_pad = F.pad(inputs, pad=extended_list)
         ep = torch.export.export(
             mod,
             args=((inputs_pad).to(dtype),),
