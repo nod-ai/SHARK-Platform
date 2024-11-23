@@ -270,7 +270,9 @@ class ExportArtifacts:
                 f"--device=hip://{i}" for i in range(self.tensor_parallelism_size)
             ]
         else:
-            rocr_visible_devices = [f"ROCR_VISIBLE_DEVICES={hip_device_id}"]
+            rocr_visible_devices = [
+                f"ROCR_VISIBLE_DEVICES={','.join(str(i) for i in range(int(hip_device_id) + 1))}"
+            ]
             params = [f"--parameters=model={irpa_path}"]
             devices = [f"--device=hip://{hip_device_id}"]
         benchmark_args += rocr_visible_devices
