@@ -67,6 +67,115 @@ class RadixData(Protocol):
         ...
 
 
+class RadixNodePageData(RadixData):
+    """
+    Container for pages associated with a radix tree node.
+
+    This class maintains two distinct collections of pages:
+    - node_pages: Pages specifically associated with this individual node
+    - path_pages: Collection of pages from the root up to (but not including)
+                 this node's pages
+    """
+
+    # page data management
+
+    def __init__(self, path_pages, node_pages, tokens_per_page):
+        """
+        Initialize a RadixNodePageData instance.
+
+        Args:
+            path_pages: Collection of pages associated with the path from root
+                        up to (but not including) this node
+            node_pages: Collection of pages associated only with this specific node
+        """
+        self.node_pages = node_pages
+        self.path_pages = path_pages
+        self.tokens_per_page = tokens_per_page
+
+    @property
+    def full_pages(self) -> list[PageInfo]:
+        """
+        Returns all the pages associated with this Node.
+        """
+        # if profiling reveals that this takes a lot of time,
+        # consider moving to an approach where all pages in the same path
+        # share the same page-list, and use an index mark the boundary between
+        # path and node pages
+        return self.path_pages + self.node_pages
+
+    def create_child(self: RadixData, new_values: list[PageInfo]) -> RadixData:
+        return RadixNodePageData(
+            path_pages=self.full_pages,
+            node_pages=new_values,
+            tokens_per_page=self.tokens_per_page,
+        )
+
+    # radix tree interface functions
+
+    def split_at(
+        self, desired_split_point: int
+    ) -> Tuple["RadixNodePageData", "RadixNodePageData", int]:
+        """
+        Split this node at a given point. Has to be split at whole-page boundaries.
+        """
+        key_begin = len(self.path_pages) * self.tokens_per_page
+        key_end = len(self.full_pages) * self.tokens_per_page
+        assert (
+            desired_split_point != key_begin
+        ), "We shouldn't be splitting at the beginning of a page because we should just be adding another RadixNode before this one."
+        assert (
+            desired_split_point != key_end
+        ), "We shouldn't be splitting at the end of a page because we should just add another RadixNode after this one."
+        # the split point should be within this node's associated pages
+        # we use gt and lt and not ge / le because if the desired_split_point is page aligned, we should have never splitted
+        assert (
+            len(self.path_pages) * self.tokens_per_page < desired_split_point
+        ), "Split point should not come before this node."
+        assert desired_split_point < len(
+            self.full_pages
+        ), "Split point should not comes after this node."
+
+        page_split_point = desired_split_point // self.tokens_per_page
+        actual_split_point = page_split_point * self.tokens_per_page
+
+        first_half = self.node_pages[:page_split_point]
+        second_half = self.node_pages[page_split_point:]
+
+        new_node = RadixNodePageData(path_pages=self.path_pages, node_pages=first_half)
+        new_child = RadixNodePageData(
+            path_pages=self.path_pages + first_half, node_pages=second_half
+        )
+        return new_node, new_child, actual_split_point
+
+    def merge_with_child(self, child: "RadixNodePageData") -> "RadixNodePageData":
+        """
+        Merge this node with its only child.
+
+        This should never be called on a node with more than one child
+        """
+        # Child's path_pages should equal our path_pages + our node_pages
+        assert child.path_pages == self.path_pages + self.node_pages
+
+        return RadixNodePageData(
+            path_pages=self.path_pages, node_pages=self.node_pages + child.node_pages
+        )
+
+    def on_evict(self):
+        """
+        Handles cleanup when this node is evicted from the radix tree.
+
+        Note: This method will only be called on leaf nodes, as the radix tree
+        only performs eviction on nodes without children.
+        """
+        # evict self.node_pages only
+        # TODO: remove checks when stable
+        assert len(self.node_pages) > 0
+        pool = self.node_pages[0].pool
+        for p in self.node_pages:
+            assert p.pool == pool
+        pool.release_pages(self.node_pages)
+
+
 @dataclass
 class RadixNode:
     key: List[int]
@@ -91,9 +200,13 @@ class RadixTree:
 
     def __init__(
         self,
+        tokens_per_page,
     ) -> None:
         """Initialize the radix tree."""
-        raise NotImplementedError()
+        root_data = RadixNodePageData(
+            path_pages=[], node_pages=[], tokens_per_page=tokens_per_page
+        )
+        self.root = RadixNode(key=[], value=root_data, children={}, parent=None)
 
     def match_prefix(self, key: List[KeyItemType]) -> tuple[RadixNode, KeyIndexType]:
         """Find the longest matching prefix for a given key sequence, returning the matched RadixNode and match length.
@@ -125,7 +238,31 @@ class RadixTree:
         - The returned match length is determined by RadixData constraints,
           not just by matching tokens
         """
-        raise NotImplementedError()
+        current_node = self.root
+        match_length = 0
+
+    def match_helper(
+        self, key: List[KeyItemType], current_node: RadixNode
+    ) -> tuple[RadixNode, KeyIndexType]:
+        """Helper function for match_prefix."""
+        best_match = current_node
+        best_match_len = self._get_match_len(key, current_node.key)
+
+        parent_key = current_node.parent.key if current_node.parent else []
+
+        # found match in this node; splitting may be necessary
+        if best_match_len < len(current_node.key) and best_match_len > parent_key:
+            best_match = self._split_node(current_node, best_match_len)
+            assert self._get_match_len(key, best_match.key) == best_match_len
+            return best_match, len(best_match.key)
+
+        assert best_match_len == current_node.key
+
+        for c in best_match.children[key[len(current_node.key)]]:
+            match, match_len = self.match_helper(key, c)
+            if match_len > best_match_len:
+                best_match = match
+                best_match_len = match_len
 
     def set_value(
         self, key: List[KeyItemType], values: list[ValueItemType]
@@ -160,13 +297,22 @@ class RadixTree:
         Returns:
             Length of the matching prefix
         """
-        raise NotImplementedError()
+        match_len = 0
+        for k1, k2 in zip(key1, key2):
+            if k1 != k2:
+                break
+            match_len += 1
+        return match_len
 
     def _split_node(
         self, node: RadixNode, desired_split_point: KeyIndexType
     ) -> RadixNode:
         """
-        Shrink the current node's key and value as necessary and insert a new node before the current node.
+        Shrink the current node's key and value as necessary so we can insert a new node as close as possible to desired_split_point.
+
+        Returns: a node to insert after. If we can't split the node, node.parent is returned.
+
+        Returns the new node.
 
         Example:
             ```pseudocode
@@ -208,7 +354,34 @@ class RadixTree:
             ```
 
         """
-        raise NotImplementedError()
+        parent_key_length = len(node.parent.key) if node.parent else 0
+        # Attempting to split at beginning or end of node would just return node.parent or node
+        if desired_split_point == parent_key_length:
+            return node.parent
+        elif desired_split_point == len(node.key):
+            return node
+
+        # Split the node's value to get prefix and suffix
+        prefix_data, suffix_data, actual_split_point = node.value.split_at(
+            desired_split_point
+        )
+
+        # no new node needed if split point is at the beginning of node
+        if actual_split_point == parent_key_length:
+            return node.parent
+
+        # Create a new parent node with the prefix data
+        new_parent = RadixNode(
+            key=node.key[:actual_split_point],
+            value=prefix_data,
+            children={node},
+            parent=node.parent,
+        )
+
+        node.value = suffix_data
+        node.parent = new_parent
+
+        return new_parent
 
     def _evict_pages(self, pages_needed: int) -> None:
         """Evict zero reference count leaf pages using LRU strategy until enough pages are free.
