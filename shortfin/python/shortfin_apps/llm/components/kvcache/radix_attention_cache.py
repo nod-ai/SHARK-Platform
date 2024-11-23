@@ -10,9 +10,6 @@ from radix_tree import (
 )  # Protocol for data types that can be stored and managed in a radix tree
 
 
-T = TypeVar("T")  # The generic data type stored in nodes
-
-
 class RadixNodePageData(RadixData):
     """
     Container for pages associated with a radix tree node.
