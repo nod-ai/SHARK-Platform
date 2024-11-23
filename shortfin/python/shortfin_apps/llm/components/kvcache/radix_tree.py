@@ -24,16 +24,14 @@ from page_pool import PagePool
 class RadixData(Protocol):
     """Protocol defining required operations for data stored in RadixTree nodes"""
 
-    def from_parent(
-        self, parent: RadixData, new_values: list[ValueItemType]
-    ) -> RadixData:
+    def create_child(self: RadixData, new_values: list[ValueItemType]) -> RadixData:
         """
         Create a new RadixData based on a parent and new values.
 
         E.g. for a list of kvpages, one might call
 
         kvlist: List[PageInfo]
-        RadixData.from_parent(parent_node, kvlist)
+        parent_node.create_child(kvlist)
 
         which might take
         new_values = [p1, p2, p3, p4, p5]

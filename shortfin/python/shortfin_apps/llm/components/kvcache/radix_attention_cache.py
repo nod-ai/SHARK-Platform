@@ -49,6 +49,13 @@ class RadixNodePageData(RadixData):
         # path and node pages
         return self.path_pages + self.node_pages
 
+    def create_child(self: RadixData, new_values: list[PageInfo]) -> RadixData:
+        return RadixNodePageData(
+            path_pages=self.full_pages,
+            node_pages=new_values,
+            tokens_per_page=self.tokens_per_page,
+        )
+
     # radix tree interface functions
 
     def split_at(
