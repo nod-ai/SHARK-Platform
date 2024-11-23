@@ -43,6 +43,10 @@ class RadixNodePageData(RadixData):
         """
         Returns all the pages associated with this Node.
         """
+        # if profiling reveals that this takes a lot of time,
+        # consider moving to an approach where all pages in the same path
+        # share the same page-list, and use an index mark the boundary between
+        # path and node pages
         return self.path_pages + self.node_pages
 
     # radix tree interface functions
@@ -103,4 +107,9 @@ class RadixNodePageData(RadixData):
         only performs eviction on nodes without children.
         """
         # evict self.node_pages only
-        ...
+        # TODO: remove checks when stable
+        assert len(self.node_pages) > 0
+        pool = self.node_pages[0].pool
+        for p in self.node_pages:
+            assert p.pool == pool
+        pool.release_pages(self.node_pages)
