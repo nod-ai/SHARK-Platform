@@ -77,7 +77,7 @@ jobs:
             iree-base-runtime
 
       - name: Run llama tests
-        run: pytest sharktank/tests/models/llama/benchmark_amdgpu_test.py -v -s --run-nightly-llama-tests --iree-hip-target=gfx942 --iree-device='hip://7' --html=out/llm/llama/benchmark/index.html
+        run: pytest sharktank/tests/models/llama/benchmark_amdgpu_test.py -v -s --run-nightly-llama-tests --iree-hip-target=gfx942 --iree-device=7 --html=out/llm/llama/benchmark/index.html
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@4f9cc6602d3f66b9c108549d475ec49e8ef4d45e # v4.0.0
