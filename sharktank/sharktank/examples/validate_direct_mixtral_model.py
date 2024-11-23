@@ -139,5 +139,6 @@ def main(args: list[str]):
         with open(output_file, "wb") as f:
             importer.module_op.write_bytecode(f)
 
+
 if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))
