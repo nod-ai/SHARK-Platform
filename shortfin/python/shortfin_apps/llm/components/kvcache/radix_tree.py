@@ -25,7 +25,7 @@ class RadixData(Protocol):
     """Protocol defining required operations for data stored in RadixTree nodes"""
 
     def from_parent(
-        self, paren: RadixData, new_values: list[ValueItemType]
+        self, parent: RadixData, new_values: list[ValueItemType]
     ) -> RadixData:
         """
         Create a new RadixData based on a parent and new values.
