@@ -11,7 +11,7 @@ from pathlib import Path
 import shortfin as sf
 import shortfin.array as sfnp
 
-from .kvcache.base_attention_cache import BasePagedAttentionCache
+from .kvcache.trie_attention_cache import TriePagedAttentionCache
 from .kvcache.page_pool import PagePoolConfig, PagePool
 from .config_struct import ModelParams
 from .manager import SystemManager
@@ -63,9 +63,10 @@ class GenerateService:
         page_pool = PagePool(
             devices=self.main_fiber.devices_dict.values(), config=page_pool_config
         )
-        self.page_cache = BasePagedAttentionCache(
+        self.page_cache = TriePagedAttentionCache(
             page_pool=page_pool,
             tokens_per_page=model_params.paged_kv_cache.block_seq_stride,
+            enable_prefix_sharing=True,
         )
 
         self.program_isolation = PROG_ISOLATIONS[program_isolation]
@@ -206,6 +207,7 @@ class BatcherProcess(sf.Process):
 
         # For now, kill anything that is left.
         for prefill_request in self.pending_prefills:
+            prefill_request.free_cache_pages()
             prefill_request.done.set_success()
         self.pending_prefills.clear()
         logger.debug("Post boarding cache state: %r", cache)
@@ -437,6 +439,8 @@ class InferenceExecutorProcess(sf.Process):
             )
             # Invoke. Logits are of shape [bs, bsl, d].
             (logits,) = await fn(*args, fiber=self.fiber)
+            for req in self.exec_requests:
+                req.publish_cache_pages()
 
             # Return results.
             for i in range(req_count):

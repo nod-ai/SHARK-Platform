@@ -69,6 +69,10 @@ class InferenceExecRequest(sf.Message):
             self.locked_pages = None
             cache.release_pages(self.input_token_ids, pages)
 
+    def publish_cache_pages(self):
+        if self._cache:
+            self._cache.publish_pages(self.input_token_ids, self.locked_pages)
+
     def lock_initial_cache_pages(
         self, cache: BasePagedAttentionCache, pages: list[PageInfo]
     ):
