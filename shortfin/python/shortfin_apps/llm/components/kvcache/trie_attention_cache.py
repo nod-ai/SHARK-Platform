@@ -11,7 +11,7 @@ import math
 class TrieNode:
     """Node of the block trie for paged attention cache."""
 
-    tokens: List[int]
+    tokens: Tuple[int]
     page: PageInfo
     num_matched: int = 0
     children: Dict[int, "TrieNode"] = None
@@ -58,12 +58,6 @@ class TriePagedAttentionCache(BasePagedAttentionCache):
         self.root = TrieNode(tokens=[], page=dummy_page)
         self.leaves: Set[TrieNode] = set()
 
-    def list_equal(self, list1: List[int], list2: List[int]) -> bool:
-        """Compare two lists for equality."""
-        if len(list1) != len(list2):
-            return False
-        return all(a == b for a, b in zip(list1, list2))
-
     def acquire_pages_for_tokens(
         self,
         tokens: List[int],
@@ -72,7 +66,7 @@ class TriePagedAttentionCache(BasePagedAttentionCache):
         if not self.enable_prefix_sharing:
             return super().acquire_pages_for_tokens(tokens, extra_token_slots)
 
-        tokens = list(tokens)
+        tokens = tuple(tokens)
         pages = []
         curr_node = self.root
         n_cached_tokens = curr_node.num_matched
@@ -88,7 +82,7 @@ class TriePagedAttentionCache(BasePagedAttentionCache):
                 break
 
             child = curr_node.children[key]
-            if not self.list_equal(curr_tokens, child.tokens):
+            if curr_tokens != child.tokens:
                 break
 
             # Match found - increment reference count
@@ -118,16 +112,14 @@ class TriePagedAttentionCache(BasePagedAttentionCache):
 
         return pages, n_cached_tokens
 
-    def publish_pages(
-        self, tokens: List[int], pages: List[PageInfo], model_variant: str = "default"
-    ) -> None:
+    def publish_pages(self, tokens: List[int], pages: List[PageInfo]) -> None:
         """
         Publish pages to make them available for prefix sharing.
         """
         if not self.enable_prefix_sharing:
             return
 
-        tokens = list(tokens)  # Create a copy to ensure we have a list
+        tokens = tuple(tokens)
         curr_node = self.root
         num_matched = curr_node.num_matched
 
@@ -146,7 +138,7 @@ class TriePagedAttentionCache(BasePagedAttentionCache):
             parent = curr_node
             if hash_key in parent.children:
                 child = parent.children[hash_key]
-                if self.list_equal(curr_tokens, child.tokens):
+                if curr_tokens != child.tokens:
                     curr_node = child
                     # Update page info
                     page.read_ref_count -= 1  # Remove our reference
@@ -173,6 +165,7 @@ class TriePagedAttentionCache(BasePagedAttentionCache):
         Release pages and decrement their reference counts.
         When reference count reaches zero, the page becomes eligible for eviction.
         """
+        tokens = tuple(tokens)
         for page in pages:
             page.read_ref_count -= 1
             if page.read_ref_count == 0:
