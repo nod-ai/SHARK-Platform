@@ -52,19 +52,11 @@ class TriePagedAttentionCache(BasePagedAttentionCache):
     def __init__(self, page_pool, tokens_per_page, enable_prefix_sharing=True):
         super().__init__(page_pool, tokens_per_page)
         self.enable_prefix_sharing = enable_prefix_sharing
-        self._roots: Dict[
-            str, TrieNode
-        ] = {}  # Different roots for different model variants
+        dummy_page = PageInfo(
+            index=-1, pool=self.page_pool, token_offset=0, token_count=0
+        )
+        self.root = TrieNode(tokens=[], page=dummy_page)
         self.leaves: Set[TrieNode] = set()
-
-    def get_root(self, model_variant: str = "default") -> TrieNode:
-        """Get root node for given model variant."""
-        if model_variant not in self._roots:
-            dummy_page = PageInfo(
-                index=-1, pool=self.page_pool, token_offset=0, token_count=0
-            )
-            self._roots[model_variant] = TrieNode(tokens=[], page=dummy_page)
-        return self._roots[model_variant]
 
     def list_equal(self, list1: List[int], list2: List[int]) -> bool:
         """Compare two lists for equality."""
@@ -76,18 +68,13 @@ class TriePagedAttentionCache(BasePagedAttentionCache):
         self,
         tokens: List[int],
         extra_token_slots: int = 1,
-        model_variant: str = "default",
     ) -> Tuple[List[PageInfo], int]:
-        """
-        Acquire pages for tokens, attempting to reuse existing pages through prefix matching.
-        Returns tuple of (list of pages, number of cached tokens).
-        """
         if not self.enable_prefix_sharing:
             return super().acquire_pages_for_tokens(tokens, extra_token_slots)
 
-        tokens = list(tokens)  # Create a copy to ensure we have a list
+        tokens = list(tokens)
         pages = []
-        curr_node = self.get_root(model_variant)
+        curr_node = self.root
         n_cached_tokens = curr_node.num_matched
 
         # Try to match existing pages
@@ -141,7 +128,7 @@ class TriePagedAttentionCache(BasePagedAttentionCache):
             return
 
         tokens = list(tokens)  # Create a copy to ensure we have a list
-        curr_node = self.get_root(model_variant)
+        curr_node = self.root
         num_matched = curr_node.num_matched
 
         # Remove from leaves if it was a leaf
