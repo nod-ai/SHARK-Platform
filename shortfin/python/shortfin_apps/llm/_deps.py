@@ -20,7 +20,8 @@ for dep in deps:
             import pytest
 
             pytest.skip(
-                f"Shortfin LLM dependency not available: {dep}", allow_module_level=True
+                f"A test imports shortfin_apps.llm; skipping due to unavailable Shortfin LLM dependency: {dep}",
+                allow_module_level=True,
             )
         else:
             raise ShortfinDepNotFoundError(__name__, dep) from e
