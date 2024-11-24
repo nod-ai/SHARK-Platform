@@ -98,6 +98,6 @@ jobs:
     - name: Run shortfin Python tests (full)
       working-directory: ${{ env.LIBSHORTFIN_DIR }}
       run: |
-        pytest -s --ignore=tests/examples/fastapi_test.py --ignore=tests/apps/llm/components/cache_test.py --ignore=tests/apps/sd
+        pytest -s --ignore=tests/examples/fastapi_test.py
       # TODO: Enable further tests and switch to
       # pytest -s

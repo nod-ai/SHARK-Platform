@@ -6,17 +6,17 @@
 
 from shortfin.support.deps import ShortfinDepNotFoundError
 
-try:
-    import transformers
-except ModuleNotFoundError as e:
-    raise ShortfinDepNotFoundError(__name__, "transformers") from e
+shortfin_llm_deps = ["tokenizers", "dataclasses_json", "transformers"]
 
-try:
-    import tokenizers
-except ModuleNotFoundError as e:
-    raise ShortfinDepNotFoundError(__name__, "tokenizers") from e
+for dep in deps:
+    try:
+        __import__(dep)
+    except ModuleNotFoundError as e:
+        if "pytest" in sys.modules:
+            import pytest
 
-try:
-    import dataclasses_json
-except ModuleNotFoundError as e:
-    raise ShortfinDepNotFoundError(__name__, "dataclasses-json") from e
+            pytest.skip(
+                f"Shortfin LLM dependency not available: {dep}", allow_module_level=True
+            )
+        else:
+            raise ShortfinDepNotFoundError(__name__, dep) from e
