@@ -212,7 +212,7 @@ class BatcherProcess(sf.Process):
         self.pending_prefills.clear()
         logger.debug("Post boarding cache state: %r", cache)
 
-    def board_prefills(self, cache: BasePagedAttentionCache):
+    def board_prefills(self, cache: TriePagedAttentionCache):
         # Fill prefill flights.
         pending_prefills = self.pending_prefills
         if len(pending_prefills) == 0:
@@ -252,7 +252,7 @@ class BatcherProcess(sf.Process):
             # And takeoff.
             exec_process.launch()
 
-    def board_decodes(self, cache: BasePagedAttentionCache):
+    def board_decodes(self, cache: TriePagedAttentionCache):
         # Fill decode flights.
         pending_decodes = self.pending_decodes
         if len(pending_decodes) == 0:

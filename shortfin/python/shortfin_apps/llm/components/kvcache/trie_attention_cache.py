@@ -1,7 +1,5 @@
-from typing import Dict, Set, List, Tuple, TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from .page_pool import PageInfo
+from typing import Dict, Set, List, Tuple
+from .page_pool import PageInfo
 import heapq
 from dataclasses import dataclass
 import time
@@ -36,8 +34,12 @@ class TrieNode:
             val.children[hash(tuple(self.tokens))] = self
         self._parent = val
 
-    def __lt__(self, other):
-        return True
+    # nodes are uniquely identified by their memory address
+    def __hash__(self):
+        return id(self)
+
+    def __eq__(self, other):
+        return self is other
 
 
 class TriePagedAttentionCache(BasePagedAttentionCache):
