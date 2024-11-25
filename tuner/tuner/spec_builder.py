@@ -26,8 +26,7 @@ def get_i64_array_attr(array: list[int], ctx: ir.Context):
 
 
 def build_vector_distribute_translation_info(
-    configuration: Configuration,
-    ctx: ir.Context
+    configuration: Configuration, ctx: ir.Context
 ) -> iree_codegen.TranslationInfoAttr:
     extra_config = get_pipeline_config(configuration)
     pipeline = iree_codegen.DispatchLoweringPassPipeline.LLVMGPUVectorDistribute
@@ -57,18 +56,19 @@ def build_vector_distribute_lowering_config(
 ) -> iree_gpu.LoweringConfigAttr:
     reduction_tile_sizes_attr = get_i64_array_attr(reduction_tile_sizes, ctx)
     workgroup_tile_sizes_attr = get_i64_array_attr(workgroup_tile_sizes, ctx)
-    intrinsic_attr = ir.Attribute.parse(f"#iree_gpu.mma_layout<{configuration.intrinsic}>", ctx)
+    intrinsic_attr = ir.Attribute.parse(
+        f"#iree_gpu.mma_layout<{configuration.intrinsic}>", ctx
+    )
     lowering_config_dict = {
-        "mma_kind" : intrinsic_attr,
-        "reduction" : reduction_tile_sizes_attr,
-        "workgroup" : workgroup_tile_sizes_attr,
-        "subgroup_m_count" : get_i64_attr(configuration.subgroup_m_count, ctx),
-        "subgroup_n_count" : get_i64_attr(configuration.subgroup_n_count, ctx),
+        "mma_kind": intrinsic_attr,
+        "reduction": reduction_tile_sizes_attr,
+        "workgroup": workgroup_tile_sizes_attr,
+        "subgroup_m_count": get_i64_attr(configuration.subgroup_m_count, ctx),
+        "subgroup_n_count": get_i64_attr(configuration.subgroup_n_count, ctx),
     }
     lowering_config_dict_attr = ir.DictAttr.get(lowering_config_dict, ctx)
     lowering_config_attr = iree_gpu.LoweringConfigAttr.get(
-        lowering_config_dict_attr,
-        ctx
+        lowering_config_dict_attr, ctx
     )
     return lowering_config_attr
 

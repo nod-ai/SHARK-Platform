@@ -29,7 +29,9 @@ def tuner_ctx() -> Generator[common.TunerContext, None, None]:
         yield common.TunerContext(ctx, logger)
 
 
-def test_build_vector_distribute_translation_info(tuner_ctx: common.TunerContext) -> None:
+def test_build_vector_distribute_translation_info(
+    tuner_ctx: common.TunerContext,
+) -> None:
     context = tuner_ctx.mlir_ctx
     subgroup_size = 16
     workgroup_size = [16, 16, 1]
@@ -47,11 +49,10 @@ def test_build_vector_distribute_translation_info(tuner_ctx: common.TunerContext
         config,
         context,
     )
-    
+
     vecdist_pipeline = iree_codegen.DispatchLoweringPassPipeline.LLVMGPUVectorDistribute
     vecdist_pipeline_attr = iree_codegen.DispatchLoweringPassPipelineAttr.get(
-        vecdist_pipeline,
-        context
+        vecdist_pipeline, context
     )
 
     assert translation_info
@@ -62,13 +63,14 @@ def test_build_vector_distribute_translation_info(tuner_ctx: common.TunerContext
         "gpu_pipeline_options = #iree_gpu.pipeline_options<prefetch_shared_memory = true>"
         in str(translation_info.configuration)
     )
-    assert (
-        'llvm_func_attrs = {"amdgpu-waves-per-eu" = "8"}'
-        in str(translation_info.configuration)
+    assert 'llvm_func_attrs = {"amdgpu-waves-per-eu" = "8"}' in str(
+        translation_info.configuration
     )
 
 
-def test_build_vector_distribute_lowering_config(tuner_ctx: common.TunerContext) -> None:
+def test_build_vector_distribute_lowering_config(
+    tuner_ctx: common.TunerContext,
+) -> None:
     context = tuner_ctx.mlir_ctx
     intrinsic = common.MfmaIntrinsic.mfma_f32_16x16x16_f16()
     subgroup_m_count = 16
@@ -91,7 +93,7 @@ def test_build_vector_distribute_lowering_config(tuner_ctx: common.TunerContext)
         workgroup_tile_sizes,
         context,
     )
-    
+
     assert lowering_config
     assert str(intrinsic) in str(lowering_config)
     assert "workgroup = [8, 8, 0]" in str(lowering_config)

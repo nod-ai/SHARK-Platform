@@ -6,6 +6,7 @@
 
 from tuner import libtuner
 
+
 def main():
     args = libtuner.parse_arguments()
 
@@ -25,7 +26,9 @@ def main():
         print("Validation successful!\n")
 
     print("Generating candidates...")
-    candidates = libtuner.generate_candidate_specs(args, path_config, candidate_trackers)
+    candidates = libtuner.generate_candidate_specs(
+        args, path_config, candidate_trackers
+    )
     print(f"Stored candidates in {path_config.candidates_dir}\n")
     if stop_after_phase == libtuner.ExecutionPhases.generate_candidates:
         return

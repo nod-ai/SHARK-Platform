@@ -75,9 +75,11 @@ def test_get_td_spec_mmt(tuner_ctx: common.TunerContext) -> None:
 
     td_spec_module = candidate_gen.MmtTuner().get_td_spec(ir_module, config)
     td_spec_module_str = str(td_spec_module)
-    
+
     assert td_spec_module
-    assert "mma_kind = #iree_gpu.mma_layout<MFMA_F32_16x16x16_F16>" in td_spec_module_str
+    assert (
+        "mma_kind = #iree_gpu.mma_layout<MFMA_F32_16x16x16_F16>" in td_spec_module_str
+    )
     assert "subgroup_m_count = 16" in td_spec_module_str
     assert "subgroup_n_count = 16" in td_spec_module_str
     assert "pipeline = LLVMGPUVectorDistribute" in td_spec_module_str
@@ -123,7 +125,9 @@ def test_get_td_spec_conv(tuner_ctx: common.TunerContext) -> None:
     td_spec_module_str = str(td_spec_module)
 
     assert td_spec_module
-    assert "mma_kind = #iree_gpu.mma_layout<MFMA_F32_16x16x16_F16>" in td_spec_module_str
+    assert (
+        "mma_kind = #iree_gpu.mma_layout<MFMA_F32_16x16x16_F16>" in td_spec_module_str
+    )
     assert "subgroup_m_count = 1" in td_spec_module_str
     assert "subgroup_n_count = 4" in td_spec_module_str
     assert "pipeline = LLVMGPUVectorDistribute" in td_spec_module_str

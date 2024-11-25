@@ -11,6 +11,7 @@ from abc import abstractmethod
 from .common import *
 from iree.compiler import ir  # type: ignore
 
+
 class LinalgIteratorType(str, Enum):
     parallel = "#linalg.iterator_type<parallel>"
     reduction = "#linalg.iterator_type<reduction>"
@@ -46,10 +47,7 @@ def get_ops_from_module(module: ir.Module, fn):
 
 
 def get_named_ops(module: ir.Module, name: str):
-    return get_ops_from_module(
-        module,
-        lambda op: op.name == name
-    )
+    return get_ops_from_module(module, lambda op: op.name == name)
 
 
 def has_iterator_types(attr: ir.ArrayAttr, iterators: list[LinalgIteratorType]):
@@ -115,10 +113,7 @@ class NamedOpMatcher:
         return op.name == self.op_name
 
     def get_matched_ops(self, op: ir.Operation):
-        return get_ops(
-            op,
-            lambda nestedOp: self.match(nestedOp)
-        )
+        return get_ops(op, lambda nestedOp: self.match(nestedOp))
 
 
 class GenericOpMatcher(NamedOpMatcher):
@@ -129,17 +124,17 @@ class GenericOpMatcher(NamedOpMatcher):
     def match_operands(self, operands: ir.OpOperandList) -> bool:
         """Match the operands of the linalg op."""
         pass
-    
+
     @abstractmethod
     def match_indexing_maps(self, maps: list[ir.AffineMap]) -> bool:
         """Match the indexing_maps of the linalg op."""
         pass
-    
+
     @abstractmethod
     def match_iterator_types(self, iterators: list[LinalgIteratorType]) -> bool:
         """Match the iterator_types of the linalg op."""
         pass
-    
+
     @abstractmethod
     def match_body(self, body_region: ir.Region) -> bool:
         """Match the body operations of the linalg op."""
@@ -151,7 +146,7 @@ class GenericOpMatcher(NamedOpMatcher):
 
         if not self.match_operands(op.operands):
             return False
-        
+
         iterators_attr = None
         maps_attr = None
         for attr in op.opview.attributes:
@@ -188,7 +183,7 @@ class GenericOpMatcher(NamedOpMatcher):
 
 class MmtOpMatcher(GenericOpMatcher):
     def match_operands(self, operands: ir.OpOperandList) -> bool:
-        if (len(operands) != 3):
+        if len(operands) != 3:
             return False
         shaped_types: list[ir.ShapedType] = []
         for operand in operands:
@@ -196,24 +191,24 @@ class MmtOpMatcher(GenericOpMatcher):
                 return False
             shaped_types.append(operand.type)
         # Check LHS type
-        if (shaped_types[0].rank != 2):
+        if shaped_types[0].rank != 2:
             return False
         # Check RHS type
-        if (shaped_types[1].rank != 2):
+        if shaped_types[1].rank != 2:
             return False
         # Check ACC type
-        if (shaped_types[2].rank != 2):
+        if shaped_types[2].rank != 2:
             return False
         return True
-    
+
     def match_indexing_maps(self, maps: list[ir.AffineMap]) -> bool:
         if len(maps) != 3:
             return False
         return get_mmt_indexing_maps(maps[0].context) == maps
-    
+
     def match_iterator_types(self, iterators: list[LinalgIteratorType]) -> bool:
         return True
-    
+
     def match_body(self, body_region: ir.Region) -> bool:
         return True
 

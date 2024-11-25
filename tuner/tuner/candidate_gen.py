@@ -87,6 +87,7 @@ class DispatchTuner(DispatchParser):
     ) -> MLIRTransformation:
         """Apply parameter transformations to the operation."""
         pass
+
     @abstractmethod
     def get_td_spec(
         self,
@@ -196,8 +197,7 @@ class MmtTuner(DispatchTuner, MmtParser):
             ir_module.context,
         )
         translation_info = build_vector_distribute_translation_info(
-            configuration,
-            ir_module.context
+            configuration, ir_module.context
         )
         lhs_type = ir.ShapedType(mmt_op.operands[0].type)
         rhs_type = ir.ShapedType(mmt_op.operands[1].type)
@@ -206,7 +206,9 @@ class MmtTuner(DispatchTuner, MmtParser):
         N = acc_type.get_dim_size(1)
         K = lhs_type.get_dim_size(1)
         func_name = f"match_mmt_{M}x{N}x{K}_{lhs_type.element_type}x{rhs_type.element_type}x{acc_type.element_type}"
-        return build_td_spec(ir_module.context, mmt_op, lowering_config, translation_info, func_name)
+        return build_td_spec(
+            ir_module.context, mmt_op, lowering_config, translation_info, func_name
+        )
 
 
 class ConvTuner(DispatchTuner, ConvParser):
@@ -310,8 +312,7 @@ class ConvTuner(DispatchTuner, ConvParser):
             ir_module.context,
         )
         translation_info = build_vector_distribute_translation_info(
-            configuration,
-            ir_module.context
+            configuration, ir_module.context
         )
         lhs_type = ir.ShapedType(conv_op.operands[0].type)
         rhs_type = ir.ShapedType(conv_op.operands[1].type)
@@ -325,7 +326,10 @@ class ConvTuner(DispatchTuner, ConvParser):
         F = rhs_type.get_dim_size(3)
         conv_type = conv_op.name.split(".")[-1]
         func_name = f"match_{conv_type}_{N}x{H}x{W}x{C}x{P}x{Q}x{F}_{lhs_type.element_type}x{rhs_type.element_type}x{acc_type.element_type}"
-        return build_td_spec(ir_module.context, conv_op, lowering_config, translation_info, func_name)
+        return build_td_spec(
+            ir_module.context, conv_op, lowering_config, translation_info, func_name
+        )
+
 
 class ContractionTuner(DispatchTuner, ContractionParser):
     def get_transform_function_broadcast_rhs_mmt(
@@ -417,6 +421,7 @@ transform.yield %generic, %config : !transform.any_op, !transform.any_param
     ) -> ir.Module:
         pass
 
+
 class BatchMmtTuner(DispatchTuner, BatchMmtParser):
     def get_transform_function_batch_mmt(
         self,
@@ -481,6 +486,7 @@ transform.yield %generic, %config : !transform.any_op, !transform.any_param
         configuration: Configuration,
     ) -> ir.Module:
         pass
+
 
 class BatchMatmulTuner(DispatchTuner, BatchMatmulParser):
     def get_transform_function_batch_matmul(
@@ -559,6 +565,7 @@ class BatchMatmulTuner(DispatchTuner, BatchMatmulParser):
         configuration: Configuration,
     ) -> ir.Module:
         pass
+
 
 @dataclass
 class OpWalkResult:

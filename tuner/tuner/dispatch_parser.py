@@ -71,16 +71,16 @@ def parse_mlir(mlir_text: str, ctx: TunerContext) -> ir.Module:
 
 
 def find_root_op(
-        ir_module: ir.Module,
-        matcher: NamedOpMatcher,
-    ) -> Optional[ir.Operation]:
-        func_ops: list[ir.Operation] = get_named_ops(ir_module, "func.func")
-        if len(func_ops) != 1:
-            return None
-        matched_ops = matcher.get_matched_ops(func_ops[0].operation)
-        if len(matched_ops) != 1:
-            return None
-        return matched_ops[0]
+    ir_module: ir.Module,
+    matcher: NamedOpMatcher,
+) -> Optional[ir.Operation]:
+    func_ops: list[ir.Operation] = get_named_ops(ir_module, "func.func")
+    if len(func_ops) != 1:
+        return None
+    matched_ops = matcher.get_matched_ops(func_ops[0].operation)
+    if len(matched_ops) != 1:
+        return None
+    return matched_ops[0]
 
 
 class DispatchParser(metaclass=ABCMeta):
