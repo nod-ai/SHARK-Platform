@@ -162,9 +162,20 @@ jobs:
       #   HIP (Heterogeneous-computing Interface for Portability) for AMD
       #   => base docker rocm/vllm-dev:20241022, not from public vllm whl
       #   srt_hip = ["sglang[runtime_common]", "torch", "vllm==0.6.3.dev13"]
-      - name: Pull SGLang Image (Had issues with sglang:v0.3.5.post1-rocm620)
+      - name: Pull SGLang Image (Had issues with sglang:v0.3.5.post2-rocm620)
         run: |
           docker pull lmsysorg/sglang:v0.3.5.post1-rocm620
+
+      - name: Check HF_TOKEN
+        run: |
+          if [ -z "$HF_TOKEN" ]; then
+            echo "Error: HF_TOKEN is not set or empty."
+            exit 1
+          else
+            echo "HF_TOKEN is set"
+          fi
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
 
       - name: Run SGLang Server
         run: |
