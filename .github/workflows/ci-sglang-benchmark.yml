@@ -179,7 +179,7 @@ jobs:
 
       - name: Run SGLang Server
         run: |
-          docker run -d  \
+          docker run --rm -d  \
             --name=sglang-server \
             --device=/dev/kfd \
             --device=/dev/dri \
