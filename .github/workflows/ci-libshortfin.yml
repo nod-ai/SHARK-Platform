@@ -36,28 +36,28 @@ env:
 
 jobs:
   build-and-test:
-    name: "Build and test :: ${{ matrix.name }} :: ${{ matrix.python-version }}"
+    name: "Unit tests :: ${{ matrix.name }} :: ${{ matrix.python-version }}"
     runs-on: ${{ matrix.runs-on }}
     strategy:
       fail-fast: false
       matrix:
-        name: ["Ubuntu 24.04 (Clang)", "Ubuntu 24.04 (GCC)", "Windows (MSVC)"]
+        name: ["Ubuntu (Clang)", "Ubuntu (GCC)", "Windows (MSVC)"]
         python-version: ["3.10", "3.11", "3.12"]
         include:
-          - name: Ubuntu 24.04 (Clang)
+          - name: Ubuntu (Clang)
             runs-on: ubuntu-24.04
             cmake-options:
               -DCMAKE_C_COMPILER=clang-18 -DCMAKE_CXX_COMPILER=clang++-18 -DCMAKE_LINKER_TYPE=LLD
             additional-packages: clang lld
-          - name: Ubuntu 24.04 (GCC)
+          - name: Ubuntu (GCC)
             runs-on: ubuntu-24.04
           - name: Windows (MSVC)
             runs-on: windows-2022
         exclude:
           # Only test Python 3.12 with GCC
-          - name: Ubuntu 24.04 (GCC)
+          - name: Ubuntu (GCC)
             python-version: "3.10"
-          - name: Ubuntu 24.04 (GCC)
+          - name: Ubuntu (GCC)
             python-version: "3.11"
           # TODO: Include additional Python versions for Windows after build got fixed
           - name: Windows (MSVC)
@@ -134,7 +134,7 @@ jobs:
         ctest --timeout 30 --output-on-failure --test-dir build
         pytest -s
 
-    - name: "Build shortfin (host-only) :: ${{ matrix.name }} :: ${{ matrix.python-version }}"
+    - name: "Build shortfin (host-only)"
       # TODO: Enable on Windows after build got fixed
       if: "runner.os == 'Linux'"
       working-directory: ${{ env.LIBSHORTFIN_DIR }}
