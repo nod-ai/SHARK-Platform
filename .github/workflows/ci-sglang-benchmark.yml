@@ -72,8 +72,8 @@ jobs:
           # We could also pin to a known working or stable version.
           # This should eventually stabilize. Do the best we can for now.
           pip install -f https://iree.dev/pip-release-links.html --upgrade \
-            iree-base-compiler==3.0.0rc20241118 \
-            iree-base-runtime==3.0.0rc20241118 \
+            iree-base-compiler \
+            iree-base-runtime \
             "numpy<2.0"
 
       - name: Install SGLang
@@ -141,8 +141,8 @@ jobs:
           # We could also pin to a known working or stable version.
           # This should eventually stabilize. Do the best we can for now.
           pip install -f https://iree.dev/pip-release-links.html --upgrade \
-            iree-base-compiler==3.0.0rc20241118 \
-            iree-base-runtime==3.0.0rc20241118 \
+            iree-base-compiler \
+            iree-base-runtime \
             "numpy<2.0"
 
       - name: Install SGLang
