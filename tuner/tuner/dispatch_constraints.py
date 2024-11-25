@@ -28,13 +28,14 @@ def get_mfma_intrinsic_constraints(
     return z3.Or(
         *(
             z3.And(
-                intrinsic_m == mma_attr.mnk_shape[0],
-                intrinsic_n == mma_attr.mnk_shape[1],
-                intrinsic_k == mma_attr.mnk_shape[2],
+                intrinsic_m == mnk[0],
+                intrinsic_n == mnk[1],
+                intrinsic_k == mnk[2],
             )
             for mma_attr in (
                 iree_gpu.MMAAttr.get(mfma) for mfma in compatible_intrinsics
             )
+            for mnk in [mma_attr.mnk_shape]
         )
     )
 
@@ -148,20 +149,25 @@ def getMMAAttr(
     lhs_type: ir.IntegerType | ir.FloatType,
     rhs_type: ir.IntegerType | ir.FloatType,
 ) -> iree_gpu.MMAAttr:
-    mma_str = ""
-    if lhs_type == rhs_type:
-        input = str(lhs_type).upper()
-        output = str(output_type).upper()
-        mma_str = f"MFMA_{output}_{m}x{n}x{k}_{input}"
-    else:
-        lhs = str(lhs_type).upper()
-        rhs = str(rhs_type).upper()
-        output = str(output_type).upper()
-        mma_str = f"MFMA_{output}_{m}x{n}x{k}_{lhs}_{rhs}"
-
-    mma_intrinsic = getattr(iree_gpu.MMAIntrinsic, mma_str)
-    mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
-    return mma_attr
+    for mma_intrinsic in iree_gpu.MMAIntrinsic:
+        mma_attr = iree_gpu.MMAIntrinsicAttr.get(mma_intrinsic).mma
+        a_type, b_type, c_type = mma_attr.abc_element_types
+        mnk = mma_attr.mnk_shape
+        if (
+            a_type == lhs_type
+            and b_type == rhs_type
+            and c_type == output_type
+            and m == mnk[0]
+            and n == mnk[1]
+            and k == mnk[2]
+        ):
+            return mma_attr
+        # If no matching intrinsic is found, raise an exception
+    raise ValueError(
+        f"No matching MMA intrinsic found for "
+        f"output_type={output_type}, lhs_type={lhs_type}, rhs_type={rhs_type}, "
+        f"m={m}, n={n}, k={k}."
+    )
 
 
 def generate_solutions(

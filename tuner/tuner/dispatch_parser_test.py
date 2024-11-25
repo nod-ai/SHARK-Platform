@@ -40,7 +40,7 @@ def test_parse_tensor_type(tuner_ctx: common.TunerContext) -> None:
 
 
 def test_get_mmt_tile_sizes(tuner_ctx: common.TunerContext) -> None:
-    mma_intrinsic = getattr(iree_gpu.MMAIntrinsic, "MFMA_F32_16x16x16_F16")
+    mma_intrinsic = iree_gpu.MMAIntrinsic.MFMA_F32_16x16x16_F16
     mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
     config = dispatch_parser.Configuration(
         subgroup_size=0,
@@ -56,7 +56,7 @@ def test_get_mmt_tile_sizes(tuner_ctx: common.TunerContext) -> None:
 
 
 def test_get_conv_tile_sizes(tuner_ctx: common.TunerContext) -> None:
-    mma_intrinsic = getattr(iree_gpu.MMAIntrinsic, "MFMA_F32_16x16x16_F16")
+    mma_intrinsic = iree_gpu.MMAIntrinsic.MFMA_F32_16x16x16_F16
     mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
     config = dispatch_parser.Configuration(
         subgroup_size=64,
@@ -80,7 +80,7 @@ def test_get_conv_tile_sizes(tuner_ctx: common.TunerContext) -> None:
 
 
 def test_get_contract_tile_sizes(tuner_ctx: common.TunerContext) -> None:
-    mma_intrinsic = getattr(iree_gpu.MMAIntrinsic, "MFMA_F32_16x16x16_F16")
+    mma_intrinsic = iree_gpu.MMAIntrinsic.MFMA_F32_16x16x16_F16
     mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
     config = dispatch_parser.Configuration(
         subgroup_size=32,

@@ -46,7 +46,7 @@ def test_apply_params_mmt(tuner_ctx: common.TunerContext) -> None:
 
     M, N, K = 2048, 1280, 1280
 
-    mma_intrinsic = getattr(iree_gpu.MMAIntrinsic, f"MFMA_F32_16x16x16_F16")
+    mma_intrinsic = iree_gpu.MMAIntrinsic.MFMA_F32_16x16x16_F16
     mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
     config = common.Configuration(
         subgroup_size=16,
@@ -100,7 +100,7 @@ def test_apply_params_conv(tuner_ctx: common.TunerContext) -> None:
 
     n, oh, ow, oc, fh, fw, ic = 2, 64, 64, 640, 3, 3, 640
 
-    mma_intrinsic = getattr(iree_gpu.MMAIntrinsic, "MFMA_F32_16x16x16_F16")
+    mma_intrinsic = iree_gpu.MMAIntrinsic.MFMA_F32_16x16x16_F16
     mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
     config = common.Configuration(
         subgroup_size=64,
@@ -166,7 +166,7 @@ def test_apply_params_contract(tuner_ctx: common.TunerContext) -> None:
         common.DispatchKind.contraction,
     )
 
-    mma_intrinsic = getattr(iree_gpu.MMAIntrinsic, "MFMA_F32_32x32x8_F16")
+    mma_intrinsic = iree_gpu.MMAIntrinsic.MFMA_F32_32x32x8_F16
     mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
     config = common.Configuration(
         subgroup_size=64,
@@ -215,7 +215,7 @@ def test_apply_params_batch_matmul(tuner_ctx: common.TunerContext) -> None:
         common.DispatchKind.batch_matmul,
     )
 
-    mma_intrinsic = getattr(iree_gpu.MMAIntrinsic, "MFMA_F32_32x32x8_F16")
+    mma_intrinsic = iree_gpu.MMAIntrinsic.MFMA_F32_32x32x8_F16
     mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
     config = common.Configuration(
         subgroup_size=64,
@@ -267,7 +267,7 @@ def test_apply_params_batch_mmt_float(tuner_ctx: common.TunerContext) -> None:
         common.DispatchKind.batch_mmt,
     )
 
-    mma_intrinsic = getattr(iree_gpu.MMAIntrinsic, "MFMA_F32_16x16x16_F16")
+    mma_intrinsic = iree_gpu.MMAIntrinsic.MFMA_F32_16x16x16_F16
     mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
     config = common.Configuration(
         subgroup_size=64,
@@ -317,7 +317,7 @@ def test_apply_params_batch_mmt_int(tuner_ctx: common.TunerContext) -> None:
         common.DispatchKind.batch_mmt,
     )
 
-    mma_intrinsic = getattr(iree_gpu.MMAIntrinsic, "MFMA_I32_32x32x16_I8")
+    mma_intrinsic = iree_gpu.MMAIntrinsic.MFMA_I32_32x32x16_I8
     mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
     config = common.Configuration(
         subgroup_size=64,
@@ -390,7 +390,7 @@ def test_apply_params_broadcast_rhs_mmt(tuner_ctx: common.TunerContext) -> None:
         common.DispatchKind.broadcast_rhs_mmt,
     )
 
-    mma_intrinsic = getattr(iree_gpu.MMAIntrinsic, "MFMA_I32_32x32x16_I8")
+    mma_intrinsic = iree_gpu.MMAIntrinsic.MFMA_I32_32x32x16_I8
     mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
     config = common.Configuration(
         subgroup_size=64,

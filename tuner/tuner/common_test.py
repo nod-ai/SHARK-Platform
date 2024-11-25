@@ -72,7 +72,7 @@ def test_gpu_pipeline_options() -> None:
 
 
 def test_get_pipeline_config(mlir_ctx: ir.Context) -> None:
-    mma_intrinsic = getattr(iree_gpu.MMAIntrinsic, "MFMA_F32_16x16x16_F16")
+    mma_intrinsic = iree_gpu.MMAIntrinsic.MFMA_F32_16x16x16_F16
     mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
     config = common.Configuration(
         subgroup_size=32,

@@ -90,7 +90,7 @@ def get_compatible_mfma_intrinsics(
     mma_intrinsics: list[iree_gpu.MMAIntrinsic],
 ) -> list[iree_gpu.MMAIntrinsic]:
     def is_comptible(mma_intrinsic: iree_gpu.MMAIntrinsic) -> bool:
-        mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
+        mma_attr = iree_gpu.MMAIntrinsicAttr.get(mma_intrinsic).mma
         a_type, b_type, c_type = mma_attr.abc_element_types
         if problem_size.res_type.element_type != c_type:
             return False
