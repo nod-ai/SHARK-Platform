@@ -27,8 +27,14 @@ def get_mfma_intrinsic_constraints(
     assert len(compatible_intrinsics) > 0, "No compatible intrinsics found"
     return z3.Or(
         *(
-            z3.And(intrinsic_m == mfma.m, intrinsic_n == mfma.n, intrinsic_k == mfma.k)
-            for mfma in compatible_intrinsics
+            z3.And(
+                intrinsic_m == mma_attr.mnk_shape[0],
+                intrinsic_n == mma_attr.mnk_shape[1],
+                intrinsic_k == mma_attr.mnk_shape[2],
+            )
+            for mma_attr in (
+                iree_gpu.MMAAttr.get(mfma) for mfma in compatible_intrinsics
+            )
         )
     )
 
@@ -134,6 +140,30 @@ def generate_constraints(
     return constraints
 
 
+def getMMAAttr(
+    output_type: ir.IntegerType | ir.FloatType,
+    m: int,
+    n: int,
+    k: int,
+    lhs_type: ir.IntegerType | ir.FloatType,
+    rhs_type: ir.IntegerType | ir.FloatType,
+) -> iree_gpu.MMAAttr:
+    mma_str = ""
+    if lhs_type == rhs_type:
+        input = str(lhs_type).upper()
+        output = str(output_type).upper()
+        mma_str = f"MFMA_{output}_{m}x{n}x{k}_{input}"
+    else:
+        lhs = str(lhs_type).upper()
+        rhs = str(rhs_type).upper()
+        output = str(output_type).upper()
+        mma_str = f"MFMA_{output}_{m}x{n}x{k}_{lhs}_{rhs}"
+
+    mma_intrinsic = getattr(iree_gpu.MMAIntrinsic, mma_str)
+    mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
+    return mma_attr
+
+
 def generate_solutions(
     logger: logging.Logger,
     problem_size: ProblemSize,
@@ -188,12 +218,13 @@ def generate_solutions(
         config = Configuration(
             lookup(subgroup_size),
             [lookup(wg_x), lookup(wg_y), lookup(wg_z)],
-            MfmaIntrinsic(
+            getMMAAttr(
                 problem_size.res_type.element_type,
                 lookup(intrinsic_mn),
                 lookup(intrinsic_mn),
                 lookup(intrinsic_k),
                 problem_size.lhs_type.element_type,
+                problem_size.rhs_type.element_type,
             ),
             [lookup(m), lookup(n), lookup(k)],
             lookup(sg_m_cnt),

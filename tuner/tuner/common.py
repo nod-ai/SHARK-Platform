@@ -85,74 +85,24 @@ class ProblemSize:
         return (self.matmul_size.M, self.matmul_size.N, self.matmul_size.K)
 
 
-@dataclass
-class MfmaIntrinsic:
-    output_type: ir.IntegerType | ir.FloatType
-    m: int
-    n: int
-    k: int
-    input_type: ir.IntegerType | ir.FloatType
-
-    def __str__(self) -> str:
-        input = str(self.input_type).upper()
-        output = str(self.output_type).upper()
-        return f"MFMA_{output}_{self.m}x{self.n}x{self.k}_{input}"
-
-    @staticmethod
-    def mfma_f32_16x16x16_f16():
-        f16 = ir.F16Type.get()
-        f32 = ir.F32Type.get()
-        return MfmaIntrinsic(f32, 16, 16, 16, f16)
-
-    @staticmethod
-    def mfma_f32_32x32x8_f16():
-        f16 = ir.F16Type.get()
-        f32 = ir.F32Type.get()
-        return MfmaIntrinsic(f32, 32, 32, 8, f16)
-
-    @staticmethod
-    def mfma_i32_16x16x32_i8():
-        i32 = ir.IntegerType.get_signless(32)
-        i8 = ir.IntegerType.get_signless(8)
-        return MfmaIntrinsic(i32, 16, 16, 32, i8)
-
-    @staticmethod
-    def mfma_i32_32x32x16_i8():
-        i32 = ir.IntegerType.get_signless(32)
-        i8 = ir.IntegerType.get_signless(8)
-        return MfmaIntrinsic(i32, 32, 32, 16, i8)
-
-    @staticmethod
-    def all():
-        return [
-            MfmaIntrinsic.mfma_f32_16x16x16_f16(),
-            MfmaIntrinsic.mfma_f32_32x32x8_f16(),
-            MfmaIntrinsic.mfma_i32_16x16x32_i8(),
-            MfmaIntrinsic.mfma_i32_32x32x16_i8(),
-        ]
-
-
 def get_compatible_mfma_intrinsics(
     problem_size: ProblemSize,
     mma_intrinsics: list[iree_gpu.MMAIntrinsic],
-) -> list[MfmaIntrinsic]:
-    available_mma_intrinsics = [str(mma) for mma in mma_intrinsics]
-
-    def is_compatible(intrinsic: MfmaIntrinsic) -> bool:
-        if problem_size.res_type.element_type != intrinsic.output_type:
+) -> list[iree_gpu.MMAIntrinsic]:
+    def is_comptible(mma_intrinsic: iree_gpu.MMAIntrinsic) -> bool:
+        mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
+        a_type, b_type, c_type = mma_attr.abc_element_types
+        if problem_size.res_type.element_type != c_type:
             return False
         if problem_size.dispatch_kind != DispatchKind.batch_matmul:
-            if problem_size.lhs_type.element_type != intrinsic.input_type:
+            if (
+                problem_size.lhs_type.element_type != a_type
+                or problem_size.rhs_type.element_type != b_type
+            ):
                 return False
-            if problem_size.rhs_type.element_type != intrinsic.input_type:
-                return False
-
-        if str(intrinsic) not in available_mma_intrinsics:
-            return False
-
         return True
 
-    return list(filter(is_compatible, MfmaIntrinsic.all()))
+    return list(filter(is_comptible, mma_intrinsics))
 
 
 class ReorderWorkgroupsStrategy(Enum):
@@ -197,7 +147,7 @@ class GpuPipelineOptions:
 class Configuration:
     subgroup_size: int
     workgroup_size: list[int]
-    intrinsic: MfmaIntrinsic
+    intrinsic: iree_gpu.MMAAttr
     tile_sizes: list[int]
     subgroup_m_count: int
     subgroup_n_count: int
