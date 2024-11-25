@@ -542,7 +542,9 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
             cwd=self.repo_root,
         )
 
-    @pytest.mark.xfail(reason="Compile Error", strict=True, raises=IreeCompileException)
+    @pytest.mark.xfail(
+        reason="70b fp8 irpa does not exist", strict=True, raises=ExportMlirException
+    )
     def testBenchmark70B_fp8_TP8_Decomposed(self):
         output_file_name = self.dir_path_70b / "fp8_decomposed"
         output_mlir = self.llama70b_fp8_decomposed_artifacts.create_file(
@@ -588,7 +590,9 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
             cwd=self.repo_root,
         )
 
-    @pytest.mark.xfail(reason="Compile Error", strict=True, raises=IreeCompileException)
+    @pytest.mark.xfail(
+        reason="70b fp8 irpa does not exist", strict=True, raises=ExportMlirException
+    )
     def testBenchmark70B_fp8_TP8_Non_Decomposed(self):
         output_file_name = self.dir_path_70b / "fp8_torch"
         output_mlir = self.llama70b_fp8_torch_sdpa_artifacts.create_file(
@@ -602,7 +606,7 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
         )
         output_shard_file_name = (
             self.artifacts_dir
-            / f"f8/tp8/llama3.1_70b_f8_tp{self.tensor_parallelism_size}_parameters.irpa"
+            / f"f8/tp8/llama3.1_70b_fp8_tp{self.tensor_parallelism_size}_parameters.irpa"
         )
         if output_shard_file_name.exists():
             self.irpa_path = output_shard_file_name
@@ -844,7 +848,7 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
         )
         output_shard_file_name = (
             self.artifacts_dir
-            / f"f8/tp8/llama3.1_405b_f8_tp{self.tensor_parallelism_size}_parameters.irpa"
+            / f"f8/tp8/llama3.1_405b_fp8_tp{self.tensor_parallelism_size}_parameters.irpa"
         )
         if output_shard_file_name.exists():
             self.irpa_path = output_shard_file_name
@@ -892,7 +896,7 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
         )
         output_shard_file_name = (
             self.artifacts_dir
-            / f"f8/tp8/llama3.1_405b_f8_tp{self.tensor_parallelism_size}_parameters.irpa"
+            / f"f8/tp8/llama3.1_405b_fp8_tp{self.tensor_parallelism_size}_parameters.irpa"
         )
         if output_shard_file_name.exists():
             self.irpa_path = output_shard_file_name
