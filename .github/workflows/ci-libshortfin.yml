@@ -121,7 +121,6 @@ jobs:
         cmake -GNinja \
           -S. \
           -Bbuild \
-          -DSHORTFIN_BUNDLE_DEPS=ON \
           -DSHORTFIN_IREE_SOURCE_DIR="${{ env.IREE_REPO_DIR }}" \
           -DSHORTFIN_BUILD_PYTHON_BINDINGS=ON \
           ${{matrix.cmake-options}}
