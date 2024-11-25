@@ -12,6 +12,7 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+
 @dataclass
 class SGLangBenchmarkArgs:
     base_url: str
@@ -57,7 +58,8 @@ class SGLangBenchmarkArgs:
             f"Tokenizer: {self.tokenizer}\n"
             f"Request Rate: {self.request_rate}"
         )
-    
+
+
 def log_jsonl_result(file_path):
     with open(file_path, "r") as file:
         json_string = file.readline().strip()

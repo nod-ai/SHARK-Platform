@@ -54,7 +54,9 @@ device_settings = {
     ],
     indirect=True,
 )
-def test_sglang_benchmark_server(request_rate, model_param_file_name, pre_process_model):
+def test_sglang_benchmark_server(
+    request_rate, model_param_file_name, pre_process_model
+):
     # TODO: Remove when multi-device is fixed
     os.environ["ROCR_VISIBLE_DEVICES"] = "1"
 
