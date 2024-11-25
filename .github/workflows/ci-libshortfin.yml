@@ -38,6 +38,9 @@ jobs:
   build-and-test:
     name: "Unit tests :: ${{ matrix.name }} :: ${{ matrix.python-version }}"
     runs-on: ${{ matrix.runs-on }}
+    defaults:
+      run:
+        shell: bash
     strategy:
       fail-fast: false
       matrix:
@@ -115,7 +118,6 @@ jobs:
 
     - name: Build shortfin (full)
       working-directory: ${{ env.LIBSHORTFIN_DIR }}
-      shell: bash
       run: |
         mkdir build
         cmake -GNinja \
