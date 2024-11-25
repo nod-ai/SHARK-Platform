@@ -6,8 +6,11 @@
 
 from argparse import Namespace
 from dataclasses import dataclass
+import json
+import logging
 from pathlib import Path
 
+logger = logging.getLogger(__name__)
 
 @dataclass
 class SGLangBenchmarkArgs:
@@ -54,3 +57,11 @@ class SGLangBenchmarkArgs:
             f"Tokenizer: {self.tokenizer}\n"
             f"Request Rate: {self.request_rate}"
         )
+    
+def log_jsonl_result(file_path):
+    with open(file_path, "r") as file:
+        json_string = file.readline().strip()
+
+    json_data = json.loads(json_string)
+    for key, val in json_data.items():
+        logger.info(f"{key.upper()}: {val}")
