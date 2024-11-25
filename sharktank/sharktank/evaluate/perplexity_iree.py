@@ -99,9 +99,9 @@ class Perplexity:
 
             func_name = func.__name__
             if func_name == "get_perplexity":
-                func_name = f"Total time to calculate perplexity"
+                func_name = f"Calculate perplexity"
             elif func_name == "compile_model":
-                func_name = f"Total time to export and compile"
+                func_name = f"Export & compile"
             logger.info(f" {func_name}: {time_taken}")
             return result
 
@@ -127,7 +127,7 @@ class Perplexity:
     def compile_model(self, weight_path_str):
         self.weight_path_str = weight_path_str
 
-        logger.info(f"Compiling: {self.weight_path_str}")
+        logger.info(f" Compiling: {self.weight_path_str}")
 
         export_artifacts = ExportArtifacts(
             irpa_path=self.weight_path_str,
@@ -143,7 +143,7 @@ class Perplexity:
     @timeit
     def load_model(self, weight_path, tokenizer, vmfb_path):
 
-        config = LlamaModelConfig(
+        self.config = LlamaModelConfig(
             hp=configs.LlamaHParams.from_gguf_props(weight_path.properties),
             block_seq_stride=16,
             kv_cache_type=self.kv_cache_type,
@@ -153,18 +153,18 @@ class Perplexity:
             tensor_parallelism_size=self.tensor_parallelism_size,
         )
 
-        if config.tensor_parallelism_size > 1:
-            weight_path.root_theta = shard_theta(weight_path.root_theta, config)
+        if self.config.tensor_parallelism_size > 1:
+            weight_path.root_theta = shard_theta(weight_path.root_theta, self.config)
 
         theta = weight_path.root_theta
 
-        if config.hp.expert_count:
-            if config.hp.model_arch == "grok":
-                model = PagedGrokModelV1(theta, config)
+        if self.config.hp.expert_count:
+            if self.config.hp.model_arch == "grok":
+                model = PagedGrokModelV1(theta, self.config)
             else:
-                model = PagedMixtralModelV1(theta, config)
+                model = PagedMixtralModelV1(theta, self.config)
         else:
-            model = PagedLlamaModelV1(theta, config)
+            model = PagedLlamaModelV1(theta, self.config)
 
         self.generator = TorchGenerator(model, tokenizer)
 
@@ -177,7 +177,7 @@ class Perplexity:
         self.haldevice = self.runner.config.device
 
     @timeit
-    def get_prompts(self):
+    def get_prompts(self, num_prompts):
         test_prompts = load_dataset("wikitext", "wikitext-2-raw-v1", split="test")[
             "text"
         ]
@@ -191,12 +191,15 @@ class Perplexity:
             s.replace("\n", "").rstrip()
             for s in test_prompts
             if s != "" and len(s.split()) >= 20 and s.count("=") < 2
-        ]
+        ][0:num_prompts]
+
+        self.test_prompts = test_prompts
 
         self.bs = len(test_prompts)
 
-        return test_prompts
+        logger.info(f" Batch size: {self.bs}")
 
+    @timeit
     def prefill_vmfb(self, token_batch, i):
 
         seq_block_ids = self.batch.pad_block_ids()
@@ -252,25 +255,7 @@ class Perplexity:
         return decode_logits
 
     @timeit
-    def get_logits(self):
-
-        token_ids, seq_lens = self.generator.tokenizer.encode(
-            self.test_prompts,
-            pad_to_multiple_of=self.generator.model.cache.pad_sequence_stride,
-        )
-
-        logger.info(f" Prompts for Evaluation:")
-        for idx, prompt in enumerate(self.test_prompts):
-            logger.info(
-                f" Prompt {idx}: \nTokens: {prompt.encode()}\nToken ids: {token_ids[idx]}\n"
-            )
-
-        self.max_prompt_length = max(seq_lens)
-
-        self.token_ids = torch.tensor(token_ids, device=self.torch_device)
-        self.attention_mask = (
-            (self.token_ids != 0).int().detach().clone().to(self.torch_device)
-        )
+    def get_logits(self, page_cache_size):
 
         is_first_token = True
         start = 0
@@ -306,6 +291,7 @@ class Perplexity:
                     token_batch=token_batch,
                     seq_lens_batch=self.seq_lens_batch,
                     bs=self.bs,
+                    page_cache_size=page_cache_size,
                 )
 
                 self.cache_state = ireert.asdevicearray(
@@ -355,11 +341,31 @@ class Perplexity:
         }
 
     @timeit
-    def get_perplexity(self, test_prompts):
+    def get_perplexity(self):
 
-        self.test_prompts = test_prompts
+        token_ids, seq_lens = self.generator.tokenizer.encode(
+            self.test_prompts,
+            pad_to_multiple_of=self.generator.model.cache.pad_sequence_stride,
+        )
 
-        self.get_logits()
+        self.page_cache_size = (
+            len(token_ids[0]) // self.config.block_seq_stride
+        ) * self.bs + 1
+
+        logger.debug(f" Prompts for Evaluation:")
+        for idx, prompt in enumerate(self.test_prompts):
+            logger.debug(
+                f" Prompt {idx}: \nTokens: {prompt.encode()}\nToken ids: {token_ids[idx]}\n"
+            )
+
+        self.max_prompt_length = max(seq_lens)
+
+        self.token_ids = torch.tensor(token_ids, device=self.torch_device)
+        self.attention_mask = (
+            (self.token_ids != 0).int().detach().clone().to(self.torch_device)
+        )
+
+        self.get_logits(page_cache_size=self.page_cache_size)
 
         self.out_logits = self.out_logits[..., :-1, :].contiguous()
         self.token_ids = self.token_ids[..., 1:].contiguous()
@@ -387,7 +393,9 @@ def run_perplexity(
     kv_cache_type,
     tensor_parallelism_size,
     attention_kernel,
+    num_prompts,
 ):
+    start = time.time()
     perplexity = Perplexity(
         torch_device=torch_device,
         iree_device=iree_device,
@@ -398,12 +406,19 @@ def run_perplexity(
         attention_kernel=attention_kernel,
     )
 
-    test_prompts = perplexity.get_prompts()
-    logger.info(f" Total test prompts: {len(test_prompts)}")
+    perplexity.get_prompts(num_prompts=num_prompts)
 
     vmfb_path = perplexity.compile_model(weight_path_str)
     perplexity.load_model(weight_path, tokenizer, vmfb_path)
-    ppl = perplexity.get_perplexity(test_prompts)
+    ppl = perplexity.get_perplexity()
+
+    end = time.time()
+    total_time = round(end - start, 2)
+    if total_time < 60:
+        total_time = str(total_time) + " secs"
+    else:
+        total_time = str(round(total_time / 60, 2)) + " mins"
+    logger.info(f" Total time taken: {total_time}")
 
     return ppl
 
@@ -412,7 +427,7 @@ def main(argv):
     parser = cli.create_parser()
     parser.add_argument("--kv-cache-type", default="paged", help="KV cache type")
     parser.add_argument("--torch-device", help="Torch device (or default)")
-    parser.add_argument("--iree-device", help="List an IREE device, eg: 'hip://0'")
+    parser.add_argument("--iree-device", help="List an IREE device (e.g., 'hip://0')")
     parser.add_argument(
         "--iree-hip-target",
         action="store",
@@ -437,6 +452,12 @@ def main(argv):
         default=1,
         help="Number of devices for tensor parallel sharding",
     )
+    parser.add_argument(
+        "--num-prompts",
+        type=int,
+        default=100,
+        help="Number of prompts for perplexity test",
+    )
 
     cli.add_tokenizer_options(parser)
     cli.add_input_dataset_options(parser)
@@ -460,6 +481,7 @@ def main(argv):
         kv_cache_type=kv_cache_type,
         tensor_parallelism_size=args.tensor_parallelism_size,
         attention_kernel=args.attention_kernel,
+        num_prompts=args.num_prompts,
     )
 
     logger.info(f"\n{json.dumps(ppl, indent=2)}")

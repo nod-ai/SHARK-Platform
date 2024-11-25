@@ -5,7 +5,6 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 import logging
-from pathlib import Path
 import pytest
 import time
 from unittest.mock import patch
