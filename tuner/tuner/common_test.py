@@ -71,8 +71,17 @@ def test_gpu_pipeline_options() -> None:
     )
 
 
-def test_get_pipeline_config(mlir_ctx: ir.Context) -> None:
-    config = common.Configuration(
+def test_get_pipeline_config_base(mlir_ctx: ir.Context):
+    config = common.BaseConfiguration(
+        tile_sizes=[4, 8, 16],
+    )
+
+    config1_str: str = config.get_pipeline_config()
+    assert config1_str == None
+
+
+def test_get_pipeline_config_llvmgpu(mlir_ctx: ir.Context) -> None:
+    config = common.LLVMGPUConfiguration(
         subgroup_size=32,
         workgroup_size=[16, 16, 1],
         intrinsic=common.MfmaIntrinsic.mfma_f32_16x16x16_f16(),
@@ -82,19 +91,35 @@ def test_get_pipeline_config(mlir_ctx: ir.Context) -> None:
         gpu_pipeline_options=common.GpuPipelineOptions(),
         waves_per_eu=2,
     )
-    config1_str: str = common.get_pipeline_config(config)
+    config1_str: str = config.get_pipeline_config()
     assert config1_str == ""
 
     config.waves_per_eu = 4
-    config2_str: str = common.get_pipeline_config(config)
+    config2_str: str = config.get_pipeline_config()
     assert config2_str == ', llvm_func_attrs = {"amdgpu-waves-per-eu" = "4"}'
 
     config.gpu_pipeline_options.prefetch_shared_memory = True
-    config3_str = common.get_pipeline_config(config)
+    config3_str = config.get_pipeline_config()
     assert (
         config3_str
         == ', gpu_pipeline_options = #iree_gpu.pipeline_options<prefetch_shared_memory = true>, llvm_func_attrs = {"amdgpu-waves-per-eu" = "4"}'
     )
+
+
+def test_get_pipeline_config_llvmcpu(mlir_ctx: ir.Context) -> None:
+    config = common.LLVMCPUConfiguration(
+        tile_sizes=[4, 8, 16],
+    )
+    config1_str: str = config.get_pipeline_config()
+    assert config1_str == None
+
+
+def test_get_pipeline_config_llvmcpu(mlir_ctx: ir.Context) -> None:
+    config = common.LLVMCPUConfiguration(
+        tile_sizes=[4, 8, 16],
+    )
+    config1_str: str = config.get_pipeline_config()
+    assert config1_str == None
 
 
 def test_mfma_intrinsic_to_str(mlir_ctx: ir.Context) -> None:

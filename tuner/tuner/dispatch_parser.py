@@ -20,11 +20,19 @@ def parse_tensor_type(tensor_type: str) -> ShapedType:
     return ShapedType(shaped_ty.shape, shaped_ty.element_type)
 
 
-def get_mmt_tile_sizes(configuration: Configuration):
+def parse_tensor_type(tensor_type: str) -> ShapedType:
+    shaped_ty = ir.RankedTensorType(ir.Type.parse(tensor_type))
+    assert shaped_ty
+    return ShapedType(shaped_ty.shape, shaped_ty.element_type)
+
+
+def get_mmt_tile_sizes(configuration: BaseConfiguration):
     return configuration.tile_sizes
 
 
-def get_contract_tile_sizes(configuration: Configuration, tile_dims: str) -> list[int]:
+def get_contract_tile_sizes(
+    configuration: BaseConfiguration, tile_dims: str
+) -> list[int]:
     m, n, k = configuration.tile_sizes
     tile_size = [1] * len(tile_dims)
     for idx, dim in enumerate(tile_dims):
@@ -37,7 +45,7 @@ def get_contract_tile_sizes(configuration: Configuration, tile_dims: str) -> lis
     return tile_size
 
 
-def get_batch_mmt_tile_sizes(configuration: Configuration) -> list[int]:
+def get_batch_mmt_tile_sizes(configuration: BaseConfiguration) -> list[int]:
     return [1] + configuration.tile_sizes
 
 
@@ -136,11 +144,70 @@ class MmtParser(DispatchParser):
         assert False, f"'{mmt_re}' not found in given context"
 
 
+class Mmt4dParser(DispatchParser):
+    def supports(self, op_name: str) -> bool:
+        return "mmt4d" in op_name
+
+    def get_shapes(self, template: list[str]) -> ProblemSize:
+        mmt_re = None
+        dps = None
+        for line in template:
+
+            if "linalg.mmt4d" not in line:
+                continue
+            # ins(%3, %4 : tensor<256x1280x8x1xf16>, tensor<1280x1280x8x1xf16>) outs(%6 : tensor<256x1280x8x8xf32>)
+            mmt_re = rf"{MlirRegex.dps_ins_two_args()}\s+{MlirRegex.dps_outs_one_arg()}"
+
+            dps = re.search(mmt_re, line)
+            if dps is None:
+                continue
+
+            lhs_tensor_type = dps.group("LHS")
+            rhs_tensor_type = dps.group("RHS")
+            lhs_shaped_type = parse_tensor_type(lhs_tensor_type)
+            assert lhs_shaped_type.rank() == 4
+            lhs_M = lhs_shaped_type.shape[0] * lhs_shaped_type.shape[2]
+            lhs_K = lhs_shaped_type.shape[1] * lhs_shaped_type.shape[3]
+
+            rhs_shaped_type = parse_tensor_type(rhs_tensor_type)
+            assert rhs_shaped_type.rank() == 4
+            rhs_N = rhs_shaped_type.shape[0] * rhs_shaped_type.shape[2]
+            rhs_K = rhs_shaped_type.shape[1] * rhs_shaped_type.shape[3]
+            assert lhs_shaped_type.element_type == rhs_shaped_type.element_type
+            assert lhs_K == rhs_K
+
+            res_tensor_type = dps.group("RES")
+            res_shaped_type = parse_tensor_type(res_tensor_type)
+            assert res_shaped_type.rank() == 4
+            res_M = res_shaped_type.shape[0] * res_shaped_type.shape[2]
+            res_N = res_shaped_type.shape[1] * res_shaped_type.shape[3]
+
+            assert lhs_K == rhs_K
+            assert lhs_M == res_M
+            assert rhs_N == res_N
+
+            matmul_size = MatmulSize(
+                lhs_M,
+                rhs_N,
+                lhs_K,
+            )
+            return ProblemSize(
+                matmul_size,
+                lhs_type=lhs_shaped_type,
+                rhs_type=rhs_shaped_type,
+                res_type=res_shaped_type,
+                dispatch_kind=DispatchKind.mmt4d,
+            )
+
+        assert mmt_re
+        assert dps, f"'{mmt_re}' not found in given context"
+
+
 class ConvParser(DispatchParser):
     def supports(self, op_name: str) -> bool:
         return "conv_2d_nhwc_hwcf" in op_name
 
-    def get_conv_tile_sizes(self, configuration: Configuration) -> list[int]:
+    def get_conv_tile_sizes(self, configuration: BaseConfiguration) -> list[int]:
         m, n, k = configuration.tile_sizes
         batch = 1
         fh = 1

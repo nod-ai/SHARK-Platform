@@ -39,7 +39,7 @@ def test_parse_tensor_type(tuner_ctx: common.TunerContext) -> None:
 
 
 def test_get_mmt_tile_sizes(tuner_ctx: common.TunerContext) -> None:
-    config = dispatch_parser.Configuration(
+    config = dispatch_parser.LLVMGPUConfiguration(
         subgroup_size=0,
         workgroup_size=[],
         intrinsic=common.MfmaIntrinsic.mfma_f32_16x16x16_f16(),
@@ -53,7 +53,7 @@ def test_get_mmt_tile_sizes(tuner_ctx: common.TunerContext) -> None:
 
 
 def test_get_conv_tile_sizes(tuner_ctx: common.TunerContext) -> None:
-    config = dispatch_parser.Configuration(
+    config = dispatch_parser.LLVMGPUConfiguration(
         subgroup_size=64,
         workgroup_size=[256, 1, 1],
         intrinsic=common.MfmaIntrinsic.mfma_f32_16x16x16_f16(),
@@ -75,7 +75,7 @@ def test_get_conv_tile_sizes(tuner_ctx: common.TunerContext) -> None:
 
 
 def test_get_contract_tile_sizes(tuner_ctx: common.TunerContext) -> None:
-    config = dispatch_parser.Configuration(
+    config = dispatch_parser.LLVMGPUConfiguration(
         subgroup_size=32,
         workgroup_size=[16, 16, 1],
         intrinsic=common.MfmaIntrinsic.mfma_f32_16x16x16_f16(),
@@ -108,6 +108,52 @@ def test_get_shapes_mmt(tuner_ctx: common.TunerContext) -> None:
         common.ShapedType([1280, 1280], tuner_ctx.type.f16),
         common.ShapedType([2048, 1280], tuner_ctx.type.f32),
         dispatch_parser.DispatchKind.mmt,
+    )
+
+
+def test_get_shapes_mmt4d(tuner_ctx: common.TunerContext) -> None:
+    template = [
+        r"%5 = tensor.empty() : tensor<256x1280x8x8xf32>",
+        r"%6 = linalg.fill {lowering_config = #iree_codegen.lowering_config<tile_sizes = [[4, 4, 0, 0], [1, 1, 0, 8], [0, 0, 0, 0], [0, 0, 0, 0]]>} ins(%cst : f16) outs(%5 : tensor<256x1280x8x8xf32>) -> tensor<256x1280x8x8xf32>",
+        r"%7 = linalg.mmt4d {lowering_config = #iree_codegen.lowering_config<tile_sizes = [[4, 4, 0, 0, 0, 0], [1, 1, 0, 8, 8, 0], [0, 0, 1, 0, 0, 1]]>} ins(%3, %4 : tensor<256x1280x8x1xf16>, tensor<1280x1280x8x1xf16>) outs(%6 : tensor<256x1280x8x8xf32>) -> tensor<256x1280x8x8xf32>",
+    ]
+    assert dispatch_parser.Mmt4dParser().get_shapes(
+        template
+    ) == dispatch_parser.ProblemSize(
+        matmul_size=dispatch_parser.MatmulSize(2048, 10240, 1280),
+        lhs_type=dispatch_parser.ShapedType(
+            [256, 1280, 8, 1], tuner_ctx.type.f16
+        ),
+        rhs_type=dispatch_parser.ShapedType(
+            [1280, 1280, 8, 1], tuner_ctx.type.f16
+        ),
+        res_type=dispatch_parser.ShapedType(
+            [256, 1280, 8, 8], tuner_ctx.type.f32
+        ),
+        dispatch_kind=dispatch_parser.DispatchKind.mmt4d,
+    )
+
+
+def test_get_shapes_mmt4d(tuner_ctx: common.TunerContext) -> None:
+    template = [
+        r"%5 = tensor.empty() : tensor<256x1280x8x8xf32>",
+        r"%6 = linalg.fill {lowering_config = #iree_codegen.lowering_config<tile_sizes = [[4, 4, 0, 0], [1, 1, 0, 8], [0, 0, 0, 0], [0, 0, 0, 0]]>} ins(%cst : f16) outs(%5 : tensor<256x1280x8x8xf32>) -> tensor<256x1280x8x8xf32>",
+        r"%7 = linalg.mmt4d {lowering_config = #iree_codegen.lowering_config<tile_sizes = [[4, 4, 0, 0, 0, 0], [1, 1, 0, 8, 8, 0], [0, 0, 1, 0, 0, 1]]>} ins(%3, %4 : tensor<256x1280x8x1xf16>, tensor<1280x1280x8x1xf16>) outs(%6 : tensor<256x1280x8x8xf32>) -> tensor<256x1280x8x8xf32>",
+    ]
+    assert dispatch_parser.Mmt4dParser().get_shapes(
+        template
+    ) == dispatch_parser.ProblemSize(
+        matmul_size=dispatch_parser.MatmulSize(2048, 10240, 1280),
+        lhs_type=dispatch_parser.ShapedType(
+            [256, 1280, 8, 1], tuner_ctx.type.f16
+        ),
+        rhs_type=dispatch_parser.ShapedType(
+            [1280, 1280, 8, 1], tuner_ctx.type.f16
+        ),
+        res_type=dispatch_parser.ShapedType(
+            [256, 1280, 8, 8], tuner_ctx.type.f32
+        ),
+        dispatch_kind=dispatch_parser.DispatchKind.mmt4d,
     )
 
 
