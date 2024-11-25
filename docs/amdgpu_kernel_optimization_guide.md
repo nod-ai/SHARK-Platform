@@ -296,17 +296,20 @@ forms a *clause* that translates to a single data fabric transaction.
 
 ## Data-Parallel Primitives and Warp-level Reduction
 
-For cross-lane data sharing, the most straightforward way is LDS. Some lanes write
-data to some locations on LDS and other lanes read data from LDS. Besides, there
-are several instructions can be used to share data cross lanes within a wavefront/warp.
+For cross-lane data sharing, the most straightforward way is LDS. Some lanes
+write data to some locations on LDS and other lanes read data from LDS. Besides,
+there are several instructions can be used to share data cross lanes within a
+wavefront/warp.
 
-Here's a brief introduction of these instructions. Please check out [this blog](https://gpuopen.com/learn/amd-gcn-assembly-cross-lane-operations/) for details.
+Here's a brief introduction of these instructions. Please check out [this
+blog](https://gpuopen.com/learn/amd-gcn-assembly-cross-lane-operations/) for
+details.
 
 ### ds_permute/ds_bpermute
 
-`ds_permute`/`ds_bpermute` instructions use LDS hardware for data sharing but don't
-actually write to an LDS location. But it still needs `s_waitcnt` instruction to determine
-when data is returned to `dest` VGPR.
+`ds_permute`/`ds_bpermute` instructions use LDS hardware for data sharing but
+don't actually write to an LDS location. But it still needs `s_waitcnt`
+instruction to determine when data is returned to `dest` VGPR.
 
 Example:
 ```nasm
@@ -315,10 +318,11 @@ ds_bpermute_b32 dest, addr, src [offset:addr_offset]
 
 ### ds_swizzle
 
-Compared to `ds_bpermute`, the `ds_swizzle` instruction doesn't require
-an additional VGPR for offset since it's encoded in the instruction.
+Compared to `ds_bpermute`, the `ds_swizzle` instruction doesn't require an
+additional VGPR for offset since it's encoded in the instruction.
 
-`ds_swizzle` is likely to have less address generation instructions required than `ds_bpermute`.
+`ds_swizzle` is likely to have less address generation instructions required
+than `ds_bpermute`.
 
 The cons are:
 1. It only supports limited patterns.
@@ -331,12 +335,13 @@ ds_swizzle_b32 dest, src offset:ds_pattern
 
 ### Data-Parallel Primitives, DPP
 
-DPP is a 32-bit instruction modifier appended to the normal VALU instructions. It
-allows VALU instructions to access data in neighboring lanes directly, which means
-it doesn't need LDS hardware anymore, hence `s_waitcnt` instructions are **not required**.
+DPP is a 32-bit instruction modifier appended to the normal VALU instructions.
+It allows VALU instructions to access data in neighboring lanes directly, which
+means it doesn't need LDS hardware anymore, hence `s_waitcnt` instructions are
+**not required**.
 
-Unfortunately, it also supported limited patterns like `ds_swizzle`. And there are
-some instructions that can't be modified by DPP.
+Unfortunately, it also supported limited patterns like `ds_swizzle`. And there
+are some instructions that can't be modified by DPP.
 
 Example:
 ```nasm
@@ -347,36 +352,46 @@ v_add_f32
 v_add_f32_dpp
 ```
 
-It's worth mentioning that DPP has different names and syntaxes on different architectures:
+It's worth mentioning that DPP has different names and syntaxes on different
+architectures:
 * CDNA: DPP
 * RDNA: DPP8/DPP16
 
-For details, please check the [MI300 ISA Reference Guide](https://www.amd.com/content/dam/amd/en/documents/instinct-tech-docs/instruction-set-architectures/amd-instinct-mi300-cdna3-instruction-set-architecture.pdf) and the
-[RDNA3 ISA Reference Guide](https://www.amd.com/content/dam/amd/en/documents/radeon-tech-docs/instruction-set-architectures/rdna3-shader-instruction-set-architecture-feb-2023_0.pdf).
+For details, please check the [MI300 ISA Reference
+Guide](https://www.amd.com/content/dam/amd/en/documents/instinct-tech-docs/instruction-set-architectures/amd-instinct-mi300-cdna3-instruction-set-architecture.pdf)
+and the [RDNA3 ISA Reference
+Guide](https://www.amd.com/content/dam/amd/en/documents/radeon-tech-docs/instruction-set-architectures/rdna3-shader-instruction-set-architecture-feb-2023_0.pdf).
 
 ### How to use them in MLIR
 
-Each instruction has a corresponding Op in MLIR (except for `ds_permute`, this one is not implemented at the time of writing):
+Each instruction has a corresponding Op in MLIR (except for `ds_permute`, this
+one is not implemented at the time of writing):
 * `ds_bpermute`: `rocdl.ds_bpermute`
 * `ds_swizzle`: `rocdl.ds_swizzle`
-* DPP: `rocdl.update.dpp`, `amdgpu.dpp` (a thin wrapper around `rocdl.update.dpp` with more comprehensive user interface, e.g., replace magic numbers with enums)
+* DPP: `rocdl.update.dpp`, `amdgpu.dpp` (a thin wrapper around
+  `rocdl.update.dpp` with more comprehensive user interface, e.g., replace magic
+  numbers with enums)
 
 The first 2 are straightforward, while DPP follows a different fashion.
 
 Since DPP is an instruction modifier instead of an instruction itself, there are
-tremendous number of combinations of VALU instructions and DPP. To solve that, `rocdl.update.dpp`
-and `amdgpu.dpp` are designed to be a wrapper of `v_mov_b32_dpp` instruction. And it depends
-on LLVM compiler to fuse it with the subsequent VALU instruction **with best efforts**.
+tremendous number of combinations of VALU instructions and DPP. To solve that,
+`rocdl.update.dpp` and `amdgpu.dpp` are designed to be a wrapper of
+`v_mov_b32_dpp` instruction. And it depends on LLVM compiler to fuse it with the
+subsequent VALU instruction **with best efforts**.
 
 For example, `v_mov_b32_dpp` + `v_add_f32_e32` might be fused into `v_add_f32_dpp`.
 
-There are plenty of constraints stopping an instruction from being merged.
-For example, if either the `bank_mask` or the `row_mask` is not `0xf`, it can't be fused.
-You can check the [GCNDPPCombine::combineDPPMov](https://github.com/llvm/llvm-project/blob/ab51eccf88f5321e7c60591c5546b254b6afab99/llvm/lib/Target/AMDGPU/GCNDPPCombine.cpp#L522) function to see how it works.
+There are plenty of constraints stopping an instruction from being merged. For
+example, if either the `bank_mask` or the `row_mask` is not `0xf`, it can't be
+fused. You can check the
+[GCNDPPCombine::combineDPPMov](https://github.com/llvm/llvm-project/blob/ab51eccf88f5321e7c60591c5546b254b6afab99/llvm/lib/Target/AMDGPU/GCNDPPCombine.cpp#L522)
+function to see how it works.
 
 ### Comparison
 
-To summarize, there's no free lunch: instruction's expressivity comes at the expense of performance.
+To summarize, there's no free lunch: instruction's expressivity comes at the
+expense of performance.
 
 The relative performance of cross-lane instructions is as follows:
 
@@ -386,8 +401,10 @@ while the generality ranking is the reverse:
 
 DPP < `ds_swizzle` < `ds_permute` < `ds_bpermute`
 
-This table presents the approximate instruction latency, collected experimentally
-on Fused Softmax kernel with [rocprofv2](https://github.com/ROCm/rocprofiler?tab=readme-ov-file#plugin-support) on MI300 GPU:
+This table presents the approximate instruction latency, collected
+experimentally on Fused Softmax kernel with
+[rocprofv2](https://github.com/ROCm/rocprofiler?tab=readme-ov-file#plugin-support)
+on the MI300 GPU:
 
 | Instructions           | MLIR Op                      | Hardware     | latency/#cycles |
 | ---------------------- | ---------------------------- | ------------ | --------------- |
@@ -395,5 +412,5 @@ on Fused Softmax kernel with [rocprofv2](https://github.com/ROCm/rocprofiler?tab
 | ds_swizzle             | rocdl.ds_swizzle             | LDS hardware | ~50*            |
 | DPP                    | rocdl.update.dpp, amdgpu.dpp | VALU         | 4~12            |
 
-*: For `ds_permute`/`ds_bpermute` and `ds_swizzle`, the latency includes the instruction itself
-and its corresponding `s_waitcnt` instruction.
+*: For `ds_permute`/`ds_bpermute` and `ds_swizzle`, the latency includes the
+instruction itself and its corresponding `s_waitcnt` instruction.
