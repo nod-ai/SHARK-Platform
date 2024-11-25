@@ -28,7 +28,7 @@ jobs:
       matrix:
         version: [3.11]
       fail-fast: false
-    runs-on: llama-mi300x-3
+    runs-on: mi300x-4
     defaults:
       run:
         shell: bash
@@ -78,7 +78,7 @@ jobs:
         run: pip install "git+https://github.com/nod-ai/sglang.git#subdirectory=python"
 
       - name: Launch Shortfin Server
-        run: pytest -v app_tests/benchmark_tests/llm/sglang_benchmark_test.py --log-cli-level=INFO --html=out/llm/sglang/index.html
+        run: pytest -v app_tests/benchmark_tests/llm/sglang_benchmarks/sglang_benchmark_test.py --log-cli-level=INFO --html=out/llm/sglang/index.html
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@4f9cc6602d3f66b9c108549d475ec49e8ef4d45e # v4.0.0
