@@ -53,7 +53,8 @@ class BasePagedAttentionCache:
 
         No token at idx < n_cached_token should be written to. TODO: consider enforcing this.
         """
-        pages_needed = math.ceil(len(tokens) + extra_token_slots / self.tokens_per_page)
+        token_count = len(tokens)
+        pages_needed = math.ceil(token_count / self.tokens_per_page)
         pages = self.page_pool.acquire_free_pages(pages_needed)
 
         n_cached_tokens = 0
