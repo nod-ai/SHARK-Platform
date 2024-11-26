@@ -33,6 +33,32 @@ from .components.tokenizer import Tokenizer
 
 logger = logging.getLogger(__name__)
 
+UVICORN_LOG_CONFIG = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "default": {
+            "()": "uvicorn.logging.DefaultFormatter",
+            "format": "[{asctime}] {message}",
+            "datefmt": "%Y-%m-%d %H:%M:%S",
+            "style": "{",
+            "use_colors": True,
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "default",
+        },
+    },
+    "loggers": {
+        "uvicorn": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+    },
+}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -211,11 +237,5 @@ if __name__ == "__main__":
     main(
         sys.argv[1:],
         # Make logging defer to the default shortfin logging config.
-        log_config={
-            "version": 1,
-            "disable_existing_loggers": False,
-            "formatters": {},
-            "handlers": {},
-            "loggers": {},
-        },
+        log_config=UVICORN_LOG_CONFIG,
     )
