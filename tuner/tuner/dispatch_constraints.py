@@ -32,11 +32,11 @@ def get_mfma_intrinsic_constraints(
     return z3.Or(
         *(
             z3.And(
-                intrinsic_m == mnk[0],
-                intrinsic_n == mnk[1],
-                intrinsic_k == mnk[2],
+                intrinsic_m == m,
+                intrinsic_n == n,
+                intrinsic_k == k,
             )
-            for mnk in mnk_shapes
+            for m, n, k in mnk_shapes
         )
     )
 
