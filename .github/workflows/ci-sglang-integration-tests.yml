@@ -69,7 +69,7 @@ jobs:
 
           # Use newest possible releases to be able to track commits that may
           # cause errors.
-          pip install -f https://iree.dev/pip-release-links.html --upgrade \
+          pip install -f https://iree.dev/pip-release-links.html --upgrade --pre \
             iree-base-compiler \
             iree-base-runtime \
             "numpy<2.0"
