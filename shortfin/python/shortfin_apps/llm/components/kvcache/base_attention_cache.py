@@ -68,13 +68,9 @@ class BasePageAttentionCacheAllocation(PageAllocation):
 
     def publish_pages(self, up_to_page_index) -> None:
         """
-        Given a list of tokens and pages containing KV corresponding to these tokens, make these pages available to other requests.
+        Release self.get_pages_list()[0:up_to_page_index] for reading by other requests.
 
-        Associates the tokens with the pages, and mark them as done writing.
-
-        It is assumed that hereafter, the calling request will not modify these pages, at least not the positions [0:len(tokens)].
-
-        This should be called when the request has finished writing to the pages.
+        This should be called when writing completes, after each kernel invocation.
         """
         pass  # the base implementation doesn't cache unfinished requests.
 
@@ -82,7 +78,11 @@ class BasePageAttentionCacheAllocation(PageAllocation):
         """
         Decrement reference count for these pages. When reference count is zero, they will be elegible for eviction.
 
-        This should be called when the request has finished reading from the pages.
+        This should be called when the request has finished reading from the pages, and they are no longer needed.
+
+        This does not immediately release the pages, but decrements the reference count.
+
+        Pages should become available for eviction when their reference count reaches zero & the pool runs out of free pages.
         """
         # in the base implementation, the pages can be owned by 1 request max, so they can be instantly release
         if self._is_released:
