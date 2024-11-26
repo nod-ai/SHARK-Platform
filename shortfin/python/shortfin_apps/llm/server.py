@@ -60,6 +60,7 @@ UVICORN_LOG_CONFIG = {
     },
 }
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     sysman.start()
