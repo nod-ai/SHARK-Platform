@@ -25,6 +25,10 @@ def get_mfma_intrinsic_constraints(
 ) -> z3.BoolRef:
     compatible_intrinsics = get_compatible_mfma_intrinsics(problem_size, mma_intrinsics)
     assert len(compatible_intrinsics) > 0, "No compatible intrinsics found"
+
+    mma_attrs = [iree_gpu.MMAAttr.get(mfma) for mfma in compatible_intrinsics]
+    mnk_shapes = [mma_attr.mnk_shape for mma_attr in mma_attrs]
+
     return z3.Or(
         *(
             z3.And(
@@ -35,7 +39,7 @@ def get_mfma_intrinsic_constraints(
             for mma_attr in (
                 iree_gpu.MMAAttr.get(mfma) for mfma in compatible_intrinsics
             )
-            for mnk in [mma_attr.mnk_shape]
+            for mnk in mnk_shapes
         )
     )
 
@@ -150,7 +154,7 @@ def getMMAAttr(
     rhs_type: ir.IntegerType | ir.FloatType,
 ) -> iree_gpu.MMAAttr:
     for mma_intrinsic in iree_gpu.MMAIntrinsic:
-        mma_attr = iree_gpu.MMAIntrinsicAttr.get(mma_intrinsic).mma
+        mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
         a_type, b_type, c_type = mma_attr.abc_element_types
         mnk = mma_attr.mnk_shape
         if (
