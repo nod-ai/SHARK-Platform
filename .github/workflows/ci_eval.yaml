@@ -57,22 +57,8 @@ jobs:
       - name: Install sharktank deps
         run: |
           python -m pip install --no-compile --upgrade pip
-          # Note: We install in three steps in order to satisfy requirements
-          # from non default locations first. Installing the PyTorch CPU
-          # wheels saves multiple minutes and a lot of bandwidth on runner setup.
-          pip install --no-compile -r pytorch-cpu-requirements.txt
-          pip install --no-compile -r requirements.txt -r sharktank/requirements-tests.txt -e sharktank/
-
-          # Install latest iree-tubrine.
-          pip install --no-compile -f https://iree.dev/pip-release-links.html --src deps \
-            -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
-
-          # Try with the latest IREE nightly releases, not what iree-turbine pins.
-          # We could also pin to a known working or stable version.
-          # This should eventually stabilize. Do the best we can for now.
-          pip install -f https://iree.dev/pip-release-links.html --upgrade --pre \
-            iree-base-compiler \
-            iree-base-runtime
+          pip install shark-ai[apps]
+          python -m pip install sharktank -f https://github.com/nod-ai/SHARK-Platform/releases/expanded_assets/dev-wheels
 
       - name: Run perplexity test with IREE
         run:  pytest -n 8 -v -s sharktank/tests/evaluate/perplexity_iree_test.py --run-nightly-llama-tests --bs=100 --iree-device='hip://7' --iree-hip-target=gfx942 --iree-hal-target-backends=rocm --llama3-8b-f16-model-path=/data/llama3.1/8b/llama8b_f16.irpa --llama3-8b-tokenizer-path=/data/llama3.1/8b/tokenizer_config.json --html=out/llm/llama/perplexity/iree_perplexity/index.html
@@ -121,15 +107,8 @@ jobs:
       - name: Install sharktank deps
         run: |
           python -m pip install --no-compile --upgrade pip
-          # Note: We install in three steps in order to satisfy requirements
-          # from non default locations first. Installing the PyTorch CPU
-          # wheels saves multiple minutes and a lot of bandwidth on runner setup.
-          pip install --no-compile -r pytorch-cpu-requirements.txt
-          pip install --no-compile -r requirements.txt -r sharktank/requirements-tests.txt -e sharktank/
-
-          # Install latest iree-tubrine.
-          pip install --no-compile -f https://iree.dev/pip-release-links.html --src deps \
-            -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
+          pip install shark-ai[apps]
+          python -m pip install sharktank -f https://github.com/nod-ai/SHARK-Platform/releases/expanded_assets/dev-wheels
 
       - name: Run perplexity test with Torch
         run:  pytest -n 8 -v -s sharktank/tests/evaluate/perplexity_torch_test.py --longrun --llama3-8b-f16-model-path=/data/llama3.1/8b/llama8b_f16.irpa --llama3-8b-tokenizer-path=/data/llama3.1/8b/tokenizer_config.json --html=out/llm/llama/perplexity/torch_perplexity/index.html
