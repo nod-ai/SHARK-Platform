@@ -36,9 +36,6 @@ def get_mfma_intrinsic_constraints(
                 intrinsic_n == mnk[1],
                 intrinsic_k == mnk[2],
             )
-            for mma_attr in (
-                iree_gpu.MMAAttr.get(mfma) for mfma in compatible_intrinsics
-            )
             for mnk in mnk_shapes
         )
     )
