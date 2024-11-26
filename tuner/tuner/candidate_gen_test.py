@@ -35,6 +35,113 @@ def remove_comments(mlir: str) -> str:
     )
 
 
+def test_get_td_spec_mmt(tuner_ctx: common.TunerContext) -> None:
+    context = tuner_ctx.mlir_ctx
+    module_str = """
+        builtin.module{
+            func.func @test(%arg0: tensor<2048x2048xf16>, %arg1: tensor<2048x2048xf16>) -> tensor<2048x2048xf32> {
+                %cst = arith.constant 0.000000e+00 : f32
+                %0 = tensor.empty() : tensor<2048x2048xf32>
+                %1 = linalg.fill ins(%cst : f32) outs(%0 : tensor<2048x2048xf32>) -> tensor<2048x2048xf32>
+                %2 = linalg.generic {
+                    indexing_maps = [
+                        affine_map<(d0, d1, d2) -> (d0, d2)>,
+                        affine_map<(d0, d1, d2) -> (d1, d2)>,
+                        affine_map<(d0, d1, d2) -> (d0, d1)>],
+                    iterator_types = ["parallel", "parallel", "reduction"]}
+                    ins(%arg0, %arg1 : tensor<2048x2048xf16>, tensor<2048x2048xf16>)
+                    outs(%1 : tensor<2048x2048xf32>) {
+                ^bb0(%in: f16, %in_0: f16, %out: f32):
+                    %3 = arith.extf %in : f16 to f32
+                    %4 = arith.extf %in_0 : f16 to f32
+                    %5 = arith.mulf %3, %4 : f32
+                    %6 = arith.addf %out, %5 : f32
+                    linalg.yield %6 : f32
+                } -> tensor<2048x2048xf32>
+                return %2 : tensor<2048x2048xf32>
+            }
+        }"""
+
+    ir_module = ir.Module.parse(module_str, context)
+    config = common.Configuration(
+        subgroup_size=16,
+        workgroup_size=[16, 16, 1],
+        intrinsic=common.MfmaIntrinsic.mfma_f32_16x16x16_f16(),
+        tile_sizes=[8, 8, 8],
+        subgroup_m_count=16,
+        subgroup_n_count=16,
+        gpu_pipeline_options=common.GpuPipelineOptions(prefetch_shared_memory=True),
+        waves_per_eu=8,
+    )
+
+    td_spec_module = candidate_gen.MmtTuner().get_td_spec(ir_module, config)
+    td_spec_module_str = str(td_spec_module)
+
+    assert td_spec_module
+    assert (
+        "mma_kind = #iree_gpu.mma_layout<MFMA_F32_16x16x16_F16>" in td_spec_module_str
+    )
+    assert "subgroup_m_count = 16" in td_spec_module_str
+    assert "subgroup_n_count = 16" in td_spec_module_str
+    assert "pipeline = LLVMGPUVectorDistribute" in td_spec_module_str
+    assert "workgroup_size = [16, 16, 1]" in td_spec_module_str
+    assert "subgroup_size = 16" in td_spec_module_str
+    assert "workgroup = [8, 8, 0]" in td_spec_module_str
+    assert "reduction = [0, 0, 8]" in td_spec_module_str
+    assert (
+        "gpu_pipeline_options = #iree_gpu.pipeline_options<prefetch_shared_memory = true>"
+        in td_spec_module_str
+    )
+    assert 'llvm_func_attrs = {"amdgpu-waves-per-eu" = "8"}' in td_spec_module_str
+
+
+def test_get_td_spec_conv(tuner_ctx: common.TunerContext) -> None:
+    context = tuner_ctx.mlir_ctx
+    module_str = """
+        builtin.module{
+            func.func @test(%arg0: tensor<2x34x34x2048xi8>, %arg1: tensor<3x3x2048x2048xi8>) -> tensor<2x32x32x2048xi32> {
+                %cst = arith.constant 0 : i32
+                %0 = tensor.empty() : tensor<2x32x32x2048xi32>
+                %1 = linalg.fill ins(%cst : i32) outs(%0 : tensor<2x32x32x2048xi32>) -> tensor<2x32x32x2048xi32>
+                %2 = linalg.conv_2d_nhwc_hwcf
+                    ins(%arg0, %arg1 : tensor<2x34x34x2048xi8>, tensor<3x3x2048x2048xi8>)
+                    outs(%1 : tensor<2x32x32x2048xi32>) -> tensor<2x32x32x2048xi32>
+                return %2 : tensor<2x32x32x2048xi32>
+            }
+        }"""
+
+    ir_module = ir.Module.parse(module_str, context)
+    config = common.Configuration(
+        subgroup_size=64,
+        workgroup_size=[256, 1, 1],
+        intrinsic=common.MfmaIntrinsic.mfma_f32_16x16x16_f16(),
+        tile_sizes=[464, 320, 16],
+        subgroup_m_count=1,
+        subgroup_n_count=4,
+        gpu_pipeline_options=common.GpuPipelineOptions(prefetch_shared_memory=False),
+        waves_per_eu=2,
+    )
+
+    td_spec_module = candidate_gen.ConvTuner().get_td_spec(ir_module, config)
+    td_spec_module_str = str(td_spec_module)
+
+    assert td_spec_module
+    assert (
+        "mma_kind = #iree_gpu.mma_layout<MFMA_F32_16x16x16_F16>" in td_spec_module_str
+    )
+    assert "subgroup_m_count = 1" in td_spec_module_str
+    assert "subgroup_n_count = 4" in td_spec_module_str
+    assert "pipeline = LLVMGPUVectorDistribute" in td_spec_module_str
+    assert "workgroup_size = [256, 1, 1]" in td_spec_module_str
+    assert "subgroup_size = 64" in td_spec_module_str
+    assert "workgroup = [1, 1, 464, 320, 0, 0, 0]" in td_spec_module_str
+    assert "reduction = [0, 0, 0, 0, 1, 1, 16]" in td_spec_module_str
+    assert (
+        "gpu_pipeline_options = #iree_gpu.pipeline_options<prefetch_shared_memory = false>"
+        in td_spec_module_str
+    )
+
+
 def test_apply_params_mmt(tuner_ctx: common.TunerContext) -> None:
     mlir_template = [
         "<intrinsic = #iree_gpu.mma_layout<MFMA_F32_32x32x8_F16>, subgroup_m_count = 16, subgroup_n_count = 16>",

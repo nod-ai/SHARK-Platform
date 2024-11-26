@@ -156,12 +156,16 @@ class Configuration:
 
 
 def get_pipeline_config(configuration: Configuration) -> str:
-    extra_config = ""
+    extra_configs = []
     if not configuration.gpu_pipeline_options.all_default():
-        extra_config += f", gpu_pipeline_options = {configuration.gpu_pipeline_options}"
+        extra_configs.append(
+            f"gpu_pipeline_options = {configuration.gpu_pipeline_options}"
+        )
     if configuration.waves_per_eu != 2:
-        extra_config += f', llvm_func_attrs = {{"amdgpu-waves-per-eu" = "{configuration.waves_per_eu}"}}'
-    return extra_config
+        extra_configs.append(
+            f'llvm_func_attrs = {{"amdgpu-waves-per-eu" = "{configuration.waves_per_eu}"}}'
+        )
+    return ", ".join(extra_configs)
 
 
 def read_input_mlir(filename: str) -> list[str]:

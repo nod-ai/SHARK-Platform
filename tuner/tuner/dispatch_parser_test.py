@@ -39,6 +39,58 @@ def test_parse_tensor_type(tuner_ctx: common.TunerContext) -> None:
     )
 
 
+def test_get_mmt_operation(tuner_ctx: common.TunerContext) -> None:
+    context = tuner_ctx.mlir_ctx
+    module_str = """
+        builtin.module{
+            func.func @test(%arg0: tensor<4x4xf16>, %arg1: tensor<4x4xf16>) -> tensor<4x4xf32> {
+                %cst = arith.constant 0.000000e+00 : f32
+                %0 = tensor.empty() : tensor<4x4xf32>
+                %1 = linalg.fill ins(%cst : f32) outs(%0 : tensor<4x4xf32>) -> tensor<4x4xf32>
+                %2 = linalg.generic {
+                    indexing_maps = [
+                        affine_map<(d0, d1, d2) -> (d0, d2)>,
+                        affine_map<(d0, d1, d2) -> (d1, d2)>,
+                        affine_map<(d0, d1, d2) -> (d0, d1)>],
+                    iterator_types = ["parallel", "parallel", "reduction"]}
+                    ins(%arg0, %arg1 : tensor<4x4xf16>, tensor<4x4xf16>)
+                    outs(%1 : tensor<4x4xf32>) {
+                ^bb0(%in: f16, %in_0: f16, %out: f32):
+                    %3 = arith.extf %in : f16 to f32
+                    %4 = arith.extf %in_0 : f16 to f32
+                    %5 = arith.mulf %3, %4 : f32
+                    %6 = arith.addf %out, %5 : f32
+                    linalg.yield %6 : f32
+                } -> tensor<4x4xf32>
+                return %2 : tensor<4x4xf32>
+            }
+        }"""
+    module = ir.Module.parse(module_str, context)
+    mmt_op = dispatch_parser.MmtParser().get_mmt_operation(module)
+    assert mmt_op is not None
+    assert mmt_op.name == "linalg.generic"
+
+
+def test_get_conv_operation(tuner_ctx: common.TunerContext) -> None:
+    context = tuner_ctx.mlir_ctx
+    module_str = """
+        builtin.module{
+            func.func @test(%arg0: tensor<2x34x34x16xi8>, %arg1: tensor<3x3x16x16xi8>) -> tensor<2x32x32x16xi32> {
+                %cst = arith.constant 0 : i32
+                %0 = tensor.empty() : tensor<2x32x32x16xi32>
+                %1 = linalg.fill ins(%cst : i32) outs(%0 : tensor<2x32x32x16xi32>) -> tensor<2x32x32x16xi32>
+                %2 = linalg.conv_2d_nhwc_hwcf
+                    ins(%arg0, %arg1 : tensor<2x34x34x16xi8>, tensor<3x3x16x16xi8>)
+                    outs(%1 : tensor<2x32x32x16xi32>) -> tensor<2x32x32x16xi32>
+                return %2 : tensor<2x32x32x16xi32>
+            }
+        }"""
+    module = ir.Module.parse(module_str, context)
+    mmt_op = dispatch_parser.ConvParser().get_conv_operation(module)
+    assert mmt_op is not None
+    assert mmt_op.name == "linalg.conv_2d_nhwc_hwcf"
+
+
 def test_get_mmt_tile_sizes(tuner_ctx: common.TunerContext) -> None:
     mma_intrinsic = iree_gpu.MMAIntrinsic.MFMA_F32_16x16x16_F16
     mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
