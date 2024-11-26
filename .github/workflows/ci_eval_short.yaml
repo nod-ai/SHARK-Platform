@@ -56,8 +56,16 @@ jobs:
       - name: Install sharktank deps
         run: |
           python -m pip install --no-compile --upgrade pip
-          pip install shark-ai[apps]
-          pip install sharktank -f https://github.com/nod-ai/SHARK-Platform/releases/expanded_assets/dev-wheels
+          # Note: We install in three steps in order to satisfy requirements
+          # from non default locations first. Installing the PyTorch CPU
+          # wheels saves multiple minutes and a lot of bandwidth on runner setup.
+          pip install --no-compile -r pytorch-cpu-requirements.txt
+          pip install --no-compile -r requirements.txt -e sharktank/ shortfin/
+
+          # Update to the latest iree packages.
+          pip install -f https://iree.dev/pip-release-links.html --upgrade --pre \
+            iree-base-compiler iree-base-runtime --src deps \
+            -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
 
       - name: Run perplexity test with vmfb
         run:  pytest -n 8 -v -s sharktank/tests/evaluate/perplexity_iree_test.py --bs=5 --iree-device='hip://6' --iree-hip-target=gfx942 --iree-hal-target-backends=rocm --llama3-8b-f16-model-path=/data/llama3.1/8b/llama8b_f16.irpa --llama3-8b-tokenizer-path=/data/llama3.1/8b/tokenizer_config.json
