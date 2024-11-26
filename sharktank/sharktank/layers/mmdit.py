@@ -1,3 +1,13 @@
+# Copyright 2024 Black Forest Labs. Inc. and Flux Authors
+# Copyright 2024 Advanced Micro Devices, Inc.
+#
+# Licensed under the Apache License v2.0 with LLVM Exceptions.
+# See https://llvm.org/LICENSE.txt for license information.
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+"""MMDIT Layers adapted from black-forest-labs' flux implementation
+https://github.com/black-forest-labs/flux/blob/main/src/flux/modules/layers.py
+"""
+
 import torch.nn.functional as F
 import torch
 from torch import Tensor
@@ -15,6 +25,7 @@ def qk_norm(q, k, v, rms_q, rms_k):
     return rms_q(q).to(v), rms_k(k).to(v)
 
 
+# TODO: Work on unifying with the current RoPE layer
 def apply_rope(xq: Tensor, xk: Tensor, freqs_cis: Tensor) -> tuple[Tensor, Tensor]:
     xq_ = xq.float().reshape(*xq.shape[:-1], -1, 1, 2)
     xk_ = xk.float().reshape(*xk.shape[:-1], -1, 1, 2)
@@ -89,7 +100,7 @@ class MMDITDoubleBlock(ThetaLayer):
             img_q, img_k, img_v, self.img_attn_norm_q, self.img_attn_norm_k
         )
 
-        # prepare txt for attention
+        # prepare text for attention
         txt_modulated = ops.layer_norm(txt, None, None, eps=1e-6)
         txt_modulated = (1 + txt_mod1.scale) * txt_modulated + txt_mod1.shift
         txt_qkv = self.txt_attn_qkv(txt_modulated)
@@ -110,7 +121,8 @@ class MMDITDoubleBlock(ThetaLayer):
         attn = attention(q, k, v, pe)
         txt_attn, img_attn = attn[:, : txt.shape[1]], attn[:, txt.shape[1] :]
 
-        # calculate the img bloks
+        # calculate the image blocks
+        # TODO: Refactor this for code reuse with the txt blocks
         img = img + img_mod1.gate * self.img_attn_proj(img_attn)
         img_mlp_in = (1 + img_mod2.scale) * ops.layer_norm(
             img, None, None, eps=1e-6
@@ -120,12 +132,13 @@ class MMDITDoubleBlock(ThetaLayer):
         img_mlp_out3 = self.img_mlp2(img_mlp_out2)
         img = img + img_mod2.gate * img_mlp_out3
 
-        # calculate the txt bloks
+        # calculate the text blocks
         txt = txt + txt_mod1.gate * self.txt_attn_proj(txt_attn)
         txt_mlp_in = (1 + txt_mod2.scale) * ops.layer_norm(
             txt, None, None, eps=1e-6
         ) + txt_mod2.shift
         txt_mlp_out1 = self.txt_mlp1(txt_mlp_in)
+        # TODO: Unify with modulation layer by taking act_fn as an arg
         txt_mlp_out2 = ops.elementwise(F.gelu, txt_mlp_out1)
         txt_mlp_out3 = self.txt_mlp2(txt_mlp_out2)
         txt = txt + txt_mod2.gate * txt_mlp_out3

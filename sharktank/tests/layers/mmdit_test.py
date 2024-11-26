@@ -18,7 +18,7 @@ from sharktank.layers import (
 )
 import sharktank.ops as ops
 from sharktank.layers.testing import (
-    make_mmdit_block_theta,
+    make_mmdit_double_block_theta,
 )
 from sharktank.types.tensors import DefaultPrimitiveTensor
 
@@ -30,9 +30,9 @@ class MMDITTest(unittest.TestCase):
         self.num_heads = 24
         self.batch_size = 3
 
-    def testExport(self):
+    def testDoubleExport(self):
 
-        theta = make_mmdit_block_theta()
+        theta = make_mmdit_double_block_theta()
         mmdit = MMDITDoubleBlock(
             theta=theta,
             num_heads=self.num_heads,

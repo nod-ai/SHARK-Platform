@@ -309,11 +309,11 @@ def layer_norm_default(input, weight, bias, *, eps):
     if weight is not None:
         weight = unbox_tensor(weight)
     else:
-        weight = torch.ones(input.shape)
+        weight = torch.ones(input.shape, dtype=input.dtype)
     if bias is not None:
         bias = unbox_tensor(bias)
     else:
-        bias = torch.zeros(input.shape)
+        bias = torch.zeros(input.shape, dtype=input.dtype)
     return F.layer_norm(
         input, normalized_shape=weight.shape, weight=weight, bias=bias, eps=eps
     )
