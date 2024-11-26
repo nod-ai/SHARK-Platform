@@ -31,8 +31,8 @@ class LinearLayer(ThetaLayer):
       x = x * premul_input
     matmul(x, weight.T) + bias
 
-    fake quant only exists in order to allow for q_input to act as qdq. 
-    when fake quant is false, q_input will quantize normally. 
+    fake quant only exists in order to allow for q_input to act as qdq.
+    when fake quant is false, q_input will quantize normally.
     ```
     """
 
@@ -80,7 +80,7 @@ class LinearLayer(ThetaLayer):
         y = ops.linear(x, weight, bias)
 
         # Unconditionally dequantize.
-        if isinstance(y, QuantizedTensor): 
+        if isinstance(y, QuantizedTensor):
             y = y.unpack().dequant()
         # Note that f8_e4m3fnuz types on AMD GPUs accumulate to fp32.
         # We can truncate to fp16 in iree, so we do a cast here
