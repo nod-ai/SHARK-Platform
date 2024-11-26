@@ -9,7 +9,7 @@ from enum import Enum
 import shortfin as sf
 import shortfin.array as sfnp
 
-from .kvcache.base_attention_cache import BasePagedAttentionCache
+from .kvcache.base_attention_cache import BasePagedAttentionCache, PageAllocation
 from .kvcache.page_pool import PageInfo
 
 
@@ -43,7 +43,7 @@ class InferenceExecRequest(sf.Message):
 
         # Cache pages that have been locked for this request.
         self._cache: BasePagedAttentionCache | None = None
-        self.locked_pages: list[PageInfo] | None = None
+        self.allocation: PageAllocation | None = None
 
     def reset(self, phase: InferencePhase):
         """Resets all per request state in preparation for an subsequent execution."""
@@ -52,35 +52,22 @@ class InferenceExecRequest(sf.Message):
         self.return_all_logits = False
         self.return_host_array = True
         self.result_logits = None
+        self.allocation.release_pages()
+        self.allocation = None
 
     def cache_page_indices(self, max_len: int) -> list[int]:
-        if not self.locked_pages:
+        if not self.allocation:
             return []
-        indices = [p.index for p in self.locked_pages]
-        if len(indices) > max_len:
-            return indices[0:max_len]
-        return indices
+        indices = [p.index for p in self.allocation.get_page_list()]
+        return indices[:max_len]
+
+    def publish_allocated_pages(self, up_to_page_index: int):
+        assert self.allocation
+        self.allocation.publish_pages(up_to_page_index)
 
     def free_cache_pages(self):
-        cache = self._cache
-        if cache:
-            pages = self.locked_pages
-            self._cache = None
-            self.locked_pages = None
-            cache.release_pages(self.input_token_ids, pages)
-
-    def lock_initial_cache_pages(
-        self, cache: BasePagedAttentionCache, pages: list[PageInfo]
-    ):
-        assert not self._cache
-        self._cache = cache
-        self.locked_pages = pages
-
-    def lock_new_cache_pages(
-        self, cache: BasePagedAttentionCache, pages: list[PageInfo]
-    ):
-        assert self._cache is cache
-        self.locked_pages.extend(pages)
+        if self.allocation:
+            self.allocation.release_pages()
 
 
 class StrobeMessage(sf.Message):
