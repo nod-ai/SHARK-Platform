@@ -59,21 +59,11 @@ jobs:
       - name: Install pip deps
         run: |
           python -m pip install --no-compile --upgrade pip
-          # Note: We install in three steps in order to satisfy requirements
-          # from non default locations first. Installing the PyTorch CPU
-          # wheels saves multiple minutes and a lot of bandwidth on runner setup.
-          pip install --no-compile -r pytorch-cpu-requirements.txt
-          pip install --no-compile -r requirements.txt -r sharktank/requirements-tests.txt -e sharktank/
-
-          # Install latest iree-turbine.
-          pip install --no-compile -f https://iree.dev/pip-release-links.html --src deps \
-            -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
-
-
-          # Test with nightly releases, not what iree-turbine uses.
+          pip install shark-ai[apps]
+          pip install sharktank -f https://github.com/nod-ai/SHARK-Platform/releases/expanded_assets/dev-wheels --upgrade --pre
           pip install -f https://iree.dev/pip-release-links.html --upgrade --pre \
-            iree-base-compiler \
-            iree-base-runtime
+            iree-base-compiler iree-base-runtime --src deps \
+            -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
 
       - name: Run llama tests
         run: pytest sharktank/tests/models/llama/benchmark_amdgpu_test.py -v -s --run-nightly-llama-tests --iree-hip-target=gfx942 --html=out/llm/llama/benchmark/index.html

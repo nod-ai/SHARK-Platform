@@ -59,20 +59,12 @@ jobs:
       - name: Install pip deps
         run: |
           python -m pip install --no-compile --upgrade pip
-          # Note: We install in three steps in order to satisfy requirements
-          # from non default locations first. Installing the PyTorch CPU
-          # wheels saves multiple minutes and a lot of bandwidth on runner setup.
-          pip install --no-compile -r pytorch-cpu-requirements.txt
-          pip install --no-compile -f https://iree.dev/pip-release-links.html --src deps \
+          pip install shark-ai[apps]
+          pip install sharktank -f https://github.com/nod-ai/SHARK-Platform/releases/expanded_assets/dev-wheels --upgrade --pre
+          pip install shortfin -f https://github.com/nod-ai/shark-ai/releases/expanded_assets/dev-wheels --upgrade --pre
+          pip install -f https://iree.dev/pip-release-links.html --upgrade --pre \
+            iree-base-compiler iree-base-runtime --src deps \
             -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
-          pip install --no-compile -r requirements.txt -e sharktank/ shortfin/
-
-          # Use newest possible releases to be able to track commits that may
-          # cause errors.
-          pip install -f https://iree.dev/pip-release-links.html --upgrade \
-            iree-base-compiler \
-            iree-base-runtime \
-            "numpy<2.0"
 
       - name: Install SGLang
         run: pip install "git+https://github.com/nod-ai/sglang.git#subdirectory=python"
