@@ -56,10 +56,9 @@ jobs:
           # Update to the latest iree packages.
           pip install -f https://iree.dev/pip-release-links.html --upgrade --pre \
             iree-base-compiler iree-base-runtime --src deps \
-            -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"  
+            -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
       - name: Run punet tests
         run: |
-          source ${VENV_DIR}/bin/activate
           pytest -v sharktank/ -m model_punet
 
   test:
