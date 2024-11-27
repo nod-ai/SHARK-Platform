@@ -59,6 +59,7 @@ class PagedLlamaAttentionBlockTest(unittest.TestCase):
         cache_state[0] = torch.rand(cache_state[0].shape, dtype=dtype)
 
         theta = make_llama_attention_block_theta(
+            block_idx=0,
             head_count=self.attention_head_count,
             head_count_kv=self.head_count_kv,
             head_dim=self.attention_head_dim,
@@ -133,6 +134,7 @@ class PagedLlamaAttentionBlockTest(unittest.TestCase):
         cache_state[0] = torch.rand(cache_state[0].shape, dtype=dtype)
 
         theta = make_llama_attention_block_theta(
+            block_idx=0,
             head_count=self.attention_head_count,
             head_count_kv=self.head_count_kv,
             head_dim=self.attention_head_dim,
