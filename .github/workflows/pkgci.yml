@@ -28,3 +28,8 @@ jobs:
   build_packages:
     name: Build Packages
     uses: ./.github/workflows/pkgci_build_packages.yml
+
+  test_shark_ai:
+    name: Test shark-ai
+    needs: [build_packages]
+    uses: ./.github/workflows/pkgci_shark_ai.yml
