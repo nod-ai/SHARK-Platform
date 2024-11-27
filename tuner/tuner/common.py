@@ -129,12 +129,7 @@ class Configuration:
 def get_pipeline_config(configuration: Configuration) -> str:
     extra_config = ""
     pipeline_options = configuration.gpu_pipeline_options
-    if (
-        pipeline_options.prefetch_shared_memory is not None
-        or pipeline_options.no_reduce_shared_memory_bank_conflicts is not None
-        or pipeline_options.use_igemm_convolution is not None
-        or pipeline_options.reorder_workgroups_strategy is not None
-    ):
+    if pipeline_options != iree_gpu.PipelineOptionsAttr.get():
         extra_config += f", gpu_pipeline_options = {pipeline_options}"
 
     if configuration.waves_per_eu != 2:
