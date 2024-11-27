@@ -171,8 +171,10 @@ if(SHORTFIN_BUNDLE_DEPS)
   # Enable spdlog shared library options so we can export it.
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSPDLOG_SHARED_LIB -Dspdlog_EXPORTS")
   message(STATUS "Fetching bundled projects")
+  list(APPEND CMAKE_MESSAGE_INDENT "  ")
   FetchContent_MakeAvailable(fmt spdlog xtl xtensor)
   shortfin_pop_bundled_lib_options()
+  list(POP_BACK CMAKE_MESSAGE_INDENT)
 else()
   find_package(spdlog)
   find_package(xtensor)
@@ -251,12 +253,16 @@ shortfin_pop_bundled_lib_options()
 
 function(shortfin_check_tokenizers)
   # Make sure that rust/cargo is installed and usable.
+  # Consider switching this to a cached variable once the tokenizers_cpp project
+  # will accept an override vs running whatever is on the path. For now, just
+  # verify the path is sane as that is what will get used.
   find_program(SHORTFIN_CARGO_PATH NAMES cargo NO_CACHE)
   if(NOT SHORTFIN_CARGO_PATH)
     message(SEND_ERROR
       "Building with -DSHORTFIN_ENABLE_TOKENIZERS=ON requires cargo (Rust's build tool). "
       "Please follow Rust documentation to install. On Ubuntu, this can typically be accomplished with:\n"
-      "  sudo apt install rustup && rustup default stable"
+      "  sudo apt install rustup && rustup default stable\n"
+      "See https://www.rust-lang.org/tools/install"
     )
   endif()
 
@@ -317,9 +323,9 @@ if(SHORTFIN_BUILD_TESTS)
   endif()
   include(GoogleTest)
   enable_testing()
+  add_custom_target(shortfin_testdata_deps)
 endif()
 
-add_custom_target(shortfin_testdata_deps)
 add_subdirectory(src)
 
 if(SHORTFIN_BUILD_PYTHON_BINDINGS)

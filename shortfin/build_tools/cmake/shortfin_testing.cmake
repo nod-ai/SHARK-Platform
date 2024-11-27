@@ -20,6 +20,9 @@ function(shortfin_download_test_data)
     ""
     ${ARGN}
   )
+  if(NOT SHORTFIN_BUILD_TESTS)
+    return()
+  endif()
   if(NOT EXISTS "${_RULE_OUTPUT_FILE}")
     set(_stage_file "${_RULE_OUTPUT_FILE}.stage")
     message(STATUS "Downloading test data ${_RULE_URL} -> ${_RULE_OUTPUT_FILE}")
@@ -36,7 +39,7 @@ function(shortfin_download_test_data)
   set_property(
     TARGET shortfin_testdata_deps
     APPEND PROPERTY ADDITIONAL_CLEAN_FILES
-      "${CMAKE_CURRENT_BINARY_DIR}/tokenizer.json"
+      "${_RULE_OUTPUT_FILE}"
   )
 
   # And make us reconfigure if it isn't there.
