@@ -5,6 +5,7 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 import torch
+from typing import Optional
 
 from .. import ops
 from .base import Theta, ThetaLayer
@@ -16,7 +17,7 @@ class TokenEmbeddingLayer(ThetaLayer):
         theta: Theta,
         *,
         weight_name: str = "weight",
-        dtype: torch.dtype = torch.float32,
+        dtype: Optional[torch.dtype] = torch.float32,
     ):
         super().__init__(theta)
         self.weight = self.theta_tensor(weight_name)
