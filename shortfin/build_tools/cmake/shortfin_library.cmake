@@ -182,7 +182,10 @@ function(shortfin_gtest_test)
     GTest::gmock
     GTest::gtest_main
   )
-  gtest_discover_tests(${_RULE_NAME})
+  gtest_discover_tests(
+    ${_RULE_NAME}
+    WORKING_DIRECTORY "${libshortfin_BINARY_DIR}"
+  )
 endfunction()
 
 
