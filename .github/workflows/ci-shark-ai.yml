@@ -37,13 +37,22 @@ jobs:
     steps:
       - name: Listing workspace directory
         run: |
-          ls ${{ github.workspace }}
+          ls -la ${{ github.workspace }}
 
       - name: "Setting up Python"
         id: setup_python
         uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
         with:
           python-version: ${{matrix.version}}
+
+      - name: Checking python
+        run: |
+          which python
+          python --version
+
+      - name: Checking installed packages
+        run: |
+          pip freeze
 
       - name: "Checkout Code"
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
