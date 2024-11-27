@@ -531,22 +531,26 @@ void BindArray(py::module_ &m) {
                  ->AddAsInvocationArgument(
                      inv, static_cast<local::ProgramResourceBarrier>(barrier));
            })
-      .def_static("for_device",
-                  [](local::ScopedDevice &device, std::span<const size_t> shape,
-                     DType dtype) {
-                    return custom_new_keep_alive<device_array>(
-                        py::type<device_array>(),
-                        /*keep_alive=*/device.fiber(),
-                        device_array::for_device(device, shape, dtype));
-                  })
-      .def_static("for_host",
-                  [](local::ScopedDevice &device, std::span<const size_t> shape,
-                     DType dtype) {
-                    return custom_new_keep_alive<device_array>(
-                        py::type<device_array>(),
-                        /*keep_alive=*/device.fiber(),
-                        device_array::for_host(device, shape, dtype));
-                  })
+      .def_static(
+          "for_device",
+          [](local::ScopedDevice &device, std::span<const size_t> shape,
+             DType dtype) {
+            return custom_new_keep_alive<device_array>(
+                py::type<device_array>(),
+                /*keep_alive=*/device.fiber(),
+                device_array::for_device(device, shape, dtype));
+          },
+          py::arg("device"), py::arg("shape"), py::arg("dtype"))
+      .def_static(
+          "for_host",
+          [](local::ScopedDevice &device, std::span<const size_t> shape,
+             DType dtype) {
+            return custom_new_keep_alive<device_array>(
+                py::type<device_array>(),
+                /*keep_alive=*/device.fiber(),
+                device_array::for_host(device, shape, dtype));
+          },
+          py::arg("device"), py::arg("shape"), py::arg("dtype"))
       .def("for_transfer",
            [](device_array &self) {
              return custom_new_keep_alive<device_array>(

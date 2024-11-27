@@ -4,12 +4,15 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-from typing import Union
+import functools
+from typing import Optional, Union
 from pathlib import Path
 import torch
+from copy import copy
 
 from .t5 import T5Config, T5Encoder
 from ...types import Dataset
+from ...transforms.dataset import set_float_dtype
 from iree.turbine.aot import FxProgramsBuilder, export
 
 __all__ = [
@@ -91,7 +94,18 @@ def prune_decoder_parameters(dataset: Dataset):
         pass
 
 
-def export_encoder_iree_parameters(model_path: str, output_path: str):
-    dataset = Dataset.load(model_path)
+def export_encoder_iree_parameters(
+    model_path_or_dataset: str | Dataset,
+    output_path: str,
+    dtype: Optional[torch.dtype] = None,
+):
+    if isinstance(model_path_or_dataset, Dataset):
+        dataset = copy(model_path_or_dataset)
+    else:
+        dataset = Dataset.load(model_path_or_dataset)
+    if dtype:
+        dataset.root_theta = dataset.root_theta.transform(
+            functools.partial(set_float_dtype, dtype=dtype)
+        )
     prune_decoder_parameters(dataset)
     dataset.save(output_path)

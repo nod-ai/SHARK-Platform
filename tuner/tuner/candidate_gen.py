@@ -30,6 +30,8 @@ from abc import abstractmethod
 
 from iree.compiler import ir  # type: ignore
 
+from iree.compiler.dialects import iree_codegen  # type: ignore
+
 from .common import *
 from .dispatch_constraints import *
 from .dispatch_parser import *
@@ -50,7 +52,7 @@ def apply_configuration(
     expr2 = re.compile(r"tile_sizes = \[\[([0-9]+)(, ([0-9]+))+\]\]")
     expr3 = re.compile(r"gpu_pipeline_options = #iree_gpu\.pipeline_options<([^>]*)>")
     expr4 = re.compile(r"\"amdgpu-waves-per-eu\" = \"([0-9])\"")
-    repl0 = f"<intrinsic = #iree_gpu.mma_layout<{configuration.intrinsic}>, subgroup_m_count = {configuration.subgroup_m_count}, subgroup_n_count = {configuration.subgroup_n_count}>"
+    repl0 = f"<intrinsic = {configuration.intrinsic}, subgroup_m_count = {configuration.subgroup_m_count}, subgroup_n_count = {configuration.subgroup_n_count}>"
     repl1 = f'LLVMGPUVectorDistribute workgroup_size = [{", ".join(map(str, configuration.workgroup_size))}] subgroup_size = {configuration.subgroup_size},'
     repl2 = f'tile_sizes = [[{", ".join(map(str, tile_sizes))}]]'
     repl3 = f"gpu_pipeline_options = {configuration.gpu_pipeline_options}"
@@ -117,7 +119,6 @@ class MmtTuner(DispatchTuner, MmtParser):
 
         wg_x, wg_y, wg_z = configuration.workgroup_size
         extra_config = get_pipeline_config(configuration)
-
         return f"""
     transform.named_sequence @{functionName}(%matmul: !transform.any_op {{transform.readonly}}) -> (!transform.any_op, !transform.any_param) {{
     %mmt = transform.include @match_mmt_f16_f16_f32 failures(propagate) (%matmul) : (!transform.any_op) -> !transform.any_op
@@ -130,7 +131,7 @@ class MmtTuner(DispatchTuner, MmtParser):
         translation_info = #iree_codegen.translation_info<LLVMGPUVectorDistribute
         workgroup_size = [{wg_x}, {wg_y}, {wg_z}] subgroup_size = {configuration.subgroup_size},
         {{mma_schedule = #iree_gpu.mma_schedule<
-            intrinsic = #iree_gpu.mma_layout<{configuration.intrinsic}>,
+            intrinsic = {configuration.intrinsic},
             subgroup_m_count = {configuration.subgroup_m_count}, subgroup_n_count = {configuration.subgroup_n_count}>
         {extra_config}}}>
         > -> !transform.any_param
@@ -203,7 +204,7 @@ class ConvTuner(DispatchTuner, ConvParser):
         translation_info = #iree_codegen.translation_info<LLVMGPUVectorDistribute
         workgroup_size = [{wg_x}, {wg_y}, {wg_z}] subgroup_size = {configuration.subgroup_size},
             {{mma_schedule = #iree_gpu.mma_schedule<
-                intrinsic = #iree_gpu.mma_layout<{configuration.intrinsic}>,
+                intrinsic = {configuration.intrinsic},
                 subgroup_m_count = {configuration.subgroup_m_count}, subgroup_n_count = {configuration.subgroup_n_count}>
             {extra_config}}}>
         > -> !transform.any_param
@@ -264,7 +265,7 @@ transform.iree.match.cast_compatible_type %rhs = tensor<{problem_size.rhs_type}>
     translation_info = #iree_codegen.translation_info<LLVMGPUVectorDistribute
     workgroup_size = [{wg_x}, {wg_y}, {wg_z}] subgroup_size = {configuration.subgroup_size},
     {{mma_schedule = #iree_gpu.mma_schedule<
-        intrinsic = #iree_gpu.mma_layout<{configuration.intrinsic}>,
+        intrinsic = {configuration.intrinsic},
         subgroup_m_count = {configuration.subgroup_m_count}, subgroup_n_count = {configuration.subgroup_n_count}>
     {extra_config}}}>
     > -> !transform.any_param
@@ -344,7 +345,7 @@ transform.iree.match.cast_compatible_type %rhs = tensor<{problem_size.rhs_type}>
     translation_info = #iree_codegen.translation_info<LLVMGPUVectorDistribute
     workgroup_size = [{wg_x}, {wg_y}, {wg_z}] subgroup_size = {configuration.subgroup_size},
     {{mma_schedule = #iree_gpu.mma_schedule<
-        intrinsic = #iree_gpu.mma_layout<{configuration.intrinsic}>,
+        intrinsic = {configuration.intrinsic},
         subgroup_m_count = {configuration.subgroup_m_count}, subgroup_n_count = {configuration.subgroup_n_count}>
     {extra_config}}}>
     > -> !transform.any_param
@@ -412,7 +413,7 @@ class BatchMatmulTuner(DispatchTuner, BatchMatmulParser):
         translation_info = #iree_codegen.translation_info<LLVMGPUPadAndVectorDistribute
         workgroup_size = [{wg_x}, {wg_y}, {wg_z}] subgroup_size = {configuration.subgroup_size},
             {{mma_schedule = #iree_gpu.mma_schedule<
-                intrinsic = #iree_gpu.mma_layout<{configuration.intrinsic}>,
+                intrinsic = {configuration.intrinsic},
                 subgroup_m_count = {configuration.subgroup_m_count}, subgroup_n_count = {configuration.subgroup_n_count}>
             {extra_config}}}>
         > -> !transform.any_param
@@ -535,13 +536,19 @@ def tune(
 
         walk_result: OpWalkResult = walk_mlir_op(mlir_module, dispatch_tuner_registry)
 
+        variant_op_list = iree_codegen.get_executable_variant_ops(mlir_module)
+        assert len(variant_op_list) == 1, "Expect one executable variant op"
+        variant_op = variant_op_list[0]
+        # Get the MMA intrinisic intructions supported by the target.
+        mma_list = iree_codegen.query_mma_intrinsics(variant_op)
+
         dispatch_tuner = walk_result.dispatch_tuner
         assert dispatch_tuner, "No suitable dispatch tuner found"
         problem_size: ProblemSize = dispatch_tuner.get_shapes(mlir_template)
         tune_logger.debug(str(problem_size))
         configs = []
         for i, config in enumerate(
-            generate_solutions(tune_logger, problem_size, num_subgroups)
+            generate_solutions(tune_logger, problem_size, num_subgroups, mma_list)
         ):
             if i >= limit:
                 break

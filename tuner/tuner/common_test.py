@@ -5,7 +5,7 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 """
-Usage: python -m pytest candidate_gen_test.py
+Usage: python -m pytest common_test.py
 """
 
 import pytest
@@ -14,6 +14,7 @@ from . import common
 from typing import Generator
 
 from iree.compiler import ir  # type: ignore
+from iree.compiler.dialects import iree_gpu  # type: ignore
 
 
 @pytest.fixture
@@ -71,10 +72,12 @@ def test_gpu_pipeline_options() -> None:
 
 
 def test_get_pipeline_config(mlir_ctx: ir.Context) -> None:
+    mma_intrinsic = iree_gpu.MMAIntrinsic.MFMA_F32_16x16x16_F16
+    mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
     config = common.Configuration(
         subgroup_size=32,
         workgroup_size=[16, 16, 1],
-        intrinsic=common.MfmaIntrinsic.mfma_f32_16x16x16_f16(),
+        intrinsic=mma_attr,
         tile_sizes=[4, 8, 16],
         subgroup_m_count=1,
         subgroup_n_count=1,
@@ -96,11 +99,6 @@ def test_get_pipeline_config(mlir_ctx: ir.Context) -> None:
     )
 
 
-def test_mfma_intrinsic_to_str(mlir_ctx: ir.Context) -> None:
-    assert str(common.MfmaIntrinsic.mfma_f32_16x16x16_f16()) == "MFMA_F32_16x16x16_F16"
-    assert str(common.MfmaIntrinsic.mfma_i32_32x32x16_i8()) == "MFMA_I32_32x32x16_I8"
-
-
 def test_get_compatible_mfma_intrinsics(tuner_ctx: common.TunerContext) -> None:
     assert common.get_compatible_mfma_intrinsics(
         common.ProblemSize(
@@ -109,10 +107,14 @@ def test_get_compatible_mfma_intrinsics(tuner_ctx: common.TunerContext) -> None:
             common.ShapedType([1280, 1280], tuner_ctx.type.f16),
             common.ShapedType([2048, 1280], tuner_ctx.type.f32),
             common.DispatchKind.mmt,
-        )
+        ),
+        [
+            iree_gpu.MMAIntrinsic.MFMA_F32_16x16x16_F16,
+            iree_gpu.MMAIntrinsic.MFMA_F32_32x32x8_F16,
+        ],
     ) == [
-        common.MfmaIntrinsic.mfma_f32_16x16x16_f16(),
-        common.MfmaIntrinsic.mfma_f32_32x32x8_f16(),
+        iree_gpu.MMAIntrinsic.MFMA_F32_16x16x16_F16,
+        iree_gpu.MMAIntrinsic.MFMA_F32_32x32x8_F16,
     ]
 
     assert common.get_compatible_mfma_intrinsics(
@@ -122,10 +124,14 @@ def test_get_compatible_mfma_intrinsics(tuner_ctx: common.TunerContext) -> None:
             common.ShapedType([1280, 1280], tuner_ctx.type.i8),
             common.ShapedType([2048, 1280], tuner_ctx.type.i32),
             common.DispatchKind.mmt,
-        )
+        ),
+        [
+            iree_gpu.MMAIntrinsic.MFMA_I32_16x16x32_I8,
+            iree_gpu.MMAIntrinsic.MFMA_I32_32x32x16_I8,
+        ],
     ) == [
-        common.MfmaIntrinsic.mfma_i32_16x16x32_i8(),
-        common.MfmaIntrinsic.mfma_i32_32x32x16_i8(),
+        iree_gpu.MMAIntrinsic.MFMA_I32_16x16x32_I8,
+        iree_gpu.MMAIntrinsic.MFMA_I32_32x32x16_I8,
     ]
 
     assert common.get_compatible_mfma_intrinsics(
@@ -135,8 +141,44 @@ def test_get_compatible_mfma_intrinsics(tuner_ctx: common.TunerContext) -> None:
             common.ShapedType([64, 640, 320], tuner_ctx.type.f32),
             common.ShapedType([64, 968, 320], tuner_ctx.type.f32),
             common.DispatchKind.batch_matmul,
-        )
+        ),
+        [
+            iree_gpu.MMAIntrinsic.MFMA_F32_16x16x16_F16,
+            iree_gpu.MMAIntrinsic.MFMA_F32_32x32x8_F16,
+        ],
     ) == [
-        common.MfmaIntrinsic.mfma_f32_16x16x16_f16(),
-        common.MfmaIntrinsic.mfma_f32_32x32x8_f16(),
+        iree_gpu.MMAIntrinsic.MFMA_F32_16x16x16_F16,
+        iree_gpu.MMAIntrinsic.MFMA_F32_32x32x8_F16,
     ]
+
+    assert common.get_compatible_mfma_intrinsics(
+        common.ProblemSize(
+            common.MatmulSize(968, 320, 640, 64),
+            common.ShapedType([64, 968, 640], tuner_ctx.type.f32),
+            common.ShapedType([64, 640, 320], tuner_ctx.type.f32),
+            common.ShapedType([64, 968, 320], tuner_ctx.type.f32),
+            common.DispatchKind.batch_matmul,
+        ),
+        [
+            iree_gpu.MMAIntrinsic.MFMA_F32_32x32x8_F16,
+        ],
+    ) == [
+        iree_gpu.MMAIntrinsic.MFMA_F32_32x32x8_F16,
+    ]
+
+    assert (
+        common.get_compatible_mfma_intrinsics(
+            common.ProblemSize(
+                common.MatmulSize(968, 320, 640, 64),
+                common.ShapedType([64, 968, 640], tuner_ctx.type.f32),
+                common.ShapedType([64, 640, 320], tuner_ctx.type.f32),
+                common.ShapedType([64, 968, 320], tuner_ctx.type.f32),
+                common.DispatchKind.batch_matmul,
+            ),
+            [
+                iree_gpu.MMAIntrinsic.MFMA_I32_16x16x32_I8,
+                iree_gpu.MMAIntrinsic.MFMA_I32_32x32x16_I8,
+            ],
+        )
+        == []
+    )

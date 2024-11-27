@@ -9,6 +9,7 @@ import sys
 import subprocess
 import logging
 import time
+import re
 from pathlib import Path
 from datetime import timedelta
 from typing import List, Optional
@@ -107,11 +108,18 @@ class ExportArtifacts:
             start = time.time()
             result = func(*args, **kwargs)
             end = time.time()
-            seconds = end - start
-            time_taken = abs(timedelta(seconds=round(seconds)))
+            total_seconds = end - start
+            time_taken = abs(timedelta(seconds=total_seconds))
+            hours, minutes, seconds = re.split(":", str(time_taken))
 
-            if seconds < 1:
-                time_taken = f" {seconds * 1000} ms"
+            if total_seconds < 1:
+                time_taken = f" {round(total_seconds * 1000, 3)} ms"
+            elif total_seconds < 60:
+                time_taken = "{:.2f} secs".format(round(float(total_seconds), 2))
+            else:
+                time_taken = "{:02d} hrs : {:02d} mins : {:.2f} secs".format(
+                    int(hours), int(minutes), round(float(seconds), 2)
+                )
 
             func_name = func.__name__
             logger.info(f" {func_name}: {time_taken}")
@@ -180,13 +188,13 @@ class ExportArtifacts:
         cwd = self.sharktank_dir
         cmd = subprocess.list2cmdline(export_args)
 
-        logger.info(f"Exporting mlir:\n" f"cd {cwd} && {cmd}")
+        logger.info(f" Exporting mlir:\n" f"cd {cwd} && {cmd}")
 
         proc = subprocess.run(cmd, shell=True, capture_output=True, cwd=cwd, text=True)
         if proc.returncode != 0:
             raise ExportMlirException(proc, cwd)
         else:
-            logger.info(f"Exported to mlir successfully:\n" f"{proc.stdout}")
+            logger.info(f" Exported to mlir successfully:\n" f"{proc.stdout}")
 
         return proc.returncode
 
@@ -223,7 +231,7 @@ class ExportArtifacts:
             compile_args += args
         cmd = subprocess.list2cmdline(compile_args)
 
-        logging.getLogger().info(f"Launching compile command:\n" f"cd {cwd} && {cmd}")
+        logger.info(f" Launching compile command:\n" f"cd {cwd} && {cmd}")
         proc = subprocess.run(cmd, shell=True, capture_output=True, cwd=cwd)
         return_code = proc.returncode
         if return_code != 0:
@@ -277,7 +285,7 @@ class ExportArtifacts:
         benchmark_args += devices
         benchmark_args += args
         cmd = subprocess.list2cmdline(benchmark_args)
-        logging.getLogger().info(f"Launching run command:\n" f"cd {cwd} && {cmd}")
+        logger.info(f" Launching run command:\n" f"cd {cwd} && {cmd}")
         proc = subprocess.run(cmd, shell=True, stdout=sys.stdout, cwd=cwd)
         return_code = proc.returncode
         if return_code != 0:

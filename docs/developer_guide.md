@@ -3,6 +3,57 @@
 Each sub-project has its own developer guide. If you would like to work across
 projects, these instructions should help you get started:
 
+
+### Install Dependencies
+
+Install shortfin dependencies
+```bash
+sudo apt update && sudo apt install -y clang lld
+```
+
+### Prepare your python environment
+
+Install:
+
+```bash
+sudo apt install python-is-python3 python3-venv python3-dev
+```
+
+<details>
+
+<summary> Or, alternatively, use `pyenv` to manage a separate python installation for more control over its version: </summary>
+
+
+The following instructions are taken from pyenv's guide here: https://github.com/pyenv/pyenv?tab=readme-ov-file#a-getting-pyenv
+
+First, install pyenv and its dependencies.
+
+```bash
+sudo apt update; sudo apt install build-essential libssl-dev zlib1g-dev \
+libbz2-dev libreadline-dev libsqlite3-dev curl git \
+libncursesw5-dev xz-utils tk-dev libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev
+curl https://pyenv.run | bash
+```
+
+Then, make pyenv available by adding the below to your `~/.bashrc`:
+
+```bash
+export PYENV_ROOT="$HOME/.pyenv"
+command -v pyenv >/dev/null || export PATH="$PYENV_ROOT/bin:$PATH"
+eval "$(pyenv init -)"
+```
+
+Finally, install a pyenv-managed version of python
+
+```bash
+pyenv install 3.12 # or whichever python version you'd like
+pyenv local 3.12
+```
+
+Now, your python, pip, and venv should be managed by pyenv instead.
+
+</details>
+
 ### Setup a venv
 
 We recommend setting up a Python
@@ -54,8 +105,10 @@ See also: [nightly_releases.md](nightly_releases.md).
 ### Running tests
 
 ```bash
+pip install -r shortfin/requirements-tests.txt
 pytest sharktank
 pytest shortfin
+pytest app_tests/integration_tests
 ```
 
 ### Optional: pre-commits and developer settings

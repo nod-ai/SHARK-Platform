@@ -9,21 +9,31 @@ import os
 import pytest
 import sys
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
-from integration_tests.llm.utils import compile_model, export_paged_llm_v1
+sys.path.append(
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+)
+from integration_tests.llm.utils import (
+    compile_model,
+    export_paged_llm_v1,
+    download_with_hf_datasets,
+)
 
 
 @pytest.fixture(scope="module")
 def pre_process_model(request, tmp_path_factory):
     tmp_dir = tmp_path_factory.mktemp("sglang_benchmark_test")
 
-    model_path = request.param["model_path"]
+    model_name = request.param["model_name"]
+    model_param_file_name = request.param["model_param_file_name"]
     settings = request.param["settings"]
     batch_sizes = request.param["batch_sizes"]
 
     mlir_path = tmp_dir / "model.mlir"
     config_path = tmp_dir / "config.json"
     vmfb_path = tmp_dir / "model.vmfb"
+
+    model_path = tmp_dir / model_param_file_name
+    download_with_hf_datasets(tmp_dir, model_name)
 
     export_paged_llm_v1(mlir_path, config_path, model_path, batch_sizes)
 

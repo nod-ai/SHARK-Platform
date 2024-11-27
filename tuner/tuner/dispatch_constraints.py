@@ -10,6 +10,9 @@
 import z3  # type: ignore
 from typing import Iterator
 
+
+from iree.compiler.dialects import iree_gpu  # type: ignore
+
 from .common import *
 
 
@@ -18,13 +21,22 @@ def get_mfma_intrinsic_constraints(
     intrinsic_m: z3.ArithRef,
     intrinsic_n: z3.ArithRef,
     intrinsic_k: z3.ArithRef,
+    mma_intrinsics: list[iree_gpu.MMAIntrinsic],
 ) -> z3.BoolRef:
-    compatible_intrinsics = get_compatible_mfma_intrinsics(problem_size)
+    compatible_intrinsics = get_compatible_mfma_intrinsics(problem_size, mma_intrinsics)
     assert len(compatible_intrinsics) > 0, "No compatible intrinsics found"
+
+    mma_attrs = [iree_gpu.MMAAttr.get(mfma) for mfma in compatible_intrinsics]
+    mnk_shapes = [mma_attr.mnk_shape for mma_attr in mma_attrs]
+
     return z3.Or(
         *(
-            z3.And(intrinsic_m == mfma.m, intrinsic_n == mfma.n, intrinsic_k == mfma.k)
-            for mfma in compatible_intrinsics
+            z3.And(
+                intrinsic_m == m,
+                intrinsic_n == n,
+                intrinsic_k == k,
+            )
+            for m, n, k in mnk_shapes
         )
     )
 
@@ -68,6 +80,7 @@ def generate_constraints(
     subgroup_m_count,
     subgroup_n_count,
     waves_per_eu,
+    mma_intrinsics: list[iree_gpu.MMAIntrinsic],
 ):
     M, N, K = (
         problem_size.matmul_size.M,
@@ -82,7 +95,7 @@ def generate_constraints(
     constraints += [subgroup_size == 64, wg_threads <= 1024]
     constraints += [
         get_mfma_intrinsic_constraints(
-            problem_size, intrinsic_mn, intrinsic_mn, intrinsic_k
+            problem_size, intrinsic_mn, intrinsic_mn, intrinsic_k, mma_intrinsics
         )
     ]
     subgroup_k_count = 1
@@ -129,8 +142,40 @@ def generate_constraints(
     return constraints
 
 
+def getMMAAttr(
+    output_type: ir.IntegerType | ir.FloatType,
+    m: int,
+    n: int,
+    k: int,
+    lhs_type: ir.IntegerType | ir.FloatType,
+    rhs_type: ir.IntegerType | ir.FloatType,
+) -> iree_gpu.MMAAttr:
+    for mma_intrinsic in iree_gpu.MMAIntrinsic:
+        mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
+        a_type, b_type, c_type = mma_attr.abc_element_types
+        mnk = mma_attr.mnk_shape
+        if (
+            a_type == lhs_type
+            and b_type == rhs_type
+            and c_type == output_type
+            and m == mnk[0]
+            and n == mnk[1]
+            and k == mnk[2]
+        ):
+            return mma_attr
+        # If no matching intrinsic is found, raise an exception
+    raise ValueError(
+        f"No matching MMA intrinsic found for "
+        f"output_type={output_type}, lhs_type={lhs_type}, rhs_type={rhs_type}, "
+        f"m={m}, n={n}, k={k}."
+    )
+
+
 def generate_solutions(
-    logger: logging.Logger, problem_size: ProblemSize, num_subgrups: int
+    logger: logging.Logger,
+    problem_size: ProblemSize,
+    num_subgrups: int,
+    mma_intrinsics: list[iree_gpu.MMAIntrinsic],
 ) -> Iterator[Configuration]:
     M, N, K = problem_size.MNK
     logger.info(f"{M},{N},{K}")
@@ -168,6 +213,7 @@ def generate_solutions(
         sg_m_cnt,
         sg_n_cnt,
         waves_per_eu,
+        mma_intrinsics,
     )
     solver.add(z3.simplify(z3.And(constraints)))
     logger.debug(f"Initial constraints: {solver}")
@@ -179,12 +225,13 @@ def generate_solutions(
         config = Configuration(
             lookup(subgroup_size),
             [lookup(wg_x), lookup(wg_y), lookup(wg_z)],
-            MfmaIntrinsic(
+            getMMAAttr(
                 problem_size.res_type.element_type,
                 lookup(intrinsic_mn),
                 lookup(intrinsic_mn),
                 lookup(intrinsic_k),
                 problem_size.lhs_type.element_type,
+                problem_size.rhs_type.element_type,
             ),
             [lookup(m), lookup(n), lookup(k)],
             lookup(sg_m_cnt),
