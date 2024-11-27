@@ -61,7 +61,8 @@ jobs:
           pip install --no-compile -r requirements.txt -e sharktank/ shortfin/
 
           # Get latest stable IREE release
-          pip install iree-turbine
+          pip install --src deps \
+            -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
 
       - name: Run LLM Integration Tests
         run: pytest -v app_tests/integration_tests/llm/shortfin --log-cli-level=INFO

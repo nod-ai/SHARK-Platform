@@ -62,7 +62,8 @@ jobs:
           pip install --no-compile -r requirements.txt -r sharktank/requirements-tests.txt -e sharktank/
 
           # Get latest stable IREE release
-          pip install iree-turbine
+          pip install --src deps \
+            -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
 
       - name: Run sharktank tests
         if: ${{ !cancelled() }}
@@ -112,7 +113,8 @@ jobs:
           pip install --no-compile -r requirements.txt -r sharktank/requirements-tests.txt -e sharktank/
 
           # Get latest stable IREE release
-          pip install iree-turbine
+          pip install --src deps \
+            -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
 
       - name: Run tests
         run: |

@@ -66,7 +66,8 @@ jobs:
           pip install --no-compile -r requirements.txt -e sharktank/ shortfin/
 
           # Get latest stable IREE release
-          pip install iree-turbine
+          pip install --src deps \
+            -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
 
       - name: Run llama 8b f16 decomposed test
         run: pytest sharktank/tests/models/llama/benchmark_amdgpu_test.py -v -s --iree-hip-target=gfx942 --run-quick-llama-test
