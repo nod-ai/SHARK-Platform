@@ -83,6 +83,24 @@ class InferenceTokenizer(ABC):
         ...
 
 
+class FakeTokenizer(InferenceTokenizer):
+    def _encode(self, texts: list[str], add_start_token: bool) -> list[list[int]]:
+        encoded = []
+        for text in texts:
+            encoded.append([int(t) for t in text.split(" ")])
+        return encoded
+
+    def _decode(self, tokens: list[list[int]]) -> list[str]:
+        strings = []
+        for token in tokens:
+            strings.append(" ".join([str(t) for t in token]))
+        return strings
+
+
+def fake_tokenizer():
+    return FakeTokenizer()
+
+
 def load_tokenizer(*posargs, tokenizer_type: str = "transformers", **kwargs):
     if tokenizer_type == "transformers":
         return _create_transformers_tokenizer(*posargs, **kwargs)
