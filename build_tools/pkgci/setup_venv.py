@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
+# Copyright 2024 Advanced Micro Devices, Inc.
 # Copyright 2023 The IREE Authors
 #
 # Licensed under the Apache License v2.0 with LLVM Exceptions.
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-"""Sets up a Python venv with compiler/runtime from a workflow run.
+"""Sets up a Python venv with all shark-ai dev packages from a workflow run.
 
 There are two modes in which to use this script:
 
@@ -38,7 +39,7 @@ import zipfile
 @functools.lru_cache
 def list_gh_artifacts(run_id: str) -> Dict[str, str]:
     print(f"Fetching artifacts for workflow run {run_id}")
-    base_path = f"/repos/iree-org/iree"
+    base_path = f"/repos/nod-ai/shark-ai"
     output = subprocess.check_output(
         [
             "gh",
@@ -94,16 +95,6 @@ def parse_arguments(argv=None):
         "--fetch-gh-workflow", help="Fetch artifacts from a GitHub workflow"
     )
     parser.add_argument(
-        "--compiler-variant",
-        default="",
-        help="Package variant to install for the compiler ('', 'asserts')",
-    )
-    parser.add_argument(
-        "--runtime-variant",
-        default="",
-        help="Package variant to install for the runtime ('', 'asserts')",
-    )
-    parser.add_argument(
         "venv_dir", type=Path, help="Directory in which to create the venv"
     )
     args = parser.parse_args(argv)
@@ -119,13 +110,8 @@ def main(args):
 
     artifact_prefix = f"{platform.system().lower()}_{platform.machine()}"
     wheels = []
-    for package_stem, variant in [
-        ("iree-base-compiler", args.compiler_variant),
-        ("iree-base-runtime", args.runtime_variant),
-    ]:
-        wheels.append(
-            find_wheel_for_variants(args, artifact_prefix, package_stem, variant)
-        )
+    for package_name in ["shark_ai", "shortfin", "sharktank"]:
+        wheels.append(find_wheel(args, artifact_prefix, package_name))
     print("Installing wheels:", wheels)
 
     # Set up venv.
@@ -161,12 +147,8 @@ def main(args):
     return 0
 
 
-def find_wheel_for_variants(
-    args, artifact_prefix: str, package_stem: str, variant: str
-) -> Tuple[Path, str]:
+def find_wheel(args, artifact_prefix: str, package_name: str) -> Tuple[Path, str]:
     artifact_path = Path(args.artifact_path)
-    package_suffix = "" if variant == "" else f"-{variant}"
-    package_name = f"{package_stem}{package_suffix}"
 
     def has_package():
         norm_package_name = package_name.replace("-", "_")
@@ -184,8 +166,7 @@ def find_wheel_for_variants(
 
     # Fetch.
     artifact_path.mkdir(parents=True, exist_ok=True)
-    artifact_suffix = "" if variant == "" else f"_{variant}"
-    artifact_name = f"{artifact_prefix}_release{artifact_suffix}_packages"
+    artifact_name = f"{artifact_prefix}_dev_packages"
     artifact_file = artifact_path / f"{artifact_name}.zip"
     if not artifact_file.exists():
         print(f"Package {package_name} not found. Fetching from {artifact_name}...")
