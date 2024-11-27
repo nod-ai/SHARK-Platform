@@ -49,8 +49,8 @@ def cache(page_pool):
 
 # fmt: off
 @pytest.mark.parametrize(
-   "tokens,expected_pages,test_name",
-   [   # Tokens                                Pages  Name
+   "tokens,expected_pages,case_name",
+   [   # Tokens                                Pages  Case Name
        ([],                                    0,     "empty_token_list"),
        (list(range(TEST_PAGE_SIZE // 2)),      1,     "partial_page"),
        (list(range(TEST_PAGE_SIZE)),           1,     "exact_page"),
@@ -63,10 +63,10 @@ def cache(page_pool):
    ],
 )
 # fmt: on
-def test_allocation_sizes(cache, tokens, expected_pages, test_name):
+def test_allocation_sizes(cache, tokens, expected_pages, case_name):
     allocation = cache.acquire_pages_for_tokens(tokens)
     pages = allocation.pages
-    assert len(pages) == expected_pages, f"Failed for case: {test_name}"
+    assert len(pages) == expected_pages, f"Failed for case: {case_name}"
     allocation.release_pages()
 
 
