@@ -153,16 +153,28 @@ def pytest_addoption(parser):
     #     --outtype=f32 \
     #     t5-v1_1-small
     parser.addoption(
-        "--google-t5-v1-1-small-fp32-model-path",
+        "--google-t5-v1-1-small-f32-model-path",
         type=Path,
-        default="/data/t5/small/google__t5-v1_1-small_fp32.gguf",
-        help="Google T5 v1.1 small fp32 model path",
+        default="/data/t5/small/google__t5-v1_1-small_f32.gguf",
+        help="Google T5 v1.1 small float32 model path",
     )
     parser.addoption(
-        "--google-t5-v1-1-xxl-fp32-model-path",
+        "--google-t5-v1-1-small-bf16-model-path",
         type=Path,
-        default="/data/t5/xxl/google__t5-v1_1-xxl_fp32.gguf",
-        help="Google T5 v1.1 XXL fp32 model path",
+        default="/data/t5/small/google__t5-v1_1-small_bf16.gguf",
+        help="Google T5 v1.1 small bfloat16 model path",
+    )
+    parser.addoption(
+        "--google-t5-v1-1-xxl-f32-model-path",
+        type=Path,
+        default="/data/t5/xxl/google__t5-v1_1-xxl_f32.gguf",
+        help="Google T5 v1.1 XXL float32 model path",
+    )
+    parser.addoption(
+        "--google-t5-v1-1-xxl-bf16-model-path",
+        type=Path,
+        default="/data/t5/xxl/google__t5-v1_1-xxl_bf16.gguf",
+        help="Google T5 v1.1 XXL bfloat16 model path",
     )
 
     parser.addoption(
@@ -288,15 +300,20 @@ def get_model_artifacts(request: FixtureRequest):
     model_path["llama3_405b_fp8_model_path"] = set_fixture_from_cli_option(
         request, "--llama3-405b-fp8-model-path", "llama3_405b_fp8_model"
     )
-    model_path["google__t5_v1_1_small_fp32_model_path"] = set_fixture_from_cli_option(
+    model_path["google__t5_v1_1_small_f32_model_path"] = set_fixture_from_cli_option(
         request,
-        "--google-t5-v1-1-small-fp32-model-path",
-        "google__t5_v1_1_small_fp32_model",
+        "--google-t5-v1-1-small-f32-model-path",
+        "google__t5_v1_1_small_f32_model",
     )
-    model_path["google__t5_v1_1_xxl_fp32_model_path"] = set_fixture_from_cli_option(
+    model_path["google__t5_v1_1_small_bf16_model_path"] = set_fixture_from_cli_option(
         request,
-        "--google-t5-v1-1-xxl-fp32-model-path",
-        "google__t5_v1_1_xxl_fp32_model",
+        "--google-t5-v1-1-small-bf16-model-path",
+        "google__t5_v1_1_small_bf16_model",
+    )
+    model_path["google__t5_v1_1_xxl_f32_model_path"] = set_fixture_from_cli_option(
+        request,
+        "--google-t5-v1-1-xxl-f32-model-path",
+        "google__t5_v1_1_xxl_f32_model",
     )
     return model_path
 

@@ -118,6 +118,15 @@ def _wrap_tensor(
             name=name, data=_externalize_tensor(name, data, logical_shape)
         )
 
+    if type_name == "BF16":
+        assert data.dtype == np.uint8
+        return DefaultPrimitiveTensor(
+            name=name,
+            data=_externalize_tensor(name, data.view(np.int16), logical_shape).view(
+                dtype=torch.bfloat16
+            ),
+        )
+
     quantized_type = _quantized_types.get(type_name)
     if quantized_type is not None:
         return quantized_type(

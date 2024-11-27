@@ -4,15 +4,14 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-name: SGLang Llama Integration Tests
+name: CI - sharktank perplexity short
 
 on:
   workflow_dispatch:
-  schedule:
-    # Run periodically, every 4 hours. This is ran periodically with the
-    # intent of catching regressions early, and allowing for those
-    # regressions to be easily triaged to a small subset of commits.
-    - cron: '0 */4 * * *'
+  pull_request:
+  push:
+    branches:
+      - main
 
 concurrency:
   # A PR number if a pull request and otherwise the commit hash. This cancels
@@ -23,23 +22,21 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  sglang_bench_serve:
-    name: "SGLang Integration Tests"
+  test_perplexity_iree:
+    name: "Llama3.1 8B FP16"
     strategy:
       matrix:
         version: [3.11]
+        runs-on: [llama-mi300x-3]
       fail-fast: false
-    runs-on: mi300x-4
+    runs-on: ${{matrix.runs-on}}
     defaults:
       run:
         shell: bash
     env:
       PIP_CACHE_DIR: "${{ github.workspace }}/.pip-cache"
+      SHARK_PLATFORM_REPO_ROOT: ${{ github.workspace }}
     steps:
-      - name: Get Current Date
-        id: date
-        run: echo "::set-output name=date::$(date +'%Y-%m-%d')"
-
       - name: "Setting up Python"
         id: setup_python
         uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
@@ -54,31 +51,27 @@ jobs:
         id: cache-pip
         with:
           path: ${{ env.PIP_CACHE_DIR }}
-          key: pip-${{ steps.setup_python.outputs.python-version }}-${{ hashFiles('*requirements.txt') }}
+          key: pip-${{ steps.setup_python.outputs.python-version }}-${{ hashFiles('*requirements*.txt','sharktank/requirements*.txt') }}
 
-      - name: Install pip deps
+      - name: Install sharktank deps
         run: |
           python -m pip install --no-compile --upgrade pip
           # Note: We install in three steps in order to satisfy requirements
           # from non default locations first. Installing the PyTorch CPU
           # wheels saves multiple minutes and a lot of bandwidth on runner setup.
           pip install --no-compile -r pytorch-cpu-requirements.txt
+          pip install --no-compile -r requirements.txt -r sharktank/requirements-tests.txt -e sharktank/
+
+          # Install latest iree-tubrine.
           pip install --no-compile -f https://iree.dev/pip-release-links.html --src deps \
             -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
-          pip install --no-compile -r requirements.txt -e sharktank/ shortfin/
 
-          # Use newest possible releases to be able to track commits that may
-          # cause errors.
-          pip install -f https://iree.dev/pip-release-links.html --upgrade \
+          # Try with the latest IREE nightly releases, not what iree-turbine pins.
+          # We could also pin to a known working or stable version.
+          # This should eventually stabilize. Do the best we can for now.
+          pip install -f https://iree.dev/pip-release-links.html --upgrade --pre \
             iree-base-compiler \
-            iree-base-runtime \
-            "numpy<2.0"
+            iree-base-runtime
 
-      - name: Install SGLang
-        run: pip install "git+https://github.com/nod-ai/sglang.git#subdirectory=python"
-
-      - name: Install sentence_transformers
-        run: pip install sentence_transformers
-
-      - name: Run Integration Tests
-        run: pytest -v app_tests/integration_tests/llm/sglang --log-cli-level=INFO
+      - name: Run perplexity test with vmfb
+        run:  pytest -n 8 -v -s sharktank/tests/evaluate/perplexity_iree_test.py --bs=5 --iree-device='hip://6' --iree-hip-target=gfx942 --iree-hal-target-backends=rocm --llama3-8b-f16-model-path=/data/llama3.1/8b/llama8b_f16.irpa --llama3-8b-tokenizer-path=/data/llama3.1/8b/tokenizer_config.json
