@@ -58,8 +58,8 @@ class InferenceExecRequest(sf.Message):
     def cache_page_indices(self, max_len: int) -> list[int]:
         if not self.allocation:
             return []
-        indices = [p.index for p in self.allocation.pages]
-        return indices[:max_len]
+        indices = [p.index for p in self.allocation.pages[:max_len]]
+        return indices
 
     def publish_allocated_pages(self, up_to_page_index: int):
         assert self.allocation
