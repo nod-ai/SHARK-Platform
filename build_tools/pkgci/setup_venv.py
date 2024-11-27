@@ -6,21 +6,64 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-"""Sets up a Python venv with all shark-ai dev packages from a workflow run.
+"""Sets up a Python venv with shark-ai packages from a workflow run.
 
-There are two modes in which to use this script:
+There are several modes in which to use this script:
 
-* Within a workflow, an artifact action will typically be used to fetch
-  relevant package artifacts. Specify the fetch location with
-  `--artifact-path=`.
+* Within a workflow triggered by `workflow_call`, an artifact action will
+  typically be used to fetch relevant package artifacts. Specify the fetched
+  location with `--artifact-path=`:
 
-* Locally, the `--fetch-gh-workflow=WORKFLOW_ID` can be used instead in order
-  to download and setup the venv in one step.
+  ```yml
+  - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+    with:
+      name: linux_x86_64_release_packages
+      path: ${{ env.PACKAGE_DOWNLOAD_DIR }}
+  - name: Setup venv
+    run: |
+      ./build_tools/pkgci/setup_venv.py ${VENV_DIR} \
+      --artifact-path=${PACKAGE_DOWNLOAD_DIR}
+  ```
+
+* Within a workflow triggered by `workflow_dispatch`, pass `artifact_run_id` as
+  an input that developers must specify when running the workflow:
+
+  ```yml
+  on:
+    workflow_dispatch:
+      inputs:
+      artifact_run_id:
+        type: string
+        default: ""
+
+  ...
+    steps:
+    - name: Setup venv
+      run: |
+        ./build_tools/pkgci/setup_venv.py ${VENV_DIR} \
+        --fetch-gh-workflow=${{ inputs.artifact_run_id }}
+  ```
+
+  (Note that these two modes are often combined to allow for workflow testing)
+
+* Locally, the `--fetch-gh-workflow=WORKFLOW_ID` can be used to download and
+  setup the venv from a specific workflow run in one step:
+
+
+  ```bash
+  python3.11 ./build_tools/pkgci/setup_venv.py /tmp/.venv --fetch-gh-workflow=12056182052
+  ```
+
+* Locally, the `--fetch-git-ref=GIT_REF` can be used to download and setup the
+  venv from the latest workflow run for a given ref (commit) in one step:
+
+  ```bash
+  python3.11 ./build_tools/pkgci/setup_venv.py /tmp/.venv --fetch-git-ref=main
+  ```
 
 You must have the `gh` command line tool installed and authenticated if you
 will be fetching artifacts.
 """
-
 from typing import Optional, Dict, Tuple
 
 import argparse
@@ -34,6 +77,69 @@ import subprocess
 import sys
 import tempfile
 import zipfile
+
+THIS_DIR = Path(__file__).parent.resolve()
+REPO_ROOT = THIS_DIR.parent.parent
+
+
+def parse_arguments(argv=None):
+    parser = argparse.ArgumentParser(description="Setup venv")
+    parser.add_argument(
+        "venv_dir", type=Path, help="Directory in which to create the venv"
+    )
+    parser.add_argument("--artifact-path", help="Path in which to find/fetch artifacts")
+    parser.add_argument(
+        "--packages",
+        help="Comma-delimited list of packages to install, in order",
+        default="shark-ai,shortfin,sharktank",
+    )
+    parser.add_argument(
+        "--install-using-index",
+        help="The default mode installs with `--no-index` to be sure that only "
+        "our packages are installed. Setting this flag removes that option, "
+        "more closely matching the behavior that users will see when they "
+        "install published packages.",
+        action="store_true",
+    )
+
+    fetch_group = parser.add_mutually_exclusive_group()
+    fetch_group.add_argument(
+        "--fetch-gh-workflow", help="Fetch artifacts from a GitHub workflow"
+    )
+    fetch_group.add_argument("--fetch-git-ref", help="Fetch artifacts for a git ref")
+
+    args = parser.parse_args(argv)
+    return args
+
+
+def get_latest_workflow_run_id_for_ref(ref: str) -> int:
+    print(f"Normalizing ref: {ref}")
+    normalized_ref = (
+        subprocess.check_output(["git", "rev-parse", ref], cwd=REPO_ROOT)
+        .decode()
+        .strip()
+    )
+
+    print(f"Fetching artifacts for normalized ref: {normalized_ref}")
+    base_path = f"/repos/nod-ai/shark-ai"
+    workflow_run_args = [
+        "gh",
+        "api",
+        "-H",
+        "Accept: application/vnd.github+json",
+        "-H",
+        "X-GitHub-Api-Version: 2022-11-28",
+        f"{base_path}/actions/workflows/pkgci.yml/runs?head_sha={normalized_ref}",
+    ]
+    print(f"Running command to list workflow runs:\n  {' '.join(workflow_run_args)}")
+    workflow_run_output = subprocess.check_output(workflow_run_args)
+    workflow_run_json_output = json.loads(workflow_run_output)
+    if workflow_run_json_output["total_count"] == 0:
+        raise RuntimeError("Workflow did not run at this commit")
+
+    latest_run = workflow_run_json_output["workflow_runs"][-1]
+    print(f"Found workflow run: {latest_run['html_url']}")
+    return latest_run["id"]
 
 
 @functools.lru_cache
@@ -88,43 +194,26 @@ def find_venv_python(venv_path: Path) -> Optional[Path]:
     return None
 
 
-def parse_arguments(argv=None):
-    parser = argparse.ArgumentParser(description="Setup venv")
-    parser.add_argument("--artifact-path", help="Path in which to find/fetch artifacts")
-    parser.add_argument(
-        "--fetch-gh-workflow", help="Fetch artifacts from a GitHub workflow"
-    )
-    parser.add_argument(
-        "venv_dir", type=Path, help="Directory in which to create the venv"
-    )
-    args = parser.parse_args(argv)
-    return args
+def install_with_index(python_exe, wheels):
+    # Install each of the built wheels, allowing dependencies and an index.
+    # Note that --pre pulls in prerelease versions of dependencies too, like
+    # numpy. We could try a solution like https://stackoverflow.com/a/76124424.
+    for artifact_path, package_name in wheels:
+        cmd = [
+            str(python_exe),
+            "-m",
+            "pip",
+            "install",
+            "--pre",
+            "-f",
+            str(artifact_path),
+            package_name,
+        ]
+        print(f"\nRunning command: {' '.join([str(c) for c in cmd])}")
+        subprocess.check_call(cmd)
 
 
-def main(args):
-    # Make sure we have an artifact path if fetching.
-    if not args.artifact_path and args.fetch_gh_workflow:
-        with tempfile.TemporaryDirectory() as td:
-            args.artifact_path = td
-            return main(args)
-
-    artifact_prefix = f"{platform.system().lower()}_{platform.machine()}"
-    wheels = []
-    for package_name in ["shark_ai", "shortfin", "sharktank"]:
-        wheels.append(find_wheel(args, artifact_prefix, package_name))
-    print("Installing wheels:", wheels)
-
-    # Set up venv.
-    venv_path = args.venv_dir
-    python_exe = find_venv_python(venv_path)
-
-    if not python_exe:
-        print(f"Creating venv at {str(venv_path)}")
-        subprocess.check_call([sys.executable, "-m", "venv", str(venv_path)])
-        python_exe = find_venv_python(venv_path)
-        if not python_exe:
-            raise RuntimeError("Error creating venv")
-
+def install_without_index(python_exe, packages, wheels):
     # Install each of the built wheels without deps or consulting an index.
     # This is because we absolutely don't want this falling back to anything
     # but what we said.
@@ -141,8 +230,92 @@ def main(args):
             "--force-reinstall",
             package_name,
         ]
-        print(f"Running command: {' '.join([str(c) for c in cmd])}")
+        print(f"\nRunning command: {' '.join([str(c) for c in cmd])}")
         subprocess.check_call(cmd)
+
+    # Install requirements for the requested packages.
+    # Note that not all of these are included in the package dependencies, but
+    # developers usually want the test requirements too.
+    requirements_files = []
+    if "sharktank" in packages:
+        requirements_files.append("sharktank/requirements.txt")
+        requirements_files.append("sharktank/requirements-tests.txt")
+    if "shortfin" in packages:
+        requirements_files.append("shortfin/requirements-tests.txt")
+
+    for requirements_file in requirements_files:
+        cmd = [
+            str(python_exe),
+            "-m",
+            "pip",
+            "install",
+            "-r",
+            str(REPO_ROOT / requirements_file),
+        ]
+        print(f"\nRunning command: {' '.join([str(c) for c in cmd])}")
+        subprocess.check_call(cmd)
+
+
+def main(args):
+    # Look up the workflow run for a ref.
+    if args.fetch_git_ref:
+        latest_gh_workflow = get_latest_workflow_run_id_for_ref(args.fetch_git_ref)
+        args.fetch_git_ref = ""
+        args.fetch_gh_workflow = str(latest_gh_workflow)
+        return main(args)
+
+    # Make sure we have an artifact path if fetching.
+    if not args.artifact_path and args.fetch_gh_workflow:
+        with tempfile.TemporaryDirectory() as td:
+            args.artifact_path = td
+            return main(args)
+
+    # Parse command-delimited list of packages from args.
+    packages = args.packages.split(",")
+    print("Installing packages:", packages)
+
+    artifact_prefix = f"{platform.system().lower()}_{platform.machine()}"
+    wheels = []
+    for package_name in packages:
+        wheels.append(find_wheel(args, artifact_prefix, package_name))
+    print("Installing wheels:", wheels)
+
+    # Set up venv.
+    venv_path = args.venv_dir
+    python_exe = find_venv_python(venv_path)
+
+    if not python_exe:
+        print(f"Creating venv at {str(venv_path)}")
+        subprocess.check_call([sys.executable, "-m", "venv", str(venv_path)])
+        python_exe = find_venv_python(venv_path)
+        if not python_exe:
+            raise RuntimeError("Error creating venv")
+        subprocess.check_call(
+            [python_exe, "-m", "pip", "install", "--upgrade", "pip", "--quiet"]
+        )
+
+    # Install the PyTorch CPU wheels first to save multiple minutes and a lot of bandwidth.
+    cmd = [
+        str(python_exe),
+        "-m",
+        "pip",
+        "install",
+        "--no-compile",
+        "-r",
+        str(REPO_ROOT / "pytorch-cpu-requirements.txt"),
+    ]
+    print(f"\nRunning command: {' '.join([str(c) for c in cmd])}")
+    subprocess.check_call(cmd)
+
+    if args.install_using_index:
+        install_with_index(python_exe, wheels)
+    else:
+        install_without_index(python_exe, packages, wheels)
+
+    # Log which packages are installed.
+    print("")
+    print(f"Checking packages with 'pip freeze':")
+    subprocess.check_call([str(python_exe), "-m", "pip", "freeze"])
 
     return 0
 
