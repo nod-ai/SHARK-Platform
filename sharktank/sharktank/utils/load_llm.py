@@ -23,24 +23,20 @@ class TorchGenerator:
         self,
         model: PagedLlamaModelV1,
         tokenizer: InferenceTokenizer,
-        page_cache_size: int = 8192,
         # Need to look at the model more for this.
         end_token: int = 2,
     ):
         self.model = model
         self.tokenizer = tokenizer
-        if model.cache.is_paged:
-            self.shared_cache_state = model.cache.paged.allocate(page_cache_size)
-        else:
-            self.shared_cache_state = None
-        self.free_pages = list(range(1, 8192))
         self.end_token = end_token
 
     @property
     def block_seq_stride(self) -> int:
         return self.model.cache.block_seq_stride
 
-    def begin_batch(self, prompts: list[str], add_start_token: bool):
+    def begin_batch(
+        self, prompts: list[str], add_start_token: bool, page_cache_size: int = 128
+    ):
         token_ids, seq_lens = self.tokenizer.encode(
             prompts,
             pad_to_multiple_of=self.model.cache.pad_sequence_stride,
@@ -48,8 +44,10 @@ class TorchGenerator:
         )
         token_ids = torch.tensor(token_ids, device=self.model.device)
         seq_lens = torch.tensor(seq_lens, device=self.model.device)
-        if self.shared_cache_state is not None:
-            cache_state = self.shared_cache_state
+
+        if self.model.cache.is_paged:
+            cache_state = self.model.cache.paged.allocate(page_cache_size)
+            self.free_pages = list(range(1, page_cache_size))
         else:
             cache_state = self.model.cache.direct.allocate(bs=len(prompts))
         return Batch(self, token_ids, seq_lens, cache_state)
@@ -59,10 +57,11 @@ class TorchGenerator:
         token_batch: torch.tensor,
         seq_lens_batch: torch.tensor,
         bs: int,
+        page_cache_size: int = 128,
     ):
-
-        if self.shared_cache_state is not None:
-            cache_state = self.shared_cache_state
+        if self.model.cache.is_paged:
+            cache_state = self.model.cache.paged.allocate(page_cache_size)
+            self.free_pages = list(range(1, page_cache_size))
         else:
             cache_state = self.model.cache.direct.allocate(bs=bs)
         return Batch(self, token_batch, seq_lens_batch, cache_state)

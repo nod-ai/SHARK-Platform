@@ -10,6 +10,7 @@ from typing import List, Optional, Sequence, Union, Any, Tuple
 import itertools
 from numbers import Number
 import math
+import functools
 
 from ..types import (
     AnyTensor,
@@ -41,7 +42,7 @@ def all_gather_split(
     shards = [
         cat(
             [
-                transfer_to_logical_device(shard, i)
+                shard if i == j else transfer_to_logical_device(shard, i)
                 for j, shard in enumerate(input.shards)
             ],
             dim=dim,
@@ -59,10 +60,10 @@ def all_reduce_split_or_unreduced(
     # If we don't move first, common sub-expression elimination is free to collapse all
     # reductions into one and then copy to all devices, which is not what we want.
     shards = [
-        elementwise(
-            torch.add,
-            *[
-                transfer_to_logical_device(shard, i)
+        functools.reduce(
+            lambda x, y: elementwise(torch.add, x, y),
+            [
+                shard if i == j else transfer_to_logical_device(shard, i)
                 for j, shard in enumerate(input.shards)
             ],
         )
@@ -1173,8 +1174,11 @@ def unshard_split(input: SplitPrimitiveTensor) -> Tensor:
 @unshard.override(UnreducedTensor)
 def unshard_unreduced(input: UnreducedTensor) -> Tensor:
     shards = input.shards
-    shards = [transfer_to_logical_device(shard, 0) for i, shard in enumerate(shards)]
-    return elementwise(torch.add, *shards)
+    shards = [
+        shard if i == 0 else transfer_to_logical_device(shard, 0)
+        for i, shard in enumerate(shards)
+    ]
+    return functools.reduce(lambda x, y: elementwise(torch.add, x, y), shards)
 
 
 @unshard.override(Tensor)
@@ -1300,3 +1304,27 @@ def view_split(tensor: SplitPrimitiveTensor, shape: List[int]) -> SplitPrimitive
     res = SplitPrimitiveTensor(shard_dim=shard_dim, ts=shards)
     assert math.prod(res.shape) == math.prod(tensor.shape)
     return res
+
+
+@view_as_complex.override(SplitPrimitiveTensor)
+def view_as_complex_split(tensor: SplitPrimitiveTensor) -> SplitPrimitiveTensor:
+    shards = [view_as_complex(shard) for shard in tensor.shards]
+    return SplitPrimitiveTensor(ts=shards, shard_dim=tensor.shard_dim)
+
+
+@view_as_complex.override(ReplicatedTensor)
+def view_as_complex_rep(tensor: ReplicatedTensor) -> ReplicatedTensor:
+    shards = [view_as_complex(shard) for shard in tensor.shards]
+    return ReplicatedTensor(ts=shards)
+
+
+@view_as_real.override(SplitPrimitiveTensor)
+def view_as_real_split(tensor: SplitPrimitiveTensor) -> SplitPrimitiveTensor:
+    shards = [view_as_real(shard) for shard in tensor.shards]
+    return SplitPrimitiveTensor(ts=shards, shard_dim=tensor.shard_dim)
+
+
+@view_as_real.override(ReplicatedTensor)
+def view_as_real_rep(tensor: ReplicatedTensor) -> ReplicatedTensor:
+    shards = [view_as_real(shard) for shard in tensor.shards]
+    return ReplicatedTensor(ts=shards)

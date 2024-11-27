@@ -19,6 +19,7 @@ from typing import (
 from copy import deepcopy
 from collections.abc import Collection, Sequence
 from numbers import Integral, Number
+import os
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -39,6 +40,8 @@ from ..utils.io import ShardedArchiveBuilder
 __all__ = [
     "AnyTensor",
     "DefaultPrimitiveTensor",
+    "dtype_to_serialized_name",
+    "dtype_to_serialized_short_name",
     "flatten_tensor_tree",
     "InferenceTensor",
     "MetaDataValueType",
@@ -48,12 +51,26 @@ __all__ = [
     "QuantizedTensor",
     "register_quantized_layout",
     "ReplicatedTensor",
+    "serialized_name_to_dtype",
+    "serialized_short_name_to_dtype",
     "ShardedTensor",
     "SplitPrimitiveTensor",
     "torch_tree_flatten",
     "unbox_tensor",
     "UnreducedTensor",
 ]
+
+if (
+    "SHARKTANK_OVERRIDE_TORCH_TENSOR_REPR" in os.environ
+    and os.environ["SHARKTANK_OVERRIDE_TORCH_TENSOR_REPR"] != "0"
+):
+
+    def _tensor_debugger_friendly_repr(self: torch.Tensor):
+        """Override for the torch.Tensor.__repr__ so it does not take forever when the
+        debugger wants to query many/large tensors."""
+        return f"Tensor({list(self.shape)}, {self.dtype})"
+
+    Tensor.__repr__ = _tensor_debugger_friendly_repr
 
 # JSON encodable value types.
 MetaDataValueType = Union[int, bool, float, str]
@@ -470,7 +487,11 @@ class PrimitiveTensor(InferenceTensor):
         return self.as_torch().dtype
 
     def __setitem__(self, key, value: "AnyTensor"):
-        self.as_torch()[key] = unbox_tensor(value)
+        if not isinstance(key, list) and not isinstance(key, tuple):
+            key = (key,)
+
+        key = [unbox_tensor(k) if isinstance(k, PrimitiveTensor) else k for k in key]
+        self.as_torch()[*key] = unbox_tensor(value)
 
 
 @register_inference_tensor
@@ -525,9 +546,15 @@ class DefaultPrimitiveTensor(PrimitiveTensor):
         return DefaultPrimitiveTensor(name=self.name, data=new_globals[self.name])
 
     def __getitem__(self, key):
-        if isinstance(key, PrimitiveTensor):
-            key = unbox_tensor(key)
-        return self._data[key]
+        keys = [key]
+        if isinstance(key, tuple) or isinstance(key, list):
+            keys = key
+
+        keys = [
+            unbox_tensor(key) if isinstance(key, PrimitiveTensor) else key
+            for key in keys
+        ]
+        return self._data[*keys]
 
     def __repr__(self):
         return f"PrimitiveTensor({self.name}, {self.shape}, {self._data.dtype})"
@@ -1011,7 +1038,9 @@ class SplitPrimitiveTensor(ShardedTensorBase):
         if len(key) <= self.shard_count:
             return key
         new_key = list(key)
-        new_key[self.shard_dim] = slice(None)
+
+        if self.shard_dim < len(new_key):
+            new_key[self.shard_dim] = slice(None)
         return new_key
 
     def __getitem__(self, key):
@@ -1024,10 +1053,16 @@ class SplitPrimitiveTensor(ShardedTensorBase):
                 f"Slicing of the split dimension {self.shard_dim} is not supported."
             )
         new_key = self._get_shard_slice(key)
-        shards = [shard[new_key] for shard in self.shards]
+
+        shards = []
+        for i, shard in enumerate(self.shards):
+            shard_keys = [
+                k.shards[i] if isinstance(k, ReplicatedTensor) else k for k in new_key
+            ]
+            shards.append(shard[*shard_keys])
 
         shard_dim = self.shard_dim
-        for i in range(shard_dim):
+        for i in range(min(shard_dim, len(key))):
             if isinstance(key[i], Number) and key[i] >= 0:
                 # Rank reduction dimension before the split dim.
                 shard_dim -= 1
@@ -1044,8 +1079,11 @@ class SplitPrimitiveTensor(ShardedTensorBase):
             raise NotImplementedError(
                 f"Slicing of the split dimension {self.shard_dim} is not supported."
             )
-        for shard, value_shard in zip(self.shards, value.shards):
-            shard[key] = unbox_tensor(value_shard)
+        for i, (shard, value_shard) in enumerate(zip(self.shards, value.shards)):
+            shard_keys = [
+                k.shards[i] if isinstance(k, ReplicatedTensor) else k for k in key
+            ]
+            shard[*shard_keys] = unbox_tensor(value_shard)
 
 
 @register_inference_tensor
@@ -1154,13 +1192,19 @@ class ReplicatedTensor(ShardedTensor):
         return cls(name=name, ts=ts)
 
     def __getitem__(self, key):
-        if isinstance(key, ReplicatedTensor):
-            assert key.shard_count == self.shard_count
-            shards = [
-                shard[key_shard] for shard, key_shard in zip(self.shards, key.shards)
-            ]
-        else:
-            shards = [shard[key] for shard in self.shards]
+        keys = [key]
+        if isinstance(key, tuple) or isinstance(key, list):
+            keys = key
+
+        shards = []
+        for i, shard in enumerate(self.shards):
+            shard_keys = []
+            for k in keys:
+                if isinstance(k, ReplicatedTensor):
+                    shard_keys.append(k.shards[i])
+                else:
+                    shard_keys.append(k)
+            shards.append(shard[*shard_keys])
         return ReplicatedTensor(ts=shards)
 
     def __repr__(self):
@@ -1235,7 +1279,7 @@ def unbox_tensor(t: Any) -> Tensor:
 ########################################################################################
 
 
-def _dtype_to_serialized_name(dtype: torch.dtype) -> str:
+def dtype_to_serialized_name(dtype: torch.dtype) -> str:
     try:
         return _DTYPE_TO_NAME[dtype]
     except KeyError as e:
@@ -1244,12 +1288,30 @@ def _dtype_to_serialized_name(dtype: torch.dtype) -> str:
         ) from e
 
 
-def _serialized_name_to_dtype(dtype_name: str) -> torch.dtype:
+def dtype_to_serialized_short_name(dtype: torch.dtype) -> str:
+    try:
+        return _DTYPE_TO_SHORT_NAME[dtype]
+    except KeyError as e:
+        raise KeyError(
+            f"Missing mapping for dtype {dtype}. Please add to the _SHORT_NAME_TO_DTYPE dict"
+        ) from e
+
+
+def serialized_name_to_dtype(dtype_name: str) -> torch.dtype:
     try:
         return _NAME_TO_DTYPE[dtype_name]
     except KeyError as e:
         raise KeyError(
             f"Missing mapping for dtype '{dtype_name}'. Please add to the _NAME_TO_DTYPE dict"
+        ) from e
+
+
+def serialized_short_name_to_dtype(dtype_name: str) -> torch.dtype:
+    try:
+        return _SHORT_NAME_TO_DTYPE[dtype_name]
+    except KeyError as e:
+        raise KeyError(
+            f"Missing mapping for dtype '{dtype_name}'. Please add to the _SHORT_NAME_TO_DTYPE dict"
         ) from e
 
 
@@ -1295,6 +1357,26 @@ _maybe_dtype(
 )
 
 _DTYPE_TO_NAME: dict[torch.dtype, str] = {v: k for k, v in _NAME_TO_DTYPE.items()}
+
+_SHORT_NAME_TO_DTYPE: dict[str, torch.dtype] = {
+    "f32": torch.float32,
+    "f64": torch.float64,
+    "c64": torch.complex64,
+    "c128": torch.complex128,
+    "f16": torch.float16,
+    "bf16": torch.bfloat16,
+    "ui8": torch.uint8,
+    "i8": torch.int8,
+    "i16": torch.int16,
+    "i32": torch.int32,
+    "i64": torch.int64,
+    "b": torch.bool,
+    "f8_e4m3fnuz": torch.float8_e4m3fnuz,
+}
+
+_DTYPE_TO_SHORT_NAME: dict[torch.dtype, str] = {
+    v: k for k, v in _SHORT_NAME_TO_DTYPE.items()
+}
 
 AnyTensor = Union[torch.Tensor, InferenceTensor]
 

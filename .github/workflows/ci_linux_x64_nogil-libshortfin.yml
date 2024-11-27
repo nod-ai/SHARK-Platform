@@ -57,7 +57,7 @@ jobs:
         repository: iree-org/iree
         path: ${{ env.IREE_REPO_DIR }}
         submodules: false
-        ref: candidate-20241101.1065
+        ref: iree-3.0.0rc20241118
 
     - name: Initalize IREE submodules
       working-directory: ${{ env.IREE_REPO_DIR }}
@@ -98,6 +98,6 @@ jobs:
     - name: Run shortfin Python tests (full)
       working-directory: ${{ env.LIBSHORTFIN_DIR }}
       run: |
-        pytest -s --ignore=tests/examples/fastapi_test.py --ignore=tests/apps/llm/components/cache_test.py --ignore=tests/apps/sd
+        pytest -s --ignore=tests/examples/fastapi_test.py --ignore=tests/apps/sd
       # TODO: Enable further tests and switch to
       # pytest -s

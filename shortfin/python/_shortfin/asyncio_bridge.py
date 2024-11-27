@@ -5,8 +5,17 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 import asyncio
+import inspect
 
 from . import lib as sfl
+
+
+# Feature detect some versions where signatures changes.
+if "context" in inspect.signature(asyncio.Task).parameters:
+    # Python > 3.10
+    _ASYNCIO_TASK_HAS_CONTEXT = True
+else:
+    _ASYNCIO_TASK_HAS_CONTEXT = False
 
 
 class PyWorkerEventLoop(asyncio.AbstractEventLoop):
@@ -17,8 +26,15 @@ class PyWorkerEventLoop(asyncio.AbstractEventLoop):
         # Requirement of asyncio.
         return False
 
-    def create_task(self, coro, *, name=None, context=None):
-        return asyncio.Task(coro, loop=self, name=name, context=context)
+    if _ASYNCIO_TASK_HAS_CONTEXT:
+
+        def create_task(self, coro, *, name=None, context=None):
+            return asyncio.Task(coro, loop=self, name=name, context=context)
+
+    else:
+
+        def create_task(self, coro, *, name=None):
+            return asyncio.Task(coro, loop=self, name=name)
 
     def create_future(self):
         return asyncio.Future(loop=self)

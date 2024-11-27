@@ -11,13 +11,18 @@ from pathlib import Path
 import shortfin as sf
 import shortfin.array as sfnp
 
-from .cache import AttnPageCache
+from .kvcache.base_attention_cache import BasePagedAttentionCache
+from .kvcache.page_pool import PagePoolConfig, PagePool
 from .config_struct import ModelParams
 from .manager import SystemManager
 from .messages import InferenceExecRequest, InferencePhase, StrobeMessage
 from .tokenizer import Tokenizer
 
 logger = logging.getLogger(__name__)
+
+PROG_ISOLATIONS = {
+    isolation.name.lower(): isolation for isolation in sf.ProgramIsolation
+}
 
 
 class GenerateService:
@@ -34,6 +39,7 @@ class GenerateService:
         sysman: SystemManager,
         tokenizer: Tokenizer,
         model_params: ModelParams,
+        program_isolation: str = "per_call",
     ):
         self.name = name
 
@@ -49,9 +55,20 @@ class GenerateService:
 
         # Scope dependent objects.
         self.batcher = BatcherProcess(self)
-        self.page_cache = AttnPageCache(
-            devices=self.main_fiber.devices_dict.values(), model_params=model_params
+        page_pool_config = PagePoolConfig(
+            dtype=model_params.attn_dtype,
+            alloc_page_count=model_params.paged_kv_cache.device_block_count,
+            paged_kv_block_size_elements=model_params.paged_kv_block_size_elements,
         )
+        page_pool = PagePool(
+            devices=self.main_fiber.devices_dict.values(), config=page_pool_config
+        )
+        self.page_cache = BasePagedAttentionCache(
+            page_pool=page_pool,
+            tokens_per_page=model_params.paged_kv_cache.block_seq_stride,
+        )
+
+        self.program_isolation = PROG_ISOLATIONS[program_isolation]
 
     def load_inference_module(self, vmfb_path: Path):
         self.inference_modules.append(sf.ProgramModule.load(self.sysman.ls, vmfb_path))
@@ -75,6 +92,7 @@ class GenerateService:
             + self.inference_modules,
             devices=self.sysman.ls.devices,
             trace_execution=False,
+            isolation=self.program_isolation,
         )
         # Resolve prefill entrypoints.
         self.prefill_functions = {}
@@ -192,7 +210,7 @@ class BatcherProcess(sf.Process):
         self.pending_prefills.clear()
         logger.debug("Post boarding cache state: %r", cache)
 
-    def board_prefills(self, cache: AttnPageCache):
+    def board_prefills(self, cache: BasePagedAttentionCache):
         # Fill prefill flights.
         pending_prefills = self.pending_prefills
         if len(pending_prefills) == 0:
@@ -201,7 +219,7 @@ class BatcherProcess(sf.Process):
             self.service,
             InferencePhase.PREFILL,
             self.page_seq_stride,
-            cache.page_tables,
+            cache.page_pool.page_tables,
         )
         for prefill_request in pending_prefills:
             assert prefill_request.phase == InferencePhase.PREFILL
@@ -210,7 +228,11 @@ class BatcherProcess(sf.Process):
             needed_pages = math.ceil(
                 len(prefill_request.input_token_ids) / self.page_seq_stride
             )
-            pages = cache.acquire_free_pages(needed_pages)
+            # allocate kv cache pages
+            pages, cache_hit_prefix_length = cache.acquire_pages_for_tokens(
+                prefill_request.input_token_ids,
+                extra_token_slots=0,  # prefill needs no extra kvcache slots to write to
+            )
             if pages is None:
                 logger.debug("Cannot fulfill request for %d pages", needed_pages)
                 continue
@@ -228,13 +250,16 @@ class BatcherProcess(sf.Process):
             # And takeoff.
             exec_process.launch()
 
-    def board_decodes(self, cache: AttnPageCache):
+    def board_decodes(self, cache: BasePagedAttentionCache):
         # Fill decode flights.
         pending_decodes = self.pending_decodes
         if len(pending_decodes) == 0:
             return
         exec_process = InferenceExecutorProcess(
-            self.service, InferencePhase.DECODE, self.page_seq_stride, cache.page_tables
+            self.service,
+            InferencePhase.DECODE,
+            self.page_seq_stride,
+            cache.page_pool.page_tables,
         )
         for decode_request in pending_decodes:
             assert decode_request.phase == InferencePhase.DECODE
@@ -246,7 +271,11 @@ class BatcherProcess(sf.Process):
                 / self.page_seq_stride
             )
             if needed_pages > len(decode_request.locked_pages):
-                pages = cache.acquire_free_pages(needed_pages)
+                # allocate kv cache pages
+                pages, cache_hit_prefix_length = cache.acquire_pages_for_tokens(
+                    decode_request.input_token_ids,
+                    extra_token_slots=1,  # need 1 extra slot to write result.
+                )
                 if pages is None:
                     logger.debug(
                         "Cannot fulfill decode request for %d pages", needed_pages
@@ -342,7 +371,10 @@ class InferenceExecutorProcess(sf.Process):
                 with tokens_host.view(i).map(discard=True) as m:
                     m.fill(0)
                     if i < req_count:
-                        m.items = self.exec_requests[i].input_token_ids
+                        if self.phase == InferencePhase.PREFILL:
+                            m.items = self.exec_requests[i].input_token_ids
+                        elif self.phase == InferencePhase.DECODE:
+                            m.items = self.exec_requests[i].input_token_ids[-1:]
             tokens_host.copy_to(tokens)
 
             # For prefill, populate seq_lens
@@ -409,7 +441,7 @@ class InferenceExecutorProcess(sf.Process):
             # Return results.
             for i in range(req_count):
                 req = self.exec_requests[i]
-                sl = len(req.input_token_ids)
+                sl = 1 if is_decode else len(req.input_token_ids)
                 if req.return_all_logits:
                     logits_item = logits.view(i, slice(0, sl))
                 else:

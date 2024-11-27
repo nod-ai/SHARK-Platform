@@ -61,6 +61,7 @@ void Account::active_deps_extend(iree_hal_semaphore_list_t sem_list) {
 }
 
 VoidFuture Account::OnSync() {
+  SHORTFIN_TRACE_SCOPE_NAMED("Account::OnSync");
   // TODO: Burn this path with fire! No attempt has been made to make this
   // particularly good: the backend is being implemented now to export
   // HAL semaphores via iree_hal_semaphore_await, and that should be used
@@ -133,6 +134,7 @@ Scheduler::~Scheduler() {
 
 void Scheduler::Initialize(
     std::span<const std::pair<std::string_view, Device *>> devices) {
+  SHORTFIN_TRACE_SCOPE_NAMED("Scheduler::Initialize");
   for (auto &it : devices) {
     accounts_.emplace_back(*this, it.second);
   }
@@ -165,6 +167,7 @@ Account &Scheduler::GetDefaultAccount(ScopedDevice &device) {
 void Scheduler::AppendCommandBuffer(ScopedDevice &device,
                                     TransactionType tx_type,
                                     std::function<void(Account &)> callback) {
+  SHORTFIN_TRACE_SCOPE_NAMED("Scheduler::AppendCommandBuffer");
   Account &account = GetDefaultAccount(device);
   auto needed_affinity_bits = device.affinity().queue_affinity();
   SHORTFIN_SCHED_LOG(
@@ -242,6 +245,7 @@ void Scheduler::AppendCommandBuffer(ScopedDevice &device,
 }
 
 iree_status_t Scheduler::FlushWithStatus() noexcept {
+  SHORTFIN_TRACE_SCOPE_NAMED("Scheduler::FlushWithStatus");
   // This loop is optimized for a small number of accounts, where it is
   // fine to just linearly probe. If this ever becomes cumbersome, we can
   // maintain a dirty list which is appended to when an account transitions
@@ -275,9 +279,8 @@ iree_status_t Scheduler::FlushWithStatus() noexcept {
             .semaphores = &signal_sem,
             .payload_values = &signal_timepoint,
         },
-        /*command_buffer_count=*/1,
-        /*command_buffers=*/&active_command_buffer,
-        /*binding_tables=*/&binding_tables));
+        /*command_buffers=*/active_command_buffer,
+        /*binding_tables=*/binding_tables));
     account.Reset();
   }
   return iree_ok_status();

@@ -8,7 +8,13 @@
 
 # build_linux_package.sh
 #
-# Builds sharktank Python package for Linux
+# Builds sharktank Python package for Linux.
+#
+# Note: requires a modern Python (3.12+ seems to work). Troubleshooting help:
+#   * https://stackoverflow.com/a/77284076
+#   * https://stackoverflow.com/a/77364602
+# Older versions like 3.10 don't include the package name and set as UNKNOWN?
+#   * Might just need some local packages updated?
 #
 # Usage:
 #   ./build_tools/build_linux_package.sh

@@ -143,7 +143,7 @@ def apply_per_layer_quant(
         if qp.get("input_zp_dtype") is not None
         else "torch.int8"
     )
-    quantization_dtype = tensors._serialized_name_to_dtype(
+    quantization_dtype = tensors.serialized_name_to_dtype(
         quantization_type.split(".")[-1]
     )
     if output_scale is not None:

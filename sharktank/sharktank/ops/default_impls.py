@@ -141,36 +141,19 @@ def elementwise_binary(operator, x, y, *args, **kwargs):
 
 
 @elementwise.override(
-    AllOfExprsVariadic(
-        IsOfType(Tensor, InferenceTensor),
-        IsOfType(Tensor, InferenceTensor, Number),
-        IsOfType(Tensor, InferenceTensor, Number),
+    AllOfExprs(
+        IsOfType(Tensor, PrimitiveTensor),
+        IsOfType(Tensor, PrimitiveTensor, Number),
+        IsOfType(Tensor, PrimitiveTensor, Number),
     )
 )
-def elementwise_variadic(operator, x, y, *args):
-    """Folds by successively applying the binary operator from left to right until
-    exhaustion.
-
-    Match a variable number of tensor/number arguments with at least 3 such arguments.
-
-    Example matches
-    ```
-    (Tensor, Tensor, Tensor)
-    (Tensor, DefaultPrimitiveTensor, float),
-    (SplitPrimitiveTensor, ReplicatedTensor, int, Tensor)
-    ```
-
-    Will not match
-    ```
-    (Tensor)
-    (Tensor, Tensor)
-    (int, Tensor, Tensor)
-    ```
-    """
-    res = elementwise(operator, x, y)
-    for arg in args:
-        res = elementwise(operator, res, arg)
-    return res
+def elementwise_ternary(operator, x, y, z, *args, **kwargs):
+    x = unbox_tensor(x)
+    if isinstance(y, PrimitiveTensor):
+        y = unbox_tensor(y)
+    if isinstance(z, PrimitiveTensor):
+        z = unbox_tensor(z)
+    return operator(x, y, z, *args, **kwargs)
 
 
 # Embedding Lookup
@@ -355,7 +338,15 @@ def matmul_default(lhs, rhs, *, transpose_rhs: bool) -> Tensor:
     rhs = unbox_tensor(rhs)
     if transpose_rhs:
         rhs = rhs.mT
-    return torch.matmul(lhs, rhs.to(lhs.dtype))
+    rhs = rhs.to(lhs.dtype)
+
+    if len(lhs.shape) > 2 and len(rhs.shape) < 3:
+        bdims = lhs.shape[:-1]
+        lhs = torch.flatten(lhs, 0, -2)
+        mm = torch.matmul(lhs, rhs)
+        return torch.unflatten(mm, 0, bdims)
+
+    return torch.matmul(lhs, rhs)
 
 
 # Scaled dot product attention
@@ -494,3 +485,13 @@ def view_QuantizedTensor(tensor: QuantizedTensor, shape):
         new_m = unpacked.m.view(shape[:-1] + [shape[-1] // 32, 1])
     layout = BlockScaledI4Layout(shape=shape, d=new_d, qs=new_qs, m=new_m)
     return PlanarQuantizedTensor(shape=shape, layout=layout)
+
+
+@view_as_complex.override(Tensor)
+def view_as_complex_default(tensor: Union[Tensor, PrimitiveTensor]) -> Tensor:
+    return torch.view_as_complex(unbox_tensor(tensor))
+
+
+@view_as_real.override(Tensor)
+def view_as_real_default(tensor: Union[Tensor, PrimitiveTensor]) -> Tensor:
+    return torch.view_as_real(unbox_tensor(tensor))

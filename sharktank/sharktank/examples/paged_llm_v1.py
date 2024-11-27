@@ -18,6 +18,8 @@ import torch
 from ..layers import *
 from ..types import *
 
+from ..ops import replicate, unshard
+
 # TODO: Should be using a base class with the protocol supported.
 from ..models.mixtral.mixtral import *
 from ..models.grok.grok import *
@@ -140,26 +142,6 @@ class Batch:
             while len(block_ids_row) < needed_blocks:
                 block_ids_row.append(self.parent.alloc_page())
 
-    def compute_prefill_logits(
-        self,
-        model,
-        # [bs, batch_seq_len]
-        tokens: torch.Tensor,
-        *,
-        # [1, 1, batch_seq_len, batch_seq_len]
-        attention_mask: torch.Tensor,
-        # [bs, batch_seq_len // block_seq_stride]
-        seq_block_ids: torch.Tensor,
-        cache_state: list[torch.Tensor],
-    ):
-        logits = model.prefill(
-            tokens,
-            attention_mask=attention_mask,
-            seq_block_ids=seq_block_ids,
-            cache_state=cache_state,
-        )
-        return logits
-
     def prefill(self):
         model = self.parent.model
         attention_mask = model.attention_mask(
@@ -170,12 +152,22 @@ class Batch:
         trace_tensor("prefill.token_ids", self.token_ids)
         trace_tensor("prefill.seq_block_ids", seq_block_ids_tensor)
         trace_tensor("prefill.attention_mask", attention_mask)
+
+        token_ids = self.token_ids
+        if model.config.tensor_parallelism_size != 1:
+            tp = model.config.tensor_parallelism_size
+            token_ids = replicate(token_ids, tp)
+            attention_mask = replicate(attention_mask, tp)
+            seq_block_ids_tensor = replicate(seq_block_ids_tensor, tp)
+
         logits = model.prefill(
-            self.token_ids,
+            token_ids,
             attention_mask=attention_mask,
             seq_block_ids=seq_block_ids_tensor,
             cache_state=self.cache_state,
         )
+
+        logits = unshard(logits)
 
         # TODO: Generalize the sampling and don't make it swap on/off cpu.
         # TODO: Normalize the output of extract_tokens_from_logits into
@@ -204,6 +196,14 @@ class Batch:
         trace_tensor("decode.start_positions", start_positions)
         trace_tensor("decode.seq_block_ids", seq_block_ids_tensor)
         trace_tensor("decode.attention_mask", decode_attention_mask)
+
+        if model.config.tensor_parallelism_size != 1:
+            tp = model.config.tensor_parallelism_size
+            self.next_tokens = replicate(self.next_tokens, tp)
+            start_positions = replicate(start_positions, tp)
+            seq_block_ids_tensor = replicate(seq_block_ids_tensor, tp)
+            decode_attention_mask = replicate(decode_attention_mask, tp)
+
         logits = model.decode(
             self.next_tokens,
             attention_mask=decode_attention_mask,
@@ -211,6 +211,8 @@ class Batch:
             seq_block_ids=seq_block_ids_tensor,
             cache_state=self.cache_state,
         )
+
+        logits = unshard(logits)
         trace_tensor("decode.logits", logits)
         # TODO: Normalize the output of extract_tokens_from_logits into
         # tensor [bs, 1].
@@ -256,16 +258,15 @@ def main():
     )
     cli.add_input_dataset_options(parser)
     cli.add_tokenizer_options(parser)
+    cli.add_quantization_options(parser)
+    cli.add_model_options(parser)
     args = cli.parse(parser)
-
     device = torch.device(args.device) if args.device else None
     activation_dtype = getattr(torch, args.activation_dtype)
     assert isinstance(activation_dtype, torch.dtype)
-
     dataset = cli.get_input_dataset(args)
     tokenizer = cli.get_tokenizer(args)
     prompts = args.prompt
-
     config = LlamaModelConfig(
         hp=configs.LlamaHParams.from_gguf_props(dataset.properties),
         block_seq_stride=16,
@@ -273,8 +274,10 @@ def main():
         device=device,
         activation_dtype=activation_dtype,
         attention_dtype=activation_dtype,
+        attention_kernel=args.attention_kernel,
         use_hf=args.use_hf,
         tensor_parallelism_size=args.tensor_parallelism_size,
+        fake_quant=args.fake_quant,
     )
     if config.tensor_parallelism_size > 1:
         dataset.root_theta = shard_theta(dataset.root_theta, config)

@@ -31,8 +31,8 @@
 # Otherwise, the shortfin build will download a pinned IREE source tree.
 
 import argparse
+import importlib
 import os
-from packaging.version import Version
 from pathlib import Path
 import re
 import subprocess
@@ -40,10 +40,19 @@ import shutil
 import sys
 import sysconfig
 
+try:
+    from packaging.version import Version
+except ModuleNotFoundError as e:
+    raise ModuleNotFoundError(
+        f"'packaging' package not installed and required: Install with:\n"
+        f"  {sys.executable} -m pip install packaging"
+    )
+
 
 CMAKE_REQUIRED_VERSION = Version("3.29")
 PYTHON_REQUIRED_VERSION = Version("3.12")
 CLANG_REQUIRED_VERSION = Version("16")
+SETUPTOOLS_REQUIRED_VERSION = Version("61.0")
 
 
 class EnvInfo:
@@ -58,6 +67,8 @@ class EnvInfo:
         self.ninja_exe = shutil.which("ninja")
         self.clang_exe, self.clang_version = self.find_clang(args)
         self.iree_dir = self.find_iree(args)
+        self.setuptools_version = self.find_package_version("setuptools")
+        self.wheel_version = self.find_package_version("wheel")
 
         self.configured_dirs = []
         self.add_configured(self.this_dir / "build" / "cmake" / "default")
@@ -94,12 +105,10 @@ class EnvInfo:
             clang_exe = shutil.which("clang")
             if not clang_exe:
                 return None, None
-            try:
-                clang_output = subprocess.check_output(
-                    [clang_exe, "--version"]
-                ).decode()
-            except:
-                return None, None
+        try:
+            clang_output = subprocess.check_output([clang_exe, "--version"]).decode()
+        except:
+            return None, None
         if m := re.search(r"clang version ([0-9\.]+)", clang_output):
             return clang_exe, Version(m.group(1))
         return None, None
@@ -116,6 +125,13 @@ class EnvInfo:
             sys.exit(1)
         return str(iree_dir)
 
+    def find_package_version(self, package_name: str) -> Version | None:
+        try:
+            m = importlib.import_module(package_name)
+        except ModuleNotFoundError:
+            return None
+        return Version(m.__version__)
+
     def check_prereqs(self, args):
         if self.cmake_version is None or self.cmake_version < CMAKE_REQUIRED_VERSION:
             print(
@@ -131,7 +147,7 @@ class EnvInfo:
             )
             sys.exit(1)
         if self.clang_exe and self.clang_version < CLANG_REQUIRED_VERSION:
-            print(f"ERROR: clang version too old: {self.clang_exe}")
+            print(f"WARNING: clang version too old: {self.clang_exe}")
             print(f"  REQUIRED: {CLANG_REQUIRED_VERSION}, Found {self.clang_version}")
         elif not self.clang_exe:
             print(f"WARNING: Building the project with clang is highly recommended")
@@ -141,6 +157,19 @@ class EnvInfo:
             print(
                 f"ERROR: An ASAN build was requested but python was not built with ASAN support"
             )
+            sys.exit(1)
+
+        if (
+            self.setuptools_version is None
+            or self.setuptools_version < SETUPTOOLS_REQUIRED_VERSION
+        ):
+            print(
+                f"ERROR: 'setuptools' packaging is not installed or too old. "
+                f"Found {self.setuptools_version}, Need {SETUPTOOLS_REQUIRED_VERSION}"
+            )
+            sys.exit(1)
+        if self.wheel_version is None:
+            print(f"'wheel' package is not installed")
             sys.exit(1)
 
     def __repr__(self):
@@ -153,6 +182,8 @@ class EnvInfo:
             f"ninja: {self.ninja_exe}",
             f"clang: {self.clang_exe} ({self.clang_version})",
             f"iree: {self.iree_dir}",
+            f"setuptools: {self.setuptools_version}",
+            f"wheel: {self.wheel_version}",
         ]
         return "\n".join(report)
 
@@ -211,7 +242,7 @@ def configure_mode(env_info: EnvInfo, args):
         "-e",
         str(env_info.this_dir),
     ]
-    print(f"{' '.join('='.join(kv) for kv in env_vars.items())} \\")
+    print(f"{' '.join('='.join(str(kv)) for kv in env_vars.items())} \\")
     print(f"  {' '.join(setup_args)}")
     actual_env_vars = dict(os.environ)
     actual_env_vars.update(env_vars)

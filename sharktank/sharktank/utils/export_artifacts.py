@@ -9,6 +9,7 @@ import sys
 import subprocess
 import logging
 import time
+import re
 from pathlib import Path
 from datetime import timedelta
 from typing import List, Optional
@@ -25,7 +26,7 @@ logger.root.handlers[0].setFormatter(
 
 
 class ExportMlirException(Exception):
-    """SHARK-Platform export MLIR exception that preserves the command line and error output."""
+    """shark-ai export MLIR exception that preserves the command line and error output."""
 
     def __init__(self, process: subprocess.CompletedProcess, cwd: str):
         try:
@@ -107,11 +108,18 @@ class ExportArtifacts:
             start = time.time()
             result = func(*args, **kwargs)
             end = time.time()
-            seconds = end - start
-            time_taken = abs(timedelta(seconds=round(seconds)))
+            total_seconds = end - start
+            time_taken = abs(timedelta(seconds=total_seconds))
+            hours, minutes, seconds = re.split(":", str(time_taken))
 
-            if seconds < 1:
-                time_taken = f" {seconds * 1000} ms"
+            if total_seconds < 1:
+                time_taken = f" {round(total_seconds * 1000, 3)} ms"
+            elif total_seconds < 60:
+                time_taken = "{:.2f} secs".format(round(float(total_seconds), 2))
+            else:
+                time_taken = "{:02d} hrs : {:02d} mins : {:.2f} secs".format(
+                    int(hours), int(minutes), round(float(seconds), 2)
+                )
 
             func_name = func.__name__
             logger.info(f" {func_name}: {time_taken}")
@@ -123,17 +131,18 @@ class ExportArtifacts:
     def shard_irpa_file(
         self,
         *,
-        output_file: str,
+        irpa_file: str,
+        output_irpa: str,
     ):
         shard_irpa_args = [
             "python3",
             "-m",
-            "sharktank.models.llama.tools.shard_llama",
+            "sharktank.examples.sharding.shard_llm_dataset",
             "--irpa-file",
-            self.irpa_path,
-            "--output-file",
-            output_file,
-            "--shard_count",
+            irpa_file,
+            "--output-irpa-file",
+            output_irpa,
+            "--tensor-parallelism-size",
             str(self.tensor_parallelism_size),
         ]
 
@@ -145,7 +154,7 @@ class ExportArtifacts:
         proc = subprocess.run(cmd, shell=True, capture_output=True, cwd=cwd, text=True)
         if proc.returncode != 0:
             logger.error(
-                f"Error sharding irpa file with shard_llama.py\n"
+                f"Error sharding irpa file with shard_llm_dataset.py\n"
                 f"{proc.stdout+proc.stderr}"
             )
         else:
@@ -159,6 +168,7 @@ class ExportArtifacts:
         *,
         mlir_path: str,
         json_path: str,
+        skip_decode: Optional[bool] = None,
     ):
         export_args = [
             "python3",
@@ -169,6 +179,8 @@ class ExportArtifacts:
             f"--output-config={json_path}",
             f"--bs={str(self.batch_size)}",
         ]
+        if skip_decode:
+            export_args.append("--skip-decode")
         if self.attention_kernel in ["decomposed", "torch"]:
             export_args.append("--attention-kernel")
             export_args.append(self.attention_kernel)
@@ -176,13 +188,13 @@ class ExportArtifacts:
         cwd = self.sharktank_dir
         cmd = subprocess.list2cmdline(export_args)
 
-        logger.info(f"Exporting mlir:\n" f"cd {cwd} && {cmd}")
+        logger.info(f" Exporting mlir:\n" f"cd {cwd} && {cmd}")
 
         proc = subprocess.run(cmd, shell=True, capture_output=True, cwd=cwd, text=True)
         if proc.returncode != 0:
             raise ExportMlirException(proc, cwd)
         else:
-            logger.info(f"Exported to mlir successfully:\n" f"{proc.stdout}")
+            logger.info(f" Exported to mlir successfully:\n" f"{proc.stdout}")
 
         return proc.returncode
 
@@ -194,6 +206,7 @@ class ExportArtifacts:
         vmfb_path,
         cwd,
         hal_dump_path: Optional[Path] = None,
+        args: Optional[List[str]] = None,
     ):
         # TODO: Control flag to enable multiple backends
         compile_args = [
@@ -203,14 +216,22 @@ class ExportArtifacts:
             f"--iree-hal-target-backends={self.iree_hal_target_backends}",
             f"-o={vmfb_path}",
         ]
+        if self.tensor_parallelism_size > 1:
+            iree_hal_target_devices = [
+                f"--iree-hal-target-device=hip[{i}]"
+                for i in range(self.tensor_parallelism_size)
+            ]
+            compile_args += iree_hal_target_devices
         if hal_dump_path:
             compile_args += [
                 f"--iree-hal-dump-executable-files-to={hal_dump_path}/files"
             ]
-
+        # Append optional arguments if provided
+        if args:
+            compile_args += args
         cmd = subprocess.list2cmdline(compile_args)
 
-        logging.getLogger().info(f"Launching compile command:\n" f"cd {cwd} && {cmd}")
+        logger.info(f" Launching compile command:\n" f"cd {cwd} && {cmd}")
         proc = subprocess.run(cmd, shell=True, capture_output=True, cwd=cwd)
         return_code = proc.returncode
         if return_code != 0:
@@ -234,19 +255,37 @@ class ExportArtifacts:
             compile_cmd: Command used to compile the program, for inclusion in error messages.
         Raises Exception if running fails for some reason.
         """
-        benchmark_args = [
-            f"ROCR_VISIBLE_DEVICES={hip_device_id}",
+        benchmark_args = []
+        if self.tensor_parallelism_size > 1:
+            base_irpa_path, _ = os.path.splitext(irpa_path)
+            rocr_visible_devices = [
+                f"ROCR_VISIBLE_DEVICES={','.join(str(i) for i in range(self.tensor_parallelism_size))}"
+            ]
+            params = [f"--parameters=model={base_irpa_path}.irpa"]
+            params += [
+                f"--parameters=model={base_irpa_path}.rank{i}.irpa"
+                for i in range(self.tensor_parallelism_size)
+            ]
+            devices = [
+                f"--device=hip://{i}" for i in range(self.tensor_parallelism_size)
+            ]
+        else:
+            rocr_visible_devices = [f"ROCR_VISIBLE_DEVICES={hip_device_id}"]
+            params = [f"--parameters=model={irpa_path}"]
+            devices = [f"--device=hip://{hip_device_id}"]
+        benchmark_args += rocr_visible_devices
+        benchmark_args += [
             "iree-benchmark-module",
-            f"--device=hip://{hip_device_id}",
             "--hip_use_streams=true",
             "--hip_allow_inline_execution=true",
             "--device_allocator=caching",
             f"--module={vmfb_name}",
-            f"--parameters=model={irpa_path}",
         ]
+        benchmark_args += params
+        benchmark_args += devices
         benchmark_args += args
         cmd = subprocess.list2cmdline(benchmark_args)
-        logging.getLogger().info(f"Launching run command:\n" f"cd {cwd} && {cmd}")
+        logger.info(f" Launching run command:\n" f"cd {cwd} && {cmd}")
         proc = subprocess.run(cmd, shell=True, stdout=sys.stdout, cwd=cwd)
         return_code = proc.returncode
         if return_code != 0:

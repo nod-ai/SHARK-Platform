@@ -4,6 +4,7 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
+from typing import Optional
 import contextlib
 from pathlib import Path
 import os
@@ -14,12 +15,13 @@ import torch
 from typing import Any, Callable
 from operator import eq
 from collections.abc import Iterable
+import gc
 
 from ..types import *
 
 # Range of torch.rand() is [0,1)
 # Range of torch.rand() * 2 - 1 is [-1, 1), includes negative values
-def make_rand_torch(shape, dtype=torch.float32):
+def make_rand_torch(shape: list[int], dtype: Optional[torch.dtype] = torch.float32):
     return torch.rand(shape, dtype=dtype) * 2 - 1
 
 
@@ -28,6 +30,7 @@ class TempDirTestBase(unittest.TestCase):
         self._temp_dir = Path(tempfile.mkdtemp(type(self).__qualname__))
 
     def tearDown(self):
+        gc.collect()
         shutil.rmtree(self._temp_dir, ignore_errors=True)
 
 

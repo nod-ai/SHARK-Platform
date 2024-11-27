@@ -13,9 +13,14 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
   )
 endif()
 
+# Get version number from file
+file(READ ${CMAKE_CURRENT_SOURCE_DIR}/version.json VERSION_JSON_STRING)
+string(JSON PACKAGE_VERSION GET ${VERSION_JSON_STRING} package-version)
+string(REGEX MATCH "(0|[1-9][0-9]*)(\.(0|[1-9][0-9]*))*" BASE_VERSION ${PACKAGE_VERSION})
+
 project(
   "libshortfin"
-  VERSION 0.9
+  VERSION ${BASE_VERSION}
   LANGUAGES C CXX)
 
 include(CMakeDependentOption)
@@ -34,11 +39,16 @@ if(NOT WIN32)
   set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 endif()
 
+# Pins
+set(SHORTFIN_IREE_GIT_TAG "iree-3.0.0rc20241118")
+
 # build options
 option(SHORTFIN_BUILD_PYTHON_BINDINGS "Builds Python Bindings" OFF)
 option(SHORTFIN_BUILD_TESTS "Builds C++ tests" ON)
 option(SHORTFIN_BUNDLE_DEPS "Download dependencies instead of using system libraries" ON)
 option(SHORTFIN_ENABLE_TRACING "Enable runtime tracing for iree and shortfin" OFF)
+option(SHORTFIN_ENABLE_LTO "Enables LTO if supported" ON)
+option(SHORTFIN_ENABLE_TOKENIZERS "Enables integration of native tokenizers library" OFF)
 
 set(SHORTFIN_IREE_SOURCE_DIR "" CACHE FILEPATH "Path to IREE source")
 
@@ -71,8 +81,26 @@ list(APPEND CMAKE_MODULE_PATH
   ${CMAKE_CURRENT_LIST_DIR}/build_tools/cmake/
 )
 include(shortfin_library)
+include(shortfin_testing)
 include(CheckCXXCompilerFlag)
 include(FetchContent)
+
+################################################################################
+# Toolchain features
+################################################################################
+
+if(SHORTFIN_ENABLE_LTO)
+  include(CheckIPOSupported)
+  check_ipo_supported(RESULT SHORTFIN_LTO_SUPPORTED OUTPUT SHORTFIN_LTO_ERROR)
+  if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    message(STATUS "Not enabling LTO for debug build")
+  elseif(SHORTFIN_LTO_SUPPORTED)
+    message(STATUS "Shortfin LTO Enabled")
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
+  else()
+    message(WARNING "Could not enable LTO (not supported): ${SHORTFIN_LTO_ERROR}")
+  endif()
+endif()
 
 # Enabling ASAN. Note that this will work best if building in a completely
 # bundled fashion and with an ASAN rigged CPython. Otherwise, various LD_PRELOAD
@@ -101,7 +129,11 @@ if(SHORTFIN_SYSTEMS_AMDGPU)
 endif()
 message(STATUS "  - Host")
 
-# Dependencies.
+################################################################################
+# Bundled Dependencies
+# These dependencies are either bundled or used via installed packages based
+# on the SHORTFIN_BUNDLE_DEPS option.
+################################################################################
 
 if(SHORTFIN_BUNDLE_DEPS)
   ## fmt
@@ -134,46 +166,65 @@ if(SHORTFIN_BUNDLE_DEPS)
     GIT_TAG        3634f2ded19e0cf38208c8b86cea9e1d7c8e397d # v0.25.0
   )
 
+  # In order to bundle libraries without conflict, we have to tweak settings.
+  shortfin_push_bundled_lib_options()
+  # Enable spdlog shared library options so we can export it.
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSPDLOG_SHARED_LIB -Dspdlog_EXPORTS")
+  message(STATUS "Fetching bundled projects")
+  list(APPEND CMAKE_MESSAGE_INDENT "  ")
   FetchContent_MakeAvailable(fmt spdlog xtl xtensor)
+  shortfin_pop_bundled_lib_options()
+  list(POP_BACK CMAKE_MESSAGE_INDENT)
 else()
   find_package(spdlog)
   find_package(xtensor)
 endif()
 
-## iree runtime
+################################################################################
+# IREE Dependency
+# This is always a source dependency on the IREE runtime.
+################################################################################
 
-if (SHORTFIN_IREE_SOURCE_DIR OR SHORTFIN_BUNDLE_DEPS)
-  # Set IREE build flags, if we are building from source
-  set(IREE_BUILD_COMPILER OFF)
-  set(IREE_BUILD_TESTS OFF)
-  set(IREE_BUILD_SAMPLES OFF)
-  # Disable missing submodules error because we are only building the runtime.
-  set(IREE_ERROR_ON_MISSING_SUBMODULES OFF)
-  # Only enable local_sync/local_task/hip drivers for now.
-  set(IREE_HAL_DRIVER_DEFAULTS OFF)
-  set(IREE_HAL_DRIVER_LOCAL_SYNC ON)
-  set(IREE_HAL_DRIVER_LOCAL_TASK ON)
-  if(SHORTFIN_SYSTEMS_AMDGPU)
-    set(IREE_HAL_DRIVER_HIP ON)
-  endif()
-  if (SHORTFIN_ENABLE_TRACING)
-    set(IREE_ENABLE_RUNTIME_TRACING ON)
-    # When using shared libraries there are some issues that need to be
-    # explored more on static initialization order. Something is getting
-    # initialized and is emitting tracy events before tracy objects are
-    # initialized. This can point to some shared library overloading allocation
-    # functions and making them emit tracy events, which are further used in
-    # some static allocation. See https://github.com/wolfpld/tracy/issues/196
-    # for a similar issue and discussion. Using the workaround suggested in
-    # that issue for now. Note that this does not happen when using static
-    # libraries.
-    set(TRACY_DELAYED_INIT ON CACHE BOOL "Enable delayed init for tracy")
-  endif()
+# Set IREE build flags.
+# We currently rely on IREE to have visible symbols in order to re-export
+# its API for further use.
+# TODO: Turn this back on and use explicit visibility control in the IREE
+# runtime and linker scripts.
+set(IREE_VISIBILITY_HIDDEN OFF)
+set(IREE_BUILD_COMPILER OFF)
+set(IREE_BUILD_TESTS OFF)
+set(IREE_BUILD_SAMPLES OFF)
+# Disable missing submodules error because we are only building the runtime.
+set(IREE_ERROR_ON_MISSING_SUBMODULES OFF)
+# Only enable local_sync/local_task/hip drivers for now.
+set(IREE_HAL_DRIVER_DEFAULTS OFF)
+set(IREE_HAL_DRIVER_LOCAL_SYNC ON)
+set(IREE_HAL_DRIVER_LOCAL_TASK ON)
+if(SHORTFIN_SYSTEMS_AMDGPU)
+  set(IREE_HAL_DRIVER_HIP ON)
+endif()
+if (SHORTFIN_ENABLE_TRACING)
+  set(IREE_ENABLE_RUNTIME_TRACING ON)
+  # When using shared libraries there are some issues that need to be
+  # explored more on static initialization order. Something is getting
+  # initialized and is emitting tracy events before tracy objects are
+  # initialized. This can point to some shared library overloading allocation
+  # functions and making them emit tracy events, which are further used in
+  # some static allocation. See https://github.com/wolfpld/tracy/issues/196
+  # for a similar issue and discussion. Using the workaround suggested in
+  # that issue for now. Note that this does not happen when using static
+  # libraries.
+  set(TRACY_DELAYED_INIT ON CACHE BOOL "Enable delayed init for tracy")
 endif()
 
+# In order to bundle libraries without conflict, we have to tweak settings.
+shortfin_push_bundled_lib_options()
 if(SHORTFIN_IREE_SOURCE_DIR)
+  message(STATUS "Using existing IREE sources: ${SHORTFIN_IREE_SOURCE_DIR}")
   add_subdirectory(${SHORTFIN_IREE_SOURCE_DIR} shortfin_iree SYSTEM EXCLUDE_FROM_ALL)
-elseif (SHORTFIN_BUNDLE_DEPS)
+else()
+  message(STATUS "Fetching IREE sources from tag ${SHORTFIN_IREE_GIT_TAG}")
+
   # TODO: We shouldn't have to pull googletest when we are not building tests.
   #       This needs to be fixed with IREE.
   set(IREE_SUBMODULES "third_party/benchmark third_party/cpuinfo third_party/flatcc third_party/hip-build-deps third_party/googletest")
@@ -183,7 +234,7 @@ elseif (SHORTFIN_BUNDLE_DEPS)
   FetchContent_Declare(
     shortfin_iree
     GIT_REPOSITORY https://github.com/iree-org/iree.git
-    GIT_TAG candidate-20241101.1065
+    GIT_TAG "${SHORTFIN_IREE_GIT_TAG}"
     GIT_SUBMODULES ${IREE_SUBMODULES}
     GIT_SHALLOW TRUE
     SYSTEM
@@ -193,12 +244,71 @@ elseif (SHORTFIN_BUNDLE_DEPS)
   if(NOT shortfin_iree_POPULATED)
     FetchContent_MakeAvailable(shortfin_iree)
   endif()
-else()
-  # Try to find iree using find_package
-  find_package(IREERuntime)
+endif()
+shortfin_pop_bundled_lib_options()
+
+################################################################################
+# Tokenizer Library
+################################################################################
+
+function(shortfin_check_tokenizers)
+  # Make sure that rust/cargo is installed and usable.
+  # Consider switching this to a cached variable once the tokenizers_cpp project
+  # will accept an override vs running whatever is on the path. For now, just
+  # verify the path is sane as that is what will get used.
+  find_program(SHORTFIN_CARGO_PATH NAMES cargo NO_CACHE)
+  if(NOT SHORTFIN_CARGO_PATH)
+    message(SEND_ERROR
+      "Building with -DSHORTFIN_ENABLE_TOKENIZERS=ON requires cargo (Rust's build tool). "
+      "Please follow Rust documentation to install. On Ubuntu, this can typically be accomplished with:\n"
+      "  sudo apt install rustup && rustup default stable\n"
+      "See https://www.rust-lang.org/tools/install"
+    )
+  endif()
+
+  # Make sure cargo is functional.
+  execute_process(
+    COMMAND ${SHORTFIN_CARGO_PATH}
+    RESULT_VARIABLE _CARGO_RESULT
+    OUTPUT_VARIABLE _CARGO_OUT
+    ERROR_VARIABLE _CARGO_ERR
+  )
+  if(NOT "${_CARGO_RESULT}" STREQUAL "0")
+    message(SEND_ERROR
+      "Building with -DSHORTFIN_ENABLE_TOKENIZERS=ON requires cargo (Rust's build tool) "
+      "to be configured properly. It was found (${SHORTFIN_CARGO_PATH}) but returned an "
+      "error. Output below:\n"
+      "${_CARGO_OUT}\n"
+      "${_CARGO_ERR}"
+    )
+  endif()
+endfunction()
+
+if(SHORTFIN_ENABLE_TOKENIZERS)
+  # TODO: submit a patch to tokenizers_cpp to allow explicit configuration of the
+  # cargo location and pass that vs relying on environmental alignment.
+  shortfin_check_tokenizers()
+
+  shortfin_push_bundled_lib_options()
+  set(CMAKE_C_VISIBILITY_PRESET "hidden")
+  set(CMAKE_CXX_VISIBILITY_PRESET "hidden")
+  set(CMAKE_VISIBILITY_INLINES_HIDDEN ON)
+  set(MLC_ENABLE_SENTENCEPIECE_TOKENIZER OFF)
+
+  FetchContent_Declare(
+    tokenizers_cpp  # From CMake project() declaration
+    GIT_REPOSITORY https://github.com/mlc-ai/tokenizers-cpp.git
+    GIT_TAG 4bb753377680e249345b54c6b10e6d0674c8af03 # 2024 Nov 15
+    EXCLUDE_FROM_ALL
+  )
+  message(STATUS "Fetching tokenizers_cpp")
+  FetchContent_MakeAvailable(tokenizers_cpp)
+  shortfin_pop_bundled_lib_options()
 endif()
 
-# tests
+################################################################################
+# Tests
+################################################################################
 
 if(SHORTFIN_BUILD_TESTS)
   if (NOT SHORTFIN_BUNDLE_DEPS AND NOT SHORTFIN_IREE_SOURCE_DIR)
@@ -213,8 +323,8 @@ if(SHORTFIN_BUILD_TESTS)
   endif()
   include(GoogleTest)
   enable_testing()
+  add_custom_target(shortfin_testdata_deps)
 endif()
-
 
 add_subdirectory(src)
 

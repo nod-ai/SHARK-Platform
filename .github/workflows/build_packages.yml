@@ -12,11 +12,15 @@ on:
     # Runs at 11:00 AM UTC, which is 3:00 AM PST (UTC-8)
     - cron: '0 11 * * *'
 
+permissions:
+  contents: read
+
 jobs:
   # Note: metadata generation could happen in a separate trigger/schedule
   # workflow. For cross platform builds, it's useful to just generate the
   # metadata on Linux and pass that to later jobs using artifacts.
   setup_metadata:
+    if: ${{ github.repository_owner == 'nod-ai' || github.event_name != 'schedule' }}
     runs-on: ubuntu-24.04
     outputs:
       shark_package_version: ${{ steps.version.outputs.shark_package_version }}
@@ -26,7 +30,7 @@ jobs:
         with:
           submodules: false
       - name: Setup Python
-        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.3
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
         with:
           python-version: 3.12
           cache: "pip"
@@ -37,19 +41,25 @@ jobs:
       - name: Generate release candidate versions
         id: version_rc
         run: |
-          sharktank_package_version=$(python3 build_tools/gen_version_info_rc.py sharktank)
-          shortfin_package_version=$(python3 build_tools/gen_version_info_rc.py shortfin)
-      - name: Upload version_info_rc.json
-        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
+          version_suffix="$(printf 'rc%(%Y%m%d)T')"
+          echo "version_suffix=${version_suffix}" >> $GITHUB_ENV
+          sharktank_package_version=$(python3 build_tools/python_deploy/compute_local_version.py --version-suffix=${version_suffix} sharktank)
+          shortfin_package_version=$(python3 build_tools/python_deploy/compute_local_version.py --version-suffix=${version_suffix} shortfin)
+          sharkai_package_version=$(python3 build_tools/python_deploy/compute_common_version.py -rc --version-suffix=${version_suffix} --write-json)
+      - name: Upload version_local.json
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
         with:
-          name: version_info_rc
+          name: version_local
           path: |
-            sharktank/version_info_rc.json
-            shortfin/version_info_rc.json
+            sharktank/version_local.json
+            shortfin/version_local.json
+            shark-ai/version_local.json
 
   build_packages:
     name: "${{ matrix.package }} :: ${{ matrix.platform }} :: ${{ matrix.python-version }}"
     runs-on: ${{ matrix.runs-on }}
+    permissions:
+      contents: write
     needs: [setup_metadata]
     strategy:
       fail-fast: false
@@ -58,8 +68,16 @@ jobs:
           # Ubuntu packages.
           - runs-on: ubuntu-24.04
             platform: linux-x86_64
+            package: shark-ai
+            python-version: cp311-cp311  # Ignored (generic wheel), set for workflow naming
+          - runs-on: ubuntu-24.04
+            platform: linux-x86_64
             package: sharktank
             python-version: cp311-cp311  # Ignored (generic wheel), set for workflow naming
+          - runs-on: ubuntu-24.04
+            platform: linux-x86_64
+            package: shortfin
+            python-version: cp310-cp310
           - runs-on: ubuntu-24.04
             platform: linux-x86_64
             package: shortfin
@@ -87,12 +105,21 @@ jobs:
         path: "c" # Windows can hit path length limits, so use a short path.
         submodules: false
 
-    - name: Download version_info_rc.json
+    - name: Download version_local.json
       uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
       with:
-        name: version_info_rc
+        name: version_local
         path: ./c/
         merge-multiple: true
+
+    - name: Build shark-ai (Linux x86_64)
+      if: "matrix.package == 'shark-ai' && matrix.platform == 'linux-x86_64'"
+      env:
+        OUTPUT_DIR: "${{ github.workspace }}/bindist"
+      run: |
+        [ -e ./bindist/* ] && rm ./bindist/*
+        ./c/build_tools/python_deploy/write_requirements.py --version-suffix=${version_suffix}
+        ./c/shark-ai/build_tools/build_linux_package.sh
 
     - name: Build sharktank (Linux x86_64)
       if: "matrix.package == 'sharktank' && matrix.platform == 'linux-x86_64'"
@@ -112,7 +139,7 @@ jobs:
         ./c/shortfin/build_tools/build_linux_package.sh
 
     - name: Upload python wheels
-      uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
       with:
         if-no-files-found: error
         name: snapshot-${{ matrix.package }}-${{ matrix.platform }}-${{ matrix.python-version }}
@@ -122,10 +149,9 @@ jobs:
       uses: ncipollo/release-action@2c591bcc8ecdcd2db72b97d6147f871fcd833ba5 # v1.14.0
       with:
         artifacts: bindist/*.whl
-        token: "${{ secrets.RELEASE_PUBLISH_ACCESS_TOKEN }}"
         tag: "dev-wheels"
         name: "dev-wheels"
-        body: "Automatic snapshot release of SHARK-Platform python wheels."
+        body: "Automatic snapshot release of shark-ai python wheels."
         removeArtifacts: false
         allowUpdates: true
         replacesArtifacts: true

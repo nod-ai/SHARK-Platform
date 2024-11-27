@@ -1,10 +1,15 @@
+# Copyright 2024 Advanced Micro Devices, Inc.
+#
+# Licensed under the Apache License v2.0 with LLVM Exceptions.
+# See https://llvm.org/LICENSE.txt for license information.
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+
 import logging
 import time
-import asyncio
-from typing import Callable, Any
+from typing import Any
 import functools
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("shortfin-sd.metrics")
 
 
 def measure(fn=None, type="exec", task=None, num_items=None, freq=1, label="items"):

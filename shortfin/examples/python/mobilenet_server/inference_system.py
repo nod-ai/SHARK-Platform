@@ -49,8 +49,8 @@ class InferenceProcess(sf.Process):
             # Simple call. Note that the await here is merely awaiting the
             # result being *available* (i.e. that the VM coroutine has
             # completed) but does not indicate that the result is ready.
-            (result1,) = await self.main_function(self.device_input)
-            (result2,) = await self.main_function(self.device_input)
+            (result1,) = await self.main_function(self.device_input, fiber=self.fiber)
+            (result2,) = await self.main_function(self.device_input, fiber=self.fiber)
 
             # TODO: Implement await on individual results. The accounting is
             # there but currently we can only await on the device itself.
@@ -95,7 +95,7 @@ class Main:
         # in a task so we can await it in the future and let program loads
         # overlap.
         for _ in range(self.processes_per_worker):
-            program = sf.Program([self.program_module], fiber=fiber)
+            program = sf.Program([self.program_module], devices=fiber.raw_devices)
             self.processes.append(
                 InferenceProcess(program, self.request_queue, fiber=fiber).launch()
             )
@@ -144,7 +144,8 @@ def run_cli(home_dir: Path, argv):
         # Done.
         writer.close()
 
-    lsys = sf.host.CPUSystemBuilder().create_system()
+    sf.SystemBuilder.default_system_type = "hostcpu"
+    lsys = sf.SystemBuilder().create_system()
     main = Main(lsys, home_dir)
     lsys.init_worker.call_threadsafe(client)
     lsys.run(main.main())

@@ -69,7 +69,33 @@ def pytest_addoption(parser):
         action="store_true",
         dest="longrun",
         default=False,
-        help="Enable long and slow tests",
+        help="Enable long tests",
+    )
+
+    parser.addoption(
+        "--run-quick-llama-test",
+        action="store_true",
+        dest="run-quick-llama-test",
+        default=False,
+        help="Enable llama 8b f16 decomposed benchmarking test",
+    )
+
+    parser.addoption(
+        "--run-nightly-llama-tests",
+        action="store_true",
+        dest="run-nightly-llama-tests",
+        default=False,
+        help="Enable all llama benchmarking tests",
+    )
+
+    parser.addoption(
+        "--with-t5-data",
+        action="store_true",
+        default=False,
+        help=(
+            "Enable tests that use T5 data like models that is not a part of the source "
+            "code. The user is expected to provide the data"
+        ),
     )
 
     # TODO: Remove all hardcoded paths in CI tests
@@ -115,6 +141,40 @@ def pytest_addoption(parser):
         action="store",
         default=None,
         help="Llama3.1 405b fp8 model path",
+    )
+
+    # To obtain a T5 GGUF file you can use llama.cpp's convert_hf_to_gguf.py.
+    # https://github.com/ggerganov/llama.cpp/blob/9abe9eeae98b11fa93b82632b264126a010225ff/convert_hf_to_gguf.py
+    # E.g.
+    # git lfs install
+    # git clone https://huggingface.co/google/t5-v1_1-small
+    # convert_hf_to_gguf.py \
+    #     --outfile t5-v1_1-small.gguf \
+    #     --outtype=f32 \
+    #     t5-v1_1-small
+    parser.addoption(
+        "--google-t5-v1-1-small-f32-model-path",
+        type=Path,
+        default="/data/t5/small/google__t5-v1_1-small_f32.gguf",
+        help="Google T5 v1.1 small float32 model path",
+    )
+    parser.addoption(
+        "--google-t5-v1-1-small-bf16-model-path",
+        type=Path,
+        default="/data/t5/small/google__t5-v1_1-small_bf16.gguf",
+        help="Google T5 v1.1 small bfloat16 model path",
+    )
+    parser.addoption(
+        "--google-t5-v1-1-xxl-f32-model-path",
+        type=Path,
+        default="/data/t5/xxl/google__t5-v1_1-xxl_f32.gguf",
+        help="Google T5 v1.1 XXL float32 model path",
+    )
+    parser.addoption(
+        "--google-t5-v1-1-xxl-bf16-model-path",
+        type=Path,
+        default="/data/t5/xxl/google__t5-v1_1-xxl_bf16.gguf",
+        help="Google T5 v1.1 XXL bfloat16 model path",
     )
 
     parser.addoption(
@@ -240,6 +300,21 @@ def get_model_artifacts(request: FixtureRequest):
     model_path["llama3_405b_fp8_model_path"] = set_fixture_from_cli_option(
         request, "--llama3-405b-fp8-model-path", "llama3_405b_fp8_model"
     )
+    model_path["google__t5_v1_1_small_f32_model_path"] = set_fixture_from_cli_option(
+        request,
+        "--google-t5-v1-1-small-f32-model-path",
+        "google__t5_v1_1_small_f32_model",
+    )
+    model_path["google__t5_v1_1_small_bf16_model_path"] = set_fixture_from_cli_option(
+        request,
+        "--google-t5-v1-1-small-bf16-model-path",
+        "google__t5_v1_1_small_bf16_model",
+    )
+    model_path["google__t5_v1_1_xxl_f32_model_path"] = set_fixture_from_cli_option(
+        request,
+        "--google-t5-v1-1-xxl-f32-model-path",
+        "google__t5_v1_1_xxl_f32_model",
+    )
     return model_path
 
 
@@ -258,10 +333,12 @@ def get_iree_flags(request: FixtureRequest):
 
 
 # The following three functions allow us to add a "XFail Reason" column to the html reports for each test
+@pytest.hookimpl(optionalhook=True)
 def pytest_html_results_table_header(cells):
     cells.insert(2, "<th>XFail Reason</th>")
 
 
+@pytest.hookimpl(optionalhook=True)
 def pytest_html_results_table_row(report, cells):
     if hasattr(report, "wasxfail"):
         cells.insert(2, f"<td>{report.wasxfail}</td>")

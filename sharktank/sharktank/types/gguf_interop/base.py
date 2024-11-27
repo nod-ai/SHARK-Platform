@@ -11,7 +11,7 @@ import os
 import numpy as np
 import torch
 
-from gguf import GGUFReader, GGUFValueType
+from gguf import GGUFReader, GGUFValueType, ReaderField
 
 from iree.turbine.aot import (
     ExternalTensorTrait,
@@ -44,12 +44,26 @@ def _sanitize_scalar(scalar):
     return scalar
 
 
+def _load_array(field: ReaderField) -> list:
+    if len(field.types) != 2:
+        raise ValueError(f"Unsupported array type {field.types}")
+    element_type = field.types[1]
+    if element_type == GGUFValueType.STRING:
+        return [
+            str(bytes(field.parts[parts_index]), encoding="utf8")
+            for parts_index in field.data
+        ]
+    elif element_type in GGUFReader.gguf_scalar_to_np:
+        return [
+            _sanitize_scalar(field.parts[parts_index][0]) for parts_index in field.data
+        ]
+    else:
+        raise ValueError(f"Unsupported array element type f{element_type}")
+
+
 def _load_properties(reader: GGUFReader) -> dict[str, Any]:
-    # TODO: Figure out what to do with tables.
-    tables: dict[str, Any] = {}
     properties: dict[str, Any] = {
         "schema": "GGUF",
-        # "tables": tables,
     }
 
     # Extract hyper-parameters. Adapted from gguf-dump.py
@@ -60,8 +74,10 @@ def _load_properties(reader: GGUFReader) -> dict[str, Any]:
                 properties[field.name] = str(bytes(field.parts[-1]), encoding="utf8")
             elif field.types[0] in reader.gguf_scalar_to_np:
                 properties[field.name] = _sanitize_scalar(field.parts[-1][0])
+        elif field.types[0] == GGUFValueType.ARRAY:
+            properties[field.name] = _load_array(field)
         else:
-            tables[field.name] = field.parts
+            raise ValueError(f"Invalid field type.")
     return properties
 
 
@@ -100,6 +116,15 @@ def _wrap_tensor(
     if type_name in ["F16", "F32", "F64"]:
         return DefaultPrimitiveTensor(
             name=name, data=_externalize_tensor(name, data, logical_shape)
+        )
+
+    if type_name == "BF16":
+        assert data.dtype == np.uint8
+        return DefaultPrimitiveTensor(
+            name=name,
+            data=_externalize_tensor(name, data.view(np.int16), logical_shape).view(
+                dtype=torch.bfloat16
+            ),
         )
 
     quantized_type = _quantized_types.get(type_name)

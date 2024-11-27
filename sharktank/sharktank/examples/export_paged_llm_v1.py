@@ -54,24 +54,20 @@ def main():
         help="Enables strictness during export",
         action="store_true",
     )
-    parser.add_argument(
-        "--attention-kernel",
-        type=str,
-        default="decomposed",
-        choices=["decomposed", "torch"],
-    )
 
+    cli.add_quantization_options(parser)
+    cli.add_model_options(parser)
     args = cli.parse(parser)
     dataset_type = cli.get_input_data_files(args)
     dataset_type = "irpa" if "irpa" in dataset_type else "gguf"
     dataset = cli.get_input_dataset(args)
-
     hp = configs.LlamaHParams.from_gguf_props(dataset.properties)
     tensor_parallelism_size = (
         dataset.properties["tensor_parallelism_size"]
         if "tensor_parallelism_size" in dataset.properties
         else 1
     )
+
     llama_config = LlamaModelConfig(
         hp,
         tensor_parallelism_size=tensor_parallelism_size,
@@ -80,6 +76,7 @@ def main():
         kv_cache_type="direct" if args.bs == [1] else "paged",
         attention_kernel=args.attention_kernel,
     )
+    llama_config.fake_quant = args.fake_quant
 
     if llama_config.hp.expert_count:
         if llama_config.hp.model_arch == "grok":
@@ -170,11 +167,12 @@ def main():
             model, llama_config.tensor_parallelism_size
         )
 
-        # We need to offset the indices for the cache
-        arg_affinities = {key + 3: arg_affinities[key] for key in arg_affinities}
+        if llama_config.tensor_parallelism_size > 1:
+            # We need to offset the indices for the cache
+            arg_affinities = {key + 3: arg_affinities[key] for key in arg_affinities}
 
-        for i in range(3):
-            arg_affinities[i] = DeviceAffinity("0")
+            for i in range(3):
+                arg_affinities[i] = DeviceAffinity("0")
 
         dynamic_shapes = {
             "tokens": {1: sl_dim},
@@ -247,12 +245,13 @@ def main():
             arg_affinities,
         ) = setup_cache(model, llama_config.tensor_parallelism_size)
 
-        # We need to offset the indices for the cache
-        arg_affinities = {key + 4: arg_affinities[key] for key in arg_affinities}
+        if llama_config.tensor_parallelism_size > 1:
+            # We need to offset the indices for the cache
+            arg_affinities = {key + 4: arg_affinities[key] for key in arg_affinities}
 
-        # Inputs have default affinity 0
-        for i in range(4):
-            arg_affinities[i] = DeviceAffinity("0")
+            # Inputs have default affinity 0
+            for i in range(4):
+                arg_affinities[i] = DeviceAffinity("0")
 
         dynamic_shapes = {
             "tokens": {},
@@ -316,7 +315,8 @@ def main():
     bsizes = []
     for bs in args.bs:
         generate_batch_prefill(bs)
-        generate_batch_decode(bs)
+        if not args.skip_decode:
+            generate_batch_decode(bs)
         bsizes.append(bs)
     config = generate_params_json(hp, bsizes, bsizes)
     print("GENERATED!")

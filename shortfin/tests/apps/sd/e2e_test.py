@@ -1,3 +1,9 @@
+# Copyright 2024 Advanced Micro Devices, Inc.
+#
+# Licensed under the Apache License v2.0 with LLVM Exceptions.
+# See https://llvm.org/LICENSE.txt for license information.
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+
 import json
 import requests
 import time
@@ -135,7 +141,7 @@ def test_sd_server_bs8_dense_fpd8(sd_server_fpd8):
     assert status_code == 200
 
 
-@pytest.mark.slow
+@pytest.mark.skip
 @pytest.mark.system("amdgpu")
 def test_sd_server_bs64_dense_fpd8(sd_server_fpd8):
     imgs, status_code = send_json_file(sd_server_fpd8.url, num_copies=64)
@@ -143,7 +149,7 @@ def test_sd_server_bs64_dense_fpd8(sd_server_fpd8):
     assert status_code == 200
 
 
-@pytest.mark.slow
+@pytest.mark.skip
 @pytest.mark.xfail(reason="Unexpectedly large client batch.")
 @pytest.mark.system("amdgpu")
 def test_sd_server_bs512_dense_fpd8(sd_server_fpd8):

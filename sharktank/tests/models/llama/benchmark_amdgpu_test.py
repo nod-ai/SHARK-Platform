@@ -20,8 +20,11 @@ from sharktank.utils.export_artifacts import (
     IreeCompileException,
 )
 
-longrun = pytest.mark.skipif("not config.getoption('longrun')")
 is_mi300x = pytest.mark.skipif("config.getoption('iree_hip_target') != 'gfx942'")
+skipif_run_quick_llama_test = pytest.mark.skipif(
+    'config.getoption("run-quick-llama-test") and not config.getoption("run-nightly-llama-tests")',
+    reason="Skipping largs tests when --run-quick-llama-test is set.",
+)
 
 
 @pytest.mark.usefixtures("get_iree_flags")
@@ -46,20 +49,33 @@ class BaseBenchmarkTest(unittest.TestCase):
 
     def setUp(self):
         self.hip_device_id = os.getenv("HIP_DEVICE_ID", default="0")
+        self.compile_args = [
+            "--iree-dispatch-creation-enable-aggressive-fusion=true",
+            "--iree-global-opt-propagate-transposes=true",
+            "--iree-opt-aggressively-propagate-transposes=true",
+            "--iree-opt-data-tiling=false",
+            "--iree-preprocessing-pass-pipeline='builtin.module(util.func(iree-preprocessing-generalize-linalg-matmul-experimental))'",
+            "--iree-stream-resource-memory-model=discrete",
+            "--iree-hip-legacy-sync=false",
+            "--iree-hal-indirect-command-buffers=true",
+            "--iree-hal-memoization=true",
+            "--iree-opt-strip-assertions",
+        ]
 
 
+@is_mi300x
 class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
     def setUp(self):
         super().setUp()
         # TODO: add numpy files to Azure and download from it
-        self.artifacts_dir = Path("/data/llama-3.1/weights/8b")
+        self.artifacts_dir = Path("/data/llama3.1/weights/8b")
         self.irpa_path = self.artifacts_dir / "fp16/llama3.1_8b_fp16.irpa"
-        self.irpa_path_fp8 = self.artifacts_dir / "f8/llama8b_fp8.irpa"
+        self.irpa_path_fp8 = self.artifacts_dir / "f8/llama3.1_8b_fp8.irpa"
         self.tensor_parallelism_size = 1
         self.dir_path_8b = self.dir_path / "llama-8b"
         self.temp_dir_8b = Path(self.dir_path_8b)
         self.temp_dir_8b.mkdir(parents=True, exist_ok=True)
-        self.llama8b_f16_artifacts = ExportArtifacts(
+        self.llama8b_f16_decomposed_artifacts = ExportArtifacts(
             irpa_path=str(self.irpa_path),
             batch_size=4,
             iree_hip_target="gfx942",
@@ -67,11 +83,34 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
             attention_kernel="decomposed",
             tensor_parallelism_size=self.tensor_parallelism_size,
         )
-        self.iree_compile_args = [
-            "--iree-hal-target-backends=rocm",
-            f"--iree-hip-target={self.iree_hip_target}",
-        ]
+        self.llama8b_f16_torch_sdpa_artifacts = ExportArtifacts(
+            irpa_path=str(self.irpa_path),
+            batch_size=4,
+            iree_hip_target="gfx942",
+            iree_hal_target_backends="rocm",
+            attention_kernel="torch",
+            tensor_parallelism_size=self.tensor_parallelism_size,
+        )
+        self.llama8b_fp8_decomposed_artifacts = ExportArtifacts(
+            irpa_path=str(self.irpa_path_fp8),
+            batch_size=4,
+            iree_hip_target="gfx942",
+            iree_hal_target_backends="rocm",
+            attention_kernel="decomposed",
+            tensor_parallelism_size=self.tensor_parallelism_size,
+        )
+        self.llama8b_fp8_torch_sdpa_artifacts = ExportArtifacts(
+            irpa_path=str(self.irpa_path_fp8),
+            batch_size=4,
+            iree_hip_target="gfx942",
+            iree_hal_target_backends="rocm",
+            attention_kernel="torch",
+            tensor_parallelism_size=self.tensor_parallelism_size,
+        )
         self.prefill_args_f16 = self.artifacts_dir / "prefill_args"
+        self.prefill_args_bs4_128_in_tokens_f16 = (
+            self.artifacts_dir / "prefill_args_bs4_128"
+        )
         self.decode_args_f16 = self.artifacts_dir / "decode_args"
         self.prefill_args_fp8 = self.artifacts_dir / "prefill_args_fp8"
         self.decode_args_fp8 = self.artifacts_dir / "decode_args_fp8"
@@ -83,6 +122,14 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
             f"--input=@{self.prefill_args_f16}/cache_state_f16.npy",
             "--benchmark_repetitions=3",
         ]
+        self.iree_run_prefill_nondecomposed_args_fp16 = [
+            "--function=prefill_bs4",
+            f"--input=@{self.prefill_args_bs4_128_in_tokens_f16}/random_tokens.npy",
+            f"--input=@{self.prefill_args_bs4_128_in_tokens_f16}/seq_lens.npy",
+            f"--input=@{self.prefill_args_bs4_128_in_tokens_f16}/seq_block_ids.npy",
+            f"--input=@{self.prefill_args_bs4_128_in_tokens_f16}/cs_f16.npy",
+            "--benchmark_repetitions=3",
+        ]
         self.iree_run_decode_args = [
             "--function=decode_bs4",
             f"--input=@{self.decode_args_f16}/tokens.npy",
@@ -110,41 +157,30 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
             "--benchmark_repetitions=3",
         ]
 
-    @longrun
-    @is_mi300x
     def testBenchmark8B_f16_Decomposed(self):
         output_file_name = self.dir_path_8b / "f16_decomposed"
-        output_mlir = self.llama8b_f16_artifacts.create_file(
+        output_mlir = self.llama8b_f16_decomposed_artifacts.create_file(
             suffix=".mlir", prefix=output_file_name
         )
-        output_json = self.llama8b_f16_artifacts.create_file(
+        output_json = self.llama8b_f16_decomposed_artifacts.create_file(
             suffix=".json", prefix=output_file_name
         )
-        output_vmfb = self.llama8b_f16_artifacts.create_file(
+        output_vmfb = self.llama8b_f16_decomposed_artifacts.create_file(
             suffix=".vmfb", prefix=output_file_name
         )
-        output_shard_file_name = str(
-            self.artifacts_dir
-            / f"llama3.1_8b_fp16_tp{self.tensor_parallelism_size}_parameters.irpa"
-        )
-        # shard_irpa file
-        shard_return_code = self.llama8b_f16_artifacts.shard_irpa_file(
-            output_file=output_shard_file_name
-        )
-        if shard_return_code == 0:
-            self.irpa_path = output_shard_file_name
-        export_return_code = self.llama8b_f16_artifacts.export_to_mlir(
+        export_return_code = self.llama8b_f16_decomposed_artifacts.export_to_mlir(
             mlir_path=output_mlir,
             json_path=output_json,
         )
-        self.llama8b_f16_artifacts.compile_to_vmfb(
+        self.llama8b_f16_decomposed_artifacts.compile_to_vmfb(
             mlir_path=str(output_mlir),
             vmfb_path=output_vmfb,
             hal_dump_path=output_file_name,
             cwd=self.repo_root,
+            args=self.compile_args,
         )
         # benchmark prefill
-        self.llama8b_f16_artifacts.iree_benchmark_vmfb(
+        self.llama8b_f16_decomposed_artifacts.iree_benchmark_vmfb(
             hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path,
@@ -152,7 +188,7 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
             cwd=self.repo_root,
         )
         # benchmark decode
-        self.llama8b_f16_artifacts.iree_benchmark_vmfb(
+        self.llama8b_f16_decomposed_artifacts.iree_benchmark_vmfb(
             hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path,
@@ -160,43 +196,67 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
             cwd=self.repo_root,
         )
 
-    @longrun
-    @is_mi300x
+    @skipif_run_quick_llama_test
+    def testBenchmark8B_f16_Non_Decomposed_Prefill(self):
+        output_file_name = self.dir_path_8b / "f16_torch_prefill"
+        output_mlir = self.llama8b_f16_torch_sdpa_artifacts.create_file(
+            suffix=".mlir", prefix=output_file_name
+        )
+        output_json = self.llama8b_f16_torch_sdpa_artifacts.create_file(
+            suffix=".json", prefix=output_file_name
+        )
+        output_vmfb = self.llama8b_f16_torch_sdpa_artifacts.create_file(
+            suffix=".vmfb", prefix=output_file_name
+        )
+        self.llama8b_f16_torch_sdpa_artifacts.attention_kernel = "torch"
+        export_return_code = self.llama8b_f16_torch_sdpa_artifacts.export_to_mlir(
+            mlir_path=output_mlir,
+            json_path=output_json,
+            skip_decode=True,
+        )
+        self.llama8b_f16_torch_sdpa_artifacts.compile_to_vmfb(
+            mlir_path=str(output_mlir),
+            vmfb_path=output_vmfb,
+            hal_dump_path=output_file_name,
+            cwd=self.repo_root,
+            args=self.compile_args,
+        )
+        # benchmark prefill
+        self.llama8b_f16_torch_sdpa_artifacts.iree_benchmark_vmfb(
+            hip_device_id=self.hip_device_id,
+            vmfb_name=output_vmfb,
+            irpa_path=self.irpa_path,
+            args=self.iree_run_prefill_nondecomposed_args_fp16,
+            cwd=self.repo_root,
+        )
+
+    @skipif_run_quick_llama_test
     @pytest.mark.xfail(reason="Compile Error", strict=True, raises=IreeCompileException)
     def testBenchmark8B_f16_Non_Decomposed(self):
         output_file_name = self.dir_path_8b / "f16_torch"
-        output_mlir = self.llama8b_f16_artifacts.create_file(
+        output_mlir = self.llama8b_f16_torch_sdpa_artifacts.create_file(
             suffix=".mlir", prefix=output_file_name
         )
-        output_json = self.llama8b_f16_artifacts.create_file(
+        output_json = self.llama8b_f16_torch_sdpa_artifacts.create_file(
             suffix=".json", prefix=output_file_name
         )
-        output_vmfb = self.llama8b_f16_artifacts.create_file(
+        output_vmfb = self.llama8b_f16_torch_sdpa_artifacts.create_file(
             suffix=".vmfb", prefix=output_file_name
         )
-        self.llama8b_f16_artifacts.attention_kernel = "torch"
-        output_shard_file_name = str(
-            self.artifacts_dir
-            / f"llama3.1_8b_fp16_tp{self.tensor_parallelism_size}_parameters_torch_sdpa.irpa"
-        )
-        # shard_irpa file
-        shard_return_code = self.llama8b_f16_artifacts.shard_irpa_file(
-            output_file=output_shard_file_name
-        )
-        if shard_return_code == 0:
-            self.irpa_path = output_shard_file_name
-        export_return_code = self.llama8b_f16_artifacts.export_to_mlir(
+        self.llama8b_f16_torch_sdpa_artifacts.attention_kernel = "torch"
+        export_return_code = self.llama8b_f16_torch_sdpa_artifacts.export_to_mlir(
             mlir_path=output_mlir,
             json_path=output_json,
         )
-        self.llama8b_f16_artifacts.compile_to_vmfb(
+        self.llama8b_f16_torch_sdpa_artifacts.compile_to_vmfb(
             mlir_path=str(output_mlir),
             vmfb_path=output_vmfb,
             hal_dump_path=output_file_name,
             cwd=self.repo_root,
+            args=self.compile_args,
         )
         # benchmark prefill
-        self.llama8b_f16_artifacts.iree_benchmark_vmfb(
+        self.llama8b_f16_torch_sdpa_artifacts.iree_benchmark_vmfb(
             hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path,
@@ -204,7 +264,7 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
             cwd=self.repo_root,
         )
         # benchmark decode
-        self.llama8b_f16_artifacts.iree_benchmark_vmfb(
+        self.llama8b_f16_torch_sdpa_artifacts.iree_benchmark_vmfb(
             hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path,
@@ -212,35 +272,31 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
             cwd=self.repo_root,
         )
 
-    @longrun
-    @is_mi300x
-    @pytest.mark.xfail(
-        reason="Test not yet implemented", strict=True, raises=AttributeError
-    )
+    @pytest.mark.xfail(reason="Compile Error", strict=True, raises=IreeCompileException)
     def testBenchmark8B_fp8_Decomposed(self):
         output_file_name = self.dir_path_8b / "fp8_decomposed"
-        output_mlir = self.create_file(suffix=".mlir", prefix=output_file_name)
-        output_json = self.create_file(suffix=".json", prefix=output_file_name)
-        output_vmfb = self.create_file(suffix=".vmfb", prefix=output_file_name)
-        self.export_mlir(
-            attention_kernel="decomposed",
-            tensor_parallelism_size=self.tensor_parallelism_size,
-            irpa_path=self.irpa_path_fp8,
-            output_mlir_path=output_mlir,
-            output_json_path=output_json,
-            cwd=self.repo_root,
+        output_mlir = self.llama8b_fp8_decomposed_artifacts.create_file(
+            suffix=".mlir", prefix=output_file_name
         )
-        iree_compile_args = self.iree_compile_args + [
-            f"--iree-hal-dump-executable-files-to={output_file_name}/files"
-        ]
-        self.iree_compile(
+        output_json = self.llama8b_fp8_decomposed_artifacts.create_file(
+            suffix=".json", prefix=output_file_name
+        )
+        output_vmfb = self.llama8b_fp8_decomposed_artifacts.create_file(
+            suffix=".vmfb", prefix=output_file_name
+        )
+        export_return_code = self.llama8b_fp8_decomposed_artifacts.export_to_mlir(
             mlir_path=output_mlir,
-            output_vmfb_path=output_vmfb,
-            args=self.iree_compile_args,
+            json_path=output_json,
+        )
+        self.llama8b_fp8_decomposed_artifacts.compile_to_vmfb(
+            mlir_path=str(output_mlir),
+            vmfb_path=output_vmfb,
+            hal_dump_path=output_file_name,
             cwd=self.repo_root,
+            args=self.compile_args,
         )
         # benchmark prefill
-        self.iree_benchmark_module(
+        self.llama8b_fp8_decomposed_artifacts.iree_benchmark_vmfb(
             hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path_fp8,
@@ -248,7 +304,7 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
             cwd=self.repo_root,
         )
         # benchmark decode
-        self.iree_benchmark_module(
+        self.llama8b_fp8_decomposed_artifacts.iree_benchmark_vmfb(
             hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path_fp8,
@@ -256,76 +312,113 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
             cwd=self.repo_root,
         )
 
-    @longrun
-    @is_mi300x
-    @pytest.mark.xfail(
-        reason="Test not yet implemented", strict=True, raises=AttributeError
-    )
+    @pytest.mark.xfail(reason="Compile Error", strict=True, raises=IreeCompileException)
     def testBenchmark8B_fp8_Non_Decomposed(self):
-        output_file_name = self.dir_path_8b / "fp8_torch_sdpa"
-        output_mlir = self.create_file(suffix=".mlir", prefix=output_file_name)
-        output_json = self.create_file(suffix=".json", prefix=output_file_name)
-        output_vmfb = self.create_file(suffix=".vmfb", prefix=output_file_name)
-        self.export_mlir(
-            attention_kernel="torch_sdpa",
-            tensor_parallelism_size=self.tensor_parallelism_size,
-            irpa_path=self.irpa_path_fp8,
-            output_mlir_path=output_mlir,
-            output_json_path=output_json,
-            cwd=self.repo_root,
+        output_file_name = self.dir_path_8b / "fp8_torch"
+        output_mlir = self.llama8b_fp8_torch_sdpa_artifacts.create_file(
+            suffix=".mlir", prefix=output_file_name
         )
-        iree_compile_args = self.iree_compile_args + [
-            f"--iree-hal-dump-executable-files-to={output_file_name}/files"
-        ]
-        self.iree_compile(
+        output_json = self.llama8b_fp8_torch_sdpa_artifacts.create_file(
+            suffix=".json", prefix=output_file_name
+        )
+        output_vmfb = self.llama8b_fp8_torch_sdpa_artifacts.create_file(
+            suffix=".vmfb", prefix=output_file_name
+        )
+        export_return_code = self.llama8b_fp8_torch_sdpa_artifacts.export_to_mlir(
             mlir_path=output_mlir,
-            output_vmfb_path=output_vmfb,
-            args=self.iree_compile_args,
+            json_path=output_json,
+        )
+        self.llama8b_fp8_torch_sdpa_artifacts.compile_to_vmfb(
+            mlir_path=str(output_mlir),
+            vmfb_path=output_vmfb,
+            hal_dump_path=output_file_name,
             cwd=self.repo_root,
+            args=self.compile_args,
         )
         # benchmark prefill
-        self.iree_benchmark_module(
+        self.llama8b_fp8_torch_sdpa_artifacts.iree_benchmark_vmfb(
             hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path_fp8,
-            args=self.iree_run_prefill_args_fp8,
+            args=self.iree_run_prefill_args,
             cwd=self.repo_root,
         )
         # benchmark decode
-        self.iree_benchmark_module(
+        self.llama8b_fp8_torch_sdpa_artifacts.iree_benchmark_vmfb(
             hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path_fp8,
-            args=self.iree_run_decode_args_fp8,
+            args=self.iree_run_decode_args,
             cwd=self.repo_root,
         )
 
 
+@is_mi300x
+@skipif_run_quick_llama_test
 class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
     def setUp(self):
         super().setUp()
         # TODO: add numpy files to Azure and download from it
-        artifacts_dir = Path("/data/llama-3.1/weights/70b")
-        self.irpa_path = artifacts_dir / "fp16/llama3.1_70b_f16.irpa"
-        self.irpa_path_fp8 = artifacts_dir / "f8/llama70b_fp8.irpa"
-        self.tensor_parallelism_size = 1
+        self.artifacts_dir = Path("/data/llama3.1/weights/70b")
+        self.irpa_path = self.artifacts_dir / "fp16/llama3.1_70b_f16.irpa"
+        self.irpa_path_fp8 = self.artifacts_dir / "f8/llama70b_fp8.irpa"
+        self.tensor_parallelism_size = 8
         self.dir_path_70b = self.dir_path / "llama-70b"
         self.temp_dir_70b = Path(self.dir_path_70b)
         self.temp_dir_70b.mkdir(parents=True, exist_ok=True)
-        self.iree_compile_args = [
-            "--iree-hal-target-backends=rocm",
-            f"--iree-hip-target={self.iree_hip_target}",
-        ]
-        self.prefill_args_f16 = artifacts_dir / "prefill_args"
-        self.decode_args_f16 = artifacts_dir / "decode_args"
-        self.prefill_args_fp8 = artifacts_dir / "prefill_args_fp8"
-        self.decode_args_fp8 = artifacts_dir / "decode_args_fp8"
+        self.llama70b_f16_decomposed_artifacts = ExportArtifacts(
+            irpa_path=str(self.irpa_path),
+            batch_size=4,
+            iree_hip_target="gfx942",
+            iree_hal_target_backends="rocm",
+            attention_kernel="decomposed",
+            tensor_parallelism_size=self.tensor_parallelism_size,
+        )
+        self.llama70b_f16_torch_sdpa_artifacts = ExportArtifacts(
+            irpa_path=str(self.irpa_path),
+            batch_size=4,
+            iree_hip_target="gfx942",
+            iree_hal_target_backends="rocm",
+            attention_kernel="torch",
+            tensor_parallelism_size=self.tensor_parallelism_size,
+        )
+        self.llama70b_fp8_decomposed_artifacts = ExportArtifacts(
+            irpa_path=str(self.irpa_path_fp8),
+            batch_size=4,
+            iree_hip_target="gfx942",
+            iree_hal_target_backends="rocm",
+            attention_kernel="decomposed",
+            tensor_parallelism_size=self.tensor_parallelism_size,
+        )
+        self.llama70b_fp8_torch_sdpa_artifacts = ExportArtifacts(
+            irpa_path=str(self.irpa_path_fp8),
+            batch_size=4,
+            iree_hip_target="gfx942",
+            iree_hal_target_backends="rocm",
+            attention_kernel="torch",
+            tensor_parallelism_size=self.tensor_parallelism_size,
+        )
+        self.prefill_args_f16 = self.artifacts_dir / "prefill_args"
+        self.prefill_args_bs4_128_in_tokens_f16 = (
+            self.artifacts_dir / "prefill_args_bs4_128"
+        )
+        self.decode_args_f16 = self.artifacts_dir / "decode_args"
+        self.prefill_args_fp8 = self.artifacts_dir / "prefill_args_fp8"
+        self.decode_args_fp8 = self.artifacts_dir / "decode_args_fp8"
         self.iree_run_prefill_args = [
             "--function=prefill_bs4",
             f"--input=@{self.prefill_args_f16}/tokens.npy",
             f"--input=@{self.prefill_args_f16}/seq_lens.npy",
             f"--input=@{self.prefill_args_f16}/seq_block_ids.npy",
             f"--input=@{self.prefill_args_f16}/cache_state_f16.npy",
+            "--benchmark_repetitions=3",
+        ]
+        self.iree_run_prefill_nondecomposed_args_fp16 = [
+            "--function=prefill_bs4",
+            f"--input=@{self.prefill_args_bs4_128_in_tokens_f16}/random_tokens.npy",
+            f"--input=@{self.prefill_args_bs4_128_in_tokens_f16}/seq_lens.npy",
+            f"--input=@{self.prefill_args_bs4_128_in_tokens_f16}/seq_block_ids.npy",
+            f"--input=@{self.prefill_args_bs4_128_in_tokens_f16}/cs_f16.npy",
             "--benchmark_repetitions=3",
         ]
         self.iree_run_decode_args = [
@@ -355,35 +448,39 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
             "--benchmark_repetitions=3",
         ]
 
-    @longrun
-    @is_mi300x
     @pytest.mark.xfail(
-        reason="Test not yet implemented", strict=True, raises=AttributeError
+        reason="Benchmarking Error", strict=True, raises=IreeBenchmarkException
     )
-    def testBenchmark70B_f16_Decomposed(self):
+    def testBenchmark70B_f16_TP8_Decomposed(self):
         output_file_name = self.dir_path_70b / "f16_decomposed"
-        output_mlir = self.create_file(suffix=".mlir", prefix=output_file_name)
-        output_json = self.create_file(suffix=".json", prefix=output_file_name)
-        output_vmfb = self.create_file(suffix=".vmfb", prefix=output_file_name)
-        self.export_mlir(
-            attention_kernel="decomposed",
-            tensor_parallelism_size=self.tensor_parallelism_size,
-            irpa_path=self.irpa_path,
-            output_mlir_path=output_mlir,
-            output_json_path=output_json,
-            cwd=self.repo_root,
+        output_mlir = self.llama70b_f16_decomposed_artifacts.create_file(
+            suffix=".mlir", prefix=output_file_name
         )
-        iree_compile_args = self.iree_compile_args + [
-            f"--iree-hal-dump-executable-files-to={output_file_name}/files"
-        ]
-        self.iree_compile(
+        output_json = self.llama70b_f16_decomposed_artifacts.create_file(
+            suffix=".json", prefix=output_file_name
+        )
+        output_vmfb = self.llama70b_f16_decomposed_artifacts.create_file(
+            suffix=".vmfb", prefix=output_file_name
+        )
+        output_shard_file_name = (
+            self.artifacts_dir
+            / f"fp16/tp8/llama3.1_70b_fp16_tp{self.tensor_parallelism_size}_parameters.irpa"
+        )
+        if output_shard_file_name.exists():
+            self.irpa_path = output_shard_file_name
+        export_return_code = self.llama70b_f16_decomposed_artifacts.export_to_mlir(
             mlir_path=output_mlir,
-            output_vmfb_path=output_vmfb,
-            args=iree_compile_args,
+            json_path=output_json,
+        )
+        self.llama70b_f16_decomposed_artifacts.compile_to_vmfb(
+            mlir_path=str(output_mlir),
+            vmfb_path=output_vmfb,
+            hal_dump_path=output_file_name,
             cwd=self.repo_root,
+            args=self.compile_args,
         )
         # benchmark prefill
-        self.iree_benchmark_module(
+        self.llama70b_f16_decomposed_artifacts.iree_benchmark_vmfb(
             hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path,
@@ -391,7 +488,7 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
             cwd=self.repo_root,
         )
         # benchmark decode
-        self.iree_benchmark_module(
+        self.llama70b_f16_decomposed_artifacts.iree_benchmark_vmfb(
             hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path,
@@ -399,35 +496,38 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
             cwd=self.repo_root,
         )
 
-    @longrun
-    @is_mi300x
-    @pytest.mark.xfail(
-        reason="Test not yet implemented", strict=True, raises=AttributeError
-    )
-    def testBenchmark70B_f16_Non_Decomposed(self):
-        output_file_name = self.dir_path_70b / "f16_torch_sdpa"
-        output_mlir = self.create_file(suffix=".mlir", prefix=output_file_name)
-        output_json = self.create_file(suffix=".json", prefix=output_file_name)
-        output_vmfb = self.create_file(suffix=".vmfb", prefix=output_file_name)
-        self.export_mlir(
-            attention_kernel="torch_sdpa",
-            tensor_parallelism_size=self.tensor_parallelism_size,
-            irpa_path=self.irpa_path,
-            output_mlir_path=output_mlir,
-            output_json_path=output_json,
-            cwd=self.repo_root,
+    @pytest.mark.xfail(reason="Compile Error", strict=True, raises=IreeCompileException)
+    def testBenchmark70B_f16_TP8_Non_Decomposed(self):
+        output_file_name = self.dir_path_70b / "f16_torch"
+        output_mlir = self.llama70b_f16_torch_sdpa_artifacts.create_file(
+            suffix=".mlir", prefix=output_file_name
         )
-        iree_compile_args = self.iree_compile_args + [
-            f"--iree-hal-dump-executable-files-to={output_file_name}/files"
-        ]
-        self.iree_compile(
+        output_json = self.llama70b_f16_torch_sdpa_artifacts.create_file(
+            suffix=".json", prefix=output_file_name
+        )
+        output_vmfb = self.llama70b_f16_torch_sdpa_artifacts.create_file(
+            suffix=".vmfb", prefix=output_file_name
+        )
+        self.llama70b_f16_torch_sdpa_artifacts.attention_kernel = "torch"
+        output_shard_file_name = (
+            self.artifacts_dir
+            / f"fp16/tp8/llama3.1_70b_fp16_tp{self.tensor_parallelism_size}_parameters.irpa"
+        )
+        if output_shard_file_name.exists():
+            self.irpa_path = output_shard_file_name
+        export_return_code = self.llama70b_f16_torch_sdpa_artifacts.export_to_mlir(
             mlir_path=output_mlir,
-            output_vmfb_path=output_vmfb,
-            args=iree_compile_args,
+            json_path=output_json,
+        )
+        self.llama70b_f16_torch_sdpa_artifacts.compile_to_vmfb(
+            mlir_path=str(output_mlir),
+            vmfb_path=output_vmfb,
+            hal_dump_path=output_file_name,
             cwd=self.repo_root,
+            args=self.compile_args,
         )
         # benchmark prefill
-        self.iree_benchmark_module(
+        self.llama70b_f16_torch_sdpa_artifacts.iree_benchmark_vmfb(
             hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path,
@@ -435,7 +535,7 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
             cwd=self.repo_root,
         )
         # benchmark decode
-        self.iree_benchmark_module(
+        self.llama70b_f16_torch_sdpa_artifacts.iree_benchmark_vmfb(
             hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path,
@@ -443,35 +543,37 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
             cwd=self.repo_root,
         )
 
-    @longrun
-    @is_mi300x
-    @pytest.mark.xfail(
-        reason="Test not yet implemented", strict=True, raises=AttributeError
-    )
-    def testBenchmark70B_fp8_Decomposed(self):
+    @pytest.mark.xfail(reason="Compile Error", strict=True, raises=IreeCompileException)
+    def testBenchmark70B_fp8_TP8_Decomposed(self):
         output_file_name = self.dir_path_70b / "fp8_decomposed"
-        output_mlir = self.create_file(suffix=".mlir", prefix=output_file_name)
-        output_json = self.create_file(suffix=".json", prefix=output_file_name)
-        output_vmfb = self.create_file(suffix=".vmfb", prefix=output_file_name)
-        self.export_mlir(
-            attention_kernel="decomposed",
-            tensor_parallelism_size=self.tensor_parallelism_size,
-            irpa_path=self.irpa_path_fp8,
-            output_mlir_path=output_mlir,
-            output_json_path=output_json,
-            cwd=self.repo_root,
+        output_mlir = self.llama70b_fp8_decomposed_artifacts.create_file(
+            suffix=".mlir", prefix=output_file_name
         )
-        iree_compile_args = self.iree_compile_args + [
-            f"--iree-hal-dump-executable-files-to={output_file_name}/files"
-        ]
-        self.iree_compile(
+        output_json = self.llama70b_fp8_decomposed_artifacts.create_file(
+            suffix=".json", prefix=output_file_name
+        )
+        output_vmfb = self.llama70b_fp8_decomposed_artifacts.create_file(
+            suffix=".vmfb", prefix=output_file_name
+        )
+        output_shard_file_name = (
+            self.artifacts_dir
+            / f"f8/tp8/llama3.1_70b_fp8_tp{self.tensor_parallelism_size}_parameters.irpa"
+        )
+        if output_shard_file_name.exists():
+            self.irpa_path = output_shard_file_name
+        export_return_code = self.llama70b_fp8_decomposed_artifacts.export_to_mlir(
             mlir_path=output_mlir,
-            output_vmfb_path=output_vmfb,
-            args=self.iree_compile_args,
+            json_path=output_json,
+        )
+        self.llama70b_fp8_decomposed_artifacts.compile_to_vmfb(
+            mlir_path=str(output_mlir),
+            vmfb_path=output_vmfb,
+            hal_dump_path=output_file_name,
             cwd=self.repo_root,
+            args=self.compile_args,
         )
         # benchmark prefill
-        self.iree_benchmark_module(
+        self.llama70b_fp8_decomposed_artifacts.iree_benchmark_vmfb(
             hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path_fp8,
@@ -479,7 +581,7 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
             cwd=self.repo_root,
         )
         # benchmark decode
-        self.iree_benchmark_module(
+        self.llama70b_fp8_decomposed_artifacts.iree_benchmark_vmfb(
             hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path_fp8,
@@ -487,76 +589,119 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
             cwd=self.repo_root,
         )
 
-    @longrun
-    @is_mi300x
-    @pytest.mark.xfail(
-        reason="Test not yet implemented", strict=True, raises=AttributeError
-    )
-    def testBenchmark70B_fp8_Non_Decomposed(self):
-        output_file_name = self.dir_path_70b / "fp8_torch_sdpa"
-        output_mlir = self.create_file(suffix=".mlir", prefix=output_file_name)
-        output_json = self.create_file(suffix=".json", prefix=output_file_name)
-        output_vmfb = self.create_file(suffix=".vmfb", prefix=output_file_name)
-        self.export_mlir(
-            attention_kernel="torch_sdpa",
-            tensor_parallelism_size=self.tensor_parallelism_size,
-            irpa_path=self.irpa_path_fp8,
-            output_mlir_path=output_mlir,
-            output_json_path=output_json,
-            cwd=self.repo_root,
+    @pytest.mark.xfail(reason="Compile Error", strict=True, raises=IreeCompileException)
+    def testBenchmark70B_fp8_TP8_Non_Decomposed(self):
+        output_file_name = self.dir_path_70b / "fp8_torch"
+        output_mlir = self.llama70b_fp8_torch_sdpa_artifacts.create_file(
+            suffix=".mlir", prefix=output_file_name
         )
-        iree_compile_args = self.iree_compile_args + [
-            f"--iree-hal-dump-executable-files-to={output_file_name}/files"
-        ]
-        self.iree_compile(
+        output_json = self.llama70b_fp8_torch_sdpa_artifacts.create_file(
+            suffix=".json", prefix=output_file_name
+        )
+        output_vmfb = self.llama70b_fp8_torch_sdpa_artifacts.create_file(
+            suffix=".vmfb", prefix=output_file_name
+        )
+        output_shard_file_name = (
+            self.artifacts_dir
+            / f"f8/tp8/llama3.1_70b_f8_tp{self.tensor_parallelism_size}_parameters.irpa"
+        )
+        if output_shard_file_name.exists():
+            self.irpa_path = output_shard_file_name
+        export_return_code = self.llama70b_fp8_torch_sdpa_artifacts.export_to_mlir(
             mlir_path=output_mlir,
-            output_vmfb_path=output_vmfb,
-            args=self.iree_compile_args,
+            json_path=output_json,
+        )
+        self.llama70b_fp8_torch_sdpa_artifacts.compile_to_vmfb(
+            mlir_path=str(output_mlir),
+            vmfb_path=output_vmfb,
+            hal_dump_path=output_file_name,
             cwd=self.repo_root,
+            args=self.compile_args,
         )
         # benchmark prefill
-        self.iree_benchmark_module(
+        self.llama70b_fp8_torch_sdpa_artifacts.iree_benchmark_vmfb(
             hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path_fp8,
-            args=self.iree_run_prefill_args_fp8,
+            args=self.iree_run_prefill_args,
             cwd=self.repo_root,
         )
         # benchmark decode
-        self.iree_benchmark_module(
+        self.llama70b_fp8_torch_sdpa_artifacts.iree_benchmark_vmfb(
             hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path_fp8,
-            args=self.iree_run_decode_args_fp8,
+            args=self.iree_run_decode_args,
             cwd=self.repo_root,
         )
 
 
+@is_mi300x
+@skipif_run_quick_llama_test
 class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
     def setUp(self):
         super().setUp()
         # TODO: add numpy files to Azure and download from it
-        artifacts_dir = Path("/data/llama-3.1/weights/405b")
-        self.irpa_path = artifacts_dir / "fp16/llama3.1_405b_fp16.irpa"
-        self.irpa_path_fp8 = artifacts_dir / "f8/llama405b_fp8.irpa"
+        self.artifacts_dir = Path("/data/llama3.1/weights/405b")
+        self.irpa_path = self.artifacts_dir / "fp16/llama3.1_405b_fp16.irpa"
+        self.irpa_path_fp8 = self.artifacts_dir / "f8/llama3.1_405b_fp8.irpa"
         self.tensor_parallelism_size = 8
         self.dir_path_405b = self.dir_path / "llama-405b"
         self.temp_dir_405b = Path(self.dir_path_405b)
         self.temp_dir_405b.mkdir(parents=True, exist_ok=True)
-        self.iree_compile_args = [
-            "--iree-hal-target-backends=rocm",
-            f"--iree-hip-target={self.iree_hip_target}",
-        ]
-        self.prefill_args_f16 = artifacts_dir / "prefill_args"
-        self.decode_args_f16 = artifacts_dir / "decode_args"
-        self.prefill_args_fp8 = artifacts_dir / "prefill_args_fp8"
-        self.decode_args_fp8 = artifacts_dir / "decode_args_fp8"
+        self.llama405b_f16_decomposed_artifacts = ExportArtifacts(
+            irpa_path=str(self.irpa_path),
+            batch_size=4,
+            iree_hip_target="gfx942",
+            iree_hal_target_backends="rocm",
+            attention_kernel="decomposed",
+            tensor_parallelism_size=self.tensor_parallelism_size,
+        )
+        self.llama405b_f16_torch_sdpa_artifacts = ExportArtifacts(
+            irpa_path=str(self.irpa_path),
+            batch_size=4,
+            iree_hip_target="gfx942",
+            iree_hal_target_backends="rocm",
+            attention_kernel="torch",
+            tensor_parallelism_size=self.tensor_parallelism_size,
+        )
+        self.llama405b_fp8_decomposed_artifacts = ExportArtifacts(
+            irpa_path=str(self.irpa_path_fp8),
+            batch_size=4,
+            iree_hip_target="gfx942",
+            iree_hal_target_backends="rocm",
+            attention_kernel="decomposed",
+            tensor_parallelism_size=self.tensor_parallelism_size,
+        )
+        self.llama405b_fp8_torch_sdpa_artifacts = ExportArtifacts(
+            irpa_path=str(self.irpa_path_fp8),
+            batch_size=4,
+            iree_hip_target="gfx942",
+            iree_hal_target_backends="rocm",
+            attention_kernel="torch",
+            tensor_parallelism_size=self.tensor_parallelism_size,
+        )
+        self.prefill_args_f16 = self.artifacts_dir / "prefill_args"
+        self.prefill_args_bs4_128_in_tokens_f16 = (
+            self.artifacts_dir / "prefill_args_bs4_128"
+        )
+        self.decode_args_f16 = self.artifacts_dir / "decode_args"
+        self.prefill_args_fp8 = self.artifacts_dir / "prefill_args_fp8"
+        self.decode_args_fp8 = self.artifacts_dir / "decode_args_fp8"
         self.iree_run_prefill_args = [
             "--function=prefill_bs4",
             f"--input=@{self.prefill_args_f16}/tokens.npy",
             f"--input=@{self.prefill_args_f16}/seq_lens.npy",
             f"--input=@{self.prefill_args_f16}/seq_block_ids.npy",
             f"--input=@{self.prefill_args_f16}/cache_state_f16.npy",
+            "--benchmark_repetitions=3",
+        ]
+        self.iree_run_prefill_nondecomposed_args_fp16 = [
+            "--function=prefill_bs4",
+            f"--input=@{self.prefill_args_bs4_128_in_tokens_f16}/random_tokens.npy",
+            f"--input=@{self.prefill_args_bs4_128_in_tokens_f16}/seq_lens.npy",
+            f"--input=@{self.prefill_args_bs4_128_in_tokens_f16}/seq_block_ids.npy",
+            f"--input=@{self.prefill_args_bs4_128_in_tokens_f16}/cs_f16.npy",
             "--benchmark_repetitions=3",
         ]
         self.iree_run_decode_args = [
@@ -586,35 +731,39 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
             "--benchmark_repetitions=3",
         ]
 
-    @longrun
-    @is_mi300x
     @pytest.mark.xfail(
-        reason="Test not yet implemented", strict=True, raises=AttributeError
+        reason="Benchmarking Error", strict=True, raises=IreeBenchmarkException
     )
-    def testBenchmark405B_f16_Decomposed(self):
+    def testBenchmark405B_f16_TP8_Decomposed(self):
         output_file_name = self.dir_path_405b / "f16_decomposed"
-        output_mlir = self.create_file(suffix=".mlir", prefix=output_file_name)
-        output_json = self.create_file(suffix=".json", prefix=output_file_name)
-        output_vmfb = self.create_file(suffix=".vmfb", prefix=output_file_name)
-        self.export_mlir(
-            attention_kernel="decomposed",
-            tensor_parallelism_size=self.tensor_parallelism_size,
-            irpa_path=self.irpa_path,
-            output_mlir_path=output_mlir,
-            output_json_path=output_json,
-            cwd=self.repo_root,
+        output_mlir = self.llama405b_f16_decomposed_artifacts.create_file(
+            suffix=".mlir", prefix=output_file_name
         )
-        iree_compile_args = self.iree_compile_args + [
-            f"--iree-hal-dump-executable-files-to={output_file_name}/files"
-        ]
-        self.iree_compile(
+        output_json = self.llama405b_f16_decomposed_artifacts.create_file(
+            suffix=".json", prefix=output_file_name
+        )
+        output_vmfb = self.llama405b_f16_decomposed_artifacts.create_file(
+            suffix=".vmfb", prefix=output_file_name
+        )
+        output_shard_file_name = (
+            self.artifacts_dir
+            / f"fp16/tp8/llama3.1_405b_fp16_tp{self.tensor_parallelism_size}_parameters.irpa"
+        )
+        if output_shard_file_name.exists():
+            self.irpa_path = output_shard_file_name
+        export_return_code = self.llama405b_f16_decomposed_artifacts.export_to_mlir(
             mlir_path=output_mlir,
-            output_vmfb_path=output_vmfb,
-            args=iree_compile_args,
+            json_path=output_json,
+        )
+        self.llama405b_f16_decomposed_artifacts.compile_to_vmfb(
+            mlir_path=str(output_mlir),
+            vmfb_path=output_vmfb,
+            hal_dump_path=output_file_name,
             cwd=self.repo_root,
+            args=self.compile_args,
         )
         # benchmark prefill
-        self.iree_benchmark_module(
+        self.llama405b_f16_decomposed_artifacts.iree_benchmark_vmfb(
             hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path,
@@ -622,7 +771,7 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
             cwd=self.repo_root,
         )
         # benchmark decode
-        self.iree_benchmark_module(
+        self.llama405b_f16_decomposed_artifacts.iree_benchmark_vmfb(
             hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path,
@@ -630,35 +779,41 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
             cwd=self.repo_root,
         )
 
-    @longrun
-    @is_mi300x
     @pytest.mark.xfail(
-        reason="Test not yet implemented", strict=True, raises=AttributeError
+        reason="Benchmarking Error", strict=True, raises=IreeBenchmarkException
     )
-    def testBenchmark405B_f16_Non_Decomposed(self):
-        output_file_name = self.dir_path_405b / "f16_torch_sdpa"
-        output_mlir = self.create_file(suffix=".mlir", prefix=output_file_name)
-        output_json = self.create_file(suffix=".json", prefix=output_file_name)
-        output_vmfb = self.create_file(suffix=".vmfb", prefix=output_file_name)
-        self.export_mlir(
-            attention_kernel="torch_sdpa",
-            tensor_parallelism_size=self.tensor_parallelism_size,
-            irpa_path=self.irpa_path,
-            output_mlir_path=output_mlir,
-            output_json_path=output_json,
-            cwd=self.repo_root,
+    def testBenchmark405B_f16_TP8_Non_Decomposed(self):
+        output_file_name = self.dir_path_405b / "f16_torch"
+        output_mlir = self.llama405b_f16_torch_sdpa_artifacts.create_file(
+            suffix=".mlir", prefix=output_file_name
         )
-        iree_compile_args = self.iree_compile_args + [
-            f"--iree-hal-dump-executable-files-to={output_file_name}/files"
-        ]
-        self.iree_compile(
+        output_json = self.llama405b_f16_torch_sdpa_artifacts.create_file(
+            suffix=".json", prefix=output_file_name
+        )
+        output_vmfb = self.llama405b_f16_torch_sdpa_artifacts.create_file(
+            suffix=".vmfb", prefix=output_file_name
+        )
+        self.llama405b_f16_torch_sdpa_artifacts.attention_kernel = "torch"
+        output_shard_file_name = (
+            self.artifacts_dir
+            / f"fp16/tp8/llama3.1_405b_fp16_tp{self.tensor_parallelism_size}_parameters.irpa"
+        )
+        if output_shard_file_name.exists():
+            self.irpa_path = output_shard_file_name
+        export_return_code = self.llama405b_f16_torch_sdpa_artifacts.export_to_mlir(
             mlir_path=output_mlir,
-            output_vmfb_path=output_vmfb,
-            args=iree_compile_args,
+            json_path=output_json,
+            skip_decode=True,
+        )
+        self.llama405b_f16_torch_sdpa_artifacts.compile_to_vmfb(
+            mlir_path=str(output_mlir),
+            vmfb_path=output_vmfb,
+            hal_dump_path=output_file_name,
             cwd=self.repo_root,
+            args=self.compile_args,
         )
         # benchmark prefill
-        self.iree_benchmark_module(
+        self.llama405b_f16_torch_sdpa_artifacts.iree_benchmark_vmfb(
             hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path,
@@ -666,7 +821,7 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
             cwd=self.repo_root,
         )
         # benchmark decode
-        self.iree_benchmark_module(
+        self.llama405b_f16_torch_sdpa_artifacts.iree_benchmark_vmfb(
             hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path,
@@ -674,91 +829,99 @@ class BenchmarkLlama3_1_405B(BaseBenchmarkTest):
             cwd=self.repo_root,
         )
 
-    @longrun
-    @is_mi300x
     @pytest.mark.xfail(
-        reason="Test not yet implemented", strict=True, raises=AttributeError
+        reason="KeyError in theta.py", strict=True, raises=ExportMlirException
     )
-    def testBenchmark405B_fp8_Decomposed(self):
+    def testBenchmark405B_fp8_TP8_Decomposed(self):
         output_file_name = self.dir_path_405b / "fp8_decomposed"
-        output_mlir = self.create_file(suffix=".mlir", prefix=output_file_name)
-        output_json = self.create_file(suffix=".json", prefix=output_file_name)
-        output_vmfb = self.create_file(suffix=".vmfb", prefix=output_file_name)
-        self.export_mlir(
-            attention_kernel="decomposed",
-            tensor_parallelism_size=self.tensor_parallelism_size,
-            irpa_path=self.irpa_path_fp8,
-            output_mlir_path=output_mlir,
-            output_json_path=output_json,
-            cwd=self.repo_root,
+        output_mlir = self.llama405b_fp8_decomposed_artifacts.create_file(
+            suffix=".mlir", prefix=output_file_name
         )
-        iree_compile_args = self.iree_compile_args + [
-            f"--iree-hal-dump-executable-files-to={output_file_name}/files"
-        ]
-        self.iree_compile(
+        output_json = self.llama405b_fp8_decomposed_artifacts.create_file(
+            suffix=".json", prefix=output_file_name
+        )
+        output_vmfb = self.llama405b_fp8_decomposed_artifacts.create_file(
+            suffix=".vmfb", prefix=output_file_name
+        )
+        output_shard_file_name = (
+            self.artifacts_dir
+            / f"f8/tp8/llama3.1_405b_f8_tp{self.tensor_parallelism_size}_parameters.irpa"
+        )
+        if output_shard_file_name.exists():
+            self.irpa_path = output_shard_file_name
+        export_return_code = self.llama405b_fp8_decomposed_artifacts.export_to_mlir(
             mlir_path=output_mlir,
-            output_vmfb_path=output_vmfb,
-            args=self.iree_compile_args,
+            json_path=output_json,
+        )
+        self.llama405b_fp8_decomposed_artifacts.compile_to_vmfb(
+            mlir_path=str(output_mlir),
+            vmfb_path=output_vmfb,
+            hal_dump_path=output_file_name,
             cwd=self.repo_root,
+            args=self.compile_args,
         )
         # benchmark prefill
-        self.iree_benchmark_module(
+        self.llama405b_fp8_decomposed_artifacts.iree_benchmark_vmfb(
             hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
-            irpa_path=self.irpa_path,
+            irpa_path=self.irpa_path_fp8,
             args=self.iree_run_prefill_args,
             cwd=self.repo_root,
         )
         # benchmark decode
-        self.iree_benchmark_module(
+        self.llama405b_fp8_decomposed_artifacts.iree_benchmark_vmfb(
             hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
-            irpa_path=self.irpa_path,
+            irpa_path=self.irpa_path_fp8,
             args=self.iree_run_decode_args,
             cwd=self.repo_root,
         )
 
-    @longrun
-    @is_mi300x
     @pytest.mark.xfail(
-        reason="Test not yet implemented", strict=True, raises=AttributeError
+        reason="KeyError in theta.py", strict=True, raises=ExportMlirException
     )
-    def testBenchmark405B_fp8_Non_Decomposed(self):
-        output_file_name = self.dir_path_405b / "fp8_torch_sdpa"
-        output_mlir = self.create_file(suffix=".mlir", prefix=output_file_name)
-        output_json = self.create_file(suffix=".json", prefix=output_file_name)
-        output_vmfb = self.create_file(suffix=".vmfb", prefix=output_file_name)
-        self.export_mlir(
-            attention_kernel="torch_sdpa",
-            tensor_parallelism_size=self.tensor_parallelism_size,
-            irpa_path=self.irpa_path_fp8,
-            output_mlir_path=output_mlir,
-            output_json_path=output_json,
-            cwd=self.repo_root,
+    def testBenchmark405B_fp8_TP8_Non_Decomposed(self):
+        output_file_name = self.dir_path_405b / "fp8_torch"
+        output_mlir = self.llama405b_fp8_torch_sdpa_artifacts.create_file(
+            suffix=".mlir", prefix=output_file_name
         )
-        iree_compile_args = self.iree_compile_args + [
-            f"--iree-hal-dump-executable-files-to={output_file_name}/files"
-        ]
-        self.iree_compile(
+        output_json = self.llama405b_fp8_torch_sdpa_artifacts.create_file(
+            suffix=".json", prefix=output_file_name
+        )
+        output_vmfb = self.llama405b_fp8_torch_sdpa_artifacts.create_file(
+            suffix=".vmfb", prefix=output_file_name
+        )
+        output_shard_file_name = (
+            self.artifacts_dir
+            / f"f8/tp8/llama3.1_405b_f8_tp{self.tensor_parallelism_size}_parameters.irpa"
+        )
+        if output_shard_file_name.exists():
+            self.irpa_path = output_shard_file_name
+        export_return_code = self.llama405b_fp8_torch_sdpa_artifacts.export_to_mlir(
             mlir_path=output_mlir,
-            output_vmfb_path=output_vmfb,
-            args=self.iree_compile_args,
+            json_path=output_json,
+        )
+        self.llama405b_fp8_torch_sdpa_artifacts.compile_to_vmfb(
+            mlir_path=str(output_mlir),
+            vmfb_path=output_vmfb,
+            hal_dump_path=output_file_name,
             cwd=self.repo_root,
+            args=self.compile_args,
         )
         # benchmark prefill
-        self.iree_benchmark_module(
+        self.llama405b_fp8_torch_sdpa_artifacts.iree_benchmark_vmfb(
             hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path_fp8,
-            args=self.iree_run_prefill_args_fp8,
+            args=self.iree_run_prefill_args,
             cwd=self.repo_root,
         )
         # benchmark decode
-        self.iree_benchmark_module(
+        self.llama405b_fp8_torch_sdpa_artifacts.iree_benchmark_vmfb(
             hip_device_id=self.hip_device_id,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path_fp8,
-            args=self.iree_run_decode_args_fp8,
+            args=self.iree_run_decode_args,
             cwd=self.repo_root,
         )
 

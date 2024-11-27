@@ -6,7 +6,6 @@
 
 import iree.runtime
 from typing import List, Tuple, Optional, Union
-from copy import deepcopy
 from pathlib import Path
 import torch
 import numpy as np
@@ -72,6 +71,54 @@ def load_iree_module(
     return vm_module, vm_context, vm_instance
 
 
+def promote_bfloat16_to_float32(tensor: torch.Tensor) -> torch.Tensor:
+    if tensor.dtype == torch.bfloat16:
+        return tensor.to(dtype=torch.float32)
+    else:
+        return tensor
+
+
+def device_array_to_host(device_array: iree.runtime.DeviceArray) -> torch.Tensor:
+    def reinterpret_hal_buffer_view_element_type(
+        buffer_view: iree.runtime.HalBufferView,
+        element_type: iree.runtime.HalElementType,
+    ) -> iree.runtime.HalBufferView:
+        return iree.runtime.HalBufferView(
+            buffer=buffer_view.get_buffer(),
+            shape=buffer_view.shape,
+            element_type=element_type,
+        )
+
+    def reinterpret_device_array_dtype(
+        device_array: iree.runtime.DeviceArray, dtype: np.dtype
+    ) -> iree.runtime.DeviceArray:
+        return iree.runtime.DeviceArray(
+            device=device_array._device,
+            buffer_view=reinterpret_hal_buffer_view_element_type(
+                device_array._buffer_view,
+                iree.runtime.array_interop.map_dtype_to_element_type(dtype),
+            ),
+        )
+
+    # Circumvent the lack of bfloat16 in numpy.
+    # TODO: This uses private fields _device and _buffer_view in iree.runtime.DeviceArray.
+    # Improve DeviceArray to provide a hatchet to allow for reinterpretation of
+    # element type of the underlying buffer.
+    def bfloat16_device_array_to_torch(
+        device_array: iree.runtime.DeviceArray,
+    ) -> torch.Tensor:
+        device_array_as_int16 = reinterpret_device_array_dtype(device_array, np.int16)
+        torch_tensor_as_int16 = torch.tensor(device_array_as_int16.to_host())
+        return torch_tensor_as_int16.view(dtype=torch.bfloat16)
+
+    if device_array._buffer_view.element_type == int(
+        iree.runtime.HalElementType.BFLOAT_16
+    ):
+        return bfloat16_device_array_to_torch(device_array)
+    else:
+        return torch.tensor(device_array.to_host())
+
+
 def run_iree_module_function(
     module: iree.runtime.VmModule,
     vm_context: iree.runtime.VmContext,
@@ -89,16 +136,13 @@ def run_iree_module_function(
         device=iree.runtime.get_device(driver, cache=False),
         vm_function=vm_function,
     )
+
     if trace_path_prefix is not None:
         for i, arg in enumerate(args):
-            # iree.runtime.DeviceArray.to_host() will cache the result and reuse it.
-            # In the meantime the "actual" device array may have changed.
-            # It kinda assumes immutable arrays.
-            # This should probably not be its behavior.
-            # See https://github.com/iree-org/iree/issues/18870.
-            # deepcopy also returns an numpy ndarray instead of DeviceArray.
-            arg_copy = deepcopy(arg)
-            np.save(f"{trace_path_prefix}{function_name}_arg{i}.npy", arg_copy)
+            np.save(
+                f"{trace_path_prefix}{function_name}_arg{i}.npy",
+                promote_bfloat16_to_float32(device_array_to_host(arg)).numpy(),
+            )
     results = invoker(*args)
     if isinstance(results, iree.runtime.DeviceArray):
         results = (results,)
@@ -107,10 +151,13 @@ def run_iree_module_function(
         for i, arg in enumerate(args):
             np.save(
                 f"{trace_path_prefix}{function_name}_arg{i}_post_call.npy",
-                deepcopy(arg),
+                device_array_to_host(arg).numpy(),
             )
         for i, arg in enumerate(results):
-            np.save(f"{trace_path_prefix}{function_name}_result{i}.npy", deepcopy(arg))
+            np.save(
+                f"{trace_path_prefix}{function_name}_result{i}.npy",
+                promote_bfloat16_to_float32(device_array_to_host(arg)).numpy(),
+            )
     return results
 
 
@@ -166,7 +213,7 @@ def call_torch_module_function(
         for i, arg in enumerate(flat_args):
             np.save(
                 f"{trace_path_prefix}{function_name}_arg{i}.npy",
-                arg.to("cpu").numpy(),
+                promote_bfloat16_to_float32(arg.to("cpu")).numpy(),
             )
     res = getattr(module, function_name)(**kwargs)
     if trace_path_prefix is not None:
@@ -174,7 +221,7 @@ def call_torch_module_function(
         for i, arg in enumerate(flat_args):
             np.save(
                 f"{trace_path_prefix}{function_name}_arg{i}.npy",
-                arg.to("cpu").numpy(),
+                promote_bfloat16_to_float32(arg.to("cpu")).numpy(),
             )
         results = (
             (res,)
@@ -197,4 +244,4 @@ def call_torch_module_function(
 
 
 def iree_to_torch(*tensors: iree.runtime.DeviceArray) -> List[torch.Tensor]:
-    return [torch.tensor(deepcopy(tensor)) for tensor in tensors]
+    return [device_array_to_host(tensor) for tensor in tensors]

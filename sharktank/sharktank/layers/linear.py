@@ -15,6 +15,7 @@ from ..types import (
     QuantizerTensor,
     StaticScaledQuantizer,
     TensorScaledLayout,
+    PlanarQuantizedTensor,
 )
 
 __all__ = [
@@ -29,6 +30,9 @@ class LinearLayer(ThetaLayer):
     if premul_input is not None:
       x = x * premul_input
     matmul(x, weight.T) + bias
+
+    fake quant only exists in order to allow for q_input to act as qdq.
+    when fake quant is false, q_input will quantize normally.
     ```
     """
 
@@ -38,11 +42,13 @@ class LinearLayer(ThetaLayer):
         *,
         weight_name: str = "weight",
         bias_name: str = "bias",
+        fake_quant: bool = False,
     ):
         super().__init__(theta)
         self._simulate_native_quant = True
         self.weight = self.theta_tensor(weight_name)
         self.bias = None
+        self.fake_quant = fake_quant
         if bias_name in self.theta.keys:
             self.bias = self.theta_tensor(bias_name)
 
@@ -65,18 +71,25 @@ class LinearLayer(ThetaLayer):
 
         if q_input is not None:
             x = q_input.quantize(x)
+            if self.fake_quant:
+                x = x.unpack().dequant()
+
         elif qdq_input is not None:
-            # TODO: probably need a way to only do q_input if exporting.
             x = qdq_input.quantize(x).unpack().dequant()
 
         y = ops.linear(x, weight, bias)
 
         # Unconditionally dequantize.
-        # TODO: Support a q_output specifier that signals the layer to let
-        # the QuantizedTensor escape.
         if isinstance(y, QuantizedTensor):
             y = y.unpack().dequant()
+        # Note that f8_e4m3fnuz types on AMD GPUs accumulate to fp32.
+        # We can truncate to fp16 in iree, so we do a cast here
+        # to account for this in the IR. This is may not be the right
+        # level to do this, but for now its here.
+        if not isinstance(y, QuantizedTensor):
+            if y.dtype == torch.float8_e4m3fnuz:
+                y = ops.to(y, torch.float16)
+                return y
         if qdq_output is not None:
-            # TODO: same as above.
             y = qdq_output.quantize(y).unpack().dequant()
         return y

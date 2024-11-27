@@ -12,7 +12,7 @@ tooling.
 
 ## Project Status
 
-[![CI - Perplexity](https://github.com/nod-ai/SHARK-Platform/actions/workflows/ci_eval.yaml/badge.svg?branch=main&event=schedule)](https://github.com/nod-ai/SHARK-Platform/actions/workflows/ci_eval.yaml)
+[![CI - Perplexity](https://github.com/nod-ai/shark-ai/actions/workflows/ci_eval.yaml/badge.svg?branch=main&event=schedule)](https://github.com/nod-ai/shark-ai/actions/workflows/ci_eval.yaml)
 
 ## Examples
 
@@ -50,7 +50,15 @@ python -m sharktank.tools.dump_gguf --hf-dataset=open_llama_3b_v2_f16_gguf
 * To build wheels for Linux:
 
     ```bash
-    sudo ./build_tools/build_linux_package.sh
+    ./build_tools/build_linux_package.sh
+    ```
+
+    That should produce
+    `build_tools/wheelhouse/sharktank-{X.Y.Z}.dev0-py3-none-any.whl`, which can
+    then be installed with
+
+    ```bash
+    python3 -m pip install build_tools/wheelhouse/sharktank-{X.Y.Z}.dev0-py3-none-any.whl
     ```
 
 * To build a wheel for your host OS/arch manually:

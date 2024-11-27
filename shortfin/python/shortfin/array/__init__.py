@@ -44,7 +44,17 @@ DType = _sfl.array.DType
 
 # Ops.
 argmax = _sfl.array.argmax
+add = _sfl.array.add
+ceil = _sfl.array.ceil
+convert = _sfl.array.convert
+divide = _sfl.array.divide
 fill_randn = _sfl.array.fill_randn
+floor = _sfl.array.floor
+multiply = _sfl.array.multiply
+round = _sfl.array.round
+subtract = _sfl.array.subtract
+transpose = _sfl.array.transpose
+trunc = _sfl.array.trunc
 RandomGenerator = _sfl.array.RandomGenerator
 
 __all__ = [
@@ -81,8 +91,18 @@ __all__ = [
     "storage",
     "DType",
     # Ops.
+    "add",
     "argmax",
+    "ceil",
+    "convert",
+    "divide",
     "fill_randn",
+    "floor",
+    "multiply",
+    "round",
+    "subtract",
+    "transpose",
+    "trunc",
     "RandomGenerator",
 ]
 

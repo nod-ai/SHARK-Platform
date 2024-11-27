@@ -4,11 +4,9 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-from typing import Dict, List, Optional, Union
+from typing import List, Optional, Union
 from dataclasses import dataclass
 import uuid
-
-import shortfin.array as sfnp
 
 
 @dataclass
@@ -72,3 +70,10 @@ class GenerateReqInput:
                 raise ValueError("The rid should be a list.")
         if self.output_type is None:
             self.output_type = ["base64"] * self.num_output_images
+        # Temporary restrictions
+        heights = [self.height] if not isinstance(self.height, list) else self.height
+        widths = [self.width] if not isinstance(self.width, list) else self.width
+        if any(dim != 1024 for dim in [*heights, *widths]):
+            raise ValueError(
+                "Currently, only 1024x1024 output image size is supported."
+            )

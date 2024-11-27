@@ -50,9 +50,26 @@ def pytest_runtest_setup(item):
     sf.SystemBuilder.default_system_type = system_type
 
 
+# Dynamic Parameterization for lsys Fixture
+def pytest_generate_tests(metafunc):
+    if "generic_lsys" in metafunc.fixturenames:
+        system = metafunc.config.getoption("--system")
+        if system == "amdgpu":
+            params = ["cpu", "amdgpu"]
+        else:
+            params = [system]
+        metafunc.parametrize("generic_lsys", params, indirect=True)
+
+
 # Keys that will be cleaned project wide prior to and after each test run.
 # Test code can freely modify these.
 CLEAN_ENV_KEYS = [
+    "SHORTFIN_ALLOCATORS",
+    "SHORTFIN_AMDGPU_ALLOCATORS",
+    "SHORTFIN_AMDGPU_ASYNC_ALLOCATIONS",
+    "SHORTFIN_AMDGPU_LOGICAL_DEVICES_PER_PHYSICAL_DEVICE",
+    "SHORTFIN_AMDGPU_TRACING_LEVEL",
+    "SHORTFIN_HOSTCPU_ALLOCATORS",
     "SHORTFIN_HOSTCPU_TOPOLOGY_NODES",
     "SHORTFIN_HOSTCPU_TOPOLOGY_MAX_GROUP_COUNT",
     "SHORTFIN_SYSTEM_TYPE",
@@ -88,6 +105,28 @@ def clean_env():
     kill()
     yield
     kill()
+
+
+@pytest.fixture(scope="session")
+def generic_lsys(request):
+    system_type = request.param
+    if system_type == "cpu" or system_type == "hostcpu":
+        sc = sf.host.CPUSystemBuilder()
+    elif system_type == "amdgpu":
+        sc = sf.amdgpu.SystemBuilder()
+    lsys = sc.create_system()
+    yield lsys
+    lsys.shutdown()
+
+
+@pytest.fixture
+def generic_fiber(generic_lsys):
+    return generic_lsys.create_fiber()
+
+
+@pytest.fixture
+def generic_device(generic_fiber):
+    return generic_fiber.device(0)
 
 
 @pytest.fixture

@@ -1,3 +1,9 @@
+# Copyright 2024 Advanced Micro Devices, Inc.
+#
+# Licensed under the Apache License v2.0 with LLVM Exceptions.
+# See https://llvm.org/LICENSE.txt for license information.
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+
 """Configuration objects.
 
 Parameters that are intrinsic to a specific model.
@@ -9,7 +15,6 @@ we extend the configuration to enumerate inference boundaries of some given set 
 from dataclasses import dataclass
 from pathlib import Path
 
-import dataclasses_json
 from dataclasses_json import dataclass_json, Undefined
 
 import shortfin.array as sfnp
