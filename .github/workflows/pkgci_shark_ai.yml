@@ -41,7 +41,6 @@ jobs:
     env:
       PACKAGE_DOWNLOAD_DIR: ${{ github.workspace }}/.packages
       VENV_DIR: ${{ github.workspace }}/.venv
-      PIP_CACHE_DIR: "${{ github.workspace }}/.pip-cache"
     steps:
       - name: "Setting up Python"
         id: setup_python
@@ -56,39 +55,22 @@ jobs:
         with:
           name: linux_x86_64_dev_packages
           path: ${{ env.PACKAGE_DOWNLOAD_DIR }}
-      # WORKING HERE - add this script
-      # - name: Setup venv
-      #   run: |
-      #     ./build_tools/pkgci/setup_venv.py ${VENV_DIR} \
-      #       --artifact-path=${PACKAGE_DOWNLOAD_DIR} \
-      #       --fetch-gh-workflow=${{ inputs.artifact_run_id }}
-
-      - name: Cache Pip Packages
-        uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4.1.2
-        id: cache-pip
-        with:
-          path: ${{ env.PIP_CACHE_DIR }}
-          key: pip-${{ steps.setup_python.outputs.python-version }}-${{ hashFiles('*requirements*.txt','shortfin/requirements*.txt','sharktank/requirements*.txt') }}
-
-      - name: Install pip deps
+      - name: Setup venv
         run: |
-          python -m pip install --no-compile --upgrade pip
-          # Note: We install in three steps in order to satisfy requirements
-          # from non default locations first. Installing the PyTorch CPU
-          # wheels saves multiple minutes and a lot of bandwidth on runner setup.
-          pip install --no-compile -r pytorch-cpu-requirements.txt
-          pip install --no-compile -r requirements.txt -e sharktank/ shortfin/
+          ./build_tools/pkgci/setup_venv.py ${VENV_DIR} \
+            --artifact-path=${PACKAGE_DOWNLOAD_DIR} \
+            --fetch-gh-workflow=${{ inputs.artifact_run_id }}
 
-          # Install latest iree-tubrine.
+      - name: Install nightly IREE packages
+        run: |
+          source ${VENV_DIR}/bin/activate
           pip install --no-compile -f https://iree.dev/pip-release-links.html --src deps \
             -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
-
-          # Try with the latest IREE nightly releases, not what iree-turbine pins.
-          # We could also pin to a known working or stable version.
-          # This should eventually stabilize. Do the best we can for now.
           pip install -f https://iree.dev/pip-release-links.html --upgrade --pre \
             iree-base-compiler \
             iree-base-runtime
 
       - name: Run LLM Integration Tests
-        run: pytest -v app_tests/integration_tests/llm/shortfin --log-cli-level=INFO
+        run: |
+          source ${VENV_DIR}/bin/activate
+          pytest -v app_tests/integration_tests/llm/shortfin --log-cli-level=INFO
