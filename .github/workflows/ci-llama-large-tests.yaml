@@ -59,7 +59,6 @@ jobs:
       - name: Install pip deps
         run: |
           python -m pip install --no-compile --upgrade pip
-          pip install shark-ai[apps]
           pip install sharktank -f https://github.com/nod-ai/SHARK-Platform/releases/expanded_assets/dev-wheels --upgrade --pre
           pip install -f https://iree.dev/pip-release-links.html --upgrade --pre \
             iree-base-compiler iree-base-runtime --src deps \
