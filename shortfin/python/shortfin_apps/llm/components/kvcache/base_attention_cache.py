@@ -25,73 +25,48 @@ class CacheAllocationFailure(Exception):
 
 
 class PageAllocation(ABC):
-    """
-    Abstract base class for page allocations in the cache.
-    Subclasses only need to implement the core allocation methods.
-    """
+    """Abstract base class for page allocations in the cache."""
 
+    @property
     @abstractmethod
-    def get_page_list(self) -> List[PageInfo]:
+    def pages(self) -> List[PageInfo]:
         """Returns the list of pages that were allocated."""
         pass
 
     @abstractmethod
     def publish_pages(self, up_to_page_index) -> None:
-        """
-        Makes self.get_page_list()[0:up_to_page_index] available to other requests after writing is complete.
-        Associates tokens with pages and marks them as ready for reading.
-        """
+        """Makes pages[0:up_to_page_index] available to other requests."""
         pass
 
     @abstractmethod
     def release_pages(self) -> None:
-        """
-        Releases the allocation's reference to pages.
-        Pages become eligible for eviction when their reference count reaches zero.
-        """
+        """Releases the allocation's reference to pages."""
         pass
 
 
 class BasePageAttentionCacheAllocation(PageAllocation):
-    """
-    Represents a page allocation in the cache, implementing the PageAllocation protocol.
-    """
+    """Represents a page allocation in the cache."""
 
     def __init__(self, pages: Iterable[PageInfo], cache: "BasePagedAttentionCache"):
-        # this should only be called by the associated attention cache &
         self._pages = tuple(pages)
         self._cache = cache
         self._is_released = False
 
-    def get_page_list(self) -> List[PageInfo]:
-        return list(self._pages)  # return a list, as expected by service.py
+    @property
+    def pages(self) -> List[PageInfo]:
+        return list(self._pages)
 
     def publish_pages(self, up_to_page_index) -> None:
-        """
-        Release self.get_pages_list()[0:up_to_page_index] for reading by other requests.
-
-        This should be called when writing completes, after each kernel invocation.
-        """
-        pass  # the base implementation doesn't cache unfinished requests.
+        pass
 
     def release_pages(self) -> None:
-        """
-        Decrement reference count for these pages. When reference count is zero, they will be elegible for eviction.
-
-        This should be called when the request has finished reading from the pages, and they are no longer needed.
-
-        This does not immediately release the pages, but decrements the reference count.
-
-        Pages should become available for eviction when their reference count reaches zero & the pool runs out of free pages.
-        """
-        # in the base implementation, the pages can be owned by 1 request max, so they can be instantly release
         if self._is_released:
             logger.warning("Releasing already-released allocation")
             return
         self._cache.page_pool.release_pages(self._pages)
         self._is_released = True
 
-    def __repr__(self):
+    def __rerp__(self) -> str:
         return f"BasePageAttentionCacheAllocation(pages={self._pages}, cache={self._cache})"
 
 
@@ -141,7 +116,5 @@ class BasePagedAttentionCache:
 
         if pages is None:
             raise CacheAllocationFailure()
-
-        n_cached_tokens = 0
 
         return BasePageAttentionCacheAllocation(pages, cache=self)
