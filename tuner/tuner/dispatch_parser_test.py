@@ -42,13 +42,24 @@ def test_parse_tensor_type(tuner_ctx: common.TunerContext) -> None:
 def test_get_mmt_tile_sizes(tuner_ctx: common.TunerContext) -> None:
     mma_intrinsic = iree_gpu.MMAIntrinsic.MFMA_F32_16x16x16_F16
     mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
+    lowering_config_dict = {
+        "mma_kind": mma_attr,
+        "workgroup": ir.ArrayAttr.get(
+            [
+                ir.IntegerAttr.get(tuner_ctx.type.i32, 128),
+                ir.IntegerAttr.get(tuner_ctx.type.i32, 320),
+                ir.IntegerAttr.get(tuner_ctx.type.i32, 32),
+            ]
+        ),
+        "reduction": ir.ArrayAttr.get([]),
+        "subgroup_m_count": ir.IntegerAttr.get(tuner_ctx.type.i32, 0),
+        "subgroup_n_count": ir.IntegerAttr.get(tuner_ctx.type.i32, 0),
+    }
+    lowering_config_attrs = ir.DictAttr.get(lowering_config_dict)
     config = dispatch_parser.Configuration(
         subgroup_size=0,
         workgroup_size=[],
-        intrinsic=mma_attr,
-        tile_sizes=[128, 320, 32],
-        subgroup_m_count=0,
-        subgroup_n_count=0,
+        lowering_config=iree_gpu.LoweringConfigAttr.get(lowering_config_attrs),
         gpu_pipeline_options=iree_gpu.PipelineOptionsAttr.get(),
         waves_per_eu=0,
     )
@@ -58,13 +69,24 @@ def test_get_mmt_tile_sizes(tuner_ctx: common.TunerContext) -> None:
 def test_get_conv_tile_sizes(tuner_ctx: common.TunerContext) -> None:
     mma_intrinsic = iree_gpu.MMAIntrinsic.MFMA_F32_16x16x16_F16
     mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
+    lowering_config_dict = {
+        "mma_kind": mma_attr,
+        "workgroup": ir.ArrayAttr.get(
+            [
+                ir.IntegerAttr.get(tuner_ctx.type.i32, 464),
+                ir.IntegerAttr.get(tuner_ctx.type.i32, 320),
+                ir.IntegerAttr.get(tuner_ctx.type.i32, 16),
+            ]
+        ),
+        "reduction": ir.ArrayAttr.get([]),
+        "subgroup_m_count": ir.IntegerAttr.get(tuner_ctx.type.i32, 1),
+        "subgroup_n_count": ir.IntegerAttr.get(tuner_ctx.type.i32, 4),
+    }
+    lowering_config_attrs = ir.DictAttr.get(lowering_config_dict)
     config = dispatch_parser.Configuration(
         subgroup_size=64,
         workgroup_size=[256, 1, 1],
-        intrinsic=mma_attr,
-        tile_sizes=[464, 320, 16],
-        subgroup_m_count=1,
-        subgroup_n_count=4,
+        lowering_config=iree_gpu.LoweringConfigAttr.get(lowering_config_attrs),
         gpu_pipeline_options=iree_gpu.PipelineOptionsAttr.get(),
         waves_per_eu=1,
     )
@@ -82,13 +104,24 @@ def test_get_conv_tile_sizes(tuner_ctx: common.TunerContext) -> None:
 def test_get_contract_tile_sizes(tuner_ctx: common.TunerContext) -> None:
     mma_intrinsic = iree_gpu.MMAIntrinsic.MFMA_F32_16x16x16_F16
     mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
+    lowering_config_dict = {
+        "mma_kind": mma_attr,
+        "workgroup": ir.ArrayAttr.get(
+            [
+                ir.IntegerAttr.get(tuner_ctx.type.i32, 4),
+                ir.IntegerAttr.get(tuner_ctx.type.i32, 8),
+                ir.IntegerAttr.get(tuner_ctx.type.i32, 16),
+            ]
+        ),
+        "reduction": ir.ArrayAttr.get([]),
+        "subgroup_m_count": ir.IntegerAttr.get(tuner_ctx.type.i32, 1),
+        "subgroup_n_count": ir.IntegerAttr.get(tuner_ctx.type.i32, 1),
+    }
+    lowering_config_attrs = ir.DictAttr.get(lowering_config_dict)
     config = dispatch_parser.Configuration(
         subgroup_size=32,
         workgroup_size=[16, 16, 1],
-        intrinsic=mma_attr,
-        tile_sizes=[4, 8, 16],
-        subgroup_m_count=1,
-        subgroup_n_count=1,
+        lowering_config=iree_gpu.LoweringConfigAttr.get(lowering_config_attrs),
         gpu_pipeline_options=iree_gpu.PipelineOptionsAttr.get(),
         waves_per_eu=2,
     )

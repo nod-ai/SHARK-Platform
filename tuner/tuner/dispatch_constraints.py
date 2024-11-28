@@ -10,8 +10,10 @@
 import z3  # type: ignore
 from typing import Iterator
 
+from iree.compiler import ir  # type: ignore
 
 from iree.compiler.dialects import iree_gpu  # type: ignore
+from iree.compiler.dialects import iree_codegen  # type: ignore
 
 from .common import *
 
@@ -217,15 +219,15 @@ def generate_solutions(
     )
     solver.add(z3.simplify(z3.And(constraints)))
     logger.debug(f"Initial constraints: {solver}")
+
+    int_type = ir.IntegerType.get_signless(32)
+
     i = 0
     while solver.check() == z3.sat:
         model = solver.model()
         lookup = lambda var: model[var].as_long()
-
-        config = Configuration(
-            lookup(subgroup_size),
-            [lookup(wg_x), lookup(wg_y), lookup(wg_z)],
-            getMMAAttr(
+        lowering_config_dict = {
+            "mma_kind": getMMAAttr(
                 problem_size.res_type.element_type,
                 lookup(intrinsic_mn),
                 lookup(intrinsic_mn),
@@ -233,9 +235,27 @@ def generate_solutions(
                 problem_size.lhs_type.element_type,
                 problem_size.rhs_type.element_type,
             ),
-            [lookup(m), lookup(n), lookup(k)],
-            lookup(sg_m_cnt),
-            lookup(sg_n_cnt),
+            "workgroup": ir.ArrayAttr.get(
+                [
+                    ir.IntegerAttr.get(int_type, lookup(m)),
+                    ir.IntegerAttr.get(int_type, lookup(n)),
+                    ir.IntegerAttr.get(int_type, lookup(k)),
+                ]
+            ),
+            "reduction": ir.ArrayAttr.get(
+                []
+            ),  # placeholder now to be consistent with iree
+            "subgroup_m_count": ir.IntegerAttr.get(int_type, lookup(sg_m_cnt)),
+            "subgroup_n_count": ir.IntegerAttr.get(int_type, lookup(sg_n_cnt)),
+        }
+
+        lowering_config_attrs = ir.DictAttr.get(lowering_config_dict)
+        lowering_config = iree_gpu.LoweringConfigAttr.get(lowering_config_attrs)
+
+        config = Configuration(
+            lookup(subgroup_size),
+            [lookup(wg_x), lookup(wg_y), lookup(wg_z)],
+            lowering_config,
             iree_gpu.PipelineOptionsAttr.get(),
             lookup(waves_per_eu),
         )

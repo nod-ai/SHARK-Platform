@@ -73,16 +73,27 @@ def test_gpu_pipeline_options(tuner_ctx: common.TunerContext) -> None:
     )
 
 
-def test_get_pipeline_config(mlir_ctx: ir.Context) -> None:
+def test_get_pipeline_config(tuner_ctx: common.TunerContext) -> None:
     mma_intrinsic = iree_gpu.MMAIntrinsic.MFMA_F32_16x16x16_F16
     mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
+    lowering_config_dict = {
+        "mma_kind": mma_attr,
+        "workgroup": ir.ArrayAttr.get(
+            [
+                ir.IntegerAttr.get(tuner_ctx.type.i32, 4),
+                ir.IntegerAttr.get(tuner_ctx.type.i32, 8),
+                ir.IntegerAttr.get(tuner_ctx.type.i32, 16),
+            ]
+        ),
+        "reduction": ir.ArrayAttr.get([]),
+        "subgroup_m_count": ir.IntegerAttr.get(tuner_ctx.type.i32, 1),
+        "subgroup_n_count": ir.IntegerAttr.get(tuner_ctx.type.i32, 1),
+    }
+    lowering_config_attrs = ir.DictAttr.get(lowering_config_dict)
     config = common.Configuration(
         subgroup_size=32,
         workgroup_size=[16, 16, 1],
-        intrinsic=mma_attr,
-        tile_sizes=[4, 8, 16],
-        subgroup_m_count=1,
-        subgroup_n_count=1,
+        lowering_config=iree_gpu.LoweringConfigAttr.get(lowering_config_attrs),
         gpu_pipeline_options=iree_gpu.PipelineOptionsAttr.get(),
         waves_per_eu=2,
     )

@@ -105,25 +105,33 @@ def get_compatible_mfma_intrinsics(
     return list(filter(is_comptible, mma_intrinsics))
 
 
-class ReorderWorkgroupsStrategy(Enum):
-    NONE = 0
-    SWIZZLE = 1
-    TRANSPOSE = 2
-
-    def __str__(self) -> str:
-        return self.name.title()
-
-
 @dataclass
 class Configuration:
     subgroup_size: int
     workgroup_size: list[int]
-    intrinsic: iree_gpu.MMAAttr
-    tile_sizes: list[int]
-    subgroup_m_count: int
-    subgroup_n_count: int
+    lowering_config: iree_gpu.LoweringConfigAttr
     gpu_pipeline_options: iree_gpu.PipelineOptionsAttr
     waves_per_eu: int
+
+    @property
+    def intrinsic(self) -> iree_gpu.MMAAttr:
+        return self.lowering_config.attributes["mma_kind"]
+
+    @property
+    def tilesize_workgroup(self) -> list[int]:
+        return [attr.value for attr in self.lowering_config.attributes["workgroup"]]
+
+    @property
+    def tilesize_reduction(self) -> list[int]:
+        return [attr.value for attr in self.lowering_config.attributes["reduction"]]
+
+    @property
+    def subgroup_m_count(self) -> int:
+        return self.lowering_config.attributes["subgroup_m_count"].value
+
+    @property
+    def subgroup_n_count(self) -> int:
+        return self.lowering_config.attributes["subgroup_n_count"].value
 
 
 def get_pipeline_config(configuration: Configuration) -> str:

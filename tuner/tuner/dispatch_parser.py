@@ -21,11 +21,11 @@ def parse_tensor_type(tensor_type: str) -> ShapedType:
 
 
 def get_mmt_tile_sizes(configuration: Configuration):
-    return configuration.tile_sizes
+    return configuration.tilesize_workgroup
 
 
 def get_contract_tile_sizes(configuration: Configuration, tile_dims: str) -> list[int]:
-    m, n, k = configuration.tile_sizes
+    m, n, k = configuration.tilesize_workgroup
     tile_size = [1] * len(tile_dims)
     for idx, dim in enumerate(tile_dims):
         if dim == "m":
@@ -38,7 +38,7 @@ def get_contract_tile_sizes(configuration: Configuration, tile_dims: str) -> lis
 
 
 def get_batch_mmt_tile_sizes(configuration: Configuration) -> list[int]:
-    return [1] + configuration.tile_sizes
+    return [1] + configuration.tilesize_workgroup
 
 
 class MlirRegex(Enum):
@@ -141,7 +141,7 @@ class ConvParser(DispatchParser):
         return "conv_2d_nhwc_hwcf" in op_name
 
     def get_conv_tile_sizes(self, configuration: Configuration) -> list[int]:
-        m, n, k = configuration.tile_sizes
+        m, n, k = configuration.tilesize_workgroup
         batch = 1
         fh = 1
         fw = 1
