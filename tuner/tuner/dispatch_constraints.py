@@ -236,7 +236,7 @@ def generate_solutions(
             [lookup(m), lookup(n), lookup(k)],
             lookup(sg_m_cnt),
             lookup(sg_n_cnt),
-            GpuPipelineOptions(),
+            iree_gpu.PipelineOptionsAttr.get(),
             lookup(waves_per_eu),
         )
         solver.add(z3.simplify(z3.Not(z3.And(list(x == model[x] for x in all_vars)))))
