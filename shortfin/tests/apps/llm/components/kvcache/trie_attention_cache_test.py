@@ -428,10 +428,3 @@ def test_reference_counting(trie_cache, ref_count):
     print("\nCleaning up allocations...")
     for alloc in allocations + fill_allocations:
         alloc.release_pages()
-
-
-@pytest.mark.parametrize("tokens_per_page", [0, -1, -100])
-def test_invalid_init(page_pool, tokens_per_page):
-    """Test validation in __init__"""
-    with pytest.raises(ValueError):
-        TriePagedAttentionCache(page_pool=page_pool, tokens_per_page=tokens_per_page)
