@@ -58,8 +58,10 @@ jobs:
       - name: Install sharktank deps
         run: |
           python -m pip install --no-compile --upgrade pip
-          pip install shark-ai[apps]
-          python -m pip install sharktank -f https://github.com/nod-ai/SHARK-Platform/releases/expanded_assets/dev-wheels
+          pip install sharktank -f https://github.com/nod-ai/SHARK-Platform/releases/expanded_assets/dev-wheels --upgrade --pre
+          pip install -f https://iree.dev/pip-release-links.html --upgrade --pre \
+            iree-base-compiler iree-base-runtime --src deps \
+            -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
 
       - name: Run perplexity test with IREE
         run:  pytest -n 8 -v -s sharktank/tests/evaluate/perplexity_iree_test.py --run-nightly-llama-tests --bs=100 --iree-device='hip://7' --iree-hip-target=gfx942 --iree-hal-target-backends=rocm --llama3-8b-f16-model-path=/data/llama3.1/8b/llama8b_f16.irpa --llama3-8b-tokenizer-path=/data/llama3.1/8b/tokenizer_config.json --html=out/llm/llama/perplexity/iree_perplexity/index.html
@@ -108,8 +110,10 @@ jobs:
       - name: Install sharktank deps
         run: |
           python -m pip install --no-compile --upgrade pip
-          pip install shark-ai[apps]
-          python -m pip install sharktank -f https://github.com/nod-ai/SHARK-Platform/releases/expanded_assets/dev-wheels
+          pip install sharktank -f https://github.com/nod-ai/SHARK-Platform/releases/expanded_assets/dev-wheels --upgrade --pre
+          pip install -f https://iree.dev/pip-release-links.html --upgrade --pre \
+            iree-base-compiler iree-base-runtime --src deps \
+            -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
 
       - name: Run perplexity test with Torch
         run:  pytest -n 8 -v -s sharktank/tests/evaluate/perplexity_torch_test.py --longrun --llama3-8b-f16-model-path=/data/llama3.1/8b/llama8b_f16.irpa --llama3-8b-tokenizer-path=/data/llama3.1/8b/tokenizer_config.json --html=out/llm/llama/perplexity/torch_perplexity/index.html
