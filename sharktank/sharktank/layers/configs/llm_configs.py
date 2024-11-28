@@ -14,11 +14,11 @@ When in question, we draw from the vocabulary and normalization they have done
 (and indeed, can bootstrap these off of GGUF files).
 """
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from typing import Any, Optional
 import torch
 
-__all__ = ["LlamaHParams", "LlamaModelConfig", "T5Config"]
+__all__ = ["ClipTextConfig", "LlamaHParams", "LlamaModelConfig", "T5Config"]
 
 
 @dataclass
@@ -266,3 +266,49 @@ class T5Config:
         all_kwargs.update(kwargs)
 
         return T5Config(**all_kwargs)
+
+
+@dataclass
+class ClipTextConfig:
+    vocab_size: int = 49408
+    hidden_size: int = 512
+    intermediate_size: int = 2048
+    projection_dim: int = 512
+    num_hidden_layers: int = 12
+    num_attention_heads: int = 8
+    max_position_embeddings: int = 77
+    hidden_act: str = "quick_gelu"
+    layer_norm_eps: float = 1e-5
+    # This differs from `CLIPTokenizer`'s default and from openai/clip
+    # See https://github.com/huggingface/transformers/pull/24773#issuecomment-1632287538
+    pad_token_id: int = 1
+    bos_token_id: int = 49406
+    eos_token_id: int = 49407
+    output_attentions: bool = False
+    output_hidden_states: bool = False
+    use_return_dict: bool = True
+
+    @staticmethod
+    def from_transformers_clip_text_config(
+        config: "transformers.CLIPTextConfig",
+    ) -> "ClipTextConfig":
+        return ClipTextConfig(
+            vocab_size=config.vocab_size,
+            hidden_size=config.hidden_size,
+            intermediate_size=config.intermediate_size,
+            projection_dim=config.projection_dim,
+            num_hidden_layers=config.num_hidden_layers,
+            num_attention_heads=config.num_attention_heads,
+            max_position_embeddings=config.max_position_embeddings,
+            hidden_act=config.hidden_act,
+            layer_norm_eps=config.layer_norm_eps,
+            pad_token_id=config.pad_token_id,
+            bos_token_id=config.bos_token_id,
+            eos_token_id=config.eos_token_id,
+            output_attentions=config.output_attentions,
+            output_hidden_states=config.output_hidden_states,
+            use_return_dict=config.use_return_dict,
+        )
+
+    def as_properties(self) -> dict[str, Any]:
+        return asdict(self)

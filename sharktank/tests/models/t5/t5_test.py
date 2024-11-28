@@ -39,7 +39,12 @@ from sharktank.models.t5 import (
     export_encoder_mlir,
     export_encoder_iree_parameters,
 )
-from sharktank.utils.testing import make_rand_torch, TempDirTestBase
+from sharktank.utils.testing import (
+    make_rand_torch,
+    make_random_mask,
+    TempDirTestBase,
+    test_prompts,
+)
 from sharktank.utils.hf_datasets import get_dataset
 from sharktank.utils.iree import (
     get_iree_devices,
@@ -55,20 +60,6 @@ from sharktank import ops
 import iree.compiler
 
 with_t5_data = pytest.mark.skipif("not config.getoption('with_t5_data')")
-
-
-def make_random_mask(shape: tuple[int], dtype: torch.dtype):
-    mask = make_rand_torch(shape=shape, dtype=dtype)
-    mask = (mask >= 0).to(dtype=dtype)
-    return mask
-
-
-test_prompts = [
-    "Studies have been shown that owning a dog is good for you",
-    "The horse went into the river",
-    "We need at least one sentence long enough so that it spans more than one padding block which by default is of size 16.",
-    "Make the batch size 4",
-]
 
 
 @pytest.mark.usefixtures("get_model_artifacts")

@@ -122,9 +122,13 @@ jobs:
             iree-base-runtime
 
       - name: Run tests
+      # TODO: unify with-t5-data and with-clip-data flags into a single flag
+      # and make it possible to run only tests that require data.
         run: |
           pytest \
+          --with-clip-data \
             --with-t5-data \
+            sharktank/tests/models/clip/clip_test.py \
             sharktank/tests/models/t5/t5_test.py \
             --durations=0
 

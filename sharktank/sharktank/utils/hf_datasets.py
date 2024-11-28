@@ -344,6 +344,25 @@ Dataset(
     ),
 )
 
+Dataset(
+    "openai/clip-vit-large-patch14",
+    (
+        RemoteFile(
+            "config",
+            "openai/clip-vit-large-patch14",
+            "config.json",
+            extra_filenames=[
+                "model.safetensors",
+                "preprocessor_config.json",
+                "special_tokens_map.json",
+                "tokenizer.json",
+                "tokenizer_config.json",
+                "vocab.json",
+            ],
+        ),
+    ),
+)
+
 ################################################################################
 # Tool entrypoint
 ################################################################################
