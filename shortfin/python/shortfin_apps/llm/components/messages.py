@@ -63,7 +63,9 @@ class InferenceExecRequest(sf.Message):
 
     def publish_allocated_pages(self, up_to_page_index: int):
         assert self.allocation
-        self.allocation.publish_pages(up_to_page_index)
+        self.allocation.publish_pages(
+            self.input_token_ids, publish_incomplete_pages=False
+        )
 
     def free_cache_pages(self):
         if self.allocation:
