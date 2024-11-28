@@ -122,7 +122,7 @@ class TriePageAttentionCacheAllocation(PageAllocation):
         publish_token_count = min(len(self.tokens), up_to_page_index * tokens_per_page)
 
         cur_node = self.last_cached_node
-        first_uncached_page_index = self.start_index // tokens_per_page
+        first_uncached_page_index = len(self.cached_pages)
 
         uncached_tokens = [
             tuple(self.tokens[i : i + tokens_per_page])
@@ -138,6 +138,9 @@ class TriePageAttentionCacheAllocation(PageAllocation):
         for token_block, page in zip(uncached_tokens, uncached_pages):
             new_node = cur_node.create_child(token_block, page)
             cur_node = new_node
+
+        self.cached_pages.extend(uncached_pages)
+        self.newly_acquired_pages = self.newly_acquired_pages[len(uncached_pages) :]
 
         if cur_node is not self.cache.root:
             self.cache.leaves.add(cur_node)
