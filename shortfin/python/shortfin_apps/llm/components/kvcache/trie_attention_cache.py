@@ -103,7 +103,7 @@ class TriePagedAttentionCacheAllocation(PageAllocation):
     def pages(self) -> List[PageInfo]:
         return self._pages
 
-    def publish_pages(self, tokens, publish_incomplete_page=False) -> None:
+    def publish_pages_for_tokens(self, tokens, publish_incomplete_page=False) -> None:
         """Make pages available in the cache for the specified tokens.
 
         Args:
