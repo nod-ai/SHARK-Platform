@@ -116,7 +116,7 @@ def published_sequence(trie_cache):
 
     def _publish_sequence(tokens: List[int]) -> None:
         alloc = trie_cache.acquire_pages_for_tokens(tokens, extra_token_slots=0)
-        alloc.publish_pages(alloc.tokens)
+        alloc.publish_pages_for_tokens(alloc.tokens)
         alloc.release_pages()
 
     return _publish_sequence
@@ -202,7 +202,7 @@ def test_basic_allocation(trie_cache, seq):
         len(allocation.pages) - allocation.number_of_published_pages
         == seq.expected_pages
     )
-    allocation.publish_pages(allocation.tokens)
+    allocation.publish_pages_for_tokens(allocation.tokens)
     allocation.release_pages()
 
 
@@ -231,7 +231,7 @@ def test_page_reuse(
         len(allocation.pages) - allocation.number_of_published_pages
         == total_pages - expected_cached
     )
-    allocation.publish_pages(allocation.tokens)
+    allocation.publish_pages_for_tokens(allocation.tokens)
     allocation.release_pages()
 
 
@@ -262,7 +262,7 @@ def test_lru_eviction(trie_cache, access_count):
     for i in range(keep_published):
         tokens = list(range(i * 100, i * 100 + TEST_PAGE_SIZE))
         alloc = trie_cache.acquire_pages_for_tokens(tokens, extra_token_slots=0)
-        alloc.publish_pages(alloc.tokens[:TEST_PAGE_SIZE])
+        alloc.publish_pages_for_tokens(alloc.tokens[:TEST_PAGE_SIZE])
         sequences.append(tokens)
         print(f"Published sequence {i} (keeping active)")
         print_tree_state(trie_cache, "  ")
@@ -272,7 +272,7 @@ def test_lru_eviction(trie_cache, access_count):
     for i in range(keep_published, TEST_POOL_CAPACITY):
         tokens = list(range(i * 100, i * 100 + TEST_PAGE_SIZE))
         alloc = trie_cache.acquire_pages_for_tokens(tokens, extra_token_slots=0)
-        alloc.publish_pages(alloc.tokens[:TEST_PAGE_SIZE])
+        alloc.publish_pages_for_tokens(alloc.tokens[:TEST_PAGE_SIZE])
         alloc.release_pages()  # These can be evicted
         sequences.append(tokens)
         print(f"Added releasable sequence {i}")
@@ -344,7 +344,7 @@ def test_progressive_publish(trie_cache, publish_steps):
         # Publish next page
         print(f"Publishing up to page {step}")
         # Replace publishing with tokens
-        alloc.publish_pages(alloc.tokens[: (step) * TEST_PAGE_SIZE])
+        alloc.publish_pages_for_tokens(alloc.tokens[: (step) * TEST_PAGE_SIZE])
         print("\nCache state after publish:")
         print_tree_state(trie_cache)
 
@@ -387,7 +387,7 @@ def test_reference_counting(trie_cache, ref_count):
     # Create initial allocation and publish
     first_alloc = trie_cache.acquire_pages_for_tokens(tokens, extra_token_slots=0)
     # Replace publishing with tokens
-    first_alloc.publish_pages(first_alloc.tokens)
+    first_alloc.publish_pages_for_tokens(first_alloc.tokens)
     allocations.append(first_alloc)
     print("\nInitial allocation created")
     print_tree_state(trie_cache, "  ")
@@ -407,7 +407,7 @@ def test_reference_counting(trie_cache, ref_count):
             range(100 + i * TEST_PAGE_SIZE, 100 + (i + 1) * TEST_PAGE_SIZE)
         )
         alloc = trie_cache.acquire_pages_for_tokens(fill_tokens, extra_token_slots=0)
-        alloc.publish_pages(alloc.tokens[:TEST_PAGE_SIZE])
+        alloc.publish_pages_for_tokens(alloc.tokens[:TEST_PAGE_SIZE])
         fill_allocations.append(alloc)
         print(f"\nFilled cache slot {i+1}/{remaining}")
         print_tree_state(trie_cache, "  ")
