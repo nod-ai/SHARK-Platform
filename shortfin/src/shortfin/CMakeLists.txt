@@ -5,5 +5,6 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 add_subdirectory(array)
+add_subdirectory(components/tokenizers)
 add_subdirectory(local)
 add_subdirectory(support)

@@ -138,6 +138,9 @@ def get_tokenizer(args) -> tokenizer.InferenceTokenizer:
     If the data_files= dict is present and explicit tokenizer options are not
     set, we will try to infer a tokenizer from the data files.
     """
+    if args.tokenizer_type == "fake":
+        return tokenizer.fake_tokenizer()
+
     if args.tokenizer_config_json is not None:
         data_files = {"tokenizer_config.json": args.tokenizer_config_json}
     else:

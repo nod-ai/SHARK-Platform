@@ -47,27 +47,29 @@ def test_get_shaped_type_to_str(tuner_ctx: common.TunerContext) -> None:
     assert str(common.ShapedType([-1, 2, 3], tuner_ctx.type.f16)) == "?x2x3xf16"
 
 
-def test_gpu_pipeline_options() -> None:
-    options = common.GpuPipelineOptions()
-    assert options.all_default()
+def test_gpu_pipeline_options(tuner_ctx: common.TunerContext) -> None:
+    options = iree_gpu.PipelineOptionsAttr.get()
     assert str(options) == "#iree_gpu.pipeline_options<>"
 
-    options.prefetch_shared_memory = True
-    assert not options.all_default()
+    options = iree_gpu.PipelineOptionsAttr.get(prefetch_shared_memory=True)
     assert str(options) == "#iree_gpu.pipeline_options<prefetch_shared_memory = true>"
 
-    options.no_reduce_shared_memory_bank_conflicts = False
+    options = iree_gpu.PipelineOptionsAttr.get(
+        prefetch_shared_memory=True, no_reduce_shared_memory_bank_conflicts=False
+    )
     assert (
         str(options)
         == "#iree_gpu.pipeline_options<prefetch_shared_memory = true, no_reduce_shared_memory_bank_conflicts = false>"
     )
 
-    options = common.GpuPipelineOptions()
-    options.reorder_workgroups_strategy = common.ReorderWorkgroupsStrategy.TRANSPOSE
-    assert not options.all_default()
+    options = iree_gpu.PipelineOptionsAttr.get(
+        reorder_workgroups_strategy=iree_gpu.ReorderWorkgroupsStrategyAttr.get(
+            iree_gpu.ReorderWorkgroupsStrategy.Transpose
+        )
+    )
     assert (
         str(options)
-        == "#iree_gpu.pipeline_options<reorder_workgroups_strategy = Transpose>"
+        == "#iree_gpu.pipeline_options<reorder_workgroups_strategy = <Transpose>>"
     )
 
 
@@ -81,7 +83,7 @@ def test_get_pipeline_config(mlir_ctx: ir.Context) -> None:
         tile_sizes=[4, 8, 16],
         subgroup_m_count=1,
         subgroup_n_count=1,
-        gpu_pipeline_options=common.GpuPipelineOptions(),
+        gpu_pipeline_options=iree_gpu.PipelineOptionsAttr.get(),
         waves_per_eu=2,
     )
     config1_str: str = common.get_pipeline_config(config)
@@ -91,7 +93,9 @@ def test_get_pipeline_config(mlir_ctx: ir.Context) -> None:
     config2_str: str = common.get_pipeline_config(config)
     assert config2_str == ', llvm_func_attrs = {"amdgpu-waves-per-eu" = "4"}'
 
-    config.gpu_pipeline_options.prefetch_shared_memory = True
+    config.gpu_pipeline_options = iree_gpu.PipelineOptionsAttr.get(
+        prefetch_shared_memory=True
+    )
     config3_str = common.get_pipeline_config(config)
     assert (
         config3_str
