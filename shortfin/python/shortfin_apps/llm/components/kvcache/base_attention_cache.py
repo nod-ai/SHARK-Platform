@@ -34,7 +34,7 @@ class PageAllocation(ABC):
         pass
 
     @abstractmethod
-    def publish_pages(self, up_to_page_index) -> None:
+    def publish_pages(self, tokens, publish_incomplete_pages=False) -> None:
         """Makes pages[0:up_to_page_index] available to other requests."""
         pass
 
@@ -56,7 +56,7 @@ class BasePageAttentionCacheAllocation(PageAllocation):
     def pages(self) -> List[PageInfo]:
         return list(self._pages)
 
-    def publish_pages(self, up_to_page_index) -> None:
+    def publish_pages(self, tokens, publish_incomplete_pages=False) -> None:
         pass
 
     def release_pages(self) -> None:

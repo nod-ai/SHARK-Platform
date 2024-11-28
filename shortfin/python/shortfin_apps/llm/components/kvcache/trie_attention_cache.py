@@ -103,7 +103,7 @@ class TriePagedAttentionCacheAllocation(PageAllocation):
     def pages(self) -> List[PageInfo]:
         return self._pages
 
-    def publish_pages(self, up_to_page_index) -> None:
+    def publish_pages(self, tokens, publish_incomplete_page=False) -> None:
         """Make pages available in the cache for the specified tokens.
 
         Args:
@@ -112,21 +112,47 @@ class TriePagedAttentionCacheAllocation(PageAllocation):
         Raises:
             ValueError: If tokens don't match allocation or exceed available pages
         """
+        # If we have more tokens, publish pages up to the incoming tokens.
+        # If incoming has more tokens, replace our tokens with incoming tokens and publish pages up to the incoming tokens.
+
+        def has_common_prefix(tokens1, tokens2):
+            for t1, t2 in zip(tokens1, tokens2):
+                if t1 != t2:
+                    return False
+            return True
+
+        if not has_common_prefix(self.tokens, tokens):
+            raise ValueError(
+                "Tokens provided in publish_pages do not match tokens in allocation"
+            )
+
+        if len(tokens) > len(self.tokens):
+            self.tokens = tokens
+
         tokens_per_page = self.cache.tokens_per_page
 
-        # Create token blocks for unpublished pages
-        start_token = self.number_of_published_pages * tokens_per_page
+        number_of_pages_to_publish = len(tokens) / tokens_per_page
+        if publish_incomplete_page:
+            number_of_pages_to_publish = math.ceil(number_of_pages_to_publish)
+        else:
+            number_of_pages_to_publish = math.floor(number_of_pages_to_publish)
 
+        # Create token blocks for unpublished pages
+        start_token_index = self.number_of_published_pages * tokens_per_page
         unpublished_tokens = [
             tuple(self.tokens[i : i + tokens_per_page])
-            for i in range(start_token, tokens_per_page)
+            for i in range(start_token_index, len(self.tokens), tokens_per_page)
         ]
 
         unpublished_pages = self._pages[
-            self.number_of_published_pages : up_to_page_index
+            self.number_of_published_pages : number_of_pages_to_publish
         ]
 
         # Add unpublished pages to trie
+        if publish_incomplete_page:
+            raise NotImplementedError(
+                "Additional work needed here to support publishing incomplete pages to ensure that we finish up a page before attaching child nodes to it."
+            )
         cur_node = self.last_cached_node
         for token_block, page in zip(unpublished_tokens, unpublished_pages):
             new_node = cur_node.create_child(token_block, page)
@@ -141,7 +167,7 @@ class TriePagedAttentionCacheAllocation(PageAllocation):
             self.last_cached_node.ref_count -= 1
             self.last_cached_node = cur_node
 
-        self.number_of_published_pages = up_to_page_index
+        self.number_of_published_pages = number_of_pages_to_publish
 
     def release_pages(self) -> None:
         """Release the allocation's reference to its pages.
