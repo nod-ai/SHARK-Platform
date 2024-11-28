@@ -39,3 +39,24 @@ class RMSNormLayer(ThetaLayer):
         # often in higher precision. Downcast back to expected.
         norm = ops.to(norm, orig_dtype)
         return norm
+
+
+class LayerNorm(ThetaLayer):
+    def __init__(
+        self,
+        theta: Theta,
+        *,
+        weight_name: str = "weight",
+        bias_name: str = "bias",
+        eps: float = 1e-05,
+    ):
+        super().__init__(theta)
+        self.weight = self.theta_tensor(weight_name)
+        if bias_name in self.theta.keys:
+            self.bias = self.theta_tensor(bias_name)
+        else:
+            self.bias = None
+        self.eps = eps
+
+    def forward(self, x: torch.Tensor):
+        return ops.layer_norm(x, weight=self.weight, bias=self.bias, eps=self.eps)
