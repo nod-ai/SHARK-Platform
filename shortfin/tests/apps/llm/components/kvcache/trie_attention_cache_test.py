@@ -315,20 +315,70 @@ def test_lru_eviction(trie_cache, access_count):
 @pytest.mark.parametrize("publish_steps", [1, 2, 3])
 def test_progressive_publish(trie_cache, publish_steps):
     """Test publishing pages progressively"""
-    tokens = list(range(TEST_PAGE_SIZE * 3))  # Three pages
-    alloc = trie_cache.acquire_pages_for_tokens(tokens)
+    print(f"\nStarting test_progressive_publish with publish_steps={publish_steps}")
 
-    for step in range(publish_steps):
+    tokens = tuple(range(TEST_PAGE_SIZE * 3))  # Three pages
+    print(f"\nInitial tokens: {tokens}")
+    print(f"Tokens per page: {TEST_PAGE_SIZE}")
+    print(
+        f"Expected total pages: {len(tokens) // TEST_PAGE_SIZE + (1 if len(tokens) % TEST_PAGE_SIZE else 0)}"
+    )
+
+    print("\nInitial cache state:")
+    print_tree_state(trie_cache)
+
+    print("\nAcquiring initial allocation...")
+    alloc = trie_cache.acquire_pages_for_tokens(tokens)
+    print(f"Initial allocation pages: {[p.index for p in alloc.pages]}")
+    print("\nCache state after initial allocation:")
+    print_tree_state(trie_cache)
+
+    for step in range(1, publish_steps + 1):
+        print(f"\n--- Step {step} of {publish_steps} ---")
+
         # Publish next page
-        alloc.publish_pages(step + 1)
+        print(f"Publishing up to page {step}")
+        alloc.publish_pages(step)
+        print("\nCache state after publish:")
+        print_tree_state(trie_cache)
 
         # Verify reuse up to published point
-        reuse_tokens = tokens[: (step + 1) * TEST_PAGE_SIZE]
+        reuse_tokens = tokens[: (step) * TEST_PAGE_SIZE]
+        print(f"\nAttempting to reuse tokens: {reuse_tokens}")
+        print(f"Expected cached pages: {step}")
+
         reuse_alloc = trie_cache.acquire_pages_for_tokens(reuse_tokens)
-        assert len(reuse_alloc.cached_pages) == step + 1
+        print(f"Reuse allocation total pages: {len(reuse_alloc.pages)}")
+        print(f"Reuse allocation cached pages: {len(reuse_alloc.cached_pages)}")
+        print(f"Cached page indices: {[p.index for p in reuse_alloc.cached_pages]}")
+        print(
+            f"New page indices: {[p.index for p in reuse_alloc.newly_acquired_pages]}"
+        )
+
+        print("\nCache state after reuse attempt:")
+        print_tree_state(trie_cache)
+
+        try:
+            assert len(reuse_alloc.cached_pages) == step
+        except AssertionError:
+            print("\nASSERTION FAILED!")
+            print(
+                f"Expected {step} cached pages but got {len(reuse_alloc.cached_pages)}"
+            )
+            print("Cached pages details:")
+            for i, page in enumerate(reuse_alloc.cached_pages):
+                print(
+                    f"Page {i}: index={page.index}, token_offset={page.token_offset}, token_count={page.token_count}"
+                )
+            raise
+
         reuse_alloc.release_pages()
+        print("\nCache state after releasing reuse allocation:")
+        print_tree_state(trie_cache)
 
     alloc.release_pages()
+    print("\nFinal cache state after releasing initial allocation:")
+    print_tree_state(trie_cache)
 
 
 @pytest.mark.parametrize("ref_count", [1, 2, 5])
