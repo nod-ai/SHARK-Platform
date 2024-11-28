@@ -100,9 +100,8 @@ jobs:
           pip install --no-compile -r pytorch-cpu-requirements.txt
           pip install --no-compile -r requirements.txt -r sharktank/requirements-tests.txt -e sharktank/
 
-          # Get latest stable IREE release
-          pip install --src deps \
-            -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
+          # Get latest working stable IREE release
+          pip install iree-turbine==3.0.0
 
       - name: Run sharktank tests
         if: ${{ !cancelled() }}
@@ -151,9 +150,8 @@ jobs:
           pip install --no-compile -r pytorch-cpu-requirements.txt
           pip install --no-compile -r requirements.txt -r sharktank/requirements-tests.txt -e sharktank/
 
-          # Get latest stable IREE release
-          pip install --src deps \
-            -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
+          # Get latest working stable IREE release
+          pip install iree-turbine==3.0.0
 
       - name: Run tests
         run: |

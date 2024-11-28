@@ -62,7 +62,7 @@ jobs:
           pip install --no-compile -r pytorch-cpu-requirements.txt
           pip install --no-compile -r requirements.txt -r sharktank/requirements-tests.txt -e sharktank/
 
-          # Get latest stable IREE release
+          # Get latest working stable IREE release
           pip install iree-turbine==3.0.0
 
       - name: Run perplexity test with vmfb
