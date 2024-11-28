@@ -70,7 +70,7 @@ class TrieNode:
         return self is other
 
 
-class TriePageAttentionCacheAllocation(PageAllocation):
+class TriePagedAttentionCacheAllocation(PageAllocation):
     """Represents a page allocation in the trie-based cache.
 
     Tracks sequence of pages and which ones are already published to the cache,
@@ -255,7 +255,7 @@ class TriePagedAttentionCache(BasePagedAttentionCache):
         new_pages = self.page_pool.acquire_free_pages(n_empty_pages)
 
         if new_pages is not None:
-            return TriePageAttentionCacheAllocation(
+            return TriePagedAttentionCacheAllocation(
                 cache=self,
                 tokens=tokens,
                 last_cached_node=cur_node,
@@ -272,7 +272,7 @@ class TriePagedAttentionCache(BasePagedAttentionCache):
                 "Failed to acquire pages even after attempting eviction from LRU leaves"
             )
 
-        return TriePageAttentionCacheAllocation(
+        return TriePagedAttentionCacheAllocation(
             cache=self,
             tokens=tokens,
             last_cached_node=cur_node,
