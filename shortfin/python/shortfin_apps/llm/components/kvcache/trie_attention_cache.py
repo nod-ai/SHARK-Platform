@@ -73,16 +73,15 @@ class TrieNode:
 class TriePageAttentionCacheAllocation(PageAllocation):
     """Represents a page allocation in the trie-based cache.
 
-    Tracks both previously cached pages and newly allocated pages,
+    Tracks sequence of pages and which ones are already published to the cache,
     implementing the PageAllocation protocol for the trie cache.
 
     Attributes:
         cache: The parent cache this allocation belongs to
         tokens: Complete sequence of tokens this allocation represents
         last_cached_node: Last matched node in the trie
-        cached_pages: List of pages already in cache
-        newly_acquired_pages: List of newly allocated pages
-        start_index: Index where cached tokens end and new tokens begin
+        pages: List of all pages in allocation
+        number_of_published_pages: Number of pages that are published to the cache
     """
 
     def __init__(
@@ -92,62 +91,57 @@ class TriePageAttentionCacheAllocation(PageAllocation):
         last_cached_node: TrieNode,
         cached_pages: List[PageInfo],
         newly_acquired_pages: List[PageInfo],
-        start_index: int,
     ):
         self.cache = cache
         self.tokens = tokens
         self.last_cached_node = last_cached_node
-        self.cached_pages = cached_pages
-        self.newly_acquired_pages = newly_acquired_pages
-        self.start_index = start_index
+        self._pages = cached_pages + newly_acquired_pages
+        self.number_of_published_pages = len(cached_pages)
         self._is_released = False
 
     @property
     def pages(self) -> List[PageInfo]:
-        """List all pages in this allocation, both cached and new.
+        return self._pages
 
-        Returns:
-            Combined list of cached and newly acquired pages
-        """
-        return self.cached_pages + self.newly_acquired_pages
-
-    def publish_pages(self, up_to_page_index: int) -> None:
-        """Make pages available in the cache up to the specified index.
+    def publish_pages(self, up_to_page_index) -> None:
+        """Make pages available in the cache for the specified tokens.
 
         Args:
-            up_to_page_index: Number of pages to publish, starting from the beginning
+            tokens_to_publish: Tokens to publish to the cache
+
+        Raises:
+            ValueError: If tokens don't match allocation or exceed available pages
         """
         tokens_per_page = self.cache.tokens_per_page
 
-        publish_token_count = min(len(self.tokens), up_to_page_index * tokens_per_page)
+        # Create token blocks for unpublished pages
+        start_token = self.number_of_published_pages * tokens_per_page
 
-        cur_node = self.last_cached_node
-        first_uncached_page_index = len(self.cached_pages)
-
-        uncached_tokens = [
+        unpublished_tokens = [
             tuple(self.tokens[i : i + tokens_per_page])
-            for i in range(
-                first_uncached_page_index * tokens_per_page,
-                publish_token_count,
-                tokens_per_page,
-            )
+            for i in range(start_token, tokens_per_page)
         ]
 
-        uncached_pages = self.newly_acquired_pages[: len(uncached_tokens)]
+        unpublished_pages = self._pages[
+            self.number_of_published_pages : up_to_page_index
+        ]
 
-        for token_block, page in zip(uncached_tokens, uncached_pages):
+        # Add unpublished pages to trie
+        cur_node = self.last_cached_node
+        for token_block, page in zip(unpublished_tokens, unpublished_pages):
             new_node = cur_node.create_child(token_block, page)
             cur_node = new_node
-
-        self.cached_pages.extend(uncached_pages)
-        self.newly_acquired_pages = self.newly_acquired_pages[len(uncached_pages) :]
 
         if cur_node is not self.cache.root:
             self.cache.leaves.add(cur_node)
 
-        cur_node.ref_count += 1
-        self.last_cached_node.ref_count -= 1
-        self.last_cached_node = cur_node
+        # Update reference counts
+        if unpublished_tokens:
+            cur_node.ref_count += 1
+            self.last_cached_node.ref_count -= 1
+            self.last_cached_node = cur_node
+
+        self.number_of_published_pages = up_to_page_index
 
     def release_pages(self) -> None:
         """Release the allocation's reference to its pages.
@@ -267,7 +261,6 @@ class TriePagedAttentionCache(BasePagedAttentionCache):
                 last_cached_node=cur_node,
                 cached_pages=matched_pages,
                 newly_acquired_pages=new_pages,
-                start_index=n_cached_tokens,
             )
 
         # Try eviction
@@ -285,7 +278,6 @@ class TriePagedAttentionCache(BasePagedAttentionCache):
             last_cached_node=cur_node,
             cached_pages=matched_pages,
             newly_acquired_pages=new_pages,
-            start_index=n_cached_tokens,
         )
 
     def _evict_pages(self, max_pages: int) -> int:
