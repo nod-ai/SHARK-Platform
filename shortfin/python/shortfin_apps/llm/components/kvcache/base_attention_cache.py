@@ -63,7 +63,7 @@ class BasePageAttentionCacheAllocation(PageAllocation):
         if self._is_released:
             logger.warning("Releasing already-released allocation")
             return
-        self._cache.page_pool.release_pages(self._pages)
+        self._cache.page_pool.free_pages(self._pages)
         self._is_released = True
 
     def __rerp__(self) -> str:

@@ -142,6 +142,10 @@ class TriePageAttentionCacheAllocation(PageAllocation):
         if cur_node is not self.cache.root:
             self.cache.leaves.add(cur_node)
 
+        cur_node.ref_count += 1
+        self.last_cached_node.ref_count -= 1
+        self.last_cached_node = cur_node
+
     def release_pages(self) -> None:
         """Release the allocation's reference to its pages.
 
@@ -225,7 +229,7 @@ class TriePagedAttentionCache(BasePagedAttentionCache):
     def acquire_pages_for_tokens(
         self,
         tokens: List[int],
-        extra_token_slots: int = 1,
+        extra_token_slots: int = 0,
     ) -> PageAllocation:
         """Acquire pages for a sequence of tokens.
 
@@ -264,7 +268,7 @@ class TriePagedAttentionCache(BasePagedAttentionCache):
             )
 
         # Try eviction
-        self._evict_pages(n_empty_pages - len(self.page_pool.free_pages))
+        self._evict_pages(n_empty_pages - len(self.page_pool.available_pages))
         new_pages = self.page_pool.acquire_free_pages(n_empty_pages)
 
         if new_pages is None:
@@ -316,6 +320,6 @@ class TriePagedAttentionCache(BasePagedAttentionCache):
                     heapq.heappush(unused_leaf_heap, (parent.access_time, parent))
 
         if pages_to_evict:
-            self.page_pool.release_pages(pages_to_evict)
+            self.page_pool.free_pages(pages_to_evict)
 
         return len(pages_to_evict)
