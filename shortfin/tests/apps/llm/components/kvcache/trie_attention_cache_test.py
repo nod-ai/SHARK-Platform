@@ -197,8 +197,13 @@ def test_basic_allocation(trie_cache, seq):
     """Test basic page allocation without reuse"""
     allocation = trie_cache.acquire_pages_for_tokens(seq.tokens, extra_token_slots=0)
     assert len(allocation.pages) == seq.expected_pages
-    assert len(allocation.cached_pages) == 0
-    assert len(allocation.newly_acquired_pages) == seq.expected_pages
+    assert allocation.number_of_published_pages == 0
+    assert (
+        len(allocation.pages) - allocation.number_of_published_pages
+        == seq.expected_pages
+    )
+    # Replace publishing with tokens
+    allocation.publish_pages(len(allocation.pages))
     allocation.release_pages()
 
 
@@ -222,8 +227,13 @@ def test_page_reuse(
     # Try to reuse
     allocation = trie_cache.acquire_pages_for_tokens(reuse_tokens, extra_token_slots=0)
     assert len(allocation.pages) == total_pages
-    assert len(allocation.cached_pages) == expected_cached
-    assert len(allocation.newly_acquired_pages) == total_pages - expected_cached
+    assert allocation.number_of_published_pages == expected_cached
+    assert (
+        len(allocation.pages) - allocation.number_of_published_pages
+        == total_pages - expected_cached
+    )
+    # Replace publishing with tokens
+    allocation.publish_pages(len(allocation.pages))
     allocation.release_pages()
 
 
@@ -292,9 +302,6 @@ def test_lru_eviction(trie_cache, access_count):
     print(f"\nAttempting to allocate new sequence: {new_tokens}")
     new_alloc = trie_cache.acquire_pages_for_tokens(new_tokens, extra_token_slots=0)
     print("\nNew allocation succeeded:")
-    print(f"- Allocated {len(new_alloc.pages)} new pages")
-    print(f"- Cached pages: {len(new_alloc.cached_pages)}")
-    print(f"- Newly acquired pages: {len(new_alloc.newly_acquired_pages)}")
     print("\nCache state after new allocation:")
     print_tree_state(trie_cache, "  ")
     new_alloc.release_pages()
@@ -304,7 +311,7 @@ def test_lru_eviction(trie_cache, access_count):
     for i in range(max(access_count, keep_published)):
         print(f"\nChecking sequence {i}:")
         recheck = trie_cache.acquire_pages_for_tokens(sequences[i], extra_token_slots=0)
-        cached_pages = len(recheck.cached_pages)
+        cached_pages = recheck.number_of_published_pages
         print(f"- Cached pages found: {cached_pages}")
         assert (
             cached_pages == 1
@@ -338,6 +345,7 @@ def test_progressive_publish(trie_cache, publish_steps):
 
         # Publish next page
         print(f"Publishing up to page {step}")
+        # Replace publishing with tokens
         alloc.publish_pages(step)
         print("\nCache state after publish:")
         print_tree_state(trie_cache)
@@ -349,27 +357,18 @@ def test_progressive_publish(trie_cache, publish_steps):
 
         reuse_alloc = trie_cache.acquire_pages_for_tokens(reuse_tokens)
         print(f"Reuse allocation total pages: {len(reuse_alloc.pages)}")
-        print(f"Reuse allocation cached pages: {len(reuse_alloc.cached_pages)}")
-        print(f"Cached page indices: {[p.index for p in reuse_alloc.cached_pages]}")
-        print(
-            f"New page indices: {[p.index for p in reuse_alloc.newly_acquired_pages]}"
-        )
+        print(f"Reuse allocation cached pages: {reuse_alloc.number_of_published_pages}")
 
         print("\nCache state after reuse attempt:")
         print_tree_state(trie_cache)
 
         try:
-            assert len(reuse_alloc.cached_pages) == step
+            assert reuse_alloc.number_of_published_pages == step
         except AssertionError:
             print("\nASSERTION FAILED!")
             print(
-                f"Expected {step} cached pages but got {len(reuse_alloc.cached_pages)}"
+                f"Expected {step} cached pages but got {reuse_alloc.number_of_published_pages}"
             )
-            print("Cached pages details:")
-            for i, page in enumerate(reuse_alloc.cached_pages):
-                print(
-                    f"Page {i}: index={page.index}, token_offset={page.token_offset}, token_count={page.token_count}"
-                )
             raise
 
         reuse_alloc.release_pages()
@@ -389,7 +388,8 @@ def test_reference_counting(trie_cache, ref_count):
 
     # Create initial allocation and publish
     first_alloc = trie_cache.acquire_pages_for_tokens(tokens, extra_token_slots=0)
-    first_alloc.publish_pages(1)
+    # Replace publishing with tokens
+    first_alloc.publish_pages(len(first_alloc.pages))
     allocations.append(first_alloc)
     print("\nInitial allocation created")
     print_tree_state(trie_cache, "  ")
@@ -419,12 +419,6 @@ def test_reference_counting(trie_cache, ref_count):
         new_tokens = list(range(1000, 1000 + TEST_PAGE_SIZE))
         new_alloc = trie_cache.acquire_pages_for_tokens(new_tokens, extra_token_slots=0)
         print("ERROR: Allocation succeeded when it should have failed!")
-        print(f"- Allocated {len(new_alloc.pages)} new pages")
-        print(f"- Cached pages: {len(new_alloc.cached_pages)}")
-        print(
-            f"- Number of newly acquired pages: {len(new_alloc.newly_acquired_pages)}"
-        )
-        print(f"- Newly acquired pages: {new_alloc.newly_acquired_pages}")
         print("\nPost-allocation state:")
         print_tree_state(trie_cache, "  ")
         new_alloc.release_pages()
