@@ -30,6 +30,9 @@ class CommonTypes:
 
         self.bf16 = ir.BF16Type.get(ctx)
 
+    def getI32(self, value: int) -> ir.IntegerAttr:
+        return ir.IntegerAttr.get(self.i32, value)
+
 
 class TunerContext:
     def __init__(self, mlir_ctx: ir.Context, logger: logging.Logger):
@@ -113,25 +116,71 @@ class Configuration:
     gpu_pipeline_options: iree_gpu.PipelineOptionsAttr
     waves_per_eu: int
 
-    @property
-    def intrinsic(self) -> iree_gpu.MMAAttr:
-        return self.lowering_config.attributes["mma_kind"]
+    def intrinsic(self) -> Optional[iree_gpu.MMAAttr]:
+        if self.lowering_config.attributes.__contains__("mma_kind"):
+            return self.lowering_config.attributes.__getitem__("mma_kind")
+        return None
 
-    @property
     def tilesize_workgroup(self) -> list[int]:
-        return [attr.value for attr in self.lowering_config.attributes["workgroup"]]
+        if self.lowering_config.attributes.__contains__("workgroup"):
+            workgroup_attrs = self.lowering_config.attributes.__getitem__("workgroup")
+            return [attr.value for attr in workgroup_attrs]
+        return []
 
-    @property
     def tilesize_reduction(self) -> list[int]:
-        return [attr.value for attr in self.lowering_config.attributes["reduction"]]
+        if self.lowering_config.attributes.__contains__("reduction"):
+            reduction_attrs = self.lowering_config.attributes.__getitem__("reduction")
+            return [attr.value for attr in reduction_attrs]
+        return []
 
-    @property
-    def subgroup_m_count(self) -> int:
-        return self.lowering_config.attributes["subgroup_m_count"].value
+    def subgroup_m_count(self) -> Optional[int]:
+        if self.lowering_config.attributes.__contains__("subgroup_m_count"):
+            attr = self.lowering_config.attributes.__getitem__("subgroup_m_count")
+            return attr.value
+        return None
 
-    @property
-    def subgroup_n_count(self) -> int:
-        return self.lowering_config.attributes["subgroup_n_count"].value
+    def subgroup_n_count(self) -> Optional[int]:
+        if self.lowering_config.attributes.__contains__("subgroup_n_count"):
+            attr = self.lowering_config.attributes.__getitem__("subgroup_n_count")
+            return attr.value
+        return None
+
+
+def get_lowering_config(
+    tuner_ctx: TunerContext,
+    mma_attr: Optional[iree_gpu.MMAAttr] = None,
+    workgroup: Optional[list[int]] = None,
+    reduction: Optional[list[int]] = None,
+    subgroup_m_count: Optional[int] = None,
+    subgroup_n_count: Optional[int] = None,
+) -> iree_gpu.LoweringConfigAttr:
+    lowering_config_dict = {}
+    if workgroup is not None:
+        lowering_config_dict["workgroup"] = ir.ArrayAttr.get(
+            [tuner_ctx.type.getI32(x) for x in workgroup]
+        )
+    if reduction is not None:
+        lowering_config_dict["reduction"] = ir.ArrayAttr.get(
+            [tuner_ctx.type.getI32(x) for x in reduction]
+        )
+    if subgroup_m_count is not None:
+        lowering_config_dict["subgroup_m_count"] = tuner_ctx.type.getI32(
+            subgroup_m_count
+        )
+    if subgroup_n_count is not None:
+        lowering_config_dict["subgroup_n_count"] = tuner_ctx.type.getI32(
+            subgroup_n_count
+        )
+    # lowering_config_dict = {
+    #     "workgroup": ir.ArrayAttr.get([tuner_ctx.type.getI32(x) for x in workgroup]),
+    #     "reduction": ir.ArrayAttr.get([tuner_ctx.type.getI32(x) for x in reduction]),
+    #     "subgroup_m_count": tuner_ctx.type.getI32(subgroup_m_count),
+    #     "subgroup_n_count": tuner_ctx.type.getI32(subgroup_n_count),
+    # }
+    if mma_attr is not None:
+        lowering_config_dict["mma_kind"] = mma_attr
+    lowering_config_attrs = ir.DictAttr.get(lowering_config_dict)
+    return iree_gpu.LoweringConfigAttr.get(lowering_config_attrs)
 
 
 def get_pipeline_config(configuration: Configuration) -> str:

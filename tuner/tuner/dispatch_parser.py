@@ -20,25 +20,49 @@ def parse_tensor_type(tensor_type: str) -> ShapedType:
     return ShapedType(shaped_ty.shape, shaped_ty.element_type)
 
 
-def get_mmt_tile_sizes(configuration: Configuration):
-    return configuration.tilesize_workgroup
+def get_mmt_workgroup_sizes(configuration: Configuration):
+    return configuration.tilesize_workgroup()
 
 
-def get_contract_tile_sizes(configuration: Configuration, tile_dims: str) -> list[int]:
-    m, n, k = configuration.tilesize_workgroup
-    tile_size = [1] * len(tile_dims)
+def get_mmt_reduction_sizes(configuration: Configuration):
+    return configuration.tilesize_reduction()
+
+
+def get_contract_workgroup_sizes(
+    configuration: Configuration, tile_dims: str
+) -> list[int]:
+    m, n, _ = configuration.tilesize_workgroup()
+
+    workgroup_size = [1] * len(tile_dims)
     for idx, dim in enumerate(tile_dims):
         if dim == "m":
-            tile_size[idx] = m
+            workgroup_size[idx] = m
         if dim == "n":
-            tile_size[idx] = n
+            workgroup_size[idx] = n
         if dim == "k":
-            tile_size[idx] = k
-    return tile_size
+            workgroup_size[idx] = 0
+
+    return workgroup_size
 
 
-def get_batch_mmt_tile_sizes(configuration: Configuration) -> list[int]:
-    return [1] + configuration.tilesize_workgroup
+def get_contract_reduction_sizes(
+    configuration: Configuration, tile_dims: str
+) -> list[int]:
+    _, _, k = configuration.tilesize_reduction()
+    reduction_size = [0] * len(tile_dims)
+    for idx, dim in enumerate(tile_dims):
+        if dim == "k":
+            reduction_size[idx] = k
+
+    return reduction_size
+
+
+def get_batch_mmt_workgroup_sizes(configuration: Configuration) -> list[int]:
+    return [1] + configuration.tilesize_workgroup()
+
+
+def get_batch_mmt_reduction_sizes(configuration: Configuration) -> list[int]:
+    return [0] + configuration.tilesize_reduction()
 
 
 class MlirRegex(Enum):
@@ -140,18 +164,22 @@ class ConvParser(DispatchParser):
     def supports(self, op_name: str) -> bool:
         return "conv_2d_nhwc_hwcf" in op_name
 
-    def get_conv_tile_sizes(self, configuration: Configuration) -> list[int]:
-        m, n, k = configuration.tilesize_workgroup
+    def get_conv_workgroup_sizes(self, configuration: Configuration) -> list[int]:
         batch = 1
         fh = 1
         fw = 1
 
         oh = 1
 
-        oc = n
-        ow = m
-        ic = k
-        return [batch, oh, ow, oc, fh, fw, ic]
+        # oc = configuration.tilesize_workgroup()[1]
+        ow, oc, _ = configuration.tilesize_workgroup()
+
+        return [batch, oh, ow, oc, fh, fw, 0]
+
+    def get_conv_reduction_sizes(self, configuration: Configuration) -> list[int]:
+        _, _, ic = configuration.tilesize_reduction()
+
+        return [0, 0, 0, 0, 0, 0, ic]
 
     def get_shapes(self, template: list[str]) -> ProblemSize:
         for line in template:
@@ -178,13 +206,6 @@ class ConvParser(DispatchParser):
             res_shaped_type = parse_tensor_type(res_tensor_type)
             assert res_shaped_type.rank() == 4
 
-            # int64_t n = outputShape[0];
-            # int64_t oh = outputShape[1];
-            # int64_t ow = outputShape[2];
-            # int64_t oc = outputShape[3];
-            # int64_t fh = filterShape[0];
-            # int64_t fw = filterShape[1];
-            # int64_t ic = filterShape[2];
             dim_info = ConvDimInfo.from_rhs_res(rhs_shaped_type, res_shaped_type)
             return ProblemSize(
                 MatmulSize(
