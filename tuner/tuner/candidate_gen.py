@@ -55,14 +55,14 @@ def apply_configuration(
     expr1 = re.compile(
         r"LLVMGPUVectorDistribute workgroup_size = \[.+\] subgroup_size = ([0-9]+),"
     )
-    expr2 = re.compile(r"workgroup = \[\[([0-9]+)(, ([0-9]+))+\]\]")
-    expr3 = re.compile(r"reduction = \[\[([0-9]+)(, ([0-9]+))+\]\]")
+    expr2 = re.compile(r"workgroup = \[([0-9]+)(, ([0-9]+))+\]")
+    expr3 = re.compile(r"reduction = \[([0-9]+)(, ([0-9]+))+\]")
     expr4 = re.compile(r"gpu_pipeline_options = #iree_gpu\.pipeline_options<([^>]*)>")
     expr5 = re.compile(r"\"amdgpu-waves-per-eu\" = \"([0-9])\"")
     repl0 = f"<intrinsic = {intrinsic}, subgroup_m_count = {subgroup_m_count}, subgroup_n_count = {subgroup_n_count}>"
     repl1 = f'LLVMGPUVectorDistribute workgroup_size = [{", ".join(map(str, configuration.workgroup_size))}] subgroup_size = {configuration.subgroup_size},'
-    repl2 = f'workgroup = [[{", ".join(map(str, workgroup_sizes))}]]'
-    repl3 = f'reduction = [[{", ".join(map(str, reduction_sizes))}]]'
+    repl2 = f'workgroup = [{", ".join(map(str, workgroup_sizes))}]'
+    repl3 = f'reduction = [{", ".join(map(str, reduction_sizes))}]'
     repl4 = f"gpu_pipeline_options = {configuration.gpu_pipeline_options}"
     repl5 = f'"amdgpu-waves-per-eu" = "{configuration.waves_per_eu}"'
 
@@ -125,8 +125,6 @@ class MmtTuner(DispatchTuner, MmtParser):
     def get_transform_function_mmt(
         self, problem_size: ProblemSize, functionName: str, configuration: Configuration
     ) -> str:
-        workgroup_sizes = ", ".join(map(str, get_mmt_workgroup_sizes(configuration)))
-        reduction_sizes = ", ".join(map(str, get_mmt_reduction_sizes(configuration)))
         intrinsic = configuration.intrinsic()
         subgroup_m_count = configuration.subgroup_m_count()
         subgroup_n_count = configuration.subgroup_n_count()
@@ -141,7 +139,7 @@ class MmtTuner(DispatchTuner, MmtParser):
     transform.iree.match.cast_compatible_type %lhs = tensor<{problem_size.lhs_type}> : !transform.any_value
     transform.iree.match.cast_compatible_type %rhs = tensor<{problem_size.rhs_type}> : !transform.any_value
     %config = transform.param.constant #iree_codegen.compilation_info<
-        lowering_config = #iree_codegen.lowering_config<workgroup = [[{workgroup_sizes}]], reduction = [[{reduction_sizes}]]>,
+        lowering_config = {configuration.lowering_config}>,
         translation_info = #iree_codegen.translation_info<LLVMGPUVectorDistribute
         workgroup_size = [{wg_x}, {wg_y}, {wg_z}] subgroup_size = {configuration.subgroup_size},
         {{mma_schedule = #iree_gpu.mma_schedule<
@@ -218,7 +216,7 @@ class ConvTuner(DispatchTuner, ConvParser):
         outs(%out : {output}) -> {output}
     }} : (!transform.any_op) -> (!transform.any_value, !transform.any_value)
         %config = transform.param.constant #iree_codegen.compilation_info<
-        lowering_config = #iree_codegen.lowering_config<workgroup = [[{workgroup_sizes}]], reduction = [[{reduction_sizes}]]>,
+        lowering_config = {configuration.lowering_config}>,
         translation_info = #iree_codegen.translation_info<LLVMGPUVectorDistribute
         workgroup_size = [{wg_x}, {wg_y}, {wg_z}] subgroup_size = {configuration.subgroup_size},
             {{mma_schedule = #iree_gpu.mma_schedule<
@@ -290,7 +288,7 @@ transform.named_sequence @{functionName}(%generic: !transform.any_op {{transform
 transform.iree.match.cast_compatible_type %lhs = tensor<{lhs_dynamic_batch}> : !transform.any_value
 transform.iree.match.cast_compatible_type %rhs = tensor<{problem_size.rhs_type}> : !transform.any_value
 %config = transform.param.constant #iree_codegen.compilation_info<
-    lowering_config = #iree_codegen.lowering_config<workgroup = [[{workgroup_sizes}]], reduction = [[{reduction_sizes}]]>,
+    lowering_config = {configuration.lowering_config}>,
     translation_info = #iree_codegen.translation_info<LLVMGPUVectorDistribute
     workgroup_size = [{wg_x}, {wg_y}, {wg_z}] subgroup_size = {configuration.subgroup_size},
     {{mma_schedule = #iree_gpu.mma_schedule<
@@ -361,12 +359,6 @@ class BatchMmtTuner(DispatchTuner, BatchMmtParser):
         functionName: str,
         configuration: Configuration,
     ) -> str:
-        workgroup_sizes = ", ".join(
-            map(str, get_batch_mmt_workgroup_sizes(configuration))
-        )
-        reduction_sizes = ", ".join(
-            map(str, get_batch_mmt_reduction_sizes(configuration))
-        )
         intrinsic = configuration.intrinsic()
         subgroup_m_count = configuration.subgroup_m_count()
         subgroup_n_count = configuration.subgroup_n_count()
@@ -382,7 +374,7 @@ transform.named_sequence @{functionName}(%generic: !transform.any_op {{transform
 transform.iree.match.cast_compatible_type %lhs = tensor<{problem_size.lhs_type}> : !transform.any_value
 transform.iree.match.cast_compatible_type %rhs = tensor<{problem_size.rhs_type}> : !transform.any_value
 %config = transform.param.constant #iree_codegen.compilation_info<
-    lowering_config = #iree_codegen.lowering_config<workgroup = [[{workgroup_sizes}]], reduction = [[{reduction_sizes}]]>,
+    lowering_config = {configuration.lowering_config}>,
     translation_info = #iree_codegen.translation_info<LLVMGPUVectorDistribute
     workgroup_size = [{wg_x}, {wg_y}, {wg_z}] subgroup_size = {configuration.subgroup_size},
     {{mma_schedule = #iree_gpu.mma_schedule<
@@ -436,12 +428,6 @@ class BatchMatmulTuner(DispatchTuner, BatchMatmulParser):
         input1 = f"tensor<{problem_size.rhs_type}>"
         output = f"tensor<{problem_size.res_type}>"
 
-        workgroup_sizes = ", ".join(
-            map(str, get_contract_workgroup_sizes(configuration, tile_dims))
-        )
-        reduction_sizes = ", ".join(
-            map(str, get_contract_reduction_sizes(configuration, tile_dims))
-        )
         intrinsic = configuration.intrinsic()
         subgroup_m_count = configuration.subgroup_m_count()
         subgroup_n_count = configuration.subgroup_n_count()
@@ -459,7 +445,7 @@ class BatchMatmulTuner(DispatchTuner, BatchMatmulParser):
         outs(%out : {output}) -> {output}
     }} : (!transform.any_op) -> (!transform.any_value, !transform.any_value)
         %config = transform.param.constant #iree_codegen.compilation_info<
-        lowering_config = #iree_codegen.lowering_config<workgroup = [[{workgroup_sizes}]], reduction = [[{reduction_sizes}]]>,
+        lowering_config = {configuration.lowering_config}>,
         translation_info = #iree_codegen.translation_info<LLVMGPUPadAndVectorDistribute
         workgroup_size = [{wg_x}, {wg_y}, {wg_z}] subgroup_size = {configuration.subgroup_size},
             {{mma_schedule = #iree_gpu.mma_schedule<

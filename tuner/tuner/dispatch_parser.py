@@ -171,7 +171,6 @@ class ConvParser(DispatchParser):
 
         oh = 1
 
-        # oc = configuration.tilesize_workgroup()[1]
         ow, oc, _ = configuration.tilesize_workgroup()
 
         return [batch, oh, ow, oc, fh, fw, 0]

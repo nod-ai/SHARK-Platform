@@ -220,7 +220,7 @@ def generate_solutions(
     solver.add(z3.simplify(z3.And(constraints)))
     logger.debug(f"Initial constraints: {solver}")
 
-    int_type = ir.IntegerType.get_signless(32)
+    int_type = ir.IntegerType.get_signless(64)
 
     i = 0
     while solver.check() == z3.sat:
@@ -239,11 +239,15 @@ def generate_solutions(
                 [
                     ir.IntegerAttr.get(int_type, lookup(m)),
                     ir.IntegerAttr.get(int_type, lookup(n)),
-                    ir.IntegerAttr.get(int_type, lookup(k)),
+                    ir.IntegerAttr.get(int_type, 0),
                 ]
             ),
             "reduction": ir.ArrayAttr.get(
-                []
+                [
+                    ir.IntegerAttr.get(int_type, 0),
+                    ir.IntegerAttr.get(int_type, 0),
+                    ir.IntegerAttr.get(int_type, lookup(k)),
+                ]
             ),  # placeholder now to be consistent with iree
             "subgroup_m_count": ir.IntegerAttr.get(int_type, lookup(sg_m_cnt)),
             "subgroup_n_count": ir.IntegerAttr.get(int_type, lookup(sg_n_cnt)),
@@ -251,7 +255,6 @@ def generate_solutions(
 
         lowering_config_attrs = ir.DictAttr.get(lowering_config_dict)
         lowering_config = iree_gpu.LoweringConfigAttr.get(lowering_config_attrs)
-
         config = Configuration(
             lookup(subgroup_size),
             [lookup(wg_x), lookup(wg_y), lookup(wg_z)],

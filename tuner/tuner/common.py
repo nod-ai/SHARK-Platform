@@ -9,6 +9,7 @@ import logging
 from dataclasses import astuple, dataclass
 from enum import Enum
 from typing import Optional
+from typing import Any
 
 from iree.compiler import ir  # type: ignore
 
@@ -22,6 +23,7 @@ class CommonTypes:
         self.i8 = ir.IntegerType.get_signless(8, ctx)
         self.i16 = ir.IntegerType.get_signless(16, ctx)
         self.i32 = ir.IntegerType.get_signless(32, ctx)
+        self.i64 = ir.IntegerType.get_signless(64, ctx)
 
         self.f8E4M3FNUZ = ir.Float8E4M3FNUZType.get(ctx)
         self.f8E5M2FNUZ = ir.Float8E5M2FNUZType.get(ctx)
@@ -30,8 +32,8 @@ class CommonTypes:
 
         self.bf16 = ir.BF16Type.get(ctx)
 
-    def getI32(self, value: int) -> ir.IntegerAttr:
-        return ir.IntegerAttr.get(self.i32, value)
+    def getI64(self, value: int) -> ir.IntegerAttr:
+        return ir.IntegerAttr.get(self.i64, value)
 
 
 class TunerContext:
@@ -148,37 +150,20 @@ class Configuration:
 
 def get_lowering_config(
     tuner_ctx: TunerContext,
-    mma_attr: Optional[iree_gpu.MMAAttr] = None,
-    workgroup: Optional[list[int]] = None,
-    reduction: Optional[list[int]] = None,
-    subgroup_m_count: Optional[int] = None,
-    subgroup_n_count: Optional[int] = None,
+    **kwargs: Any,
 ) -> iree_gpu.LoweringConfigAttr:
     lowering_config_dict = {}
-    if workgroup is not None:
-        lowering_config_dict["workgroup"] = ir.ArrayAttr.get(
-            [tuner_ctx.type.getI32(x) for x in workgroup]
-        )
-    if reduction is not None:
-        lowering_config_dict["reduction"] = ir.ArrayAttr.get(
-            [tuner_ctx.type.getI32(x) for x in reduction]
-        )
-    if subgroup_m_count is not None:
-        lowering_config_dict["subgroup_m_count"] = tuner_ctx.type.getI32(
-            subgroup_m_count
-        )
-    if subgroup_n_count is not None:
-        lowering_config_dict["subgroup_n_count"] = tuner_ctx.type.getI32(
-            subgroup_n_count
-        )
-    # lowering_config_dict = {
-    #     "workgroup": ir.ArrayAttr.get([tuner_ctx.type.getI32(x) for x in workgroup]),
-    #     "reduction": ir.ArrayAttr.get([tuner_ctx.type.getI32(x) for x in reduction]),
-    #     "subgroup_m_count": tuner_ctx.type.getI32(subgroup_m_count),
-    #     "subgroup_n_count": tuner_ctx.type.getI32(subgroup_n_count),
-    # }
-    if mma_attr is not None:
-        lowering_config_dict["mma_kind"] = mma_attr
+    for key, value in kwargs.items():
+        if isinstance(value, list):
+            lowering_config_dict[key] = ir.ArrayAttr.get(
+                [tuner_ctx.type.getI64(x) for x in value]
+            )
+        elif isinstance(value, int):
+            lowering_config_dict[key] = tuner_ctx.type.getI64(value)
+        elif isinstance(value, iree_gpu.MMAAttr):
+            lowering_config_dict[key] = value
+        else:
+            raise TypeError(f"Unsupported type for key '{key}': {type(value).__name__}")
     lowering_config_attrs = ir.DictAttr.get(lowering_config_dict)
     return iree_gpu.LoweringConfigAttr.get(lowering_config_attrs)
 
