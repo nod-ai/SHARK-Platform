@@ -1,5 +1,5 @@
 [project]
-name = "SHARK Tuner"
+name = "SHARK-Tuner"
 authors = [
   {name = "SHARK Authors"},
 ]

@@ -62,10 +62,14 @@ DEVICE_ID_PLACEHOLDER = "!DEVICE_ID!"
 @dataclass
 class CandidateTracker:
     candidate_id: int
+    mlir_path: Optional[Path] = None
+    stripped_mlir_path: Optional[Path] = None
     dispatch_mlir_path: Optional[Path] = None
     dispatch_config_path: Optional[Path] = None
     configuration: Optional[candidate_gen.Configuration] = None
     compilation_successful: Optional[bool] = None
+    compiled_vmfb_path: Optional[Path] = None
+    compiled_vmfb_hash: Optional[str] = None
     compiled_dispatch_path: Optional[Path] = None
     compiled_dispatch_hash: Optional[str] = None
     first_benchmark_time: Optional[float] = None
@@ -75,6 +79,8 @@ class CandidateTracker:
     compiled_model_hash: Optional[str] = None
     model_benchmark_time: Optional[float] = None
     model_benchmark_device_id: Optional[str] = None
+    benchmark_time: Optional[float] = None
+    benchmark_device_id: Optional[str] = None
     baseline_benchmark_time: Optional[float] = None
     calibrated_benchmark_diff: Optional[float] = None
 
@@ -85,6 +91,7 @@ class PathConfig:
     global_config_prolog_mlir: Path = Path("config_prolog.mlir")
     global_config_epilog_mlir: Path = Path("config_epilog.mlir")
     model_baseline_vmfb: Path = Path("baseline.vmfb")
+    baseline_vmfb: Path = Path("baseline.vmfb")
 
     # Dynamic paths
     base_dir: Path = field(init=False)
@@ -151,11 +158,21 @@ class PathConfig:
     def get_candidate_spec_filename(self, candidate_id: int) -> str:
         return f"{candidate_id}_spec.mlir"
 
+    def get_candidate_vmfb_filename(self, file_path: Path) -> int:
+        return int(file_path.stem.split("_")[0])
+
     def get_compiled_model_index(self, file_path: Path) -> int:
         return int(file_path.stem.split("_")[-1])
 
 
 class TuningClient(ABC):
+    @abstractmethod
+    def get_iree_compile_flags(self) -> list[str]:
+        pass
+
+    def get_iree_benchmark_module_flags(self) -> list[str]:
+        pass
+
     @abstractmethod
     def get_dispatch_compile_command(
         self, candidate_tracker: CandidateTracker
@@ -178,6 +195,14 @@ class TuningClient(ABC):
     def get_model_benchmark_command(
         self, candidate_tracker: CandidateTracker
     ) -> list[str]:
+        pass
+
+    @abstractmethod
+    def get_compile_timeout_s(self) -> int:
+        pass
+
+    @abstractmethod
+    def get_benchmark_timeout_s(self) -> int:
         pass
 
     @abstractmethod
@@ -214,6 +239,7 @@ class RunResult:
 class TaskPack:
     run_pack: RunPack
     candidate_id: int
+    candidate_tracker: Optional[CandidateTracker] = None
     command_need_device_id: bool = False
     cooling_time: int = 0
 
@@ -231,6 +257,14 @@ class ParsedDisptachBenchmarkResult:
     benchmark_time_in_seconds: float
     candidate_mlir: Path
     candidate_spec_mlir: Path
+
+
+@dataclass
+class ParsedBenchmarkResult:
+    candidate_id: int
+    device_id: str
+    benchmark_time_in_us: float
+    dump_str: str
 
 
 @dataclass
@@ -377,8 +411,12 @@ class ExecutionPhases(str, Enum):
     benchmark_models = "benchmark-models"
 
 
-def parse_arguments() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Autotune script")
+def parse_arguments(
+    initial_parser: Optional[argparse.ArgumentParser] = None
+) -> argparse.Namespace:
+    parser = initial_parser
+    if parser is None:
+        parser = argparse.ArgumentParser(description="Autotune script")
 
     # Required arguments
     required_args = parser.add_argument_group("Required Options")
@@ -594,6 +632,124 @@ def run_command(run_pack: RunPack) -> RunResult:
     return RunResult(result, is_timeout)
 
 
+def run_iree_compile_command(task_pack: TaskPack):
+    # TODO(Max191): It is probably better to use the iree.compiler.api bindings
+    # here instead of subprocess.run, but the api seems to not be aware of many
+    # iree-compile command line flags. Eventually, this should switch to use
+    # bindings.
+
+    candidate_tracker = task_pack.candidate_tracker
+    mlir_file = candidate_tracker.mlir_path
+    strip_command = [
+        f"iree-opt",
+        f"{mlir_file}",
+        f"--iree-codegen-strip-compilation-info",
+    ]
+    command_str = " ".join(strip_command)
+    stripped_path = candidate_tracker.stripped_mlir_path
+    compile_command = [
+        f"iree-compile",
+        candidate_tracker.stripped_mlir_path.as_posix(),
+        f"--iree-hal-target-backends=rocm",
+        f"-o",
+        candidate_tracker.compiled_vmfb_path.as_posix(),
+    ]
+    compile_command.extend(task_pack.run_pack.command)
+    result = None
+    is_timeout = False
+    try:
+        # Strip compilation info from the source and save the stripped IR
+        result = subprocess.run(
+            strip_command,
+            check=task_pack.run_pack.check,
+            capture_output=True,
+            text=True,
+            timeout=task_pack.run_pack.timeout_seconds,
+        )
+        stripped = result.stdout
+        with open(stripped_path, "w") as f:
+            f.write(stripped)
+            f.close()
+
+        # Compile the stripped IR
+        command_str = " ".join(compile_command)
+        result = subprocess.run(
+            compile_command,
+            check=task_pack.run_pack.check,
+            capture_output=True,
+            text=True,
+            timeout=task_pack.run_pack.timeout_seconds,
+        )
+    except subprocess.TimeoutExpired as e:
+        logging.warning(
+            f"Command '{command_str}' timed out after {task_pack.run_pack.timeout_seconds} seconds."
+        )
+        is_timeout = True
+    except subprocess.CalledProcessError as e:
+        print(e.output)
+        logging.error(
+            f"Command '{command_str}' returned non-zero exit status {e.returncode}."
+        )
+        logging.error(f"Command '{command_str}' failed with error: {e.stderr}")
+        if task_pack.run_pack.check:
+            raise
+    except KeyboardInterrupt:
+        print("Ctrl+C detected, terminating child processes...")
+
+    time.sleep(task_pack.cooling_time)
+    return TaskResult(
+        RunResult(result, is_timeout),
+        candidate_tracker.candidate_id,
+        str(-1),
+    )
+
+
+def run_iree_benchmark_module_command(task_pack: TaskPack):
+    candidate_tracker = task_pack.candidate_tracker
+    benchmark_command = [
+        f"iree-benchmark-module",
+        f"--device={device_id}",
+        f"--module={candidate_tracker.compiled_vmfb_path.as_posix()}",
+        "--benchmark_format=json",
+    ]
+    benchmark_command.extend(task_pack.run_pack.command)
+    command_str = " ".join(benchmark_command)
+    is_timeout = False
+    result = None
+
+    try:
+        # Benchmark the candidate
+        result = subprocess.run(
+            benchmark_command,
+            check=task_pack.run_pack.check,
+            capture_output=True,
+            text=True,
+            timeout=task_pack.run_pack.timeout_seconds,
+        )
+    except subprocess.TimeoutExpired as e:
+        logging.warning(
+            f"Command '{command_str}' timed out after {task_pack.run_pack.timeout_seconds} seconds."
+        )
+        is_timeout = True
+    except subprocess.CalledProcessError as e:
+        print(e.output)
+        logging.error(
+            f"Command '{command_str}' returned non-zero exit status {e.returncode}."
+        )
+        logging.error(f"Command '{command_str}' failed with error: {e.stderr}")
+        if task_pack.run_pack.check:
+            raise
+    except KeyboardInterrupt:
+        print("Ctrl+C detected, terminating child processes...")
+
+    time.sleep(task_pack.cooling_time)
+    return TaskResult(
+        RunResult(result, is_timeout),
+        candidate_tracker.candidate_id,
+        device_id,
+    )
+
+
 def run_command_wrapper(task_pack: TaskPack) -> TaskResult:
     """Help handle extra requirements and record more data for run_command()"""
     if task_pack.command_need_device_id:
@@ -746,6 +902,7 @@ def append_to_file(lines: list[str], filepath: Path, title: str = "") -> None:
         file.write("\n")
 
 
+# TODO(Max191): Remove in favor of using generate_candidate_specs.
 def generate_candidates(
     args: argparse.Namespace,
     path_config: PathConfig,
@@ -825,6 +982,72 @@ def generate_candidates(
     return candidates
 
 
+def generate_candidate_specs(
+    args: argparse.Namespace,
+    path_config: PathConfig,
+    candidate_trackers: list[CandidateTracker],
+) -> list[int]:
+    """Generate candidate transform dialect specs for tuning. Returns the list of candidate indexes"""
+    logging.debug("generate_candidate_specs()")
+
+    shutil.copy(args.input_file, path_config.template_mlir)
+    path_config.specs_dir.mkdir(parents=True, exist_ok=True)
+
+    # Generate transform dialect specs.
+    specs = []
+    try:
+        logging.debug("Captured messages from candidate_gen.py:")
+        candidate_gen.tune_with_td(
+            input=str(path_config.template_mlir),
+            output=str(path_config.candidates_dir),
+            limit=args.num_candidates,
+            num_subgroups=args.num_subgroups,
+            lhs_dims=args.lhs_dims,
+            rhs_dims=args.rhs_dims,
+            tile_dims=args.tile_dims,
+        )
+        specs = sorted(
+            path_config.candidates_dir.glob("*.mlir"), key=numerical_sort_key
+        )
+    except Exception as e:
+        logging.error("An error occurred during candidates generation: %s", str(e))
+        # Capture and log debug messages from candidate_gen.py
+        tune_logger = logging.getLogger("tune_with_td")
+        for handler in logging.getLogger().handlers:
+            if isinstance(handler, logging.FileHandler):
+                tune_logger.handlers.append(handler)
+        tune_logger.exception("Error in candidate_gen.py:")
+        raise
+    logging.debug("candidate_gen.py ends")
+
+    candidate_configs = load_pickle(path_config.candidate_configs_pkl)
+
+    # Create candidate trackers.
+    assert len(specs) == len(candidate_configs)
+    candidates = []
+    for spec in specs:
+        candidate_num = int(spec.stem.split("_spec")[0])
+        candidates.append(candidate_num)
+        # Move the specs to the canonical path_config location.
+        spec_path = path_config.specs_dir / path_config.get_candidate_spec_filename(candidate_num)
+        shutil.move(spec, spec_path)
+        new_candidate = CandidateTracker(
+            mlir_path=path_config.template_mlir,
+            candidate_id=candidate_num,
+            spec_path=spec_path,
+            configuration=candidate_configs[candidate_num],
+        )
+        candidate_trackers.append(new_candidate)
+
+    handle_error(
+        condition=(len(candidates) <= 1), msg="Failed to generate any candidates"
+    )
+
+    logging.info(f"Generated [{len(candidates) - 1}] candidates")
+
+    return candidates
+
+
 def collision_handler(index_hash_list: list[tuple[int, str]]) -> tuple[bool, list[int]]:
     """If a collision is found, generate a list of new indexes. If no collision, `unique_indexes = []`"""
     # Check if candidate produces tbe same .vmfb
@@ -843,6 +1066,85 @@ def collision_handler(index_hash_list: list[tuple[int, str]]) -> tuple[bool, lis
     return collision_detected, unique_indexes
 
 
+def compile(
+    args: argparse.Namespace,
+    path_config: PathConfig,
+    candidates: list[int],
+    candidate_trackers: list[CandidateTracker],
+    tuning_client: TuningClient,
+    input_file: Optional[Path] = None,
+) -> list[int]:
+    logging.debug("compile()")
+
+    if args.dry_run:
+        return []
+
+    if not candidates:
+        logging.warning("No model candidates to compile.")
+        return []
+
+    path_config.compiled_dir.mkdir(parents=True, exist_ok=True)
+
+    for i in candidates:
+        vmfb_path = path_config.compiled_dir / (candidate_trackers[i].spec_path.stem + ".vmfb")
+        stripped_path = path_config.compiled_dir / (candidate_trackers[i].spec_path.stem + "_stripped_source.mlir")
+        candidate_trackers[i].compiled_vmfb_path = vmfb_path
+        candidate_trackers[i].stripped_mlir_path = stripped_path
+        if input_file is not None:
+            candidate_trackers[i].mlir_path = input_file
+    if input_file is not None:
+        candidate_trackers[0].mlir_path = input_file
+
+    task_list = [
+        TaskPack(
+            RunPack(
+                command=tuning_client.get_iree_compile_flags(),
+                check=False,
+                timeout_seconds=tuning_client.get_compile_timeout_s(),
+            ),
+            candidate_tracker=candidate_trackers[i],
+            candidate_id=i,
+        )
+        for i in candidates
+    ]
+    num_worker = min(args.max_cpu_workers, len(task_list))
+    multiprocess_progress_wrapper(
+        num_worker=num_worker, task_list=task_list, function=run_iree_compile_command
+    )
+
+    candidates_files = list(path_config.compiled_dir.glob("*.vmfb"))
+
+    candidates_indexes = []
+    candidates_hash_list = []
+
+    # Update candidate tracker
+    for candidate in candidates_files:
+        assert candidate is not None
+        index = path_config.get_candidate_vmfb_filename(candidate)
+        hash_val = calculate_md5(candidate)
+        candidate_trackers[index].compiled_vmfb_hash = hash_val
+        candidates_hash_list.append((index, hash_val))
+        candidates_indexes.append(index)
+
+    # Check if model candidate produces tbe same .vmfb
+    collision_detected, unique_model_candidates_indexes = collision_handler(
+        candidates_hash_list
+    )
+
+    if collision_detected:
+        logging.info(
+            f"Remains [{len(unique_model_candidates_indexes)}] unique candidate indexes"
+        )
+
+    return (
+        unique_model_candidates_indexes
+        if collision_detected
+        else candidates_indexes
+    )
+
+
+# TODO(Max191): Remove in favor of using `compile` for both model and dispatch
+# tuning.
 def compile_dispatches(
     args: argparse.Namespace,
     path_config: PathConfig,
@@ -928,6 +1230,7 @@ def compile_dispatches(
     return compiled_candidates if not collision_detected else unique_indexes
 
 
+# TODO(Max191): Remove this function in favor of `parse_benchmark_results`.
 def parse_dispatch_benchmark_results(
     path_config: PathConfig,
     benchmark_results: list[TaskResult],
@@ -1030,6 +1333,7 @@ def generate_dryrun_model_benchmark_results(
     return candidate_results, baseline_results
 
 
+# TODO(Max191): Remove this function in favor of `benchmark`.
 def benchmark_dispatches(
     args: argparse.Namespace,
     path_config: PathConfig,
@@ -1107,6 +1411,211 @@ def benchmark_dispatches(
     return top_candidates
 
 
+def parse_benchmark_results(
+    candidate_trackers: list[CandidateTracker],
+    candidate_results: list[TaskResult],
+    baseline_results: list[TaskResult],
+) -> list[ParsedBenchmarkResult]:
+    """Update candidate_tracker and format a list of result strings to be saved later."""
+    candidate_results = sorted(candidate_results, key=lambda br: br.device_id)
+    baseline_results = sorted(baseline_results, key=lambda tr: tr.device_id)
+
+    # Assign candidates to the same groups by device_id
+    grouped_candidate_results = group_benchmark_results_by_device_id(candidate_results)
+
+    # Insert baseline results to the head of each list
+    grouped_benchmark_results = [
+        [x] + y for x, y in zip(baseline_results, grouped_candidate_results)
+    ]
+
+    all_parsed_results: list[ParsedBenchmarkResult] = []
+    incomplete_list: list[
+        tuple[int, Optional[str]]
+    ] = []  # format: [(candidate_id, device_id)]
+
+    baseline_time = None
+    for same_device_results in grouped_benchmark_results:
+        device_parsed_results: list[ParsedBenchmarkResult] = []
+        for task_result in same_device_results:
+            candidate_id = task_result.candidate_id
+            device_id = task_result.device_id
+            process_res = task_result.run_result.process_res
+
+            # Check if benchmarking has completed
+            if not process_res:
+                if task_result.run_result.is_timeout:
+                    incomplete_list.append((candidate_id, device_id))
+                if candidate_id == 0:
+                    baseline_time = None
+                continue
+
+            result_json = extract_benchmark_from_run_result(task_result.run_result)
+            assert result_json is not None
+            res = IREEBenchmarkResult(candidate_id, result_json)
+            benchmark_time = res.get_mean_time_us()
+            assert benchmark_time is not None
+
+            # Update candidate_tracker
+            candidate_trackers[candidate_id].benchmark_time = benchmark_time
+            candidate_trackers[candidate_id].benchmark_device_id = device_id
+
+            # Calculate candidate improvement based on baseline.
+            if candidate_id == 0:
+                baseline_time = benchmark_time
+            calibrated_benchmark_diff = None
+            if baseline_time:
+                candidate_trackers[candidate_id].baseline_benchmark_time = baseline_time
+                calibrated_benchmark_diff = (
+                    benchmark_time - baseline_time
+                ) / baseline_time
+                candidate_trackers[
+                    candidate_id
+                ].calibrated_benchmark_diff = calibrated_benchmark_diff
+
+            # Collect candidate dump str
+            candidate_vmfb_path = candidate_trackers[candidate_id].compiled_vmfb_path
+            assert candidate_vmfb_path is not None
+            dump_str = (
+                generate_display_MBR(
+                    candidate_vmfb_path_str=candidate_vmfb_path.as_posix(),
+                    device_id=device_id,
+                    t1=benchmark_time,
+                    calibrated_diff=calibrated_benchmark_diff,
+                )
+                + "\n\n"
+            )
+
+            device_parsed_results.append(
+                    ParsedBenchmarkResult(
+                        candidate_id=candidate_id,
+                        device_id=device_id,
+                        benchmark_time_in_us=benchmark_time,
+                        dump_str=dump_str,
+                    )
+                )
+
+        # Sort model candidate benchmarking result str in ascending time order.
+        all_parsed_results = all_parsed_results + [
+            parsed_result for parsed_result in sorted(device_parsed_results, key=lambda r: r.benchmark_time_in_us)
+        ]
+
+    # Store incomplete .vmfb file at the end of dump_list.
+    for index, device in incomplete_list:
+        file_path = candidate_trackers[index].compiled_model_path
+        assert file_path is not None
+        error_msg = f"Benchmarking result of {file_path.as_posix()} on device {device} is incomplete"
+        handle_error(condition=True, msg=error_msg, level=logging.WARNING)
+        all_parsed_results.append(
+            ParsedBenchmarkResult(
+                candidate_id=index,
+                device_id=device,
+                benchmark_time_in_us=sys.float_info.max,
+                dump_str=error_msg + "\n",
+            )
+        )
+
+    return all_parsed_results
+
+
+def benchmark(
+    args: argparse.Namespace,
+    path_config: PathConfig,
+    compiled_candidates: list[int],
+    candidate_trackers: list[CandidateTracker],
+    tuning_client: TuningClient,
+):
+    logging.debug("benchmark()")
+
+    if args.dry_run:
+        return []
+    # Benchmarking candidates
+    task_list = [
+        TaskPack(
+            RunPack(
+                command=tuning_client.get_iree_benchmark_module_flags(),
+                check=False,
+                timeout_seconds=tuning_client.get_benchmark_timeout_s(),
+            ),
+            candidate_id=i,
+            candidate_tracker=candidate_trackers[i],
+            command_need_device_id=True,
+        )
+        for i in compiled_candidates
+        if i != 0
+    ]
+    worker_context_queue = create_worker_context_queue(args.devices)
+    candidate_results = multiprocess_progress_wrapper(
+        num_worker=len(args.devices),
+        task_list=task_list,
+        function=run_iree_benchmark_module_command,
+        initializer=init_worker_context,
+        initializer_inputs=(worker_context_queue,),
+    )
+
+    # Benchmarking baselines on each involved device.
+    worker_context_queue = create_worker_context_queue(args.devices)
+    baseline_task_list = [
+        TaskPack(
+            RunPack(
+                command=tuning_client.get_iree_benchmark_module_flags(),
+                check=False,
+                timeout_seconds=tuning_client.get_benchmark_timeout_s(),
+            ),
+            candidate_id=0,
+            candidate_tracker=candidate_trackers[0],
+            command_need_device_id=True,
+        )
+    ] * len(group_benchmark_results_by_device_id(candidate_results))
+    baseline_results = multiprocess_progress_wrapper(
+        num_worker=len(args.devices),
+        task_list=baseline_task_list,
+        function=run_iree_benchmark_module_command,
+        initializer=init_worker_context,
+        initializer_inputs=(worker_context_queue,),
+    )
+
+    parsed_benchmark_results = parse_benchmark_results(
+        candidate_trackers, candidate_results, baseline_results
+    )
+    benchmark_dumps = [r.dump_str for r in parsed_benchmark_results]
+
+    append_to_file(
+        benchmark_dumps, filepath=path_config.output_unilog, title="Benchmark Results"
+    )
+
+    parsed_candidate_results = [r for r in parsed_benchmark_results if r.candidate_id != 0]
+    complete_candidate_results = [r for r in parsed_candidate_results if r.benchmark_time_in_us != sys.float_info.max]
+    benchmarking_rate = (len(complete_candidate_results) / len(candidate_results)) * 100
+    num_failed = len(candidate_results) - len(parsed_candidate_results)
+    num_incomplete = len(parsed_candidate_results) - len(complete_candidate_results)
+    logging.info(
+        f"Total Candidates: {len(candidate_results)} | Benchmarked: {len(parsed_candidate_results)} | Failed: {num_failed} | Incomplete: {num_incomplete} | Benchmarking Rate: {benchmarking_rate:.1f}%"
+    )
+    handle_error(
+        condition=(len(candidate_results) == 0),
+        msg="Failed to benchmark all candidate .vmfb files",
+    )
+
+    # Select top candidates
+    best_results = sorted(
+        parsed_candidate_results, key=lambda r: float(r.benchmark_time_in_us)
+    )[: args.num_model_candidates]
+    logging.info(f"Selected top[{len(best_results)}]")
+
+    top_candidates_dump_list = [
+        f"{r.benchmark_time_in_us}\t{candidate_trackers[r.candidate_id].mlir_path.as_posix()}\t{candidate_trackers[r.candidate_id].spec_path.as_posix()}\n"
+        for r in best_results
+    ]
+    append_to_file(
+        top_candidates_dump_list, filepath=path_config.output_unilog, title="Top Candidates Results"
+    )
+
+    top_candidates = [result.candidate_id for result in best_results]
+    return top_candidates
+
+
+# TODO(Max191): Remove in favor of using `compile` for both model and dispatch
+# tuning.
 def compile_models(
     args: argparse.Namespace,
     path_config: PathConfig,
@@ -1201,6 +1710,7 @@ def group_benchmark_results_by_device_id(
     return grouped_benchmark_results
 
 
+# TODO(Max191): Remove this function in favor of `parse_benchmark_results`.
 def parse_model_benchmark_results(
     candidate_trackers: list[CandidateTracker],
     candidate_results: list[TaskResult],
@@ -1310,6 +1820,7 @@ def parse_model_benchmark_results(
     return dump_list
 
 
+# TODO(Max191): Remove this function in favor of `benchmark`.
 def benchmark_models(
     args: argparse.Namespace,
     path_config: PathConfig,
