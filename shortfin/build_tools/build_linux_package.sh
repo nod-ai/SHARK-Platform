@@ -36,11 +36,8 @@ REPO_ROOT="$(cd "$THIS_DIR"/../../ && pwd)"
 SCRIPT_NAME="$(basename $0)"
 ARCH="$(uname -m)"
 
-# TODO(#130): Update to manylinux_2_28, upstream or a fork
-#   * upstream uses a version of gcc that has build warnings/errors
-#   * https://github.com/nod-ai/base-docker-images is a bit out of date but can include a recent clang
-# MANYLINUX_DOCKER_IMAGE="${MANYLINUX_DOCKER_IMAGE:-quay.io/pypa/manylinux_2_28_${ARCH}:latest}"
-MANYLINUX_DOCKER_IMAGE="${MANYLINUX_DOCKER_IMAGE:-quay.io/pypa/manylinux2014_${ARCH}:latest}"
+# Note: we can switch to https://github.com/nod-ai/base-docker-images as needed for extra deps.
+MANYLINUX_DOCKER_IMAGE="${MANYLINUX_DOCKER_IMAGE:-quay.io/pypa/manylinux_2_28_${ARCH}:latest}"
 PYTHON_VERSIONS="${OVERRIDE_PYTHON_VERSIONS:-cp311-cp311 cp312-cp312 cp313-cp313}"
 OUTPUT_DIR="${OUTPUT_DIR:-${THIS_DIR}/wheelhouse}"
 
