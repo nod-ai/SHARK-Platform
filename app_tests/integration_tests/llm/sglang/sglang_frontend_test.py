@@ -29,7 +29,7 @@ DEVICE_SETTINGS = {
     "device": "hip",
 }
 
-ACCEPTED_THRESHOLD = 0.8
+ACCEPTED_THRESHOLD = 0.7
 
 
 def compute_similarity(model: SentenceTransformer, sentence_1: str, sentence_2: str):
