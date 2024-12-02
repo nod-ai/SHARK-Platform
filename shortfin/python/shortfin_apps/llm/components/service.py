@@ -11,8 +11,12 @@ from pathlib import Path
 import shortfin as sf
 import shortfin.array as sfnp
 
-from .kvcache.base_attention_cache import BasePagedAttentionCache
-from .kvcache.page_pool import PagePoolConfig, PagePool
+from .kvcache.base_attention_cache import (
+    BasePagedAttentionCache,
+    CacheAllocationFailure,
+    PageAllocation,
+)
+from .kvcache.page_pool import PagePoolConfig, PagePool, PageInfo
 from .config_struct import ModelParams
 from .manager import SystemManager
 from .messages import InferenceExecRequest, InferencePhase, StrobeMessage
@@ -229,16 +233,17 @@ class BatcherProcess(sf.Process):
                 len(prefill_request.input_token_ids) / self.page_seq_stride
             )
             # allocate kv cache pages
-            pages, cache_hit_prefix_length = cache.acquire_pages_for_tokens(
-                prefill_request.input_token_ids,
-                extra_token_slots=0,  # prefill needs no extra kvcache slots to write to
-            )
-            if pages is None:
+            try:
+                allocation = cache.acquire_pages_for_tokens(
+                    prefill_request.input_token_ids,
+                    extra_token_slots=0,  # prefill needs no extra kvcache slots to write to
+                )
+            except CacheAllocationFailure:
                 logger.debug("Cannot fulfill request for %d pages", needed_pages)
                 continue
-            else:
-                logger.debug("Allocated %d cache pages to request", len(pages))
-                prefill_request.lock_initial_cache_pages(cache, pages)
+            logger.debug(f"Successfully acquired allocation: {allocation}")
+            prefill_request.free_cache_pages()
+            prefill_request.allocation = allocation
 
             # Can flight this request.
             exec_process.exec_requests.append(prefill_request)
@@ -266,26 +271,20 @@ class BatcherProcess(sf.Process):
             if len(exec_process.exec_requests) >= self.ideal_batch_size:
                 break
             incoming_token_count = len(decode_request.input_token_ids)
-            needed_pages = math.ceil(
-                (decode_request.start_position + incoming_token_count)
-                / self.page_seq_stride
-            )
-            if needed_pages > len(decode_request.locked_pages):
-                # allocate kv cache pages
-                pages, cache_hit_prefix_length = cache.acquire_pages_for_tokens(
+
+            try:
+                allocation = cache.acquire_pages_for_tokens(
                     decode_request.input_token_ids,
                     extra_token_slots=1,  # need 1 extra slot to write result.
                 )
-                if pages is None:
-                    logger.debug(
-                        "Cannot fulfill decode request for %d pages", needed_pages
-                    )
-                    continue
-                else:
-                    logger.debug(
-                        "Allocated %d cache pages to decode request", len(pages)
-                    )
-                decode_request.lock_new_cache_pages(cache, pages)
+            except CacheAllocationFailure:
+                logger.debug(
+                    "Cannot fulfill request for %d tokens",
+                    len(decode_request.input_token_ids),
+                )
+
+            decode_request.free_cache_pages()
+            decode_request.allocation = allocation
 
             # Can flight this request.
             exec_process.exec_requests.append(decode_request)
@@ -437,6 +436,12 @@ class InferenceExecutorProcess(sf.Process):
             )
             # Invoke. Logits are of shape [bs, bsl, d].
             (logits,) = await fn(*args, fiber=self.fiber)
+
+            # publish cache pages
+            for r in self.exec_requests:
+                total_tokens = r.start_position + len(r.input_token_ids)
+                number_of_complete_pages = total_tokens // seq_stride
+                r.publish_allocated_pages(number_of_complete_pages)
 
             # Return results.
             for i in range(req_count):
