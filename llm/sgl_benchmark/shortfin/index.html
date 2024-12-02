@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title id="head-title">index.html</title>
+      <link href="assets/style.css" rel="stylesheet" type="text/css"/>
+  </head>
+  <body>
+    <h1 id="title">index.html</h1>
+    <p>Report generated on 02-Dec-2024 at 21:53:25 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a>
+        v4.1.1</p>
+    <div id="environment-header">
+      <h2>Environment</h2>
+    </div>
+    <table id="environment"></table>
+    <!-- TEMPLATES -->
+      <template id="template_environment_row">
+      <tr>
+        <td></td>
+        <td></td>
+      </tr>
+    </template>
+    <template id="template_results-table__body--empty">
+      <tbody class="results-table-row">
+        <tr id="not-found-message">
+          <td colspan="4">No results found. Check the filters.</th>
+        </tr>
+    </template>
+    <template id="template_results-table__tbody">
+      <tbody class="results-table-row">
+        <tr class="collapsible">
+        </tr>
+        <tr class="extras-row">
+          <td class="extra" colspan="4">
+            <div class="extraHTML"></div>
+            <div class="media">
+              <div class="media-container">
+                  <div class="media-container__nav--left"><</div>
+                  <div class="media-container__viewport">
+                    <img src="" />
+                    <video controls>
+                      <source src="" type="video/mp4">
+                    </video>
+                  </div>
+                  <div class="media-container__nav--right">></div>
+                </div>
+                <div class="media__name"></div>
+                <div class="media__counter"></div>
+            </div>
+            <div class="logwrapper">
+              <div class="logexpander"></div>
+              <div class="log"></div>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </template>
+    <!-- END TEMPLATES -->
+    <div class="summary">
+      <div class="summary__data">
+        <h2>Summary</h2>
+        <div class="additional-summary prefix">
+        </div>
+        <p class="run-count">6 tests took 00:31:26.</p>
+        <p class="filter">(Un)check the boxes to filter the results.</p>
+        <div class="summary__reload">
+          <div class="summary__reload__button hidden" onclick="location.reload()">
+            <div>There are still tests running. <br />Reload this page to get the latest results!</div>
+          </div>
+        </div>
+        <div class="summary__spacer"></div>
+        <div class="controls">
+          <div class="filters">
+            <input checked="true" class="filter" name="filter_checkbox" type="checkbox" data-test-result="failed" disabled/>
+            <span class="failed">0 Failed,</span>
+            <input checked="true" class="filter" name="filter_checkbox" type="checkbox" data-test-result="passed" />
+            <span class="passed">6 Passed,</span>
+            <input checked="true" class="filter" name="filter_checkbox" type="checkbox" data-test-result="skipped" disabled/>
+            <span class="skipped">0 Skipped,</span>
+            <input checked="true" class="filter" name="filter_checkbox" type="checkbox" data-test-result="xfailed" disabled/>
+            <span class="xfailed">0 Expected failures,</span>
+            <input checked="true" class="filter" name="filter_checkbox" type="checkbox" data-test-result="xpassed" disabled/>
+            <span class="xpassed">0 Unexpected passes,</span>
+            <input checked="true" class="filter" name="filter_checkbox" type="checkbox" data-test-result="error" disabled/>
+            <span class="error">0 Errors,</span>
+            <input checked="true" class="filter" name="filter_checkbox" type="checkbox" data-test-result="rerun" disabled/>
+            <span class="rerun">0 Reruns</span>
+          </div>
+          <div class="collapse">
+            <button id="show_all_details">Show all details</button>&nbsp;/&nbsp;<button id="hide_all_details">Hide all details</button>
+          </div>
+        </div>
+      </div>
+      <div class="additional-summary summary">
+      </div>
+      <div class="additional-summary postfix">
+      </div>
+    </div>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable" data-column-type="result">Result</th>
+          <th class="sortable" data-column-type="testId">Test</th>
+          <th class="sortable" data-column-type="duration">Duration</th>
+          <th>Links</th>
+        </tr>
+      </thead>
+    </table>
+  </body>
+  <footer>
+    <div id="data-container" data-jsonblob="{&#34;environment&#34;: {&#34;Python&#34;: &#34;3.11.10&#34;, &#34;Platform&#34;: &#34;Linux-5.15.0-125-generic-x86_64-with-glibc2.35&#34;, &#34;Packages&#34;: {&#34;pytest&#34;: &#34;8.0.0&#34;, &#34;pluggy&#34;: &#34;1.5.0&#34;}, &#34;Plugins&#34;: {&#34;html&#34;: &#34;4.1.1&#34;, &#34;anyio&#34;: &#34;4.6.2.post1&#34;, &#34;xdist&#34;: &#34;3.5.0&#34;, &#34;metadata&#34;: &#34;3.1.1&#34;}, &#34;CI&#34;: &#34;true&#34;}, &#34;tests&#34;: {&#34;app_tests/benchmark_tests/llm/sglang_benchmarks/shortfin_benchmark_test.py::test_shortfin_benchmark[pre_process_model0-1-meta-llama-3.1-8b-instruct.f16.gguf]&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;Passed&#34;, &#34;testId&#34;: &#34;app_tests/benchmark_tests/llm/sglang_benchmarks/shortfin_benchmark_test.py::test_shortfin_benchmark[pre_process_model0-1-meta-llama-3.1-8b-instruct.f16.gguf]&#34;, &#34;duration&#34;: &#34;00:08:31&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;Passed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;app_tests/benchmark_tests/llm/sglang_benchmarks/shortfin_benchmark_test.py::test_shortfin_benchmark[pre_process_model0-1-meta-llama-3.1-8b-instruct.f16.gguf]&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;00:08:31&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;---------------------------- Captured stdout setup -----------------------------\nDownloading dataset llama3_8B_fp16\n  gguf: /tmp/pytest-of-nod/pytest-68/sglang_benchmark_test0/meta-llama-3.1-8b-instruct.f16.gguf\n  tokenizer_config.json: /tmp/pytest-of-nod/pytest-68/sglang_benchmark_test0/tokenizer_config.json\nExporting prefill_bs1\nExporting decode_bs1\nExporting prefill_bs4\nExporting decode_bs4\nGENERATED!\nExporting\nSaving to &amp;#x27;/tmp/pytest-of-nod/pytest-68/sglang_benchmark_test0/model.mlir&amp;#x27;\n\n---------------------------- Captured stderr setup -----------------------------\n/home/nod/actions-runner-shark-ai/_work/shark-ai/shark-ai/sharktank/sharktank/types/gguf_interop/base.py:100: UserWarning: The given NumPy array is not writable, and PyTorch does not support non-writable tensors. This means writing to this tensor will result in undefined behavior. You may want to copy the array to protect its data or make it writable before converting it to a tensor. This type of warning will be suppressed for the rest of this program. (Triggered internally at ../torch/csrc/utils/tensor_numpy.cpp:206.)\n  data_tensor = torch.as_tensor(data.reshape(logical_shape))\n/home/nod/actions-runner-shark-ai/_work/shark-ai/shark-ai/deps/iree-turbine/iree/turbine/runtime/op_reg/base.py:407: UserWarning: ComplexHalf support is experimental and many operators don&amp;#x27;t support it yet. (Triggered internally at ../aten/src/ATen/EmptyTensor.cpp:41.)\n  return self.return_tensor(torch.empty(size, dtype=dtype, device=&amp;quot;meta&amp;quot;))\n\n------------------------------ Captured log setup ------------------------------\nINFO     integration_tests.llm.utils:utils.py:50 Download model llama3_8B_fp16 with `hf_datasets` to /tmp/pytest-of-nod/pytest-68/sglang_benchmark_test0...\nINFO     integration_tests.llm.utils:utils.py:62 Model llama3_8B_fp16 successfully downloaded.\nINFO     integration_tests.llm.utils:utils.py:82 Exporting model with following settings:\n  MLIR Path: /tmp/pytest-of-nod/pytest-68/sglang_benchmark_test0/model.mlir\n  Config Path: /tmp/pytest-of-nod/pytest-68/sglang_benchmark_test0/config.json\n  Batch Sizes: 1,4\nINFO     integration_tests.llm.utils:utils.py:100 Model successfully exported to /tmp/pytest-of-nod/pytest-68/sglang_benchmark_test0/model.mlir\nINFO     integration_tests.llm.utils:utils.py:104 Compiling model to /tmp/pytest-of-nod/pytest-68/sglang_benchmark_test0/model.vmfb\nINFO     integration_tests.llm.utils:utils.py:115 Model successfully compiled to /tmp/pytest-of-nod/pytest-68/sglang_benchmark_test0/model.vmfb\n\n----------------------------- Captured stderr call -----------------------------\n[2024-12-02 21:24:40] Started server process [1684080]\n[2024-12-02 21:24:40] Waiting for application startup.\n[2024-12-02 21:24:43] Application startup complete.\n[2024-12-02 21:24:43] Uvicorn running on http://0.0.0.0:51807 (Press CTRL+C to quit)\n[2024-12-02 21:24:44] 127.0.0.1:47738 - &amp;quot;GET /health HTTP/1.1&amp;quot; 200\nSpecial tokens have been added in the vocabulary, make sure the associated word embeddings are fine-tuned or trained.\n[2024-12-02 21:24:47] 127.0.0.1:57280 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n\r  0%|          | 0/10 [00:00&amp;lt;?, ?it/s][2024-12-02 21:26:51] 127.0.0.1:54262 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:26:52] 127.0.0.1:54276 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:26:53] 127.0.0.1:54284 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:26:53] 127.0.0.1:54288 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:26:54] 127.0.0.1:54298 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:26:54] 127.0.0.1:54308 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:26:54] 127.0.0.1:54324 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:26:54] 127.0.0.1:54326 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:26:54] 127.0.0.1:54336 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:26:55] 127.0.0.1:54350 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n\r 10%|\u2588         | 1/10 [00:05&amp;lt;00:52,  5.88s/it]\r 20%|\u2588\u2588        | 2/10 [00:08&amp;lt;00:31,  3.94s/it]\r 30%|\u2588\u2588\u2588       | 3/10 [00:53&amp;lt;02:39, 22.77s/it]\r 40%|\u2588\u2588\u2588\u2588      | 4/10 [00:55&amp;lt;01:26, 14.37s/it]\r 50%|\u2588\u2588\u2588\u2588\u2588     | 5/10 [01:07&amp;lt;01:07, 13.58s/it]\r 60%|\u2588\u2588\u2588\u2588\u2588\u2588    | 6/10 [01:07&amp;lt;00:36,  9.05s/it]\r 70%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588   | 7/10 [01:09&amp;lt;00:20,  6.81s/it]\r 80%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588  | 8/10 [01:31&amp;lt;00:23, 11.50s/it]\r 90%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588 | 9/10 [01:40&amp;lt;00:10, 10.70s/it]\r100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 10/10 [03:37&amp;lt;00:00, 43.72s/it]\r100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 10/10 [03:37&amp;lt;00:00, 21.79s/it]\n[2024-12-02 21:30:29] Shutting down\n[2024-12-02 21:30:29] Waiting for application shutdown.\n[2024-12-02 21:30:29] Application shutdown complete.\n[2024-12-02 21:30:29] Finished server process [1684080]\n\n------------------------------ Captured log call -------------------------------\nINFO     integration_tests.llm.utils:utils.py:122 Finding available port...\nINFO     integration_tests.llm.utils:utils.py:127 Found available port: 51807\nINFO     integration_tests.llm.utils:utils.py:175 Starting LLM server...\nINFO     integration_tests.llm.utils:utils.py:203 Process started... waiting for server\nINFO     integration_tests.llm.utils:utils.py:132 Waiting for server to start at http://localhost:51807...\nINFO     integration_tests.llm.utils:utils.py:137 Server successfully started\nINFO     sglang_benchmarks.shortfin_benchmark_test:shortfin_benchmark_test.py:97 Running SGLang Benchmark with the following args:\nINFO     sglang_benchmarks.shortfin_benchmark_test:shortfin_benchmark_test.py:98 Backend: shortfin\nBase URL: http://localhost:51807\nNum Prompt: 10\nTokenizer: /tmp/pytest-of-nod/pytest-68/sglang_benchmark_test0\nRequest Rate: 1\nINFO     sglang_benchmarks.shortfin_benchmark_test:shortfin_benchmark_test.py:109 Benchmark run completed in 345.3198275566101 seconds\nINFO     sglang_benchmarks.shortfin_benchmark_test:shortfin_benchmark_test.py:110 ======== RESULTS ========\nINFO     sglang_benchmarks.utils:utils.py:69 BACKEND: shortfin\nINFO     sglang_benchmarks.utils:utils.py:69 DATASET_NAME: sharegpt\nINFO     sglang_benchmarks.utils:utils.py:69 REQUEST_RATE: 1\nINFO     sglang_benchmarks.utils:utils.py:69 TOTAL_INPUT_TOKENS: 1960\nINFO     sglang_benchmarks.utils:utils.py:69 TOTAL_OUTPUT_TOKENS: 2774\nINFO     sglang_benchmarks.utils:utils.py:69 TOTAL_OUTPUT_TOKENS_RETOKENIZED: 358\nINFO     sglang_benchmarks.utils:utils.py:69 MEAN_E2E_LATENCY_MS: 71682.44255930185\nINFO     sglang_benchmarks.utils:utils.py:69 MEDIAN_E2E_LATENCY_MS: 66262.09161849692\nINFO     sglang_benchmarks.utils:utils.py:69 MEDIAN_TTFT_MS: 1019.2466370062903\nINFO     sglang_benchmarks.utils:utils.py:69 MEDIAN_ITL_MS: 115.6361794564873\nINFO     sglang_benchmarks.utils:utils.py:69 OUTPUT_THROUGHPUT: 12.730078393787954\nINFO     sglang_benchmarks.utils:utils.py:69 SHAREGPT_OUTPUT_LEN: None\nINFO     sglang_benchmarks.utils:utils.py:69 RANDOM_INPUT_LEN: None\nINFO     sglang_benchmarks.utils:utils.py:69 RANDOM_OUTPUT_LEN: None\nINFO     sglang_benchmarks.utils:utils.py:69 RANDOM_RANGE_RATIO: 0.0\nINFO     sglang_benchmarks.utils:utils.py:69 DURATION: 217.90910583501682\nINFO     sglang_benchmarks.utils:utils.py:69 COMPLETED: 10\n\n&#34;}], &#34;app_tests/benchmark_tests/llm/sglang_benchmarks/shortfin_benchmark_test.py::test_shortfin_benchmark[pre_process_model0-2-meta-llama-3.1-8b-instruct.f16.gguf]&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;Passed&#34;, &#34;testId&#34;: &#34;app_tests/benchmark_tests/llm/sglang_benchmarks/shortfin_benchmark_test.py::test_shortfin_benchmark[pre_process_model0-2-meta-llama-3.1-8b-instruct.f16.gguf]&#34;, &#34;duration&#34;: &#34;00:04:05&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;Passed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;app_tests/benchmark_tests/llm/sglang_benchmarks/shortfin_benchmark_test.py::test_shortfin_benchmark[pre_process_model0-2-meta-llama-3.1-8b-instruct.f16.gguf]&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;00:04:05&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;----------------------------- Captured stderr call -----------------------------\n[2024-12-02 21:30:32] Started server process [1691746]\n[2024-12-02 21:30:32] Waiting for application startup.\n[2024-12-02 21:30:36] Application startup complete.\n[2024-12-02 21:30:36] Uvicorn running on http://0.0.0.0:35573 (Press CTRL+C to quit)\n[2024-12-02 21:30:36] 127.0.0.1:54076 - &amp;quot;GET /health HTTP/1.1&amp;quot; 200\nSpecial tokens have been added in the vocabulary, make sure the associated word embeddings are fine-tuned or trained.\n[2024-12-02 21:30:40] 127.0.0.1:54082 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n\r  0%|          | 0/10 [00:00&amp;lt;?, ?it/s][2024-12-02 21:32:44] 127.0.0.1:55160 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:32:44] 127.0.0.1:55162 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:32:45] 127.0.0.1:55172 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:32:45] 127.0.0.1:55174 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:32:46] 127.0.0.1:55190 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:32:46] 127.0.0.1:55200 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:32:46] 127.0.0.1:55202 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:32:46] 127.0.0.1:55214 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:32:46] 127.0.0.1:55218 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:32:46] 127.0.0.1:55228 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n\r 10%|\u2588         | 1/10 [00:03&amp;lt;00:33,  3.69s/it]\r 20%|\u2588\u2588        | 2/10 [00:06&amp;lt;00:24,  3.00s/it]\r 30%|\u2588\u2588\u2588       | 3/10 [00:14&amp;lt;00:38,  5.56s/it]\r 40%|\u2588\u2588\u2588\u2588      | 4/10 [00:24&amp;lt;00:43,  7.17s/it]\r 60%|\u2588\u2588\u2588\u2588\u2588\u2588    | 6/10 [00:25&amp;lt;00:14,  3.62s/it]\r 70%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588   | 7/10 [00:40&amp;lt;00:20,  6.82s/it]\r 80%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588  | 8/10 [00:41&amp;lt;00:10,  5.04s/it]\r 90%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588 | 9/10 [01:19&amp;lt;00:14, 14.63s/it]\r100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 10/10 [01:50&amp;lt;00:00, 19.38s/it]\r100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 10/10 [01:50&amp;lt;00:00, 11.06s/it]\n[2024-12-02 21:34:35] Shutting down\n[2024-12-02 21:34:35] Waiting for application shutdown.\n[2024-12-02 21:34:35] Application shutdown complete.\n[2024-12-02 21:34:35] Finished server process [1691746]\n\n------------------------------ Captured log call -------------------------------\nINFO     integration_tests.llm.utils:utils.py:122 Finding available port...\nINFO     integration_tests.llm.utils:utils.py:127 Found available port: 35573\nINFO     integration_tests.llm.utils:utils.py:175 Starting LLM server...\nINFO     integration_tests.llm.utils:utils.py:203 Process started... waiting for server\nINFO     integration_tests.llm.utils:utils.py:132 Waiting for server to start at http://localhost:35573...\nINFO     integration_tests.llm.utils:utils.py:137 Server successfully started\nINFO     sglang_benchmarks.shortfin_benchmark_test:shortfin_benchmark_test.py:97 Running SGLang Benchmark with the following args:\nINFO     sglang_benchmarks.shortfin_benchmark_test:shortfin_benchmark_test.py:98 Backend: shortfin\nBase URL: http://localhost:35573\nNum Prompt: 10\nTokenizer: /tmp/pytest-of-nod/pytest-68/sglang_benchmark_test0\nRequest Rate: 2\nINFO     sglang_benchmarks.shortfin_benchmark_test:shortfin_benchmark_test.py:109 Benchmark run completed in 238.51185059547424 seconds\nINFO     sglang_benchmarks.shortfin_benchmark_test:shortfin_benchmark_test.py:110 ======== RESULTS ========\nINFO     sglang_benchmarks.utils:utils.py:69 BACKEND: shortfin\nINFO     sglang_benchmarks.utils:utils.py:69 DATASET_NAME: sharegpt\nINFO     sglang_benchmarks.utils:utils.py:69 REQUEST_RATE: 2\nINFO     sglang_benchmarks.utils:utils.py:69 TOTAL_INPUT_TOKENS: 1960\nINFO     sglang_benchmarks.utils:utils.py:69 TOTAL_OUTPUT_TOKENS: 2774\nINFO     sglang_benchmarks.utils:utils.py:69 TOTAL_OUTPUT_TOKENS_RETOKENIZED: 356\nINFO     sglang_benchmarks.utils:utils.py:69 MEAN_E2E_LATENCY_MS: 36073.88161374256\nINFO     sglang_benchmarks.utils:utils.py:69 MEDIAN_E2E_LATENCY_MS: 24474.1659470601\nINFO     sglang_benchmarks.utils:utils.py:69 MEDIAN_TTFT_MS: 1392.4947265768424\nINFO     sglang_benchmarks.utils:utils.py:69 MEDIAN_ITL_MS: 40.90029397048056\nINFO     sglang_benchmarks.utils:utils.py:69 OUTPUT_THROUGHPUT: 25.090254454616776\nINFO     sglang_benchmarks.utils:utils.py:69 SHAREGPT_OUTPUT_LEN: None\nINFO     sglang_benchmarks.utils:utils.py:69 RANDOM_INPUT_LEN: None\nINFO     sglang_benchmarks.utils:utils.py:69 RANDOM_OUTPUT_LEN: None\nINFO     sglang_benchmarks.utils:utils.py:69 RANDOM_RANGE_RATIO: 0.0\nINFO     sglang_benchmarks.utils:utils.py:69 DURATION: 110.56085561099462\nINFO     sglang_benchmarks.utils:utils.py:69 COMPLETED: 10\n\n&#34;}], &#34;app_tests/benchmark_tests/llm/sglang_benchmarks/shortfin_benchmark_test.py::test_shortfin_benchmark[pre_process_model0-4-meta-llama-3.1-8b-instruct.f16.gguf]&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;Passed&#34;, &#34;testId&#34;: &#34;app_tests/benchmark_tests/llm/sglang_benchmarks/shortfin_benchmark_test.py::test_shortfin_benchmark[pre_process_model0-4-meta-llama-3.1-8b-instruct.f16.gguf]&#34;, &#34;duration&#34;: &#34;00:03:44&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;Passed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;app_tests/benchmark_tests/llm/sglang_benchmarks/shortfin_benchmark_test.py::test_shortfin_benchmark[pre_process_model0-4-meta-llama-3.1-8b-instruct.f16.gguf]&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;00:03:44&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;----------------------------- Captured stderr call -----------------------------\n[2024-12-02 21:34:37] Started server process [1694166]\n[2024-12-02 21:34:37] Waiting for application startup.\n[2024-12-02 21:34:41] Application startup complete.\n[2024-12-02 21:34:41] Uvicorn running on http://0.0.0.0:45881 (Press CTRL+C to quit)\n[2024-12-02 21:34:41] 127.0.0.1:59734 - &amp;quot;GET /health HTTP/1.1&amp;quot; 200\nSpecial tokens have been added in the vocabulary, make sure the associated word embeddings are fine-tuned or trained.\n[2024-12-02 21:34:44] 127.0.0.1:59750 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n\r  0%|          | 0/10 [00:00&amp;lt;?, ?it/s][2024-12-02 21:36:49] 127.0.0.1:36800 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:36:49] 127.0.0.1:36808 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:36:49] 127.0.0.1:36812 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:36:49] 127.0.0.1:36814 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:36:50] 127.0.0.1:36824 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:36:50] 127.0.0.1:36838 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:36:50] 127.0.0.1:36854 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:36:50] 127.0.0.1:36860 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:36:50] 127.0.0.1:36870 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:36:50] 127.0.0.1:36876 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n\r 10%|\u2588         | 1/10 [00:03&amp;lt;00:30,  3.36s/it]\r 20%|\u2588\u2588        | 2/10 [00:04&amp;lt;00:18,  2.31s/it]\r 30%|\u2588\u2588\u2588       | 3/10 [00:14&amp;lt;00:39,  5.66s/it]\r 40%|\u2588\u2588\u2588\u2588      | 4/10 [00:22&amp;lt;00:38,  6.36s/it]\r 50%|\u2588\u2588\u2588\u2588\u2588     | 5/10 [00:25&amp;lt;00:26,  5.30s/it]\r 60%|\u2588\u2588\u2588\u2588\u2588\u2588    | 6/10 [00:27&amp;lt;00:16,  4.14s/it]\r 70%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588   | 7/10 [00:31&amp;lt;00:12,  4.18s/it]\r 80%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588  | 8/10 [00:57&amp;lt;00:21, 10.98s/it]\r 90%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588 | 9/10 [01:16&amp;lt;00:13, 13.65s/it]\r100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 10/10 [01:29&amp;lt;00:00, 13.45s/it]\r100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 10/10 [01:29&amp;lt;00:00,  8.97s/it]\n[2024-12-02 21:38:18] Shutting down\n[2024-12-02 21:38:19] Waiting for application shutdown.\n[2024-12-02 21:38:19] Application shutdown complete.\n[2024-12-02 21:38:19] Finished server process [1694166]\n\n------------------------------ Captured log call -------------------------------\nINFO     integration_tests.llm.utils:utils.py:122 Finding available port...\nINFO     integration_tests.llm.utils:utils.py:127 Found available port: 45881\nINFO     integration_tests.llm.utils:utils.py:175 Starting LLM server...\nINFO     integration_tests.llm.utils:utils.py:203 Process started... waiting for server\nINFO     integration_tests.llm.utils:utils.py:132 Waiting for server to start at http://localhost:45881...\nINFO     integration_tests.llm.utils:utils.py:137 Server successfully started\nINFO     sglang_benchmarks.shortfin_benchmark_test:shortfin_benchmark_test.py:97 Running SGLang Benchmark with the following args:\nINFO     sglang_benchmarks.shortfin_benchmark_test:shortfin_benchmark_test.py:98 Backend: shortfin\nBase URL: http://localhost:45881\nNum Prompt: 10\nTokenizer: /tmp/pytest-of-nod/pytest-68/sglang_benchmark_test0\nRequest Rate: 4\nINFO     sglang_benchmarks.shortfin_benchmark_test:shortfin_benchmark_test.py:109 Benchmark run completed in 217.12646007537842 seconds\nINFO     sglang_benchmarks.shortfin_benchmark_test:shortfin_benchmark_test.py:110 ======== RESULTS ========\nINFO     sglang_benchmarks.utils:utils.py:69 BACKEND: shortfin\nINFO     sglang_benchmarks.utils:utils.py:69 DATASET_NAME: sharegpt\nINFO     sglang_benchmarks.utils:utils.py:69 REQUEST_RATE: 4\nINFO     sglang_benchmarks.utils:utils.py:69 TOTAL_INPUT_TOKENS: 1960\nINFO     sglang_benchmarks.utils:utils.py:69 TOTAL_OUTPUT_TOKENS: 2774\nINFO     sglang_benchmarks.utils:utils.py:69 TOTAL_OUTPUT_TOKENS_RETOKENIZED: 356\nINFO     sglang_benchmarks.utils:utils.py:69 MEAN_E2E_LATENCY_MS: 34753.18428478204\nINFO     sglang_benchmarks.utils:utils.py:69 MEDIAN_E2E_LATENCY_MS: 25999.06172195915\nINFO     sglang_benchmarks.utils:utils.py:69 MEDIAN_TTFT_MS: 1836.6675525903702\nINFO     sglang_benchmarks.utils:utils.py:69 MEDIAN_ITL_MS: 44.62158610112965\nINFO     sglang_benchmarks.utils:utils.py:69 OUTPUT_THROUGHPUT: 30.9393157313432\nINFO     sglang_benchmarks.utils:utils.py:69 SHAREGPT_OUTPUT_LEN: None\nINFO     sglang_benchmarks.utils:utils.py:69 RANDOM_INPUT_LEN: None\nINFO     sglang_benchmarks.utils:utils.py:69 RANDOM_OUTPUT_LEN: None\nINFO     sglang_benchmarks.utils:utils.py:69 RANDOM_RANGE_RATIO: 0.0\nINFO     sglang_benchmarks.utils:utils.py:69 DURATION: 89.65938432794064\nINFO     sglang_benchmarks.utils:utils.py:69 COMPLETED: 10\n\n&#34;}], &#34;app_tests/benchmark_tests/llm/sglang_benchmarks/shortfin_benchmark_test.py::test_shortfin_benchmark[pre_process_model0-8-meta-llama-3.1-8b-instruct.f16.gguf]&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;Passed&#34;, &#34;testId&#34;: &#34;app_tests/benchmark_tests/llm/sglang_benchmarks/shortfin_benchmark_test.py::test_shortfin_benchmark[pre_process_model0-8-meta-llama-3.1-8b-instruct.f16.gguf]&#34;, &#34;duration&#34;: &#34;00:04:55&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;Passed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;app_tests/benchmark_tests/llm/sglang_benchmarks/shortfin_benchmark_test.py::test_shortfin_benchmark[pre_process_model0-8-meta-llama-3.1-8b-instruct.f16.gguf]&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;00:04:55&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;----------------------------- Captured stderr call -----------------------------\n[2024-12-02 21:38:21] Started server process [1699023]\n[2024-12-02 21:38:21] Waiting for application startup.\n[2024-12-02 21:38:25] Application startup complete.\n[2024-12-02 21:38:25] Uvicorn running on http://0.0.0.0:55175 (Press CTRL+C to quit)\n[2024-12-02 21:38:25] 127.0.0.1:39048 - &amp;quot;GET /health HTTP/1.1&amp;quot; 200\nSpecial tokens have been added in the vocabulary, make sure the associated word embeddings are fine-tuned or trained.\n[2024-12-02 21:38:28] 127.0.0.1:60256 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n\r  0%|          | 0/10 [00:00&amp;lt;?, ?it/s][2024-12-02 21:40:33] 127.0.0.1:57618 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:40:33] 127.0.0.1:57624 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:40:33] 127.0.0.1:57628 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:40:33] 127.0.0.1:57638 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:40:34] 127.0.0.1:57640 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:40:34] 127.0.0.1:57644 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:40:34] 127.0.0.1:57658 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:40:34] 127.0.0.1:57664 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:40:34] 127.0.0.1:57666 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:40:34] 127.0.0.1:57680 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n\r 10%|\u2588         | 1/10 [00:03&amp;lt;00:28,  3.11s/it]\r 20%|\u2588\u2588        | 2/10 [00:04&amp;lt;00:16,  2.05s/it]\r 30%|\u2588\u2588\u2588       | 3/10 [00:18&amp;lt;00:52,  7.53s/it]\r 40%|\u2588\u2588\u2588\u2588      | 4/10 [00:19&amp;lt;00:30,  5.05s/it]\r 50%|\u2588\u2588\u2588\u2588\u2588     | 5/10 [00:24&amp;lt;00:24,  4.81s/it]\r 60%|\u2588\u2588\u2588\u2588\u2588\u2588    | 6/10 [00:25&amp;lt;00:15,  3.81s/it]\r 70%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588   | 7/10 [00:29&amp;lt;00:10,  3.63s/it]\r 80%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588  | 8/10 [00:31&amp;lt;00:06,  3.26s/it]\r 90%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588 | 9/10 [01:06&amp;lt;00:13, 13.17s/it]\r100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 10/10 [02:40&amp;lt;00:00, 38.17s/it]\r100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 10/10 [02:40&amp;lt;00:00, 16.08s/it]\n[2024-12-02 21:43:14] Shutting down\n[2024-12-02 21:43:14] Waiting for application shutdown.\n[2024-12-02 21:43:14] Application shutdown complete.\n[2024-12-02 21:43:14] Finished server process [1699023]\n\n------------------------------ Captured log call -------------------------------\nINFO     integration_tests.llm.utils:utils.py:122 Finding available port...\nINFO     integration_tests.llm.utils:utils.py:127 Found available port: 55175\nINFO     integration_tests.llm.utils:utils.py:175 Starting LLM server...\nINFO     integration_tests.llm.utils:utils.py:203 Process started... waiting for server\nINFO     integration_tests.llm.utils:utils.py:132 Waiting for server to start at http://localhost:55175...\nINFO     integration_tests.llm.utils:utils.py:137 Server successfully started\nINFO     sglang_benchmarks.shortfin_benchmark_test:shortfin_benchmark_test.py:97 Running SGLang Benchmark with the following args:\nINFO     sglang_benchmarks.shortfin_benchmark_test:shortfin_benchmark_test.py:98 Backend: shortfin\nBase URL: http://localhost:55175\nNum Prompt: 10\nTokenizer: /tmp/pytest-of-nod/pytest-68/sglang_benchmark_test0\nRequest Rate: 8\nINFO     sglang_benchmarks.shortfin_benchmark_test:shortfin_benchmark_test.py:109 Benchmark run completed in 288.1822965145111 seconds\nINFO     sglang_benchmarks.shortfin_benchmark_test:shortfin_benchmark_test.py:110 ======== RESULTS ========\nINFO     sglang_benchmarks.utils:utils.py:69 BACKEND: shortfin\nINFO     sglang_benchmarks.utils:utils.py:69 DATASET_NAME: sharegpt\nINFO     sglang_benchmarks.utils:utils.py:69 REQUEST_RATE: 8\nINFO     sglang_benchmarks.utils:utils.py:69 TOTAL_INPUT_TOKENS: 1960\nINFO     sglang_benchmarks.utils:utils.py:69 TOTAL_OUTPUT_TOKENS: 2774\nINFO     sglang_benchmarks.utils:utils.py:69 TOTAL_OUTPUT_TOKENS_RETOKENIZED: 356\nINFO     sglang_benchmarks.utils:utils.py:69 MEAN_E2E_LATENCY_MS: 38160.99161643069\nINFO     sglang_benchmarks.utils:utils.py:69 MEDIAN_E2E_LATENCY_MS: 24871.108987601474\nINFO     sglang_benchmarks.utils:utils.py:69 MEDIAN_TTFT_MS: 1981.8573869997635\nINFO     sglang_benchmarks.utils:utils.py:69 MEDIAN_ITL_MS: 44.146534404717386\nINFO     sglang_benchmarks.utils:utils.py:69 OUTPUT_THROUGHPUT: 17.251192768615645\nINFO     sglang_benchmarks.utils:utils.py:69 SHAREGPT_OUTPUT_LEN: None\nINFO     sglang_benchmarks.utils:utils.py:69 RANDOM_INPUT_LEN: None\nINFO     sglang_benchmarks.utils:utils.py:69 RANDOM_OUTPUT_LEN: None\nINFO     sglang_benchmarks.utils:utils.py:69 RANDOM_RANGE_RATIO: 0.0\nINFO     sglang_benchmarks.utils:utils.py:69 DURATION: 160.80047549214214\nINFO     sglang_benchmarks.utils:utils.py:69 COMPLETED: 10\n\n&#34;}], &#34;app_tests/benchmark_tests/llm/sglang_benchmarks/shortfin_benchmark_test.py::test_shortfin_benchmark[pre_process_model0-16-meta-llama-3.1-8b-instruct.f16.gguf]&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;Passed&#34;, &#34;testId&#34;: &#34;app_tests/benchmark_tests/llm/sglang_benchmarks/shortfin_benchmark_test.py::test_shortfin_benchmark[pre_process_model0-16-meta-llama-3.1-8b-instruct.f16.gguf]&#34;, &#34;duration&#34;: &#34;00:05:07&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;Passed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;app_tests/benchmark_tests/llm/sglang_benchmarks/shortfin_benchmark_test.py::test_shortfin_benchmark[pre_process_model0-16-meta-llama-3.1-8b-instruct.f16.gguf]&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;00:05:07&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;----------------------------- Captured stderr call -----------------------------\n[2024-12-02 21:43:17] Started server process [1704851]\n[2024-12-02 21:43:17] Waiting for application startup.\n[2024-12-02 21:43:22] Application startup complete.\n[2024-12-02 21:43:22] Uvicorn running on http://0.0.0.0:50755 (Press CTRL+C to quit)\n[2024-12-02 21:43:22] 127.0.0.1:57108 - &amp;quot;GET /health HTTP/1.1&amp;quot; 200\nSpecial tokens have been added in the vocabulary, make sure the associated word embeddings are fine-tuned or trained.\n[2024-12-02 21:43:25] 127.0.0.1:57112 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n\r  0%|          | 0/10 [00:00&amp;lt;?, ?it/s][2024-12-02 21:45:30] 127.0.0.1:41896 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:45:30] 127.0.0.1:41902 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:45:30] 127.0.0.1:41916 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:45:30] 127.0.0.1:41930 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:45:31] 127.0.0.1:41944 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:45:31] 127.0.0.1:41958 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:45:31] 127.0.0.1:41974 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:45:31] 127.0.0.1:41990 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:45:31] 127.0.0.1:41992 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:45:31] 127.0.0.1:42006 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n\r 10%|\u2588         | 1/10 [00:03&amp;lt;00:28,  3.21s/it]\r 20%|\u2588\u2588        | 2/10 [00:05&amp;lt;00:23,  2.94s/it]\r 30%|\u2588\u2588\u2588       | 3/10 [00:15&amp;lt;00:40,  5.85s/it]\r 40%|\u2588\u2588\u2588\u2588      | 4/10 [00:19&amp;lt;00:30,  5.13s/it]\r 50%|\u2588\u2588\u2588\u2588\u2588     | 5/10 [00:19&amp;lt;00:17,  3.52s/it]\r 60%|\u2588\u2588\u2588\u2588\u2588\u2588    | 6/10 [00:26&amp;lt;00:18,  4.70s/it]\r 70%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588   | 7/10 [00:27&amp;lt;00:09,  3.23s/it]\r 80%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588  | 8/10 [01:16&amp;lt;00:35, 17.78s/it]\r 90%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588 | 9/10 [01:23&amp;lt;00:14, 14.57s/it]\r100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 10/10 [02:51&amp;lt;00:00, 37.10s/it]\r100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 10/10 [02:51&amp;lt;00:00, 17.12s/it]\n[2024-12-02 21:48:21] Shutting down\n[2024-12-02 21:48:21] Waiting for application shutdown.\n[2024-12-02 21:48:21] Application shutdown complete.\n[2024-12-02 21:48:21] Finished server process [1704851]\n\n------------------------------ Captured log call -------------------------------\nINFO     integration_tests.llm.utils:utils.py:122 Finding available port...\nINFO     integration_tests.llm.utils:utils.py:127 Found available port: 50755\nINFO     integration_tests.llm.utils:utils.py:175 Starting LLM server...\nINFO     integration_tests.llm.utils:utils.py:203 Process started... waiting for server\nINFO     integration_tests.llm.utils:utils.py:132 Waiting for server to start at http://localhost:50755...\nINFO     integration_tests.llm.utils:utils.py:137 Server successfully started\nINFO     sglang_benchmarks.shortfin_benchmark_test:shortfin_benchmark_test.py:97 Running SGLang Benchmark with the following args:\nINFO     sglang_benchmarks.shortfin_benchmark_test:shortfin_benchmark_test.py:98 Backend: shortfin\nBase URL: http://localhost:50755\nNum Prompt: 10\nTokenizer: /tmp/pytest-of-nod/pytest-68/sglang_benchmark_test0\nRequest Rate: 16\nINFO     sglang_benchmarks.shortfin_benchmark_test:shortfin_benchmark_test.py:109 Benchmark run completed in 298.5587751865387 seconds\nINFO     sglang_benchmarks.shortfin_benchmark_test:shortfin_benchmark_test.py:110 ======== RESULTS ========\nINFO     sglang_benchmarks.utils:utils.py:69 BACKEND: shortfin\nINFO     sglang_benchmarks.utils:utils.py:69 DATASET_NAME: sharegpt\nINFO     sglang_benchmarks.utils:utils.py:69 REQUEST_RATE: 16\nINFO     sglang_benchmarks.utils:utils.py:69 TOTAL_INPUT_TOKENS: 1960\nINFO     sglang_benchmarks.utils:utils.py:69 TOTAL_OUTPUT_TOKENS: 2774\nINFO     sglang_benchmarks.utils:utils.py:69 TOTAL_OUTPUT_TOKENS_RETOKENIZED: 356\nINFO     sglang_benchmarks.utils:utils.py:69 MEAN_E2E_LATENCY_MS: 44740.62071084045\nINFO     sglang_benchmarks.utils:utils.py:69 MEDIAN_E2E_LATENCY_MS: 23344.629411469214\nINFO     sglang_benchmarks.utils:utils.py:69 MEDIAN_TTFT_MS: 2005.369554972276\nINFO     sglang_benchmarks.utils:utils.py:69 MEDIAN_ITL_MS: 43.362986063584685\nINFO     sglang_benchmarks.utils:utils.py:69 OUTPUT_THROUGHPUT: 16.207077686331797\nINFO     sglang_benchmarks.utils:utils.py:69 SHAREGPT_OUTPUT_LEN: None\nINFO     sglang_benchmarks.utils:utils.py:69 RANDOM_INPUT_LEN: None\nINFO     sglang_benchmarks.utils:utils.py:69 RANDOM_OUTPUT_LEN: None\nINFO     sglang_benchmarks.utils:utils.py:69 RANDOM_RANGE_RATIO: 0.0\nINFO     sglang_benchmarks.utils:utils.py:69 DURATION: 171.1597891789861\nINFO     sglang_benchmarks.utils:utils.py:69 COMPLETED: 10\n\n&#34;}], &#34;app_tests/benchmark_tests/llm/sglang_benchmarks/shortfin_benchmark_test.py::test_shortfin_benchmark[pre_process_model0-32-meta-llama-3.1-8b-instruct.f16.gguf]&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;Passed&#34;, &#34;testId&#34;: &#34;app_tests/benchmark_tests/llm/sglang_benchmarks/shortfin_benchmark_test.py::test_shortfin_benchmark[pre_process_model0-32-meta-llama-3.1-8b-instruct.f16.gguf]&#34;, &#34;duration&#34;: &#34;00:05:04&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;Passed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;app_tests/benchmark_tests/llm/sglang_benchmarks/shortfin_benchmark_test.py::test_shortfin_benchmark[pre_process_model0-32-meta-llama-3.1-8b-instruct.f16.gguf]&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;00:05:04&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;----------------------------- Captured stderr call -----------------------------\n[2024-12-02 21:48:24] Started server process [1708603]\n[2024-12-02 21:48:24] Waiting for application startup.\n[2024-12-02 21:48:27] Application startup complete.\n[2024-12-02 21:48:27] Uvicorn running on http://0.0.0.0:57001 (Press CTRL+C to quit)\n[2024-12-02 21:48:28] 127.0.0.1:35820 - &amp;quot;GET /health HTTP/1.1&amp;quot; 200\nSpecial tokens have been added in the vocabulary, make sure the associated word embeddings are fine-tuned or trained.\n[2024-12-02 21:48:31] 127.0.0.1:35832 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n\r  0%|          | 0/10 [00:00&amp;lt;?, ?it/s][2024-12-02 21:50:35] 127.0.0.1:54724 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:50:35] 127.0.0.1:54728 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:50:35] 127.0.0.1:54744 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:50:35] 127.0.0.1:54760 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:50:36] 127.0.0.1:54764 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:50:36] 127.0.0.1:54772 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:50:36] 127.0.0.1:54780 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:50:36] 127.0.0.1:54796 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:50:36] 127.0.0.1:54810 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n[2024-12-02 21:50:36] 127.0.0.1:54812 - &amp;quot;POST /generate HTTP/1.1&amp;quot; 200\n\r 10%|\u2588         | 1/10 [00:02&amp;lt;00:26,  2.98s/it]\r 20%|\u2588\u2588        | 2/10 [00:05&amp;lt;00:20,  2.56s/it]\r 30%|\u2588\u2588\u2588       | 3/10 [00:12&amp;lt;00:34,  4.93s/it]\r 40%|\u2588\u2588\u2588\u2588      | 4/10 [00:18&amp;lt;00:30,  5.04s/it]\r 50%|\u2588\u2588\u2588\u2588\u2588     | 5/10 [00:22&amp;lt;00:24,  4.83s/it]\r 60%|\u2588\u2588\u2588\u2588\u2588\u2588    | 6/10 [00:25&amp;lt;00:16,  4.20s/it]\r 80%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588  | 8/10 [01:14&amp;lt;00:28, 14.21s/it]\r 90%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588 | 9/10 [01:18&amp;lt;00:11, 11.55s/it]\r100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 10/10 [02:49&amp;lt;00:00, 32.98s/it]\r100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 10/10 [02:49&amp;lt;00:00, 16.93s/it]\n[2024-12-02 21:53:25] Shutting down\n[2024-12-02 21:53:25] Waiting for application shutdown.\n[2024-12-02 21:53:25] Application shutdown complete.\n[2024-12-02 21:53:25] Finished server process [1708603]\n\n------------------------------ Captured log call -------------------------------\nINFO     integration_tests.llm.utils:utils.py:122 Finding available port...\nINFO     integration_tests.llm.utils:utils.py:127 Found available port: 57001\nINFO     integration_tests.llm.utils:utils.py:175 Starting LLM server...\nINFO     integration_tests.llm.utils:utils.py:203 Process started... waiting for server\nINFO     integration_tests.llm.utils:utils.py:132 Waiting for server to start at http://localhost:57001...\nINFO     integration_tests.llm.utils:utils.py:137 Server successfully started\nINFO     sglang_benchmarks.shortfin_benchmark_test:shortfin_benchmark_test.py:97 Running SGLang Benchmark with the following args:\nINFO     sglang_benchmarks.shortfin_benchmark_test:shortfin_benchmark_test.py:98 Backend: shortfin\nBase URL: http://localhost:57001\nNum Prompt: 10\nTokenizer: /tmp/pytest-of-nod/pytest-68/sglang_benchmark_test0\nRequest Rate: 32\nINFO     sglang_benchmarks.shortfin_benchmark_test:shortfin_benchmark_test.py:109 Benchmark run completed in 296.7023079395294 seconds\nINFO     sglang_benchmarks.shortfin_benchmark_test:shortfin_benchmark_test.py:110 ======== RESULTS ========\nINFO     sglang_benchmarks.utils:utils.py:69 BACKEND: shortfin\nINFO     sglang_benchmarks.utils:utils.py:69 DATASET_NAME: sharegpt\nINFO     sglang_benchmarks.utils:utils.py:69 REQUEST_RATE: 32\nINFO     sglang_benchmarks.utils:utils.py:69 TOTAL_INPUT_TOKENS: 1960\nINFO     sglang_benchmarks.utils:utils.py:69 TOTAL_OUTPUT_TOKENS: 2774\nINFO     sglang_benchmarks.utils:utils.py:69 TOTAL_OUTPUT_TOKENS_RETOKENIZED: 356\nINFO     sglang_benchmarks.utils:utils.py:69 MEAN_E2E_LATENCY_MS: 43520.39238084108\nINFO     sglang_benchmarks.utils:utils.py:69 MEDIAN_E2E_LATENCY_MS: 24071.978526073508\nINFO     sglang_benchmarks.utils:utils.py:69 MEDIAN_TTFT_MS: 2006.59923045896\nINFO     sglang_benchmarks.utils:utils.py:69 MEDIAN_ITL_MS: 42.67038544639945\nINFO     sglang_benchmarks.utils:utils.py:69 OUTPUT_THROUGHPUT: 16.388690459032507\nINFO     sglang_benchmarks.utils:utils.py:69 SHAREGPT_OUTPUT_LEN: None\nINFO     sglang_benchmarks.utils:utils.py:69 RANDOM_INPUT_LEN: None\nINFO     sglang_benchmarks.utils:utils.py:69 RANDOM_OUTPUT_LEN: None\nINFO     sglang_benchmarks.utils:utils.py:69 RANDOM_RANGE_RATIO: 0.0\nINFO     sglang_benchmarks.utils:utils.py:69 DURATION: 169.26306631602347\nINFO     sglang_benchmarks.utils:utils.py:69 COMPLETED: 10\n\n&#34;}]}, &#34;renderCollapsed&#34;: [&#34;passed&#34;], &#34;initialSort&#34;: &#34;result&#34;, &#34;title&#34;: &#34;index.html&#34;}"></div>
+    <script>
+      (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
+const { getCollapsedCategory, setCollapsedIds } = require('./storage.js')
+
+class DataManager {
+    setManager(data) {
+        const collapsedCategories = [...getCollapsedCategory(data.renderCollapsed)]
+        const collapsedIds = []
+        const tests = Object.values(data.tests).flat().map((test, index) => {
+            const collapsed = collapsedCategories.includes(test.result.toLowerCase())
+            const id = `test_${index}`
+            if (collapsed) {
+                collapsedIds.push(id)
+            }
+            return {
+                ...test,
+                id,
+                collapsed,
+            }
+        })
+        const dataBlob = { ...data, tests }
+        this.data = { ...dataBlob }
+        this.renderData = { ...dataBlob }
+        setCollapsedIds(collapsedIds)
+    }
+
+    get allData() {
+        return { ...this.data }
+    }
+
+    resetRender() {
+        this.renderData = { ...this.data }
+    }
+
+    setRender(data) {
+        this.renderData.tests = [...data]
+    }
+
+    toggleCollapsedItem(id) {
+        this.renderData.tests = this.renderData.tests.map((test) =>
+            test.id === id ? { ...test, collapsed: !test.collapsed } : test,
+        )
+    }
+
+    set allCollapsed(collapsed) {
+        this.renderData = { ...this.renderData, tests: [...this.renderData.tests.map((test) => (
+            { ...test, collapsed }
+        ))] }
+    }
+
+    get testSubset() {
+        return [...this.renderData.tests]
+    }
+
+    get environment() {
+        return this.renderData.environment
+    }
+
+    get initialSort() {
+        return this.data.initialSort
+    }
+}
+
+module.exports = {
+    manager: new DataManager(),
+}
+
+},{"./storage.js":8}],2:[function(require,module,exports){
+const mediaViewer = require('./mediaviewer.js')
+const templateEnvRow = document.getElementById('template_environment_row')
+const templateResult = document.getElementById('template_results-table__tbody')
+
+function htmlToElements(html) {
+    const temp = document.createElement('template')
+    temp.innerHTML = html
+    return temp.content.childNodes
+}
+
+const find = (selector, elem) => {
+    if (!elem) {
+        elem = document
+    }
+    return elem.querySelector(selector)
+}
+
+const findAll = (selector, elem) => {
+    if (!elem) {
+        elem = document
+    }
+    return [...elem.querySelectorAll(selector)]
+}
+
+const dom = {
+    getStaticRow: (key, value) => {
+        const envRow = templateEnvRow.content.cloneNode(true)
+        const isObj = typeof value === 'object' && value !== null
+        const values = isObj ? Object.keys(value).map((k) => `${k}: ${value[k]}`) : null
+
+        const valuesElement = htmlToElements(
+            values ? `<ul>${values.map((val) => `<li>${val}</li>`).join('')}<ul>` : `<div>${value}</div>`)[0]
+        const td = findAll('td', envRow)
+        td[0].textContent = key
+        td[1].appendChild(valuesElement)
+
+        return envRow
+    },
+    getResultTBody: ({ testId, id, log, extras, resultsTableRow, tableHtml, result, collapsed }) => {
+        const resultBody = templateResult.content.cloneNode(true)
+        resultBody.querySelector('tbody').classList.add(result.toLowerCase())
+        resultBody.querySelector('tbody').id = testId
+        resultBody.querySelector('.collapsible').dataset.id = id
+
+        resultsTableRow.forEach((html) => {
+            const t = document.createElement('template')
+            t.innerHTML = html
+            resultBody.querySelector('.collapsible').appendChild(t.content)
+        })
+
+        if (log) {
+            // Wrap lines starting with "E" with span.error to color those lines red
+            const wrappedLog = log.replace(/^E.*$/gm, (match) => `<span class="error">${match}</span>`)
+            resultBody.querySelector('.log').innerHTML = wrappedLog
+        } else {
+            resultBody.querySelector('.log').remove()
+        }
+
+        if (collapsed) {
+            resultBody.querySelector('.collapsible > td')?.classList.add('collapsed')
+            resultBody.querySelector('.extras-row').classList.add('hidden')
+        } else {
+            resultBody.querySelector('.collapsible > td')?.classList.remove('collapsed')
+        }
+
+        const media = []
+        extras?.forEach(({ name, format_type, content }) => {
+            if (['image', 'video'].includes(format_type)) {
+                media.push({ path: content, name, format_type })
+            }
+
+            if (format_type === 'html') {
+                resultBody.querySelector('.extraHTML').insertAdjacentHTML('beforeend', `<div>${content}</div>`)
+            }
+        })
+        mediaViewer.setup(resultBody, media)
+
+        // Add custom html from the pytest_html_results_table_html hook
+        tableHtml?.forEach((item) => {
+            resultBody.querySelector('td[class="extra"]').insertAdjacentHTML('beforeend', item)
+        })
+
+        return resultBody
+    },
+}
+
+module.exports = {
+    dom,
+    htmlToElements,
+    find,
+    findAll,
+}
+
+},{"./mediaviewer.js":6}],3:[function(require,module,exports){
+const { manager } = require('./datamanager.js')
+const { doSort } = require('./sort.js')
+const storageModule = require('./storage.js')
+
+const getFilteredSubSet = (filter) =>
+    manager.allData.tests.filter(({ result }) => filter.includes(result.toLowerCase()))
+
+const doInitFilter = () => {
+    const currentFilter = storageModule.getVisible()
+    const filteredSubset = getFilteredSubSet(currentFilter)
+    manager.setRender(filteredSubset)
+}
+
+const doFilter = (type, show) => {
+    if (show) {
+        storageModule.showCategory(type)
+    } else {
+        storageModule.hideCategory(type)
+    }
+
+    const currentFilter = storageModule.getVisible()
+    const filteredSubset = getFilteredSubSet(currentFilter)
+    manager.setRender(filteredSubset)
+
+    const sortColumn = storageModule.getSort()
+    doSort(sortColumn, true)
+}
+
+module.exports = {
+    doFilter,
+    doInitFilter,
+}
+
+},{"./datamanager.js":1,"./sort.js":7,"./storage.js":8}],4:[function(require,module,exports){
+const { redraw, bindEvents, renderStatic } = require('./main.js')
+const { doInitFilter } = require('./filter.js')
+const { doInitSort } = require('./sort.js')
+const { manager } = require('./datamanager.js')
+const data = JSON.parse(document.getElementById('data-container').dataset.jsonblob)
+
+function init() {
+    manager.setManager(data)
+    doInitFilter()
+    doInitSort()
+    renderStatic()
+    redraw()
+    bindEvents()
+}
+
+init()
+
+},{"./datamanager.js":1,"./filter.js":3,"./main.js":5,"./sort.js":7}],5:[function(require,module,exports){
+const { dom, find, findAll } = require('./dom.js')
+const { manager } = require('./datamanager.js')
+const { doSort } = require('./sort.js')
+const { doFilter } = require('./filter.js')
+const {
+    getVisible,
+    getCollapsedIds,
+    setCollapsedIds,
+    getSort,
+    getSortDirection,
+    possibleFilters,
+} = require('./storage.js')
+
+const removeChildren = (node) => {
+    while (node.firstChild) {
+        node.removeChild(node.firstChild)
+    }
+}
+
+const renderStatic = () => {
+    const renderEnvironmentTable = () => {
+        const environment = manager.environment
+        const rows = Object.keys(environment).map((key) => dom.getStaticRow(key, environment[key]))
+        const table = document.getElementById('environment')
+        removeChildren(table)
+        rows.forEach((row) => table.appendChild(row))
+    }
+    renderEnvironmentTable()
+}
+
+const addItemToggleListener = (elem) => {
+    elem.addEventListener('click', ({ target }) => {
+        const id = target.parentElement.dataset.id
+        manager.toggleCollapsedItem(id)
+
+        const collapsedIds = getCollapsedIds()
+        if (collapsedIds.includes(id)) {
+            const updated = collapsedIds.filter((item) => item !== id)
+            setCollapsedIds(updated)
+        } else {
+            collapsedIds.push(id)
+            setCollapsedIds(collapsedIds)
+        }
+        redraw()
+    })
+}
+
+const renderContent = (tests) => {
+    const sortAttr = getSort(manager.initialSort)
+    const sortAsc = JSON.parse(getSortDirection())
+    const rows = tests.map(dom.getResultTBody)
+    const table = document.getElementById('results-table')
+    const tableHeader = document.getElementById('results-table-head')
+
+    const newTable = document.createElement('table')
+    newTable.id = 'results-table'
+
+    // remove all sorting classes and set the relevant
+    findAll('.sortable', tableHeader).forEach((elem) => elem.classList.remove('asc', 'desc'))
+    tableHeader.querySelector(`.sortable[data-column-type="${sortAttr}"]`)?.classList.add(sortAsc ? 'desc' : 'asc')
+    newTable.appendChild(tableHeader)
+
+    if (!rows.length) {
+        const emptyTable = document.getElementById('template_results-table__body--empty').content.cloneNode(true)
+        newTable.appendChild(emptyTable)
+    } else {
+        rows.forEach((row) => {
+            if (!!row) {
+                findAll('.collapsible td:not(.col-links', row).forEach(addItemToggleListener)
+                find('.logexpander', row).addEventListener('click',
+                    (evt) => evt.target.parentNode.classList.toggle('expanded'),
+                )
+                newTable.appendChild(row)
+            }
+        })
+    }
+
+    table.replaceWith(newTable)
+}
+
+const renderDerived = () => {
+    const currentFilter = getVisible()
+    possibleFilters.forEach((result) => {
+        const input = document.querySelector(`input[data-test-result="${result}"]`)
+        input.checked = currentFilter.includes(result)
+    })
+}
+
+const bindEvents = () => {
+    const filterColumn = (evt) => {
+        const { target: element } = evt
+        const { testResult } = element.dataset
+
+        doFilter(testResult, element.checked)
+        const collapsedIds = getCollapsedIds()
+        const updated = manager.renderData.tests.map((test) => {
+            return {
+                ...test,
+                collapsed: collapsedIds.includes(test.id),
+            }
+        })
+        manager.setRender(updated)
+        redraw()
+    }
+
+    const header = document.getElementById('environment-header')
+    header.addEventListener('click', () => {
+        const table = document.getElementById('environment')
+        table.classList.toggle('hidden')
+        header.classList.toggle('collapsed')
+    })
+
+    findAll('input[name="filter_checkbox"]').forEach((elem) => {
+        elem.addEventListener('click', filterColumn)
+    })
+
+    findAll('.sortable').forEach((elem) => {
+        elem.addEventListener('click', (evt) => {
+            const { target: element } = evt
+            const { columnType } = element.dataset
+            doSort(columnType)
+            redraw()
+        })
+    })
+
+    document.getElementById('show_all_details').addEventListener('click', () => {
+        manager.allCollapsed = false
+        setCollapsedIds([])
+        redraw()
+    })
+    document.getElementById('hide_all_details').addEventListener('click', () => {
+        manager.allCollapsed = true
+        const allIds = manager.renderData.tests.map((test) => test.id)
+        setCollapsedIds(allIds)
+        redraw()
+    })
+}
+
+const redraw = () => {
+    const { testSubset } = manager
+
+    renderContent(testSubset)
+    renderDerived()
+}
+
+module.exports = {
+    redraw,
+    bindEvents,
+    renderStatic,
+}
+
+},{"./datamanager.js":1,"./dom.js":2,"./filter.js":3,"./sort.js":7,"./storage.js":8}],6:[function(require,module,exports){
+class MediaViewer {
+    constructor(assets) {
+        this.assets = assets
+        this.index = 0
+    }
+
+    nextActive() {
+        this.index = this.index === this.assets.length - 1 ? 0 : this.index + 1
+        return [this.activeFile, this.index]
+    }
+
+    prevActive() {
+        this.index = this.index === 0 ? this.assets.length - 1 : this.index -1
+        return [this.activeFile, this.index]
+    }
+
+    get currentIndex() {
+        return this.index
+    }
+
+    get activeFile() {
+        return this.assets[this.index]
+    }
+}
+
+
+const setup = (resultBody, assets) => {
+    if (!assets.length) {
+        resultBody.querySelector('.media').classList.add('hidden')
+        return
+    }
+
+    const mediaViewer = new MediaViewer(assets)
+    const container = resultBody.querySelector('.media-container')
+    const leftArrow = resultBody.querySelector('.media-container__nav--left')
+    const rightArrow = resultBody.querySelector('.media-container__nav--right')
+    const mediaName = resultBody.querySelector('.media__name')
+    const counter = resultBody.querySelector('.media__counter')
+    const imageEl = resultBody.querySelector('img')
+    const sourceEl = resultBody.querySelector('source')
+    const videoEl = resultBody.querySelector('video')
+
+    const setImg = (media, index) => {
+        if (media?.format_type === 'image') {
+            imageEl.src = media.path
+
+            imageEl.classList.remove('hidden')
+            videoEl.classList.add('hidden')
+        } else if (media?.format_type === 'video') {
+            sourceEl.src = media.path
+
+            videoEl.classList.remove('hidden')
+            imageEl.classList.add('hidden')
+        }
+
+        mediaName.innerText = media?.name
+        counter.innerText = `${index + 1} / ${assets.length}`
+    }
+    setImg(mediaViewer.activeFile, mediaViewer.currentIndex)
+
+    const moveLeft = () => {
+        const [media, index] = mediaViewer.prevActive()
+        setImg(media, index)
+    }
+    const doRight = () => {
+        const [media, index] = mediaViewer.nextActive()
+        setImg(media, index)
+    }
+    const openImg = () => {
+        window.open(mediaViewer.activeFile.path, '_blank')
+    }
+    if (assets.length === 1) {
+        container.classList.add('media-container--fullscreen')
+    } else {
+        leftArrow.addEventListener('click', moveLeft)
+        rightArrow.addEventListener('click', doRight)
+    }
+    imageEl.addEventListener('click', openImg)
+}
+
+module.exports = {
+    setup,
+}
+
+},{}],7:[function(require,module,exports){
+const { manager } = require('./datamanager.js')
+const storageModule = require('./storage.js')
+
+const genericSort = (list, key, ascending, customOrder) => {
+    let sorted
+    if (customOrder) {
+        sorted = list.sort((a, b) => {
+            const aValue = a.result.toLowerCase()
+            const bValue = b.result.toLowerCase()
+
+            const aIndex = customOrder.findIndex((item) => item.toLowerCase() === aValue)
+            const bIndex = customOrder.findIndex((item) => item.toLowerCase() === bValue)
+
+            // Compare the indices to determine the sort order
+            return aIndex - bIndex
+        })
+    } else {
+        sorted = list.sort((a, b) => a[key] === b[key] ? 0 : a[key] > b[key] ? 1 : -1)
+    }
+
+    if (ascending) {
+        sorted.reverse()
+    }
+    return sorted
+}
+
+const durationSort = (list, ascending) => {
+    const parseDuration = (duration) => {
+        if (duration.includes(':')) {
+            // If it's in the format "HH:mm:ss"
+            const [hours, minutes, seconds] = duration.split(':').map(Number)
+            return (hours * 3600 + minutes * 60 + seconds) * 1000
+        } else {
+            // If it's in the format "nnn ms"
+            return parseInt(duration)
+        }
+    }
+    const sorted = list.sort((a, b) => parseDuration(a['duration']) - parseDuration(b['duration']))
+    if (ascending) {
+        sorted.reverse()
+    }
+    return sorted
+}
+
+const doInitSort = () => {
+    const type = storageModule.getSort(manager.initialSort)
+    const ascending = storageModule.getSortDirection()
+    const list = manager.testSubset
+    const initialOrder = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed', 'Skipped', 'Passed']
+
+    storageModule.setSort(type)
+    storageModule.setSortDirection(ascending)
+
+    if (type?.toLowerCase() === 'original') {
+        manager.setRender(list)
+    } else {
+        let sortedList
+        switch (type) {
+        case 'duration':
+            sortedList = durationSort(list, ascending)
+            break
+        case 'result':
+            sortedList = genericSort(list, type, ascending, initialOrder)
+            break
+        default:
+            sortedList = genericSort(list, type, ascending)
+            break
+        }
+        manager.setRender(sortedList)
+    }
+}
+
+const doSort = (type, skipDirection) => {
+    const newSortType = storageModule.getSort(manager.initialSort) !== type
+    const currentAsc = storageModule.getSortDirection()
+    let ascending
+    if (skipDirection) {
+        ascending = currentAsc
+    } else {
+        ascending = newSortType ? false : !currentAsc
+    }
+    storageModule.setSort(type)
+    storageModule.setSortDirection(ascending)
+
+    const list = manager.testSubset
+    const sortedList = type === 'duration' ? durationSort(list, ascending) : genericSort(list, type, ascending)
+    manager.setRender(sortedList)
+}
+
+module.exports = {
+    doInitSort,
+    doSort,
+}
+
+},{"./datamanager.js":1,"./storage.js":8}],8:[function(require,module,exports){
+const possibleFilters = [
+    'passed',
+    'skipped',
+    'failed',
+    'error',
+    'xfailed',
+    'xpassed',
+    'rerun',
+]
+
+const getVisible = () => {
+    const url = new URL(window.location.href)
+    const settings = new URLSearchParams(url.search).get('visible')
+    const lower = (item) => {
+        const lowerItem = item.toLowerCase()
+        if (possibleFilters.includes(lowerItem)) {
+            return lowerItem
+        }
+        return null
+    }
+    return settings === null ?
+        possibleFilters :
+        [...new Set(settings?.split(',').map(lower).filter((item) => item))]
+}
+
+const hideCategory = (categoryToHide) => {
+    const url = new URL(window.location.href)
+    const visibleParams = new URLSearchParams(url.search).get('visible')
+    const currentVisible = visibleParams ? visibleParams.split(',') : [...possibleFilters]
+    const settings = [...new Set(currentVisible)].filter((f) => f !== categoryToHide).join(',')
+
+    url.searchParams.set('visible', settings)
+    window.history.pushState({}, null, unescape(url.href))
+}
+
+const showCategory = (categoryToShow) => {
+    if (typeof window === 'undefined') {
+        return
+    }
+    const url = new URL(window.location.href)
+    const currentVisible = new URLSearchParams(url.search).get('visible')?.split(',').filter(Boolean) ||
+        [...possibleFilters]
+    const settings = [...new Set([categoryToShow, ...currentVisible])]
+    const noFilter = possibleFilters.length === settings.length || !settings.length
+
+    noFilter ? url.searchParams.delete('visible') : url.searchParams.set('visible', settings.join(','))
+    window.history.pushState({}, null, unescape(url.href))
+}
+
+const getSort = (initialSort) => {
+    const url = new URL(window.location.href)
+    let sort = new URLSearchParams(url.search).get('sort')
+    if (!sort) {
+        sort = initialSort || 'result'
+    }
+    return sort
+}
+
+const setSort = (type) => {
+    const url = new URL(window.location.href)
+    url.searchParams.set('sort', type)
+    window.history.pushState({}, null, unescape(url.href))
+}
+
+const getCollapsedCategory = (renderCollapsed) => {
+    let categories
+    if (typeof window !== 'undefined') {
+        const url = new URL(window.location.href)
+        const collapsedItems = new URLSearchParams(url.search).get('collapsed')
+        switch (true) {
+        case !renderCollapsed && collapsedItems === null:
+            categories = ['passed']
+            break
+        case collapsedItems?.length === 0 || /^["']{2}$/.test(collapsedItems):
+            categories = []
+            break
+        case /^all$/.test(collapsedItems) || collapsedItems === null && /^all$/.test(renderCollapsed):
+            categories = [...possibleFilters]
+            break
+        default:
+            categories = collapsedItems?.split(',').map((item) => item.toLowerCase()) || renderCollapsed
+            break
+        }
+    } else {
+        categories = []
+    }
+    return categories
+}
+
+const getSortDirection = () => JSON.parse(sessionStorage.getItem('sortAsc')) || false
+const setSortDirection = (ascending) => sessionStorage.setItem('sortAsc', ascending)
+
+const getCollapsedIds = () => JSON.parse(sessionStorage.getItem('collapsedIds')) || []
+const setCollapsedIds = (list) => sessionStorage.setItem('collapsedIds', JSON.stringify(list))
+
+module.exports = {
+    getVisible,
+    hideCategory,
+    showCategory,
+    getCollapsedIds,
+    setCollapsedIds,
+    getSort,
+    setSort,
+    getSortDirection,
+    setSortDirection,
+    getCollapsedCategory,
+    possibleFilters,
+}
+
+},{}]},{},[4]);
+    </script>
+  </footer>
+</html>
