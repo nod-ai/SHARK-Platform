@@ -7,8 +7,6 @@
 name: SGLang Llama Benchmarking Tests
 
 on:
-  # TODO: Remove PR trigger after verification
-  pull_request:
   workflow_dispatch:
   schedule:
     # Weekdays at 4:00 AM UTC = 9:00 PM PST.
@@ -82,14 +80,13 @@ jobs:
       - name: Run Shortfin Benchmark Tests
         run: pytest -v app_tests/benchmark_tests/llm/sglang_benchmarks/shortfin_benchmark_test.py --log-cli-level=INFO --html=out/llm/shortfin/index.html
 
-      # TODO: Uncomment after verification
-      # - name: Deploy to GitHub Pages
-      #   uses: peaceiris/actions-gh-pages@4f9cc6602d3f66b9c108549d475ec49e8ef4d45e # v4.0.0
-      #   with:
-      #     github_token: ${{ secrets.SHARK_PLATFORM_GH_TOKEN }}
-      #     publish_dir: ./out/llm/sgl_benchmark/shortfin
-      #     destination_dir: ./llm/sgl_benchmark/shortfin
-      #     keep_files: true
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@4f9cc6602d3f66b9c108549d475ec49e8ef4d45e # v4.0.0
+        with:
+          github_token: ${{ secrets.SHARK_PLATFORM_GH_TOKEN }}
+          publish_dir: ./out/llm/shortfin
+          destination_dir: ./llm/sgl_benchmark/shortfin
+          keep_files: true
 
   benchmark_sglang:
     if: ${{ github.repository_owner == 'nod-ai' || github.event_name != 'schedule' }}
@@ -197,11 +194,10 @@ jobs:
       - name: Cleanup SGLang Image
         run: docker image rm lmsysorg/sglang:v0.3.5.post1-rocm620
 
-      # TODO: Uncomment after verifying
-      # - name: Deploy to GitHub Pages
-      #   uses: peaceiris/actions-gh-pages@4f9cc6602d3f66b9c108549d475ec49e8ef4d45e # v4.0.0
-      #   with:
-      #     github_token: ${{ secrets.SHARK_PLATFORM_GH_TOKEN }}
-      #     publish_dir: ./out/llm/sgl_benchmark/sglang
-      #     destination_dir: ./llm/sgl_benchmark/sglang
-      #     keep_files: true
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@4f9cc6602d3f66b9c108549d475ec49e8ef4d45e # v4.0.0
+        with:
+          github_token: ${{ secrets.SHARK_PLATFORM_GH_TOKEN }}
+          publish_dir: ./out/llm/sglang
+          destination_dir: ./llm/sgl_benchmark/sglang
+          keep_files: true
