@@ -32,7 +32,7 @@ class MockPagePool(PagePool):
         except queue.Empty:
             return None
 
-    def release_pages(self, pages):
+    def free_pages(self, pages):
         for page in pages:
             self._queue.put(page)
 
