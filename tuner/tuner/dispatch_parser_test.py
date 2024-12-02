@@ -49,7 +49,7 @@ def test_get_mmt_tile_sizes(tuner_ctx: common.TunerContext) -> None:
         tile_sizes=[128, 320, 32],
         subgroup_m_count=0,
         subgroup_n_count=0,
-        gpu_pipeline_options=common.GpuPipelineOptions(),
+        gpu_pipeline_options=iree_gpu.PipelineOptionsAttr.get(),
         waves_per_eu=0,
     )
     assert dispatch_parser.get_mmt_tile_sizes(config) == [128, 320, 32]
@@ -65,7 +65,7 @@ def test_get_conv_tile_sizes(tuner_ctx: common.TunerContext) -> None:
         tile_sizes=[464, 320, 16],
         subgroup_m_count=1,
         subgroup_n_count=4,
-        gpu_pipeline_options=common.GpuPipelineOptions(),
+        gpu_pipeline_options=iree_gpu.PipelineOptionsAttr.get(),
         waves_per_eu=1,
     )
     assert dispatch_parser.ConvParser().get_conv_tile_sizes(config) == [
@@ -89,7 +89,7 @@ def test_get_contract_tile_sizes(tuner_ctx: common.TunerContext) -> None:
         tile_sizes=[4, 8, 16],
         subgroup_m_count=1,
         subgroup_n_count=1,
-        gpu_pipeline_options=common.GpuPipelineOptions(),
+        gpu_pipeline_options=iree_gpu.PipelineOptionsAttr.get(),
         waves_per_eu=2,
     )
     assert dispatch_parser.get_contract_tile_sizes(config, "mnk") == [4, 8, 16]

@@ -115,35 +115,6 @@ class ReorderWorkgroupsStrategy(Enum):
 
 
 @dataclass
-class GpuPipelineOptions:
-    """Represents the `iree_gpu.pipeline_options` attribute"""
-
-    prefetch_shared_memory: Optional[bool] = None
-    no_reduce_shared_memory_bank_conflicts: Optional[bool] = None
-    reorder_workgroups_strategy: Optional[ReorderWorkgroupsStrategy] = None
-
-    def all_default(self) -> bool:
-        return all(x is None for x in astuple(self))
-
-    def __str__(self) -> str:
-        options: list[str] = []
-        if self.prefetch_shared_memory is not None:
-            options.append(
-                f"prefetch_shared_memory = {str(self.prefetch_shared_memory).lower()}"
-            )
-        if self.no_reduce_shared_memory_bank_conflicts is not None:
-            options.append(
-                f"no_reduce_shared_memory_bank_conflicts = {str(self.no_reduce_shared_memory_bank_conflicts).lower()}"
-            )
-        if self.reorder_workgroups_strategy is not None:
-            options.append(
-                f"reorder_workgroups_strategy = {self.reorder_workgroups_strategy}"
-            )
-
-        return f"#iree_gpu.pipeline_options<{', '.join(options)}>"
-
-
-@dataclass
 class Configuration:
     subgroup_size: int
     workgroup_size: list[int]
@@ -151,14 +122,16 @@ class Configuration:
     tile_sizes: list[int]
     subgroup_m_count: int
     subgroup_n_count: int
-    gpu_pipeline_options: GpuPipelineOptions
+    gpu_pipeline_options: iree_gpu.PipelineOptionsAttr
     waves_per_eu: int
 
 
 def get_pipeline_config(configuration: Configuration) -> str:
     extra_config = ""
-    if not configuration.gpu_pipeline_options.all_default():
-        extra_config += f", gpu_pipeline_options = {configuration.gpu_pipeline_options}"
+    pipeline_options = configuration.gpu_pipeline_options
+    if pipeline_options != iree_gpu.PipelineOptionsAttr.get():
+        extra_config += f", gpu_pipeline_options = {pipeline_options}"
+
     if configuration.waves_per_eu != 2:
         extra_config += f', llvm_func_attrs = {{"amdgpu-waves-per-eu" = "{configuration.waves_per_eu}"}}'
     return extra_config
