@@ -51,6 +51,7 @@ def model_test_dir(request, tmp_path_factory):
     tokenizer_id = request.param["tokenizer_id"]
     settings = request.param["settings"]
     batch_sizes = request.param["batch_sizes"]
+    prefix_sharing_algorithm = request.param["prefix_sharing_algorithm"]
 
     tmp_dir = tmp_path_factory.mktemp("cpu_llm_server_test")
     hf_home = os.environ.get("HF_HOME", None)
