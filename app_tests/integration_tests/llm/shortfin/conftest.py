@@ -87,7 +87,7 @@ def model_test_dir(request, tmp_path_factory):
             "paged_kv_cache": {
                 "block_seq_stride": 16,
                 "device_block_count": 256,
-                "prefix_sharing_algorithm": "none",
+                "prefix_sharing_algorithm": prefix_sharing_algorithm,
             },
         }
         logger.info(f"Saving edited config to: {edited_config_path}\n")
