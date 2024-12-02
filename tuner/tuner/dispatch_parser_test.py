@@ -5,7 +5,7 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 """
-Usage: python -m pytest candidate_gen_test.py
+Usage: python -m pytest dispatch_parser_test.py
 """
 
 import pytest
@@ -14,6 +14,7 @@ from typing import Generator
 
 from iree.compiler import ir  # type: ignore
 from iree.compiler.dialects import func  # type: ignore
+from iree.compiler.dialects import iree_gpu  # type: ignore
 
 from . import common
 from . import dispatch_parser
@@ -39,28 +40,32 @@ def test_parse_tensor_type(tuner_ctx: common.TunerContext) -> None:
 
 
 def test_get_mmt_tile_sizes(tuner_ctx: common.TunerContext) -> None:
+    mma_intrinsic = iree_gpu.MMAIntrinsic.MFMA_F32_16x16x16_F16
+    mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
     config = dispatch_parser.Configuration(
         subgroup_size=0,
         workgroup_size=[],
-        intrinsic=common.MfmaIntrinsic.mfma_f32_16x16x16_f16(),
+        intrinsic=mma_attr,
         tile_sizes=[128, 320, 32],
         subgroup_m_count=0,
         subgroup_n_count=0,
-        gpu_pipeline_options=common.GpuPipelineOptions(),
+        gpu_pipeline_options=iree_gpu.PipelineOptionsAttr.get(),
         waves_per_eu=0,
     )
     assert dispatch_parser.get_mmt_tile_sizes(config) == [128, 320, 32]
 
 
 def test_get_conv_tile_sizes(tuner_ctx: common.TunerContext) -> None:
+    mma_intrinsic = iree_gpu.MMAIntrinsic.MFMA_F32_16x16x16_F16
+    mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
     config = dispatch_parser.Configuration(
         subgroup_size=64,
         workgroup_size=[256, 1, 1],
-        intrinsic=common.MfmaIntrinsic.mfma_f32_16x16x16_f16(),
+        intrinsic=mma_attr,
         tile_sizes=[464, 320, 16],
         subgroup_m_count=1,
         subgroup_n_count=4,
-        gpu_pipeline_options=common.GpuPipelineOptions(),
+        gpu_pipeline_options=iree_gpu.PipelineOptionsAttr.get(),
         waves_per_eu=1,
     )
     assert dispatch_parser.ConvParser().get_conv_tile_sizes(config) == [
@@ -75,14 +80,16 @@ def test_get_conv_tile_sizes(tuner_ctx: common.TunerContext) -> None:
 
 
 def test_get_contract_tile_sizes(tuner_ctx: common.TunerContext) -> None:
+    mma_intrinsic = iree_gpu.MMAIntrinsic.MFMA_F32_16x16x16_F16
+    mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
     config = dispatch_parser.Configuration(
         subgroup_size=32,
         workgroup_size=[16, 16, 1],
-        intrinsic=common.MfmaIntrinsic.mfma_f32_16x16x16_f16(),
+        intrinsic=mma_attr,
         tile_sizes=[4, 8, 16],
         subgroup_m_count=1,
         subgroup_n_count=1,
-        gpu_pipeline_options=common.GpuPipelineOptions(),
+        gpu_pipeline_options=iree_gpu.PipelineOptionsAttr.get(),
         waves_per_eu=2,
     )
     assert dispatch_parser.get_contract_tile_sizes(config, "mnk") == [4, 8, 16]

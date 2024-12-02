@@ -48,6 +48,7 @@ option(SHORTFIN_BUILD_TESTS "Builds C++ tests" ON)
 option(SHORTFIN_BUNDLE_DEPS "Download dependencies instead of using system libraries" ON)
 option(SHORTFIN_ENABLE_TRACING "Enable runtime tracing for iree and shortfin" OFF)
 option(SHORTFIN_ENABLE_LTO "Enables LTO if supported" ON)
+option(SHORTFIN_ENABLE_TOKENIZERS "Enables integration of native tokenizers library" OFF)
 
 set(SHORTFIN_IREE_SOURCE_DIR "" CACHE FILEPATH "Path to IREE source")
 
@@ -80,6 +81,7 @@ list(APPEND CMAKE_MODULE_PATH
   ${CMAKE_CURRENT_LIST_DIR}/build_tools/cmake/
 )
 include(shortfin_library)
+include(shortfin_testing)
 include(CheckCXXCompilerFlag)
 include(FetchContent)
 
@@ -90,7 +92,9 @@ include(FetchContent)
 if(SHORTFIN_ENABLE_LTO)
   include(CheckIPOSupported)
   check_ipo_supported(RESULT SHORTFIN_LTO_SUPPORTED OUTPUT SHORTFIN_LTO_ERROR)
-  if(SHORTFIN_LTO_SUPPORTED)
+  if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    message(STATUS "Not enabling LTO for debug build")
+  elseif(SHORTFIN_LTO_SUPPORTED)
     message(STATUS "Shortfin LTO Enabled")
     set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
   else()
@@ -126,7 +130,9 @@ endif()
 message(STATUS "  - Host")
 
 ################################################################################
-# Dependencies
+# Bundled Dependencies
+# These dependencies are either bundled or used via installed packages based
+# on the SHORTFIN_BUNDLE_DEPS option.
 ################################################################################
 
 if(SHORTFIN_BUNDLE_DEPS)
@@ -164,15 +170,19 @@ if(SHORTFIN_BUNDLE_DEPS)
   shortfin_push_bundled_lib_options()
   # Enable spdlog shared library options so we can export it.
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSPDLOG_SHARED_LIB -Dspdlog_EXPORTS")
+  message(STATUS "Fetching bundled projects")
+  list(APPEND CMAKE_MESSAGE_INDENT "  ")
   FetchContent_MakeAvailable(fmt spdlog xtl xtensor)
   shortfin_pop_bundled_lib_options()
+  list(POP_BACK CMAKE_MESSAGE_INDENT)
 else()
   find_package(spdlog)
   find_package(xtensor)
 endif()
 
 ################################################################################
-# IREE
+# IREE Dependency
+# This is always a source dependency on the IREE runtime.
 ################################################################################
 
 # Set IREE build flags.
@@ -238,6 +248,65 @@ endif()
 shortfin_pop_bundled_lib_options()
 
 ################################################################################
+# Tokenizer Library
+################################################################################
+
+function(shortfin_check_tokenizers)
+  # Make sure that rust/cargo is installed and usable.
+  # Consider switching this to a cached variable once the tokenizers_cpp project
+  # will accept an override vs running whatever is on the path. For now, just
+  # verify the path is sane as that is what will get used.
+  find_program(SHORTFIN_CARGO_PATH NAMES cargo NO_CACHE)
+  if(NOT SHORTFIN_CARGO_PATH)
+    message(SEND_ERROR
+      "Building with -DSHORTFIN_ENABLE_TOKENIZERS=ON requires cargo (Rust's build tool). "
+      "Please follow Rust documentation to install. On Ubuntu, this can typically be accomplished with:\n"
+      "  sudo apt install rustup && rustup default stable\n"
+      "See https://www.rust-lang.org/tools/install"
+    )
+  endif()
+
+  # Make sure cargo is functional.
+  execute_process(
+    COMMAND ${SHORTFIN_CARGO_PATH}
+    RESULT_VARIABLE _CARGO_RESULT
+    OUTPUT_VARIABLE _CARGO_OUT
+    ERROR_VARIABLE _CARGO_ERR
+  )
+  if(NOT "${_CARGO_RESULT}" STREQUAL "0")
+    message(SEND_ERROR
+      "Building with -DSHORTFIN_ENABLE_TOKENIZERS=ON requires cargo (Rust's build tool) "
+      "to be configured properly. It was found (${SHORTFIN_CARGO_PATH}) but returned an "
+      "error. Output below:\n"
+      "${_CARGO_OUT}\n"
+      "${_CARGO_ERR}"
+    )
+  endif()
+endfunction()
+
+if(SHORTFIN_ENABLE_TOKENIZERS)
+  # TODO: submit a patch to tokenizers_cpp to allow explicit configuration of the
+  # cargo location and pass that vs relying on environmental alignment.
+  shortfin_check_tokenizers()
+
+  shortfin_push_bundled_lib_options()
+  set(CMAKE_C_VISIBILITY_PRESET "hidden")
+  set(CMAKE_CXX_VISIBILITY_PRESET "hidden")
+  set(CMAKE_VISIBILITY_INLINES_HIDDEN ON)
+  set(MLC_ENABLE_SENTENCEPIECE_TOKENIZER OFF)
+
+  FetchContent_Declare(
+    tokenizers_cpp  # From CMake project() declaration
+    GIT_REPOSITORY https://github.com/mlc-ai/tokenizers-cpp.git
+    GIT_TAG 4bb753377680e249345b54c6b10e6d0674c8af03 # 2024 Nov 15
+    EXCLUDE_FROM_ALL
+  )
+  message(STATUS "Fetching tokenizers_cpp")
+  FetchContent_MakeAvailable(tokenizers_cpp)
+  shortfin_pop_bundled_lib_options()
+endif()
+
+################################################################################
 # Tests
 ################################################################################
 
@@ -254,8 +323,8 @@ if(SHORTFIN_BUILD_TESTS)
   endif()
   include(GoogleTest)
   enable_testing()
+  add_custom_target(shortfin_testdata_deps)
 endif()
-
 
 add_subdirectory(src)
 

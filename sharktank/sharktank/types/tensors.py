@@ -41,6 +41,7 @@ __all__ = [
     "AnyTensor",
     "DefaultPrimitiveTensor",
     "dtype_to_serialized_name",
+    "dtype_to_serialized_short_name",
     "flatten_tensor_tree",
     "InferenceTensor",
     "MetaDataValueType",
@@ -51,6 +52,7 @@ __all__ = [
     "register_quantized_layout",
     "ReplicatedTensor",
     "serialized_name_to_dtype",
+    "serialized_short_name_to_dtype",
     "ShardedTensor",
     "SplitPrimitiveTensor",
     "torch_tree_flatten",
@@ -1286,12 +1288,30 @@ def dtype_to_serialized_name(dtype: torch.dtype) -> str:
         ) from e
 
 
+def dtype_to_serialized_short_name(dtype: torch.dtype) -> str:
+    try:
+        return _DTYPE_TO_SHORT_NAME[dtype]
+    except KeyError as e:
+        raise KeyError(
+            f"Missing mapping for dtype {dtype}. Please add to the _SHORT_NAME_TO_DTYPE dict"
+        ) from e
+
+
 def serialized_name_to_dtype(dtype_name: str) -> torch.dtype:
     try:
         return _NAME_TO_DTYPE[dtype_name]
     except KeyError as e:
         raise KeyError(
             f"Missing mapping for dtype '{dtype_name}'. Please add to the _NAME_TO_DTYPE dict"
+        ) from e
+
+
+def serialized_short_name_to_dtype(dtype_name: str) -> torch.dtype:
+    try:
+        return _SHORT_NAME_TO_DTYPE[dtype_name]
+    except KeyError as e:
+        raise KeyError(
+            f"Missing mapping for dtype '{dtype_name}'. Please add to the _SHORT_NAME_TO_DTYPE dict"
         ) from e
 
 
@@ -1337,6 +1357,26 @@ _maybe_dtype(
 )
 
 _DTYPE_TO_NAME: dict[torch.dtype, str] = {v: k for k, v in _NAME_TO_DTYPE.items()}
+
+_SHORT_NAME_TO_DTYPE: dict[str, torch.dtype] = {
+    "f32": torch.float32,
+    "f64": torch.float64,
+    "c64": torch.complex64,
+    "c128": torch.complex128,
+    "f16": torch.float16,
+    "bf16": torch.bfloat16,
+    "ui8": torch.uint8,
+    "i8": torch.int8,
+    "i16": torch.int16,
+    "i32": torch.int32,
+    "i64": torch.int64,
+    "b": torch.bool,
+    "f8_e4m3fnuz": torch.float8_e4m3fnuz,
+}
+
+_DTYPE_TO_SHORT_NAME: dict[torch.dtype, str] = {
+    v: k for k, v in _SHORT_NAME_TO_DTYPE.items()
+}
 
 AnyTensor = Union[torch.Tensor, InferenceTensor]
 

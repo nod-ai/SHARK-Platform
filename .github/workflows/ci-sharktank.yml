@@ -69,7 +69,7 @@ jobs:
       - name: Run sharktank tests
         if: ${{ !cancelled() }}
         run: |
-          pytest -n 4 sharktank/
+          pytest -n 4 sharktank/ --durations=10
 
 
   test_with_data:
@@ -128,4 +128,5 @@ jobs:
         run: |
           pytest \
             --with-t5-data \
-            sharktank/tests/models/t5/t5_test.py
+            sharktank/tests/models/t5/t5_test.py \
+            --durations=0

@@ -13,6 +13,7 @@ import pytest
 from typing import Generator
 
 from iree.compiler import ir  # type: ignore
+from iree.compiler.dialects import iree_gpu  # type: ignore
 
 from . import candidate_gen
 from . import common
@@ -45,14 +46,18 @@ def test_apply_params_mmt(tuner_ctx: common.TunerContext) -> None:
 
     M, N, K = 2048, 1280, 1280
 
+    mma_intrinsic = iree_gpu.MMAIntrinsic.MFMA_F32_16x16x16_F16
+    mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
     config = common.Configuration(
         subgroup_size=16,
         workgroup_size=[16, 16, 1],
-        intrinsic=common.MfmaIntrinsic.mfma_f32_16x16x16_f16(),
+        intrinsic=mma_attr,
         tile_sizes=[8, 8, 8],
         subgroup_m_count=16,
         subgroup_n_count=16,
-        gpu_pipeline_options=common.GpuPipelineOptions(prefetch_shared_memory=True),
+        gpu_pipeline_options=iree_gpu.PipelineOptionsAttr.get(
+            prefetch_shared_memory=True
+        ),
         waves_per_eu=8,
     )
 
@@ -97,15 +102,19 @@ def test_apply_params_conv(tuner_ctx: common.TunerContext) -> None:
 
     n, oh, ow, oc, fh, fw, ic = 2, 64, 64, 640, 3, 3, 640
 
+    mma_intrinsic = iree_gpu.MMAIntrinsic.MFMA_F32_16x16x16_F16
+    mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
     config = common.Configuration(
         subgroup_size=64,
         workgroup_size=[256, 1, 1],
-        intrinsic=common.MfmaIntrinsic.mfma_f32_16x16x16_f16(),
+        intrinsic=mma_attr,
         tile_sizes=[464, 320, 16],
         subgroup_m_count=1,
         subgroup_n_count=4,
-        gpu_pipeline_options=common.GpuPipelineOptions(
-            reorder_workgroups_strategy=common.ReorderWorkgroupsStrategy.TRANSPOSE
+        gpu_pipeline_options=iree_gpu.PipelineOptionsAttr.get(
+            reorder_workgroups_strategy=iree_gpu.ReorderWorkgroupsStrategyAttr.get(
+                iree_gpu.ReorderWorkgroupsStrategy.Transpose
+            )
         ),
         waves_per_eu=2,
     )
@@ -126,7 +135,6 @@ def test_apply_params_conv(tuner_ctx: common.TunerContext) -> None:
 
     assert modified
     modified = remove_comments(modified)
-
     assert embeddable
     assert (
         "intrinsic = #iree_gpu.mma_layout<MFMA_F32_16x16x16_F16>, subgroup_m_count = 1, subgroup_n_count = 4"
@@ -138,7 +146,7 @@ def test_apply_params_conv(tuner_ctx: common.TunerContext) -> None:
     )
     assert "tile_sizes = [[1, 1, 464, 320, 1, 1, 16]]" in modified
     assert (
-        "gpu_pipeline_options = #iree_gpu.pipeline_options<reorder_workgroups_strategy = Transpose>"
+        "gpu_pipeline_options = #iree_gpu.pipeline_options<reorder_workgroups_strategy = <Transpose>>"
         in modified
     )
     assert '{llvm_func_attrs = {"amdgpu-waves-per-eu" = "2"}' in modified
@@ -161,14 +169,16 @@ def test_apply_params_contract(tuner_ctx: common.TunerContext) -> None:
         common.DispatchKind.contraction,
     )
 
+    mma_intrinsic = iree_gpu.MMAIntrinsic.MFMA_F32_32x32x8_F16
+    mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
     config = common.Configuration(
         subgroup_size=64,
         workgroup_size=[256, 1, 1],
-        intrinsic=common.MfmaIntrinsic.mfma_f32_32x32x8_f16(),
+        intrinsic=mma_attr,
         tile_sizes=[480, 384, 32],
         subgroup_m_count=1,
         subgroup_n_count=4,
-        gpu_pipeline_options=common.GpuPipelineOptions(),
+        gpu_pipeline_options=iree_gpu.PipelineOptionsAttr.get(),
         waves_per_eu=2,
     )
 
@@ -208,14 +218,16 @@ def test_apply_params_batch_matmul(tuner_ctx: common.TunerContext) -> None:
         common.DispatchKind.batch_matmul,
     )
 
+    mma_intrinsic = iree_gpu.MMAIntrinsic.MFMA_F32_32x32x8_F16
+    mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
     config = common.Configuration(
         subgroup_size=64,
         workgroup_size=[128, 2, 1],
-        intrinsic=common.MfmaIntrinsic.mfma_f32_32x32x8_f16(),
+        intrinsic=mma_attr,
         tile_sizes=[416, 320, 128],
         subgroup_m_count=2,
         subgroup_n_count=2,
-        gpu_pipeline_options=common.GpuPipelineOptions(),
+        gpu_pipeline_options=iree_gpu.PipelineOptionsAttr.get(),
         waves_per_eu=2,
     )
 
@@ -258,14 +270,16 @@ def test_apply_params_batch_mmt_float(tuner_ctx: common.TunerContext) -> None:
         common.DispatchKind.batch_mmt,
     )
 
+    mma_intrinsic = iree_gpu.MMAIntrinsic.MFMA_F32_16x16x16_F16
+    mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
     config = common.Configuration(
         subgroup_size=64,
         workgroup_size=[128, 2, 1],
-        intrinsic=common.MfmaIntrinsic.mfma_f32_16x16x16_f16(),
+        intrinsic=mma_attr,
         tile_sizes=[128, 64, 128],
         subgroup_m_count=2,
         subgroup_n_count=2,
-        gpu_pipeline_options=common.GpuPipelineOptions(),
+        gpu_pipeline_options=iree_gpu.PipelineOptionsAttr.get(),
         waves_per_eu=2,
     )
 
@@ -306,14 +320,16 @@ def test_apply_params_batch_mmt_int(tuner_ctx: common.TunerContext) -> None:
         common.DispatchKind.batch_mmt,
     )
 
+    mma_intrinsic = iree_gpu.MMAIntrinsic.MFMA_I32_32x32x16_I8
+    mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
     config = common.Configuration(
         subgroup_size=64,
         workgroup_size=[128, 2, 1],
-        intrinsic=common.MfmaIntrinsic.mfma_i32_32x32x16_i8(),
+        intrinsic=mma_attr,
         tile_sizes=[128, 64, 128],
         subgroup_m_count=2,
         subgroup_n_count=2,
-        gpu_pipeline_options=common.GpuPipelineOptions(),
+        gpu_pipeline_options=iree_gpu.PipelineOptionsAttr.get(),
         waves_per_eu=4,
     )
 
@@ -377,14 +393,16 @@ def test_apply_params_broadcast_rhs_mmt(tuner_ctx: common.TunerContext) -> None:
         common.DispatchKind.broadcast_rhs_mmt,
     )
 
+    mma_intrinsic = iree_gpu.MMAIntrinsic.MFMA_I32_32x32x16_I8
+    mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
     config = common.Configuration(
         subgroup_size=64,
         workgroup_size=[128, 2, 1],
-        intrinsic=common.MfmaIntrinsic.mfma_i32_32x32x16_i8(),
+        intrinsic=mma_attr,
         tile_sizes=[128, 64, 128],
         subgroup_m_count=2,
         subgroup_n_count=2,
-        gpu_pipeline_options=common.GpuPipelineOptions(),
+        gpu_pipeline_options=iree_gpu.PipelineOptionsAttr.get(),
         waves_per_eu=4,
     )
 

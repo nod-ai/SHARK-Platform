@@ -85,74 +85,24 @@ class ProblemSize:
         return (self.matmul_size.M, self.matmul_size.N, self.matmul_size.K)
 
 
-@dataclass
-class MfmaIntrinsic:
-    output_type: ir.IntegerType | ir.FloatType
-    m: int
-    n: int
-    k: int
-    input_type: ir.IntegerType | ir.FloatType
-
-    def __str__(self) -> str:
-        input = str(self.input_type).upper()
-        output = str(self.output_type).upper()
-        return f"MFMA_{output}_{self.m}x{self.n}x{self.k}_{input}"
-
-    @staticmethod
-    def mfma_f32_16x16x16_f16():
-        f16 = ir.F16Type.get()
-        f32 = ir.F32Type.get()
-        return MfmaIntrinsic(f32, 16, 16, 16, f16)
-
-    @staticmethod
-    def mfma_f32_32x32x8_f16():
-        f16 = ir.F16Type.get()
-        f32 = ir.F32Type.get()
-        return MfmaIntrinsic(f32, 32, 32, 8, f16)
-
-    @staticmethod
-    def mfma_i32_16x16x32_i8():
-        i32 = ir.IntegerType.get_signless(32)
-        i8 = ir.IntegerType.get_signless(8)
-        return MfmaIntrinsic(i32, 16, 16, 32, i8)
-
-    @staticmethod
-    def mfma_i32_32x32x16_i8():
-        i32 = ir.IntegerType.get_signless(32)
-        i8 = ir.IntegerType.get_signless(8)
-        return MfmaIntrinsic(i32, 32, 32, 16, i8)
-
-    @staticmethod
-    def all():
-        return [
-            MfmaIntrinsic.mfma_f32_16x16x16_f16(),
-            MfmaIntrinsic.mfma_f32_32x32x8_f16(),
-            MfmaIntrinsic.mfma_i32_16x16x32_i8(),
-            MfmaIntrinsic.mfma_i32_32x32x16_i8(),
-        ]
-
-
 def get_compatible_mfma_intrinsics(
     problem_size: ProblemSize,
     mma_intrinsics: list[iree_gpu.MMAIntrinsic],
-) -> list[MfmaIntrinsic]:
-    available_mma_intrinsics = [str(mma) for mma in mma_intrinsics]
-
-    def is_compatible(intrinsic: MfmaIntrinsic) -> bool:
-        if problem_size.res_type.element_type != intrinsic.output_type:
+) -> list[iree_gpu.MMAIntrinsic]:
+    def is_comptible(mma_intrinsic: iree_gpu.MMAIntrinsic) -> bool:
+        mma_attr = iree_gpu.MMAIntrinsicAttr.get(mma_intrinsic).mma
+        a_type, b_type, c_type = mma_attr.abc_element_types
+        if problem_size.res_type.element_type != c_type:
             return False
         if problem_size.dispatch_kind != DispatchKind.batch_matmul:
-            if problem_size.lhs_type.element_type != intrinsic.input_type:
+            if (
+                problem_size.lhs_type.element_type != a_type
+                or problem_size.rhs_type.element_type != b_type
+            ):
                 return False
-            if problem_size.rhs_type.element_type != intrinsic.input_type:
-                return False
-
-        if str(intrinsic) not in available_mma_intrinsics:
-            return False
-
         return True
 
-    return list(filter(is_compatible, MfmaIntrinsic.all()))
+    return list(filter(is_comptible, mma_intrinsics))
 
 
 class ReorderWorkgroupsStrategy(Enum):
@@ -165,50 +115,23 @@ class ReorderWorkgroupsStrategy(Enum):
 
 
 @dataclass
-class GpuPipelineOptions:
-    """Represents the `iree_gpu.pipeline_options` attribute"""
-
-    prefetch_shared_memory: Optional[bool] = None
-    no_reduce_shared_memory_bank_conflicts: Optional[bool] = None
-    reorder_workgroups_strategy: Optional[ReorderWorkgroupsStrategy] = None
-
-    def all_default(self) -> bool:
-        return all(x is None for x in astuple(self))
-
-    def __str__(self) -> str:
-        options: list[str] = []
-        if self.prefetch_shared_memory is not None:
-            options.append(
-                f"prefetch_shared_memory = {str(self.prefetch_shared_memory).lower()}"
-            )
-        if self.no_reduce_shared_memory_bank_conflicts is not None:
-            options.append(
-                f"no_reduce_shared_memory_bank_conflicts = {str(self.no_reduce_shared_memory_bank_conflicts).lower()}"
-            )
-        if self.reorder_workgroups_strategy is not None:
-            options.append(
-                f"reorder_workgroups_strategy = {self.reorder_workgroups_strategy}"
-            )
-
-        return f"#iree_gpu.pipeline_options<{', '.join(options)}>"
-
-
-@dataclass
 class Configuration:
     subgroup_size: int
     workgroup_size: list[int]
-    intrinsic: MfmaIntrinsic
+    intrinsic: iree_gpu.MMAAttr
     tile_sizes: list[int]
     subgroup_m_count: int
     subgroup_n_count: int
-    gpu_pipeline_options: GpuPipelineOptions
+    gpu_pipeline_options: iree_gpu.PipelineOptionsAttr
     waves_per_eu: int
 
 
 def get_pipeline_config(configuration: Configuration) -> str:
     extra_config = ""
-    if not configuration.gpu_pipeline_options.all_default():
-        extra_config += f", gpu_pipeline_options = {configuration.gpu_pipeline_options}"
+    pipeline_options = configuration.gpu_pipeline_options
+    if pipeline_options != iree_gpu.PipelineOptionsAttr.get():
+        extra_config += f", gpu_pipeline_options = {pipeline_options}"
+
     if configuration.waves_per_eu != 2:
         extra_config += f', llvm_func_attrs = {{"amdgpu-waves-per-eu" = "{configuration.waves_per_eu}"}}'
     return extra_config
