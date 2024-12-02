@@ -121,6 +121,7 @@ class Configuration:
     def intrinsic(self) -> Optional[iree_gpu.MMAAttr]:
         if "mma_kind" in self.lowering_config.attributes:
             return self.lowering_config.attributes["mma_kind"]
+        return None
 
     def tilesize_workgroup(self) -> list[int]:
         if "workgroup" in self.lowering_config.attributes:
@@ -151,7 +152,7 @@ def get_lowering_config(
     tuner_ctx: TunerContext,
     **kwargs: Any,
 ) -> iree_gpu.LoweringConfigAttr:
-    lowering_config_dict = {}
+    lowering_config_dict: dict[str, Any] = {}
     for key, value in kwargs.items():
         match key:
             case "workgroup" | "reduction":
