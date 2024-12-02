@@ -16,6 +16,7 @@ from .kvcache.base_attention_cache import (
     CacheAllocationFailure,
     PageAllocation,
 )
+from .kvcache.trie_attention_cache import TriePagedAttentionCache
 from .kvcache.page_pool import PagePoolConfig, PagePool, PageInfo
 from .config_struct import ModelParams
 from .manager import SystemManager
@@ -67,10 +68,16 @@ class GenerateService:
         page_pool = PagePool(
             devices=self.main_fiber.devices_dict.values(), config=page_pool_config
         )
-        self.page_cache = BasePagedAttentionCache(
-            page_pool=page_pool,
-            tokens_per_page=model_params.paged_kv_cache.block_seq_stride,
-        )
+        if model_params.paged_kv_cache.cache_type == "trie":
+            self.page_cache = TriePagedAttentionCache(
+                page_pool=page_pool,
+                tokens_per_page=model_params.paged_kv_cache.block_seq_stride,
+            )
+        elif model_params.paged_kv_cache.cache_type == "base":
+            self.page_cache = BasePagedAttentionCache(
+                page_pool=page_pool,
+                tokens_per_page=model_params.paged_kv_cache.block_seq_stride,
+            )
 
         self.program_isolation = PROG_ISOLATIONS[program_isolation]
 
