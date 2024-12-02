@@ -215,6 +215,6 @@ def test_get_lowering_config(tuner_ctx: common.TunerContext) -> None:
         waves_per_eu=2,
     )
 
-    assert config.intrinsic() is None
-    assert config.subgroup_m_count() == 1
-    assert config.subgroup_n_count() == 1
+    assert common.get_intrinsic(config) is None
+    assert common.get_subgroup_m_count(config) == 1
+    assert common.get_subgroup_n_count(config) == 1

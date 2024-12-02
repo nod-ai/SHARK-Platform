@@ -118,34 +118,39 @@ class Configuration:
     gpu_pipeline_options: iree_gpu.PipelineOptionsAttr
     waves_per_eu: int
 
-    def intrinsic(self) -> Optional[iree_gpu.MMAAttr]:
-        if "mma_kind" in self.lowering_config.attributes:
-            return self.lowering_config.attributes["mma_kind"]
-        return None
 
-    def tilesize_workgroup(self) -> list[int]:
-        if "workgroup" in self.lowering_config.attributes:
-            workgroup_attrs = self.lowering_config.attributes["workgroup"]
-            return [attr.value for attr in workgroup_attrs]
-        return []
+def get_intrinsic(config: Configuration) -> Optional[iree_gpu.MMAAttr]:
+    if "mma_kind" in config.lowering_config.attributes:
+        return config.lowering_config.attributes["mma_kind"]
+    return None
 
-    def tilesize_reduction(self) -> list[int]:
-        if "reduction" in self.lowering_config.attributes:
-            reduction_attrs = self.lowering_config.attributes["reduction"]
-            return [attr.value for attr in reduction_attrs]
-        return []
 
-    def subgroup_m_count(self) -> Optional[int]:
-        if "subgroup_m_count" in self.lowering_config.attributes:
-            attr = self.lowering_config.attributes["subgroup_m_count"]
-            return attr.value
-        return None
+def get_tilesize_workgroup(config: Configuration) -> list[int]:
+    if "workgroup" in config.lowering_config.attributes:
+        workgroup_attrs = config.lowering_config.attributes["workgroup"]
+        return [attr.value for attr in workgroup_attrs]
+    return []
 
-    def subgroup_n_count(self) -> Optional[int]:
-        if "subgroup_n_count" in self.lowering_config.attributes:
-            attr = self.lowering_config.attributes["subgroup_n_count"]
-            return attr.value
-        return None
+
+def get_tilesize_reduction(config: Configuration) -> list[int]:
+    if "reduction" in config.lowering_config.attributes:
+        reduction_attrs = config.lowering_config.attributes["reduction"]
+        return [attr.value for attr in reduction_attrs]
+    return []
+
+
+def get_subgroup_m_count(config: Configuration) -> Optional[int]:
+    if "subgroup_m_count" in config.lowering_config.attributes:
+        attr = config.lowering_config.attributes["subgroup_m_count"]
+        return attr.value
+    return None
+
+
+def get_subgroup_n_count(config: Configuration) -> Optional[int]:
+    if "subgroup_n_count" in config.lowering_config.attributes:
+        attr = config.lowering_config.attributes["subgroup_n_count"]
+        return attr.value
+    return None
 
 
 def get_lowering_config(
@@ -154,36 +159,31 @@ def get_lowering_config(
 ) -> iree_gpu.LoweringConfigAttr:
     lowering_config_dict: dict[str, Any] = {}
     for key, value in kwargs.items():
+        # A local variable to hold the transformed value.
+        promoted_value = value
         match key:
             case "workgroup" | "reduction":
+                assert isinstance(
+                    value, (list, ir.ArrayAttr)
+                ), f"Unsupported type for key '{key}': {type(value).__name__}"
                 if isinstance(value, list):
-                    lowering_config_dict[key] = ir.ArrayAttr.get(
+                    promoted_value = ir.ArrayAttr.get(
                         [tuner_ctx.type.getI64(x) for x in value]
                     )
-                elif isinstance(value, ir.ArrayAttr):
-                    lowering_config_dict[key] = value
-                else:
-                    raise TypeError(
-                        f"Unsupported type for key '{key}': {type(value).__name__}"
-                    )
             case "subgroup_m_count" | "subgroup_n_count":
+                assert isinstance(
+                    value, (int, tuner_ctx.type.i64)
+                ), f"Unsupported type for key '{key}': {type(value).__name__}"
                 if isinstance(value, int):
-                    lowering_config_dict[key] = tuner_ctx.type.getI64(value)
-                elif isinstance(value, tuner_ctx.type.i64):
-                    lowering_config_dict[key] = value
-                else:
-                    raise TypeError(
-                        f"Unsupported type for key '{key}': {type(value).__name__}"
-                    )
+                    promoted_value = tuner_ctx.type.getI64(value)
             case "mma_kind":
-                if isinstance(value, iree_gpu.MMAAttr):
-                    lowering_config_dict[key] = value
-                else:
-                    raise TypeError(
-                        f"Unsupported type for key '{key}': {type(value).__name__}"
-                    )
+                assert isinstance(
+                    value, iree_gpu.MMAAttr
+                ), f"Unsupported type for key '{key}': {type(value).__name__}"
             case _:
                 raise KeyError(f"Unhandled key in lowering configuration: {key}")
+        # Single assignment after the match.
+        lowering_config_dict[key] = promoted_value
     lowering_config_attrs = ir.DictAttr.get(lowering_config_dict)
     return iree_gpu.LoweringConfigAttr.get(lowering_config_attrs)
 

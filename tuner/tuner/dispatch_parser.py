@@ -21,17 +21,17 @@ def parse_tensor_type(tensor_type: str) -> ShapedType:
 
 
 def get_mmt_workgroup_sizes(configuration: Configuration):
-    return configuration.tilesize_workgroup()
+    return get_tilesize_workgroup(configuration)
 
 
 def get_mmt_reduction_sizes(configuration: Configuration):
-    return configuration.tilesize_reduction()
+    return get_tilesize_reduction(configuration)
 
 
 def get_contract_workgroup_sizes(
     configuration: Configuration, tile_dims: str
 ) -> list[int]:
-    m, n, _ = configuration.tilesize_workgroup()
+    m, n, _k = get_tilesize_workgroup(configuration)
 
     workgroup_size = [1] * len(tile_dims)
     for idx, dim in enumerate(tile_dims):
@@ -48,7 +48,7 @@ def get_contract_workgroup_sizes(
 def get_contract_reduction_sizes(
     configuration: Configuration, tile_dims: str
 ) -> list[int]:
-    _, _, k = configuration.tilesize_reduction()
+    _m, _n, k = get_tilesize_reduction(configuration)
     reduction_size = [0] * len(tile_dims)
     for idx, dim in enumerate(tile_dims):
         if dim == "k":
@@ -58,11 +58,11 @@ def get_contract_reduction_sizes(
 
 
 def get_batch_mmt_workgroup_sizes(configuration: Configuration) -> list[int]:
-    return [1] + configuration.tilesize_workgroup()
+    return [1] + get_tilesize_workgroup(configuration)
 
 
 def get_batch_mmt_reduction_sizes(configuration: Configuration) -> list[int]:
-    return [0] + configuration.tilesize_reduction()
+    return [0] + get_tilesize_reduction(configuration)
 
 
 class MlirRegex(Enum):
@@ -171,12 +171,12 @@ class ConvParser(DispatchParser):
 
         oh = 1
 
-        ow, oc, _ic = configuration.tilesize_workgroup()
+        ow, oc, _ic = get_tilesize_workgroup(configuration)
 
         return [batch, oh, ow, oc, fh, fw, 0]
 
     def get_conv_reduction_sizes(self, configuration: Configuration) -> list[int]:
-        _ow, _oc, ic = configuration.tilesize_reduction()
+        _ow, _oc, ic = get_tilesize_reduction(configuration)
 
         return [0, 0, 0, 0, 0, 0, ic]
 
