@@ -86,7 +86,7 @@ class PagePool:
             for i in range(self.config.alloc_page_count)
         ]
 
-        self.attn_page_free = list(self.attn_page_entries)
+        self.available_pages = list(self.attn_page_entries)
 
         # Initialize a page table on each device.
         page_table_shape = [
@@ -108,14 +108,14 @@ class PagePool:
 
     def acquire_free_pages(self, count: int) -> list[PageInfo] | None:
         with self._lock:
-            available = len(self.attn_page_free)
+            available = len(self.available_pages)
             if count > available:
                 return None
-            return [self.attn_page_free.pop() for _ in range(count)]
+            return [self.available_pages.pop() for _ in range(count)]
 
-    def release_pages(self, pages: list[PageInfo]):
+    def free_pages(self, pages: list[PageInfo]):
         with self._lock:
-            self.attn_page_free.extend(pages)
+            self.available_pages.extend(pages)
 
     def copy_page(self, src_page: PageInfo) -> PageInfo:
         """
@@ -148,7 +148,7 @@ class PagePool:
 
     def __repr__(self):
         # No need to lock for repr (list is internally synchronized).
-        free_pages = len(self.attn_page_free)
+        free_pages = len(self.available_pages)
         total_pages = len(self.attn_page_entries)
         return (
             f"PagePool({total_pages - free_pages}/{total_pages} pages in use: "
