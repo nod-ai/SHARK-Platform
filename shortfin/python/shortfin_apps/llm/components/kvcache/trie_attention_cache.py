@@ -181,6 +181,60 @@ class TriePagedAttentionCacheAllocation(PageAllocation):
         self.last_cached_node.ref_count -= 1
         self._is_released = True
 
+    def extend_allocation(self, tokens: List[int], extra_token_slots=0) -> None:
+        """Extend the current allocation to accommodate additional tokens.
+
+        Args:
+            tokens: New token sequence to extend the allocation to
+
+        Raises:
+            ValueError: If new tokens don't extend current allocation's tokens
+        """
+        # Verify new tokens extend current tokens
+        if len(tokens) < len(self.tokens):
+            raise ValueError("New tokens must be longer than current tokens")
+
+        # Check that current tokens are a prefix of new tokens
+        for old_token, new_token in zip(self.tokens, tokens):
+            if old_token != new_token:
+                raise ValueError("New tokens must extend current token sequence")
+
+        # If tokens are identical, no extension needed
+        if len(tokens) == len(self.tokens):
+            return
+
+        # Calculate how many new pages we need
+        tokens_per_page = self.cache.tokens_per_page
+        current_pages = len(self._pages)
+        total_tokens = len(tokens) + extra_token_slots
+        total_pages_needed = math.ceil(total_tokens / tokens_per_page)
+        new_pages_needed = total_pages_needed - current_pages
+
+        if new_pages_needed <= 0:
+            self.tokens = tokens
+            return
+
+        # Acquire new pages
+        new_pages = self.cache.page_pool.acquire_free_pages(new_pages_needed)
+
+        if new_pages is None:
+            # Try eviction if initial allocation fails
+            self.cache._evict_pages(
+                new_pages_needed - len(self.cache.page_pool.available_pages)
+            )
+            new_pages = self.cache.page_pool.acquire_free_pages(new_pages_needed)
+
+            if new_pages is None:
+                raise CacheAllocationFailure(
+                    "Failed to acquire pages for allocation extension even after attempting eviction"
+                )
+
+        # Extend our page list
+        self._pages.extend(new_pages)
+
+        # Update tokens
+        self.tokens = tokens
+
 
 class TriePagedAttentionCache(BasePagedAttentionCache):
     """Trie-based paged attention cache implementation.

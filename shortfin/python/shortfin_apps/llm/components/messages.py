@@ -52,8 +52,6 @@ class InferenceExecRequest(sf.Message):
         self.return_all_logits = False
         self.return_host_array = True
         self.result_logits = None
-        self.allocation.release_pages()
-        self.allocation = None
 
     def cache_page_indices(self, max_len: int) -> list[int]:
         if not self.allocation:
@@ -70,6 +68,7 @@ class InferenceExecRequest(sf.Message):
     def free_cache_pages(self):
         if self.allocation:
             self.allocation.release_pages()
+            self.allocation = None
 
 
 class StrobeMessage(sf.Message):

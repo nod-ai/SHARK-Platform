@@ -281,21 +281,9 @@ class BatcherProcess(sf.Process):
             assert decode_request.phase == InferencePhase.DECODE
             if len(exec_process.exec_requests) >= self.ideal_batch_size:
                 break
-            incoming_token_count = len(decode_request.input_token_ids)
-
-            try:
-                allocation = cache.acquire_pages_for_tokens(
-                    decode_request.input_token_ids,
-                    extra_token_slots=1,  # need 1 extra slot to write result.
-                )
-            except CacheAllocationFailure:
-                logger.debug(
-                    "Cannot fulfill request for %d tokens",
-                    len(decode_request.input_token_ids),
-                )
-
-            decode_request.free_cache_pages()
-            decode_request.allocation = allocation
+            decode_request.allocation.extend_allocation(
+                decode_request.input_token_ids, extra_token_slots=1
+            )
 
             # Can flight this request.
             exec_process.exec_requests.append(decode_request)

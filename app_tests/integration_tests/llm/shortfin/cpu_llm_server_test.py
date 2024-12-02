@@ -65,17 +65,6 @@ def do_generate(prompt, port):
 @pytest.mark.parametrize(
     "model_test_dir,llm_server",
     [
-        (
-            {
-                "repo_id": "SlyEcho/open_llama_3b_v2_gguf",
-                "model_file": "open-llama-3b-v2-f16.gguf",
-                "tokenizer_id": "openlm-research/open_llama_3b_v2",
-                "settings": CPU_SETTINGS,
-                "batch_sizes": [1, 4],
-                "prefix_sharing_algorithm": "none",
-            },
-            {"model_file": "open-llama-3b-v2-f16.gguf", "settings": CPU_SETTINGS},
-        ),
         pytest.param(
             {
                 "repo_id": "SlyEcho/open_llama_3b_v2_gguf",
@@ -89,6 +78,17 @@ def do_generate(prompt, port):
             marks=pytest.mark.xfail(
                 reason="Trie-based prefix sharing not yet supported"
             ),
+        ),
+        pytest.param(
+            {
+                "repo_id": "SlyEcho/open_llama_3b_v2_gguf",
+                "model_file": "open-llama-3b-v2-f16.gguf",
+                "tokenizer_id": "openlm-research/open_llama_3b_v2",
+                "settings": CPU_SETTINGS,
+                "batch_sizes": [1, 4],
+                "prefix_sharing_algorithm": "none",
+            },
+            {"model_file": "open-llama-3b-v2-f16.gguf", "settings": CPU_SETTINGS},
         ),
     ],
     indirect=True,

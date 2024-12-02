@@ -45,6 +45,13 @@ class PageAllocation(ABC):
         """Releases the allocation's reference to pages."""
         pass
 
+    @abstractmethod
+    def extend_allocation(self, tokens, extra_token_slots=0) -> None:
+        """
+        Extends the allocation to include additional tokens. For details, reference the derived class in trie_attention_cache.py.
+        """
+        pass
+
 
 class BasePageAttentionCacheAllocation(PageAllocation):
     """Represents a page allocation in the cache."""
@@ -67,6 +74,19 @@ class BasePageAttentionCacheAllocation(PageAllocation):
             return
         self._cache.page_pool.free_pages(self._pages)
         self._is_released = True
+
+    def extend_allocation(self, tokens, extra_token_slots=0) -> None:
+        # assert old tokens are a prefix of incoming tokens
+        # if we don't have enough pages to hold the tokens, we need to allocate more pages
+        token_count = len(tokens) + extra_token_slots
+        pages_needed = math.ceil(token_count / self._cache.tokens_per_page)
+        if pages_needed > len(self._pages):
+            new_pages = self._cache.page_pool.acquire_free_pages(
+                pages_needed - len(self._pages)
+            )
+            if new_pages is None:
+                raise CacheAllocationFailure()
+            self._pages += tuple(new_pages)
 
     def __rerp__(self) -> str:
         return f"BasePageAttentionCacheAllocation(pages={self._pages}, cache={self._cache})"
