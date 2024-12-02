@@ -248,7 +248,7 @@ def generate_solutions(
                     ir.IntegerAttr.get(int_type, 0),
                     ir.IntegerAttr.get(int_type, lookup(k)),
                 ]
-            ),  # placeholder now to be consistent with iree
+            ),  # Placeholder now to be consistent with iree.
             "subgroup_m_count": ir.IntegerAttr.get(int_type, lookup(sg_m_cnt)),
             "subgroup_n_count": ir.IntegerAttr.get(int_type, lookup(sg_n_cnt)),
         }

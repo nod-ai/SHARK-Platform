@@ -44,7 +44,7 @@ def test_get_mmt_tile_sizes(tuner_ctx: common.TunerContext) -> None:
     mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
     lowering_config = common.get_lowering_config(
         tuner_ctx=tuner_ctx,
-        mma_attr=mma_attr,
+        mma_kind=mma_attr,
         workgroup=[128, 320, 0],
         reduction=[0, 0, 32],
         subgroup_m_count=1,
@@ -66,7 +66,7 @@ def test_get_conv_tile_sizes(tuner_ctx: common.TunerContext) -> None:
     mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
     lowering_config = common.get_lowering_config(
         tuner_ctx=tuner_ctx,
-        mma_attr=mma_attr,
+        mma_kind=mma_attr,
         workgroup=[464, 320, 0],
         reduction=[0, 0, 16],
         subgroup_m_count=1,
@@ -104,7 +104,7 @@ def test_get_contract_tile_sizes(tuner_ctx: common.TunerContext) -> None:
     mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
     lowering_config = common.get_lowering_config(
         tuner_ctx=tuner_ctx,
-        mma_attr=mma_attr,
+        mma_kind=mma_attr,
         workgroup=[4, 8, 0],
         reduction=[0, 0, 16],
         subgroup_m_count=1,
@@ -123,16 +123,8 @@ def test_get_contract_tile_sizes(tuner_ctx: common.TunerContext) -> None:
     assert dispatch_parser.get_contract_reduction_sizes(config, "nmk") == [0, 0, 16]
     assert dispatch_parser.get_contract_workgroup_sizes(config, "knm") == [0, 8, 4]
     assert dispatch_parser.get_contract_reduction_sizes(config, "knm") == [16, 0, 0]
-    assert dispatch_parser.get_contract_workgroup_sizes(config, "kkk") == [
-        0,
-        0,
-        0,
-    ]
-    assert dispatch_parser.get_contract_reduction_sizes(config, "kkk") == [
-        16,
-        16,
-        16,
-    ]
+    assert dispatch_parser.get_contract_workgroup_sizes(config, "kkk") == [0, 0, 0]
+    assert dispatch_parser.get_contract_reduction_sizes(config, "kkk") == [16, 16, 16]
 
 
 def test_get_shapes_mmt(tuner_ctx: common.TunerContext) -> None:

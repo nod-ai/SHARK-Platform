@@ -171,12 +171,12 @@ class ConvParser(DispatchParser):
 
         oh = 1
 
-        ow, oc, _ = configuration.tilesize_workgroup()
+        ow, oc, _ic = configuration.tilesize_workgroup()
 
         return [batch, oh, ow, oc, fh, fw, 0]
 
     def get_conv_reduction_sizes(self, configuration: Configuration) -> list[int]:
-        _, _, ic = configuration.tilesize_reduction()
+        _ow, _oc, ic = configuration.tilesize_reduction()
 
         return [0, 0, 0, 0, 0, 0, ic]
 

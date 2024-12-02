@@ -78,7 +78,7 @@ def test_get_pipeline_config(tuner_ctx: common.TunerContext) -> None:
     mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
     lowering_config = common.get_lowering_config(
         tuner_ctx=tuner_ctx,
-        mma_attr=mma_attr,
+        mma_kind=mma_attr,
         workgroup=[4, 8, 0],
         reduction=[0, 0, 16],
         subgroup_m_count=1,
@@ -201,6 +201,12 @@ def test_get_lowering_config(tuner_ctx: common.TunerContext) -> None:
         subgroup_m_count=1,
         subgroup_n_count=1,
     )
+
+    assert (
+        str(lowering_config)
+        == "#iree_gpu.lowering_config<{reduction = [0, 0, 16], subgroup_m_count = 1 : i64, subgroup_n_count = 1 : i64, workgroup = [4, 8, 0]}>"
+    )
+
     config = common.Configuration(
         subgroup_size=32,
         workgroup_size=[16, 16, 1],
