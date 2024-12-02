@@ -94,7 +94,8 @@ jobs:
   benchmark_sglang:
     if: ${{ github.repository_owner == 'nod-ai' || github.event_name != 'schedule' }}
     name: "SGLang Serving Benchmark With SGLang"
-    needs: benchmark_shortfin
+    # TODO: Temporarily commenting out for CI validation
+    # needs: benchmark_shortfin
     strategy:
       matrix:
         version: [3.11]
