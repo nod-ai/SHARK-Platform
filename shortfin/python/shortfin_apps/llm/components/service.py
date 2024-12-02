@@ -78,6 +78,10 @@ class GenerateService:
                 page_pool=page_pool,
                 tokens_per_page=model_params.paged_kv_cache.block_seq_stride,
             )
+        else:
+            raise ValueError(
+                f"Unknown model_params.paged_kv_cache.cache_type {model_params.paged_kv_cache.cache_type}. Currently only supporting 'trie' and 'base'."
+            )
 
         self.program_isolation = PROG_ISOLATIONS[program_isolation]
 
