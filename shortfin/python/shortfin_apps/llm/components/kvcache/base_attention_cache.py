@@ -34,7 +34,7 @@ class PageAllocation(ABC):
         pass
 
     @abstractmethod
-    def publish_pages_for_tokens(self, tokens, publish_incomplete_pages=False) -> None:
+    def publish_pages_for_tokens(self, tokens, publish_incomplete_page=False) -> None:
         """
         Makes pages available to other requests. For details, reference the derived class in trie_attention_cache.py.
         """
@@ -58,7 +58,7 @@ class BasePageAttentionCacheAllocation(PageAllocation):
     def pages(self) -> List[PageInfo]:
         return list(self._pages)
 
-    def publish_pages_for_tokens(self, tokens, publish_incomplete_pages=False) -> None:
+    def publish_pages_for_tokens(self, tokens, publish_incomplete_page=False) -> None:
         pass
 
     def release_pages(self) -> None:
