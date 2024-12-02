@@ -68,19 +68,19 @@ class GenerateService:
         page_pool = PagePool(
             devices=self.main_fiber.devices_dict.values(), config=page_pool_config
         )
-        if model_params.paged_kv_cache.cache_type == "trie":
+        if model_params.paged_kv_cache.prefix_sharing_algorithm == "trie":
             self.page_cache = TriePagedAttentionCache(
                 page_pool=page_pool,
                 tokens_per_page=model_params.paged_kv_cache.block_seq_stride,
             )
-        elif model_params.paged_kv_cache.cache_type == "base":
+        elif model_params.paged_kv_cache.prefix_sharing_algorithm == "none":
             self.page_cache = BasePagedAttentionCache(
                 page_pool=page_pool,
                 tokens_per_page=model_params.paged_kv_cache.block_seq_stride,
             )
         else:
             raise ValueError(
-                f"Unknown model_params.paged_kv_cache.cache_type {model_params.paged_kv_cache.cache_type}. Currently only supporting 'trie' and 'base'."
+                f"Unknown model_params.paged_kv_cache.prefix_sharing_algorithm {model_params.paged_kv_cache.prefix_sharing_algorithm}. Currently only supporting 'trie' and 'none'."
             )
 
         self.program_isolation = PROG_ISOLATIONS[program_isolation]

@@ -83,7 +83,11 @@ def model_test_dir(request, tmp_path_factory):
             "prefill_batch_sizes": batch_sizes,
             "decode_batch_sizes": batch_sizes,
             "transformer_block_count": 26,
-            "paged_kv_cache": {"block_seq_stride": 16, "device_block_count": 256},
+            "paged_kv_cache": {
+                "block_seq_stride": 16,
+                "device_block_count": 256,
+                "prefix_sharing_algorithm": "none",
+            },
         }
         logger.info(f"Saving edited config to: {edited_config_path}\n")
         logger.info(f"Config: {json.dumps(config, indent=2)}")
