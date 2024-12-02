@@ -75,9 +75,6 @@ def do_generate(prompt, port):
                 "prefix_sharing_algorithm": "trie",
             },
             {"model_file": "open-llama-3b-v2-f16.gguf", "settings": CPU_SETTINGS},
-            marks=pytest.mark.xfail(
-                reason="Trie-based prefix sharing not yet supported"
-            ),
         ),
         pytest.param(
             {
