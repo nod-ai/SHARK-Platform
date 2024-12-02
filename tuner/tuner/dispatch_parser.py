@@ -21,17 +21,17 @@ def parse_tensor_type(tensor_type: str) -> ShapedType:
 
 
 def get_mmt_workgroup_sizes(configuration: Configuration):
-    return get_tilesize_workgroup(configuration)
+    return get_workgroup_tile_sizes(configuration)
 
 
 def get_mmt_reduction_sizes(configuration: Configuration):
-    return get_tilesize_reduction(configuration)
+    return get_reduction_tile_sizes(configuration)
 
 
 def get_contract_workgroup_sizes(
     configuration: Configuration, tile_dims: str
 ) -> list[int]:
-    m, n, _k = get_tilesize_workgroup(configuration)
+    m, n, _k = get_workgroup_tile_sizes(configuration)
 
     workgroup_size = [1] * len(tile_dims)
     for idx, dim in enumerate(tile_dims):
@@ -48,7 +48,7 @@ def get_contract_workgroup_sizes(
 def get_contract_reduction_sizes(
     configuration: Configuration, tile_dims: str
 ) -> list[int]:
-    _m, _n, k = get_tilesize_reduction(configuration)
+    _m, _n, k = get_reduction_tile_sizes(configuration)
     reduction_size = [0] * len(tile_dims)
     for idx, dim in enumerate(tile_dims):
         if dim == "k":
@@ -58,11 +58,11 @@ def get_contract_reduction_sizes(
 
 
 def get_batch_mmt_workgroup_sizes(configuration: Configuration) -> list[int]:
-    return [1] + get_tilesize_workgroup(configuration)
+    return [1] + get_workgroup_tile_sizes(configuration)
 
 
 def get_batch_mmt_reduction_sizes(configuration: Configuration) -> list[int]:
-    return [0] + get_tilesize_reduction(configuration)
+    return [0] + get_reduction_tile_sizes(configuration)
 
 
 class MlirRegex(Enum):
@@ -171,12 +171,12 @@ class ConvParser(DispatchParser):
 
         oh = 1
 
-        ow, oc, _ic = get_tilesize_workgroup(configuration)
+        ow, oc, _ic = get_workgroup_tile_sizes(configuration)
 
         return [batch, oh, ow, oc, fh, fw, 0]
 
     def get_conv_reduction_sizes(self, configuration: Configuration) -> list[int]:
-        _ow, _oc, ic = get_tilesize_reduction(configuration)
+        _ow, _oc, ic = get_reduction_tile_sizes(configuration)
 
         return [0, 0, 0, 0, 0, 0, ic]
 

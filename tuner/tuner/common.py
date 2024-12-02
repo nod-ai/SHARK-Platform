@@ -125,14 +125,14 @@ def get_intrinsic(config: Configuration) -> Optional[iree_gpu.MMAAttr]:
     return None
 
 
-def get_tilesize_workgroup(config: Configuration) -> list[int]:
+def get_workgroup_tile_sizes(config: Configuration) -> list[int]:
     if "workgroup" in config.lowering_config.attributes:
         workgroup_attrs = config.lowering_config.attributes["workgroup"]
         return [attr.value for attr in workgroup_attrs]
     return []
 
 
-def get_tilesize_reduction(config: Configuration) -> list[int]:
+def get_reduction_tile_sizes(config: Configuration) -> list[int]:
     if "reduction" in config.lowering_config.attributes:
         reduction_attrs = config.lowering_config.attributes["reduction"]
         return [attr.value for attr in reduction_attrs]
@@ -163,26 +163,29 @@ def get_lowering_config(
         promoted_value = value
         match key:
             case "workgroup" | "reduction":
-                assert isinstance(
-                    value, (list, ir.ArrayAttr)
-                ), f"Unsupported type for key '{key}': {type(value).__name__}"
                 if isinstance(value, list):
                     promoted_value = ir.ArrayAttr.get(
                         [tuner_ctx.type.getI64(x) for x in value]
                     )
+                elif not isinstance(value, ir.ArrayAttr):
+                    assert (
+                        False
+                    ), f"Unsupported type for key '{key}': {type(value).__name__}"
             case "subgroup_m_count" | "subgroup_n_count":
-                assert isinstance(
-                    value, (int, tuner_ctx.type.i64)
-                ), f"Unsupported type for key '{key}': {type(value).__name__}"
                 if isinstance(value, int):
                     promoted_value = tuner_ctx.type.getI64(value)
+                elif not isinstance(value, tuner_ctx.type.i64):
+                    assert (
+                        False
+                    ), f"Unsupported type for key '{key}': {type(value).__name__}"
             case "mma_kind":
-                assert isinstance(
-                    value, iree_gpu.MMAAttr
-                ), f"Unsupported type for key '{key}': {type(value).__name__}"
+                if not isinstance(value, iree_gpu.MMAAttr):
+                    assert (
+                        False
+                    ), f"Unsupported type for key '{key}': {type(value).__name__}"
             case _:
-                raise KeyError(f"Unhandled key in lowering configuration: {key}")
-        # Single assignment after the match.
+                assert False, f"Unhandled key in lowering configuration: {key}"
+
         lowering_config_dict[key] = promoted_value
     lowering_config_attrs = ir.DictAttr.get(lowering_config_dict)
     return iree_gpu.LoweringConfigAttr.get(lowering_config_attrs)

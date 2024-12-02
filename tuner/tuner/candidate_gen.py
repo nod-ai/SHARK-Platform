@@ -61,8 +61,8 @@ def apply_configuration(
     expr5 = re.compile(r"\"amdgpu-waves-per-eu\" = \"([0-9])\"")
     repl0 = f"<intrinsic = {intrinsic}, subgroup_m_count = {subgroup_m_count}, subgroup_n_count = {subgroup_n_count}>"
     repl1 = f'LLVMGPUVectorDistribute workgroup_size = [{", ".join(map(str, configuration.workgroup_size))}] subgroup_size = {configuration.subgroup_size},'
-    repl2 = f'workgroup = [{", ".join(map(str, workgroup_sizes))}]'
-    repl3 = f'reduction = [{", ".join(map(str, reduction_sizes))}]'
+    repl2 = f"workgroup = {workgroup_sizes}"
+    repl3 = f"reduction = {reduction_sizes}"
     repl4 = f"gpu_pipeline_options = {configuration.gpu_pipeline_options}"
     repl5 = f'"amdgpu-waves-per-eu" = "{configuration.waves_per_eu}"'
 
