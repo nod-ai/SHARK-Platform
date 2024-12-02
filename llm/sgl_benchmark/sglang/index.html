@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title id="head-title">index.html</title>
+      <link href="assets/style.css" rel="stylesheet" type="text/css"/>
+  </head>
+  <body>
+    <h1 id="title">index.html</h1>
+    <p>Report generated on 02-Dec-2024 at 21:59:22 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a>
+        v4.1.1</p>
+    <div id="environment-header">
+      <h2>Environment</h2>
+    </div>
+    <table id="environment"></table>
+    <!-- TEMPLATES -->
+      <template id="template_environment_row">
+      <tr>
+        <td></td>
+        <td></td>
+      </tr>
+    </template>
+    <template id="template_results-table__body--empty">
+      <tbody class="results-table-row">
+        <tr id="not-found-message">
+          <td colspan="4">No results found. Check the filters.</th>
+        </tr>
+    </template>
+    <template id="template_results-table__tbody">
+      <tbody class="results-table-row">
+        <tr class="collapsible">
+        </tr>
+        <tr class="extras-row">
+          <td class="extra" colspan="4">
+            <div class="extraHTML"></div>
+            <div class="media">
+              <div class="media-container">
+                  <div class="media-container__nav--left"><</div>
+                  <div class="media-container__viewport">
+                    <img src="" />
+                    <video controls>
+                      <source src="" type="video/mp4">
+                    </video>
+                  </div>
+                  <div class="media-container__nav--right">></div>
+                </div>
+                <div class="media__name"></div>
+                <div class="media__counter"></div>
+            </div>
+            <div class="logwrapper">
+              <div class="logexpander"></div>
+              <div class="log"></div>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </template>
+    <!-- END TEMPLATES -->
+    <div class="summary">
+      <div class="summary__data">
+        <h2>Summary</h2>
+        <div class="additional-summary prefix">
+        </div>
+        <p class="run-count">6 tests took 00:02:01.</p>
+        <p class="filter">(Un)check the boxes to filter the results.</p>
+        <div class="summary__reload">
+          <div class="summary__reload__button hidden" onclick="location.reload()">
+            <div>There are still tests running. <br />Reload this page to get the latest results!</div>
+          </div>
+        </div>
+        <div class="summary__spacer"></div>
+        <div class="controls">
+          <div class="filters">
+            <input checked="true" class="filter" name="filter_checkbox" type="checkbox" data-test-result="failed" disabled/>
+            <span class="failed">0 Failed,</span>
+            <input checked="true" class="filter" name="filter_checkbox" type="checkbox" data-test-result="passed" />
+            <span class="passed">6 Passed,</span>
+            <input checked="true" class="filter" name="filter_checkbox" type="checkbox" data-test-result="skipped" disabled/>
+            <span class="skipped">0 Skipped,</span>
+            <input checked="true" class="filter" name="filter_checkbox" type="checkbox" data-test-result="xfailed" disabled/>
+            <span class="xfailed">0 Expected failures,</span>
+            <input checked="true" class="filter" name="filter_checkbox" type="checkbox" data-test-result="xpassed" disabled/>
+            <span class="xpassed">0 Unexpected passes,</span>
+            <input checked="true" class="filter" name="filter_checkbox" type="checkbox" data-test-result="error" disabled/>
+            <span class="error">0 Errors,</span>
+            <input checked="true" class="filter" name="filter_checkbox" type="checkbox" data-test-result="rerun" disabled/>
+            <span class="rerun">0 Reruns</span>
+          </div>
+          <div class="collapse">
+            <button id="show_all_details">Show all details</button>&nbsp;/&nbsp;<button id="hide_all_details">Hide all details</button>
+          </div>
+        </div>
+      </div>
+      <div class="additional-summary summary">
+      </div>
+      <div class="additional-summary postfix">
+      </div>
+    </div>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable" data-column-type="result">Result</th>
+          <th class="sortable" data-column-type="testId">Test</th>
+          <th class="sortable" data-column-type="duration">Duration</th>
+          <th>Links</th>
+        </tr>
+      </thead>
+    </table>
+  </body>
+  <footer>
+    <div id="data-container" data-jsonblob="{&#34;environment&#34;: {&#34;Python&#34;: &#34;3.11.10&#34;, &#34;Platform&#34;: &#34;Linux-5.15.0-125-generic-x86_64-with-glibc2.35&#34;, &#34;Packages&#34;: {&#34;pytest&#34;: &#34;8.0.0&#34;, &#34;pluggy&#34;: &#34;1.5.0&#34;}, &#34;Plugins&#34;: {&#34;html&#34;: &#34;4.1.1&#34;, &#34;anyio&#34;: &#34;4.6.2.post1&#34;, &#34;xdist&#34;: &#34;3.5.0&#34;, &#34;metadata&#34;: &#34;3.1.1&#34;}, &#34;CI&#34;: &#34;true&#34;}, &#34;tests&#34;: {&#34;app_tests/benchmark_tests/llm/sglang_benchmarks/sglang_benchmark_test.py::test_sglang_benchmark[1-llama3_8B_fp16]&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;Passed&#34;, &#34;testId&#34;: &#34;app_tests/benchmark_tests/llm/sglang_benchmarks/sglang_benchmark_test.py::test_sglang_benchmark[1-llama3_8B_fp16]&#34;, &#34;duration&#34;: &#34;00:00:51&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;Passed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;app_tests/benchmark_tests/llm/sglang_benchmarks/sglang_benchmark_test.py::test_sglang_benchmark[1-llama3_8B_fp16]&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;00:00:51&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;----------------------------- Captured stdout call -----------------------------\nDownloading dataset llama3_8B_fp16\n  gguf: /tmp/pytest-of-nod/pytest-69/sglang_benchmark_test0/meta-llama-3.1-8b-instruct.f16.gguf\n  tokenizer_config.json: /tmp/pytest-of-nod/pytest-69/sglang_benchmark_test0/tokenizer_config.json\n\n----------------------------- Captured stderr call -----------------------------\nSpecial tokens have been added in the vocabulary, make sure the associated word embeddings are fine-tuned or trained.\nSpecial tokens have been added in the vocabulary, make sure the associated word embeddings are fine-tuned or trained.\n\r  0%|          | 0/10 [00:00&amp;lt;?, ?it/s]\r 10%|\u2588         | 1/10 [00:02&amp;lt;00:18,  2.09s/it]\r 20%|\u2588\u2588        | 2/10 [00:02&amp;lt;00:07,  1.03it/s]\r 30%|\u2588\u2588\u2588       | 3/10 [00:02&amp;lt;00:04,  1.52it/s]\r 40%|\u2588\u2588\u2588\u2588      | 4/10 [00:03&amp;lt;00:04,  1.47it/s]\r 50%|\u2588\u2588\u2588\u2588\u2588     | 5/10 [00:04&amp;lt;00:04,  1.16it/s]\r 60%|\u2588\u2588\u2588\u2588\u2588\u2588    | 6/10 [00:06&amp;lt;00:05,  1.39s/it]\r 70%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588   | 7/10 [00:07&amp;lt;00:03,  1.05s/it]\r 80%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588  | 8/10 [00:07&amp;lt;00:01,  1.28it/s]\r 90%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588 | 9/10 [00:08&amp;lt;00:00,  1.18it/s]\r100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 10/10 [00:08&amp;lt;00:00,  1.62it/s]\r100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 10/10 [00:08&amp;lt;00:00,  1.17it/s]\n\n------------------------------ Captured log call -------------------------------\nINFO     integration_tests.llm.utils:utils.py:50 Download model llama3_8B_fp16 with `hf_datasets` to /tmp/pytest-of-nod/pytest-69/sglang_benchmark_test0...\nINFO     integration_tests.llm.utils:utils.py:62 Model llama3_8B_fp16 successfully downloaded.\nINFO     sglang_benchmarks.sglang_benchmark_test:sglang_benchmark_test.py:32 Beginning SGLang benchmark test...\nINFO     integration_tests.llm.utils:utils.py:132 Waiting for server to start at http://localhost:30000...\nINFO     integration_tests.llm.utils:utils.py:137 Server successfully started\nINFO     sglang_benchmarks.sglang_benchmark_test:sglang_benchmark_test.py:54 Running SGLang Benchmark with the following args:\nINFO     sglang_benchmarks.sglang_benchmark_test:sglang_benchmark_test.py:55 Backend: sglang\nBase URL: http://localhost:30000\nNum Prompt: 10\nTokenizer: /tmp/pytest-of-nod/pytest-69/sglang_benchmark_test0\nRequest Rate: 1\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Namespace(num_prompts=10, base_url=&amp;#x27;http://localhost:30000&amp;#x27;, tokenizer=&amp;#x27;/tmp/pytest-of-nod/pytest-69/sglang_benchmark_test0&amp;#x27;, request_rate=1, backend=&amp;#x27;sglang&amp;#x27;, output_file=PosixPath(&amp;#x27;/tmp/pytest-of-nod/pytest-69/sglang_benchmark_test0/sglang_10_1.jsonl&amp;#x27;), seed=1, extra_request_body=None, port=8000, model=&amp;#x27;meta-llama/Llama-3.1-8B-Instruct&amp;#x27;, dataset_name=&amp;#x27;sharegpt&amp;#x27;, random_input_len=None, random_output_len=None, random_range_ratio=0.0, dataset_path=&amp;#x27;&amp;#x27;, sharegpt_output_len=None, multi=False, disable_tqdm=False, disable_stream=False, disable_ignore_eos=False)\n\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 #Input tokens: 1960\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 #Output tokens: 2774\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Starting initial single prompt test run...\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Initial test run completed. Starting main benchmark run...\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 \n============ Serving Benchmark Result ============\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Backend:                                 sglang    \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Traffic request rate:                    1         \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Successful requests:                     10        \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Benchmark duration (s):                  8.53      \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Total input tokens:                      1960      \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Total generated tokens:                  2774      \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Total generated tokens (retokenized):    2774      \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Request throughput (req/s):              1.17      \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Input token throughput (tok/s):          229.74    \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Output token throughput (tok/s):         325.16    \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Total token throughput (tok/s):          554.90    \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 ----------------End-to-End Latency----------------\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Mean E2E Latency (ms):                   3282.20   \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Median E2E Latency (ms):                 3562.00   \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 ---------------Time to First Token----------------\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Mean TTFT (ms):                          30.14     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Median TTFT (ms):                        24.11     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 P99 TTFT (ms):                           50.66     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 -----Time per Output Token (excl. 1st token)------\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Mean TPOT (ms):                          11.58     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Median TPOT (ms):                        12.01     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 P99 TPOT (ms):                           13.22     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 ---------------Inter-token Latency----------------\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Mean ITL (ms):                           11.77     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Median ITL (ms):                         12.97     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 P99 ITL (ms):                            23.26     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 ==================================================\nINFO     sglang_benchmarks.sglang_benchmark_test:sglang_benchmark_test.py:63 Benchmark run completed in 17.015551567077637 seconds\nINFO     sglang_benchmarks.sglang_benchmark_test:sglang_benchmark_test.py:64 ======== RESULTS ========\nINFO     sglang_benchmarks.utils:utils.py:69 BACKEND: sglang\nINFO     sglang_benchmarks.utils:utils.py:69 DATASET_NAME: sharegpt\nINFO     sglang_benchmarks.utils:utils.py:69 REQUEST_RATE: 1\nINFO     sglang_benchmarks.utils:utils.py:69 TOTAL_INPUT_TOKENS: 1960\nINFO     sglang_benchmarks.utils:utils.py:69 TOTAL_OUTPUT_TOKENS: 2774\nINFO     sglang_benchmarks.utils:utils.py:69 TOTAL_OUTPUT_TOKENS_RETOKENIZED: 2774\nINFO     sglang_benchmarks.utils:utils.py:69 MEAN_E2E_LATENCY_MS: 3282.202030182816\nINFO     sglang_benchmarks.utils:utils.py:69 MEDIAN_E2E_LATENCY_MS: 3561.9961925549433\nINFO     sglang_benchmarks.utils:utils.py:69 MEDIAN_TTFT_MS: 24.10662709735334\nINFO     sglang_benchmarks.utils:utils.py:69 MEDIAN_ITL_MS: 12.971301446668804\nINFO     sglang_benchmarks.utils:utils.py:69 OUTPUT_THROUGHPUT: 325.1580879143889\nINFO     sglang_benchmarks.utils:utils.py:69 SHAREGPT_OUTPUT_LEN: None\nINFO     sglang_benchmarks.utils:utils.py:69 RANDOM_INPUT_LEN: None\nINFO     sglang_benchmarks.utils:utils.py:69 RANDOM_OUTPUT_LEN: None\nINFO     sglang_benchmarks.utils:utils.py:69 RANDOM_RANGE_RATIO: 0.0\nINFO     sglang_benchmarks.utils:utils.py:69 DURATION: 8.531234815018252\nINFO     sglang_benchmarks.utils:utils.py:69 COMPLETED: 10\n\n&#34;}], &#34;app_tests/benchmark_tests/llm/sglang_benchmarks/sglang_benchmark_test.py::test_sglang_benchmark[2-llama3_8B_fp16]&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;Passed&#34;, &#34;testId&#34;: &#34;app_tests/benchmark_tests/llm/sglang_benchmarks/sglang_benchmark_test.py::test_sglang_benchmark[2-llama3_8B_fp16]&#34;, &#34;duration&#34;: &#34;00:00:14&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;Passed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;app_tests/benchmark_tests/llm/sglang_benchmarks/sglang_benchmark_test.py::test_sglang_benchmark[2-llama3_8B_fp16]&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;00:00:14&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;----------------------------- Captured stdout call -----------------------------\nDownloading dataset llama3_8B_fp16\n  gguf: /tmp/pytest-of-nod/pytest-69/sglang_benchmark_test1/meta-llama-3.1-8b-instruct.f16.gguf\n  tokenizer_config.json: /tmp/pytest-of-nod/pytest-69/sglang_benchmark_test1/tokenizer_config.json\n\n----------------------------- Captured stderr call -----------------------------\nSpecial tokens have been added in the vocabulary, make sure the associated word embeddings are fine-tuned or trained.\nSpecial tokens have been added in the vocabulary, make sure the associated word embeddings are fine-tuned or trained.\n\r  0%|          | 0/10 [00:00&amp;lt;?, ?it/s]\r 10%|\u2588         | 1/10 [00:01&amp;lt;00:10,  1.21s/it]\r 20%|\u2588\u2588        | 2/10 [00:01&amp;lt;00:04,  1.70it/s]\r 30%|\u2588\u2588\u2588       | 3/10 [00:02&amp;lt;00:06,  1.02it/s]\r 40%|\u2588\u2588\u2588\u2588      | 4/10 [00:03&amp;lt;00:05,  1.18it/s]\r 50%|\u2588\u2588\u2588\u2588\u2588     | 5/10 [00:03&amp;lt;00:03,  1.59it/s]\r 60%|\u2588\u2588\u2588\u2588\u2588\u2588    | 6/10 [00:05&amp;lt;00:04,  1.16s/it]\r 70%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588   | 7/10 [00:05&amp;lt;00:02,  1.23it/s]\r 90%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588 | 9/10 [00:06&amp;lt;00:00,  1.58it/s]\r100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 10/10 [00:07&amp;lt;00:00,  1.64it/s]\r100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 10/10 [00:07&amp;lt;00:00,  1.35it/s]\n\n------------------------------ Captured log call -------------------------------\nINFO     integration_tests.llm.utils:utils.py:50 Download model llama3_8B_fp16 with `hf_datasets` to /tmp/pytest-of-nod/pytest-69/sglang_benchmark_test1...\nINFO     integration_tests.llm.utils:utils.py:62 Model llama3_8B_fp16 successfully downloaded.\nINFO     sglang_benchmarks.sglang_benchmark_test:sglang_benchmark_test.py:32 Beginning SGLang benchmark test...\nINFO     integration_tests.llm.utils:utils.py:132 Waiting for server to start at http://localhost:30000...\nINFO     integration_tests.llm.utils:utils.py:137 Server successfully started\nINFO     sglang_benchmarks.sglang_benchmark_test:sglang_benchmark_test.py:54 Running SGLang Benchmark with the following args:\nINFO     sglang_benchmarks.sglang_benchmark_test:sglang_benchmark_test.py:55 Backend: sglang\nBase URL: http://localhost:30000\nNum Prompt: 10\nTokenizer: /tmp/pytest-of-nod/pytest-69/sglang_benchmark_test1\nRequest Rate: 2\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Namespace(num_prompts=10, base_url=&amp;#x27;http://localhost:30000&amp;#x27;, tokenizer=&amp;#x27;/tmp/pytest-of-nod/pytest-69/sglang_benchmark_test1&amp;#x27;, request_rate=2, backend=&amp;#x27;sglang&amp;#x27;, output_file=PosixPath(&amp;#x27;/tmp/pytest-of-nod/pytest-69/sglang_benchmark_test1/sglang_10_2.jsonl&amp;#x27;), seed=1, extra_request_body=None, port=8000, model=&amp;#x27;meta-llama/Llama-3.1-8B-Instruct&amp;#x27;, dataset_name=&amp;#x27;sharegpt&amp;#x27;, random_input_len=None, random_output_len=None, random_range_ratio=0.0, dataset_path=&amp;#x27;&amp;#x27;, sharegpt_output_len=None, multi=False, disable_tqdm=False, disable_stream=False, disable_ignore_eos=False)\n\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 #Input tokens: 1960\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 #Output tokens: 2774\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Starting initial single prompt test run...\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Initial test run completed. Starting main benchmark run...\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 \n============ Serving Benchmark Result ============\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Backend:                                 sglang    \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Traffic request rate:                    2         \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Successful requests:                     10        \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Benchmark duration (s):                  7.40      \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Total input tokens:                      1960      \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Total generated tokens:                  2774      \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Total generated tokens (retokenized):    2774      \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Request throughput (req/s):              1.35      \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Input token throughput (tok/s):          265.01    \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Output token throughput (tok/s):         375.07    \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Total token throughput (tok/s):          640.08    \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 ----------------End-to-End Latency----------------\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Mean E2E Latency (ms):                   3442.20   \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Median E2E Latency (ms):                 3835.12   \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 ---------------Time to First Token----------------\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Mean TTFT (ms):                          21.91     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Median TTFT (ms):                        21.22     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 P99 TTFT (ms):                           26.54     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 -----Time per Output Token (excl. 1st token)------\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Mean TPOT (ms):                          12.50     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Median TPOT (ms):                        12.43     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 P99 TPOT (ms):                           14.31     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 ---------------Inter-token Latency----------------\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Mean ITL (ms):                           12.37     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Median ITL (ms):                         13.00     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 P99 ITL (ms):                            22.70     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 ==================================================\nINFO     sglang_benchmarks.sglang_benchmark_test:sglang_benchmark_test.py:63 Benchmark run completed in 14.037453413009644 seconds\nINFO     sglang_benchmarks.sglang_benchmark_test:sglang_benchmark_test.py:64 ======== RESULTS ========\nINFO     sglang_benchmarks.utils:utils.py:69 BACKEND: sglang\nINFO     sglang_benchmarks.utils:utils.py:69 DATASET_NAME: sharegpt\nINFO     sglang_benchmarks.utils:utils.py:69 REQUEST_RATE: 2\nINFO     sglang_benchmarks.utils:utils.py:69 TOTAL_INPUT_TOKENS: 1960\nINFO     sglang_benchmarks.utils:utils.py:69 TOTAL_OUTPUT_TOKENS: 2774\nINFO     sglang_benchmarks.utils:utils.py:69 TOTAL_OUTPUT_TOKENS_RETOKENIZED: 2774\nINFO     sglang_benchmarks.utils:utils.py:69 MEAN_E2E_LATENCY_MS: 3442.2012246446684\nINFO     sglang_benchmarks.utils:utils.py:69 MEDIAN_E2E_LATENCY_MS: 3835.1152314571664\nINFO     sglang_benchmarks.utils:utils.py:69 MEDIAN_TTFT_MS: 21.221359027549624\nINFO     sglang_benchmarks.utils:utils.py:69 MEDIAN_ITL_MS: 13.00409552641213\nINFO     sglang_benchmarks.utils:utils.py:69 OUTPUT_THROUGHPUT: 375.0712714555968\nINFO     sglang_benchmarks.utils:utils.py:69 SHAREGPT_OUTPUT_LEN: None\nINFO     sglang_benchmarks.utils:utils.py:69 RANDOM_INPUT_LEN: None\nINFO     sglang_benchmarks.utils:utils.py:69 RANDOM_OUTPUT_LEN: None\nINFO     sglang_benchmarks.utils:utils.py:69 RANDOM_RANGE_RATIO: 0.0\nINFO     sglang_benchmarks.utils:utils.py:69 DURATION: 7.395927683915943\nINFO     sglang_benchmarks.utils:utils.py:69 COMPLETED: 10\n\n&#34;}], &#34;app_tests/benchmark_tests/llm/sglang_benchmarks/sglang_benchmark_test.py::test_sglang_benchmark[4-llama3_8B_fp16]&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;Passed&#34;, &#34;testId&#34;: &#34;app_tests/benchmark_tests/llm/sglang_benchmarks/sglang_benchmark_test.py::test_sglang_benchmark[4-llama3_8B_fp16]&#34;, &#34;duration&#34;: &#34;00:00:15&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;Passed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;app_tests/benchmark_tests/llm/sglang_benchmarks/sglang_benchmark_test.py::test_sglang_benchmark[4-llama3_8B_fp16]&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;00:00:15&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;----------------------------- Captured stdout call -----------------------------\nDownloading dataset llama3_8B_fp16\n  gguf: /tmp/pytest-of-nod/pytest-69/sglang_benchmark_test2/meta-llama-3.1-8b-instruct.f16.gguf\n  tokenizer_config.json: /tmp/pytest-of-nod/pytest-69/sglang_benchmark_test2/tokenizer_config.json\n\n----------------------------- Captured stderr call -----------------------------\nSpecial tokens have been added in the vocabulary, make sure the associated word embeddings are fine-tuned or trained.\nSpecial tokens have been added in the vocabulary, make sure the associated word embeddings are fine-tuned or trained.\n\r  0%|          | 0/10 [00:00&amp;lt;?, ?it/s]\r 10%|\u2588         | 1/10 [00:00&amp;lt;00:06,  1.32it/s]\r 30%|\u2588\u2588\u2588       | 3/10 [00:03&amp;lt;00:07,  1.05s/it]\r 40%|\u2588\u2588\u2588\u2588      | 4/10 [00:03&amp;lt;00:04,  1.30it/s]\r 50%|\u2588\u2588\u2588\u2588\u2588     | 5/10 [00:03&amp;lt;00:02,  1.73it/s]\r 60%|\u2588\u2588\u2588\u2588\u2588\u2588    | 6/10 [00:05&amp;lt;00:03,  1.01it/s]\r 90%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588 | 9/10 [00:06&amp;lt;00:00,  1.78it/s]\r100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 10/10 [00:06&amp;lt;00:00,  1.66it/s]\r100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 10/10 [00:06&amp;lt;00:00,  1.46it/s]\n\n------------------------------ Captured log call -------------------------------\nINFO     integration_tests.llm.utils:utils.py:50 Download model llama3_8B_fp16 with `hf_datasets` to /tmp/pytest-of-nod/pytest-69/sglang_benchmark_test2...\nINFO     integration_tests.llm.utils:utils.py:62 Model llama3_8B_fp16 successfully downloaded.\nINFO     sglang_benchmarks.sglang_benchmark_test:sglang_benchmark_test.py:32 Beginning SGLang benchmark test...\nINFO     integration_tests.llm.utils:utils.py:132 Waiting for server to start at http://localhost:30000...\nINFO     integration_tests.llm.utils:utils.py:137 Server successfully started\nINFO     sglang_benchmarks.sglang_benchmark_test:sglang_benchmark_test.py:54 Running SGLang Benchmark with the following args:\nINFO     sglang_benchmarks.sglang_benchmark_test:sglang_benchmark_test.py:55 Backend: sglang\nBase URL: http://localhost:30000\nNum Prompt: 10\nTokenizer: /tmp/pytest-of-nod/pytest-69/sglang_benchmark_test2\nRequest Rate: 4\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Namespace(num_prompts=10, base_url=&amp;#x27;http://localhost:30000&amp;#x27;, tokenizer=&amp;#x27;/tmp/pytest-of-nod/pytest-69/sglang_benchmark_test2&amp;#x27;, request_rate=4, backend=&amp;#x27;sglang&amp;#x27;, output_file=PosixPath(&amp;#x27;/tmp/pytest-of-nod/pytest-69/sglang_benchmark_test2/sglang_10_4.jsonl&amp;#x27;), seed=1, extra_request_body=None, port=8000, model=&amp;#x27;meta-llama/Llama-3.1-8B-Instruct&amp;#x27;, dataset_name=&amp;#x27;sharegpt&amp;#x27;, random_input_len=None, random_output_len=None, random_range_ratio=0.0, dataset_path=&amp;#x27;&amp;#x27;, sharegpt_output_len=None, multi=False, disable_tqdm=False, disable_stream=False, disable_ignore_eos=False)\n\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 #Input tokens: 1960\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 #Output tokens: 2774\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Starting initial single prompt test run...\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Initial test run completed. Starting main benchmark run...\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 \n============ Serving Benchmark Result ============\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Backend:                                 sglang    \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Traffic request rate:                    4         \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Successful requests:                     10        \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Benchmark duration (s):                  6.85      \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Total input tokens:                      1960      \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Total generated tokens:                  2774      \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Total generated tokens (retokenized):    2774      \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Request throughput (req/s):              1.46      \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Input token throughput (tok/s):          286.08    \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Output token throughput (tok/s):         404.90    \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Total token throughput (tok/s):          690.98    \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 ----------------End-to-End Latency----------------\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Mean E2E Latency (ms):                   3536.62   \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Median E2E Latency (ms):                 3978.64   \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 ---------------Time to First Token----------------\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Mean TTFT (ms):                          20.10     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Median TTFT (ms):                        18.94     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 P99 TTFT (ms):                           29.69     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 -----Time per Output Token (excl. 1st token)------\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Mean TPOT (ms):                          13.06     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Median TPOT (ms):                        13.17     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 P99 TPOT (ms):                           14.40     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 ---------------Inter-token Latency----------------\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Mean ITL (ms):                           12.72     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Median ITL (ms):                         13.12     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 P99 ITL (ms):                            22.59     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 ==================================================\nINFO     sglang_benchmarks.sglang_benchmark_test:sglang_benchmark_test.py:63 Benchmark run completed in 14.059074640274048 seconds\nINFO     sglang_benchmarks.sglang_benchmark_test:sglang_benchmark_test.py:64 ======== RESULTS ========\nINFO     sglang_benchmarks.utils:utils.py:69 BACKEND: sglang\nINFO     sglang_benchmarks.utils:utils.py:69 DATASET_NAME: sharegpt\nINFO     sglang_benchmarks.utils:utils.py:69 REQUEST_RATE: 4\nINFO     sglang_benchmarks.utils:utils.py:69 TOTAL_INPUT_TOKENS: 1960\nINFO     sglang_benchmarks.utils:utils.py:69 TOTAL_OUTPUT_TOKENS: 2774\nINFO     sglang_benchmarks.utils:utils.py:69 TOTAL_OUTPUT_TOKENS_RETOKENIZED: 2774\nINFO     sglang_benchmarks.utils:utils.py:69 MEAN_E2E_LATENCY_MS: 3536.6206157719716\nINFO     sglang_benchmarks.utils:utils.py:69 MEDIAN_E2E_LATENCY_MS: 3978.643195470795\nINFO     sglang_benchmarks.utils:utils.py:69 MEDIAN_TTFT_MS: 18.94495403394103\nINFO     sglang_benchmarks.utils:utils.py:69 MEDIAN_ITL_MS: 13.117333990521729\nINFO     sglang_benchmarks.utils:utils.py:69 OUTPUT_THROUGHPUT: 404.8953937357756\nINFO     sglang_benchmarks.utils:utils.py:69 SHAREGPT_OUTPUT_LEN: None\nINFO     sglang_benchmarks.utils:utils.py:69 RANDOM_INPUT_LEN: None\nINFO     sglang_benchmarks.utils:utils.py:69 RANDOM_OUTPUT_LEN: None\nINFO     sglang_benchmarks.utils:utils.py:69 RANDOM_RANGE_RATIO: 0.0\nINFO     sglang_benchmarks.utils:utils.py:69 DURATION: 6.8511522801127285\nINFO     sglang_benchmarks.utils:utils.py:69 COMPLETED: 10\n\n&#34;}], &#34;app_tests/benchmark_tests/llm/sglang_benchmarks/sglang_benchmark_test.py::test_sglang_benchmark[8-llama3_8B_fp16]&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;Passed&#34;, &#34;testId&#34;: &#34;app_tests/benchmark_tests/llm/sglang_benchmarks/sglang_benchmark_test.py::test_sglang_benchmark[8-llama3_8B_fp16]&#34;, &#34;duration&#34;: &#34;00:00:14&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;Passed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;app_tests/benchmark_tests/llm/sglang_benchmarks/sglang_benchmark_test.py::test_sglang_benchmark[8-llama3_8B_fp16]&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;00:00:14&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;----------------------------- Captured stdout call -----------------------------\nDownloading dataset llama3_8B_fp16\n  gguf: /tmp/pytest-of-nod/pytest-69/sglang_benchmark_test3/meta-llama-3.1-8b-instruct.f16.gguf\n  tokenizer_config.json: /tmp/pytest-of-nod/pytest-69/sglang_benchmark_test3/tokenizer_config.json\n\n----------------------------- Captured stderr call -----------------------------\nSpecial tokens have been added in the vocabulary, make sure the associated word embeddings are fine-tuned or trained.\nSpecial tokens have been added in the vocabulary, make sure the associated word embeddings are fine-tuned or trained.\n\r  0%|          | 0/10 [00:00&amp;lt;?, ?it/s]\r 10%|\u2588         | 1/10 [00:00&amp;lt;00:03,  2.26it/s]\r 20%|\u2588\u2588        | 2/10 [00:00&amp;lt;00:02,  3.53it/s]\r 30%|\u2588\u2588\u2588       | 3/10 [00:03&amp;lt;00:08,  1.28s/it]\r 40%|\u2588\u2588\u2588\u2588      | 4/10 [00:03&amp;lt;00:04,  1.21it/s]\r 50%|\u2588\u2588\u2588\u2588\u2588     | 5/10 [00:03&amp;lt;00:03,  1.53it/s]\r 60%|\u2588\u2588\u2588\u2588\u2588\u2588    | 6/10 [00:05&amp;lt;00:03,  1.06it/s]\r 90%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588 | 9/10 [00:05&amp;lt;00:00,  1.95it/s]\r100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 10/10 [00:06&amp;lt;00:00,  1.70it/s]\r100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 10/10 [00:06&amp;lt;00:00,  1.52it/s]\n\n------------------------------ Captured log call -------------------------------\nINFO     integration_tests.llm.utils:utils.py:50 Download model llama3_8B_fp16 with `hf_datasets` to /tmp/pytest-of-nod/pytest-69/sglang_benchmark_test3...\nINFO     integration_tests.llm.utils:utils.py:62 Model llama3_8B_fp16 successfully downloaded.\nINFO     sglang_benchmarks.sglang_benchmark_test:sglang_benchmark_test.py:32 Beginning SGLang benchmark test...\nINFO     integration_tests.llm.utils:utils.py:132 Waiting for server to start at http://localhost:30000...\nINFO     integration_tests.llm.utils:utils.py:137 Server successfully started\nINFO     sglang_benchmarks.sglang_benchmark_test:sglang_benchmark_test.py:54 Running SGLang Benchmark with the following args:\nINFO     sglang_benchmarks.sglang_benchmark_test:sglang_benchmark_test.py:55 Backend: sglang\nBase URL: http://localhost:30000\nNum Prompt: 10\nTokenizer: /tmp/pytest-of-nod/pytest-69/sglang_benchmark_test3\nRequest Rate: 8\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Namespace(num_prompts=10, base_url=&amp;#x27;http://localhost:30000&amp;#x27;, tokenizer=&amp;#x27;/tmp/pytest-of-nod/pytest-69/sglang_benchmark_test3&amp;#x27;, request_rate=8, backend=&amp;#x27;sglang&amp;#x27;, output_file=PosixPath(&amp;#x27;/tmp/pytest-of-nod/pytest-69/sglang_benchmark_test3/sglang_10_8.jsonl&amp;#x27;), seed=1, extra_request_body=None, port=8000, model=&amp;#x27;meta-llama/Llama-3.1-8B-Instruct&amp;#x27;, dataset_name=&amp;#x27;sharegpt&amp;#x27;, random_input_len=None, random_output_len=None, random_range_ratio=0.0, dataset_path=&amp;#x27;&amp;#x27;, sharegpt_output_len=None, multi=False, disable_tqdm=False, disable_stream=False, disable_ignore_eos=False)\n\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 #Input tokens: 1960\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 #Output tokens: 2774\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Starting initial single prompt test run...\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Initial test run completed. Starting main benchmark run...\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 \n============ Serving Benchmark Result ============\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Backend:                                 sglang    \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Traffic request rate:                    8         \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Successful requests:                     10        \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Benchmark duration (s):                  6.57      \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Total input tokens:                      1960      \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Total generated tokens:                  2774      \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Total generated tokens (retokenized):    2774      \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Request throughput (req/s):              1.52      \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Input token throughput (tok/s):          298.15    \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Output token throughput (tok/s):         421.98    \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Total token throughput (tok/s):          720.13    \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 ----------------End-to-End Latency----------------\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Mean E2E Latency (ms):                   3586.92   \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Median E2E Latency (ms):                 4081.14   \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 ---------------Time to First Token----------------\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Mean TTFT (ms):                          23.75     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Median TTFT (ms):                        20.77     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 P99 TTFT (ms):                           58.10     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 -----Time per Output Token (excl. 1st token)------\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Mean TPOT (ms):                          13.28     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Median TPOT (ms):                        13.25     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 P99 TPOT (ms):                           14.49     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 ---------------Inter-token Latency----------------\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Mean ITL (ms):                           12.89     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Median ITL (ms):                         13.06     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 P99 ITL (ms):                            22.17     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 ==================================================\nINFO     sglang_benchmarks.sglang_benchmark_test:sglang_benchmark_test.py:63 Benchmark run completed in 13.633504629135132 seconds\nINFO     sglang_benchmarks.sglang_benchmark_test:sglang_benchmark_test.py:64 ======== RESULTS ========\nINFO     sglang_benchmarks.utils:utils.py:69 BACKEND: sglang\nINFO     sglang_benchmarks.utils:utils.py:69 DATASET_NAME: sharegpt\nINFO     sglang_benchmarks.utils:utils.py:69 REQUEST_RATE: 8\nINFO     sglang_benchmarks.utils:utils.py:69 TOTAL_INPUT_TOKENS: 1960\nINFO     sglang_benchmarks.utils:utils.py:69 TOTAL_OUTPUT_TOKENS: 2774\nINFO     sglang_benchmarks.utils:utils.py:69 TOTAL_OUTPUT_TOKENS_RETOKENIZED: 2774\nINFO     sglang_benchmarks.utils:utils.py:69 MEAN_E2E_LATENCY_MS: 3586.9206042261794\nINFO     sglang_benchmarks.utils:utils.py:69 MEDIAN_E2E_LATENCY_MS: 4081.1400689417496\nINFO     sglang_benchmarks.utils:utils.py:69 MEDIAN_TTFT_MS: 20.76890890020877\nINFO     sglang_benchmarks.utils:utils.py:69 MEDIAN_ITL_MS: 13.056489056907594\nINFO     sglang_benchmarks.utils:utils.py:69 OUTPUT_THROUGHPUT: 421.97599550332853\nINFO     sglang_benchmarks.utils:utils.py:69 SHAREGPT_OUTPUT_LEN: None\nINFO     sglang_benchmarks.utils:utils.py:69 RANDOM_INPUT_LEN: None\nINFO     sglang_benchmarks.utils:utils.py:69 RANDOM_OUTPUT_LEN: None\nINFO     sglang_benchmarks.utils:utils.py:69 RANDOM_RANGE_RATIO: 0.0\nINFO     sglang_benchmarks.utils:utils.py:69 DURATION: 6.57383365300484\nINFO     sglang_benchmarks.utils:utils.py:69 COMPLETED: 10\n\n&#34;}], &#34;app_tests/benchmark_tests/llm/sglang_benchmarks/sglang_benchmark_test.py::test_sglang_benchmark[16-llama3_8B_fp16]&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;Passed&#34;, &#34;testId&#34;: &#34;app_tests/benchmark_tests/llm/sglang_benchmarks/sglang_benchmark_test.py::test_sglang_benchmark[16-llama3_8B_fp16]&#34;, &#34;duration&#34;: &#34;00:00:14&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;Passed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;app_tests/benchmark_tests/llm/sglang_benchmarks/sglang_benchmark_test.py::test_sglang_benchmark[16-llama3_8B_fp16]&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;00:00:14&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;----------------------------- Captured stdout call -----------------------------\nDownloading dataset llama3_8B_fp16\n  gguf: /tmp/pytest-of-nod/pytest-69/sglang_benchmark_test4/meta-llama-3.1-8b-instruct.f16.gguf\n  tokenizer_config.json: /tmp/pytest-of-nod/pytest-69/sglang_benchmark_test4/tokenizer_config.json\n\n----------------------------- Captured stderr call -----------------------------\nSpecial tokens have been added in the vocabulary, make sure the associated word embeddings are fine-tuned or trained.\nSpecial tokens have been added in the vocabulary, make sure the associated word embeddings are fine-tuned or trained.\n\r  0%|          | 0/10 [00:00&amp;lt;?, ?it/s]\r 10%|\u2588         | 1/10 [00:00&amp;lt;00:02,  3.26it/s]\r 20%|\u2588\u2588        | 2/10 [00:00&amp;lt;00:01,  4.20it/s]\r 30%|\u2588\u2588\u2588       | 3/10 [00:02&amp;lt;00:08,  1.26s/it]\r 40%|\u2588\u2588\u2588\u2588      | 4/10 [00:03&amp;lt;00:05,  1.15it/s]\r 50%|\u2588\u2588\u2588\u2588\u2588     | 5/10 [00:03&amp;lt;00:03,  1.52it/s]\r 60%|\u2588\u2588\u2588\u2588\u2588\u2588    | 6/10 [00:04&amp;lt;00:03,  1.16it/s]\r 90%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588 | 9/10 [00:05&amp;lt;00:00,  2.07it/s]\r100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 10/10 [00:06&amp;lt;00:00,  1.74it/s]\r100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 10/10 [00:06&amp;lt;00:00,  1.57it/s]\n\n------------------------------ Captured log call -------------------------------\nINFO     integration_tests.llm.utils:utils.py:50 Download model llama3_8B_fp16 with `hf_datasets` to /tmp/pytest-of-nod/pytest-69/sglang_benchmark_test4...\nINFO     integration_tests.llm.utils:utils.py:62 Model llama3_8B_fp16 successfully downloaded.\nINFO     sglang_benchmarks.sglang_benchmark_test:sglang_benchmark_test.py:32 Beginning SGLang benchmark test...\nINFO     integration_tests.llm.utils:utils.py:132 Waiting for server to start at http://localhost:30000...\nINFO     integration_tests.llm.utils:utils.py:137 Server successfully started\nINFO     sglang_benchmarks.sglang_benchmark_test:sglang_benchmark_test.py:54 Running SGLang Benchmark with the following args:\nINFO     sglang_benchmarks.sglang_benchmark_test:sglang_benchmark_test.py:55 Backend: sglang\nBase URL: http://localhost:30000\nNum Prompt: 10\nTokenizer: /tmp/pytest-of-nod/pytest-69/sglang_benchmark_test4\nRequest Rate: 16\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Namespace(num_prompts=10, base_url=&amp;#x27;http://localhost:30000&amp;#x27;, tokenizer=&amp;#x27;/tmp/pytest-of-nod/pytest-69/sglang_benchmark_test4&amp;#x27;, request_rate=16, backend=&amp;#x27;sglang&amp;#x27;, output_file=PosixPath(&amp;#x27;/tmp/pytest-of-nod/pytest-69/sglang_benchmark_test4/sglang_10_16.jsonl&amp;#x27;), seed=1, extra_request_body=None, port=8000, model=&amp;#x27;meta-llama/Llama-3.1-8B-Instruct&amp;#x27;, dataset_name=&amp;#x27;sharegpt&amp;#x27;, random_input_len=None, random_output_len=None, random_range_ratio=0.0, dataset_path=&amp;#x27;&amp;#x27;, sharegpt_output_len=None, multi=False, disable_tqdm=False, disable_stream=False, disable_ignore_eos=False)\n\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 #Input tokens: 1960\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 #Output tokens: 2774\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Starting initial single prompt test run...\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Initial test run completed. Starting main benchmark run...\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 \n============ Serving Benchmark Result ============\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Backend:                                 sglang    \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Traffic request rate:                    16        \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Successful requests:                     10        \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Benchmark duration (s):                  6.35      \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Total input tokens:                      1960      \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Total generated tokens:                  2774      \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Total generated tokens (retokenized):    2774      \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Request throughput (req/s):              1.57      \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Input token throughput (tok/s):          308.47    \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Output token throughput (tok/s):         436.58    \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Total token throughput (tok/s):          745.04    \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 ----------------End-to-End Latency----------------\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Mean E2E Latency (ms):                   3557.37   \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Median E2E Latency (ms):                 4045.17   \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 ---------------Time to First Token----------------\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Mean TTFT (ms):                          18.64     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Median TTFT (ms):                        17.78     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 P99 TTFT (ms):                           27.18     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 -----Time per Output Token (excl. 1st token)------\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Mean TPOT (ms):                          13.42     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Median TPOT (ms):                        13.18     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 P99 TPOT (ms):                           16.23     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 ---------------Inter-token Latency----------------\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Mean ITL (ms):                           12.80     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Median ITL (ms):                         13.02     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 P99 ITL (ms):                            22.10     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 ==================================================\nINFO     sglang_benchmarks.sglang_benchmark_test:sglang_benchmark_test.py:63 Benchmark run completed in 13.39802861213684 seconds\nINFO     sglang_benchmarks.sglang_benchmark_test:sglang_benchmark_test.py:64 ======== RESULTS ========\nINFO     sglang_benchmarks.utils:utils.py:69 BACKEND: sglang\nINFO     sglang_benchmarks.utils:utils.py:69 DATASET_NAME: sharegpt\nINFO     sglang_benchmarks.utils:utils.py:69 REQUEST_RATE: 16\nINFO     sglang_benchmarks.utils:utils.py:69 TOTAL_INPUT_TOKENS: 1960\nINFO     sglang_benchmarks.utils:utils.py:69 TOTAL_OUTPUT_TOKENS: 2774\nINFO     sglang_benchmarks.utils:utils.py:69 TOTAL_OUTPUT_TOKENS_RETOKENIZED: 2774\nINFO     sglang_benchmarks.utils:utils.py:69 MEAN_E2E_LATENCY_MS: 3557.365658530034\nINFO     sglang_benchmarks.utils:utils.py:69 MEDIAN_E2E_LATENCY_MS: 4045.1705461600795\nINFO     sglang_benchmarks.utils:utils.py:69 MEDIAN_TTFT_MS: 17.781379050575197\nINFO     sglang_benchmarks.utils:utils.py:69 MEDIAN_ITL_MS: 13.022742932662368\nINFO     sglang_benchmarks.utils:utils.py:69 OUTPUT_THROUGHPUT: 436.57618281739923\nINFO     sglang_benchmarks.utils:utils.py:69 SHAREGPT_OUTPUT_LEN: None\nINFO     sglang_benchmarks.utils:utils.py:69 RANDOM_INPUT_LEN: None\nINFO     sglang_benchmarks.utils:utils.py:69 RANDOM_OUTPUT_LEN: None\nINFO     sglang_benchmarks.utils:utils.py:69 RANDOM_RANGE_RATIO: 0.0\nINFO     sglang_benchmarks.utils:utils.py:69 DURATION: 6.353988396935165\nINFO     sglang_benchmarks.utils:utils.py:69 COMPLETED: 10\n\n&#34;}], &#34;app_tests/benchmark_tests/llm/sglang_benchmarks/sglang_benchmark_test.py::test_sglang_benchmark[32-llama3_8B_fp16]&#34;: [{&#34;extras&#34;: [], &#34;result&#34;: &#34;Passed&#34;, &#34;testId&#34;: &#34;app_tests/benchmark_tests/llm/sglang_benchmarks/sglang_benchmark_test.py::test_sglang_benchmark[32-llama3_8B_fp16]&#34;, &#34;duration&#34;: &#34;00:00:14&#34;, &#34;resultsTableRow&#34;: [&#34;&lt;td class=\&#34;col-result\&#34;&gt;Passed&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-testId\&#34;&gt;app_tests/benchmark_tests/llm/sglang_benchmarks/sglang_benchmark_test.py::test_sglang_benchmark[32-llama3_8B_fp16]&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-duration\&#34;&gt;00:00:14&lt;/td&gt;&#34;, &#34;&lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;&#34;], &#34;log&#34;: &#34;----------------------------- Captured stdout call -----------------------------\nDownloading dataset llama3_8B_fp16\n  gguf: /tmp/pytest-of-nod/pytest-69/sglang_benchmark_test5/meta-llama-3.1-8b-instruct.f16.gguf\n  tokenizer_config.json: /tmp/pytest-of-nod/pytest-69/sglang_benchmark_test5/tokenizer_config.json\n\n----------------------------- Captured stderr call -----------------------------\nSpecial tokens have been added in the vocabulary, make sure the associated word embeddings are fine-tuned or trained.\nSpecial tokens have been added in the vocabulary, make sure the associated word embeddings are fine-tuned or trained.\n\r  0%|          | 0/10 [00:00&amp;lt;?, ?it/s]\r 10%|\u2588         | 1/10 [00:00&amp;lt;00:02,  4.36it/s]\r 20%|\u2588\u2588        | 2/10 [00:00&amp;lt;00:01,  4.53it/s]\r 30%|\u2588\u2588\u2588       | 3/10 [00:02&amp;lt;00:08,  1.23s/it]\r 40%|\u2588\u2588\u2588\u2588      | 4/10 [00:03&amp;lt;00:05,  1.13it/s]\r 50%|\u2588\u2588\u2588\u2588\u2588     | 5/10 [00:03&amp;lt;00:03,  1.51it/s]\r 60%|\u2588\u2588\u2588\u2588\u2588\u2588    | 6/10 [00:04&amp;lt;00:03,  1.20it/s]\r 80%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588  | 8/10 [00:04&amp;lt;00:00,  2.22it/s]\r 90%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588 | 9/10 [00:05&amp;lt;00:00,  2.11it/s]\r100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 10/10 [00:06&amp;lt;00:00,  1.68it/s]\r100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 10/10 [00:06&amp;lt;00:00,  1.60it/s]\n\n------------------------------ Captured log call -------------------------------\nINFO     integration_tests.llm.utils:utils.py:50 Download model llama3_8B_fp16 with `hf_datasets` to /tmp/pytest-of-nod/pytest-69/sglang_benchmark_test5...\nINFO     integration_tests.llm.utils:utils.py:62 Model llama3_8B_fp16 successfully downloaded.\nINFO     sglang_benchmarks.sglang_benchmark_test:sglang_benchmark_test.py:32 Beginning SGLang benchmark test...\nINFO     integration_tests.llm.utils:utils.py:132 Waiting for server to start at http://localhost:30000...\nINFO     integration_tests.llm.utils:utils.py:137 Server successfully started\nINFO     sglang_benchmarks.sglang_benchmark_test:sglang_benchmark_test.py:54 Running SGLang Benchmark with the following args:\nINFO     sglang_benchmarks.sglang_benchmark_test:sglang_benchmark_test.py:55 Backend: sglang\nBase URL: http://localhost:30000\nNum Prompt: 10\nTokenizer: /tmp/pytest-of-nod/pytest-69/sglang_benchmark_test5\nRequest Rate: 32\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Namespace(num_prompts=10, base_url=&amp;#x27;http://localhost:30000&amp;#x27;, tokenizer=&amp;#x27;/tmp/pytest-of-nod/pytest-69/sglang_benchmark_test5&amp;#x27;, request_rate=32, backend=&amp;#x27;sglang&amp;#x27;, output_file=PosixPath(&amp;#x27;/tmp/pytest-of-nod/pytest-69/sglang_benchmark_test5/sglang_10_32.jsonl&amp;#x27;), seed=1, extra_request_body=None, port=8000, model=&amp;#x27;meta-llama/Llama-3.1-8B-Instruct&amp;#x27;, dataset_name=&amp;#x27;sharegpt&amp;#x27;, random_input_len=None, random_output_len=None, random_range_ratio=0.0, dataset_path=&amp;#x27;&amp;#x27;, sharegpt_output_len=None, multi=False, disable_tqdm=False, disable_stream=False, disable_ignore_eos=False)\n\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 #Input tokens: 1960\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 #Output tokens: 2774\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Starting initial single prompt test run...\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Initial test run completed. Starting main benchmark run...\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 \n============ Serving Benchmark Result ============\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Backend:                                 sglang    \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Traffic request rate:                    32        \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Successful requests:                     10        \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Benchmark duration (s):                  6.23      \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Total input tokens:                      1960      \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Total generated tokens:                  2774      \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Total generated tokens (retokenized):    2774      \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Request throughput (req/s):              1.60      \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Input token throughput (tok/s):          314.41    \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Output token throughput (tok/s):         444.99    \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Total token throughput (tok/s):          759.40    \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 ----------------End-to-End Latency----------------\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Mean E2E Latency (ms):                   3534.97   \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Median E2E Latency (ms):                 4019.67   \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 ---------------Time to First Token----------------\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Mean TTFT (ms):                          18.57     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Median TTFT (ms):                        19.42     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 P99 TTFT (ms):                           21.52     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 -----Time per Output Token (excl. 1st token)------\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Mean TPOT (ms):                          13.34     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Median TPOT (ms):                        13.11     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 P99 TPOT (ms):                           16.10     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 ---------------Inter-token Latency----------------\nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Mean ITL (ms):                           12.72     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 Median ITL (ms):                         13.01     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 P99 ITL (ms):                            15.93     \nINFO     sglang_benchmarks.sglang_benchmark_test:mock.py:1189 ==================================================\nINFO     sglang_benchmarks.sglang_benchmark_test:sglang_benchmark_test.py:63 Benchmark run completed in 13.464574337005615 seconds\nINFO     sglang_benchmarks.sglang_benchmark_test:sglang_benchmark_test.py:64 ======== RESULTS ========\nINFO     sglang_benchmarks.utils:utils.py:69 BACKEND: sglang\nINFO     sglang_benchmarks.utils:utils.py:69 DATASET_NAME: sharegpt\nINFO     sglang_benchmarks.utils:utils.py:69 REQUEST_RATE: 32\nINFO     sglang_benchmarks.utils:utils.py:69 TOTAL_INPUT_TOKENS: 1960\nINFO     sglang_benchmarks.utils:utils.py:69 TOTAL_OUTPUT_TOKENS: 2774\nINFO     sglang_benchmarks.utils:utils.py:69 TOTAL_OUTPUT_TOKENS_RETOKENIZED: 2774\nINFO     sglang_benchmarks.utils:utils.py:69 MEAN_E2E_LATENCY_MS: 3534.971269289963\nINFO     sglang_benchmarks.utils:utils.py:69 MEDIAN_E2E_LATENCY_MS: 4019.665283500217\nINFO     sglang_benchmarks.utils:utils.py:69 MEDIAN_TTFT_MS: 19.417044357396662\nINFO     sglang_benchmarks.utils:utils.py:69 MEDIAN_ITL_MS: 13.010305003263056\nINFO     sglang_benchmarks.utils:utils.py:69 OUTPUT_THROUGHPUT: 444.99113953705347\nINFO     sglang_benchmarks.utils:utils.py:69 SHAREGPT_OUTPUT_LEN: None\nINFO     sglang_benchmarks.utils:utils.py:69 RANDOM_INPUT_LEN: None\nINFO     sglang_benchmarks.utils:utils.py:69 RANDOM_OUTPUT_LEN: None\nINFO     sglang_benchmarks.utils:utils.py:69 RANDOM_RANGE_RATIO: 0.0\nINFO     sglang_benchmarks.utils:utils.py:69 DURATION: 6.233831987949088\nINFO     sglang_benchmarks.utils:utils.py:69 COMPLETED: 10\n\n&#34;}]}, &#34;renderCollapsed&#34;: [&#34;passed&#34;], &#34;initialSort&#34;: &#34;result&#34;, &#34;title&#34;: &#34;index.html&#34;}"></div>
+    <script>
+      (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
+const { getCollapsedCategory, setCollapsedIds } = require('./storage.js')
+
+class DataManager {
+    setManager(data) {
+        const collapsedCategories = [...getCollapsedCategory(data.renderCollapsed)]
+        const collapsedIds = []
+        const tests = Object.values(data.tests).flat().map((test, index) => {
+            const collapsed = collapsedCategories.includes(test.result.toLowerCase())
+            const id = `test_${index}`
+            if (collapsed) {
+                collapsedIds.push(id)
+            }
+            return {
+                ...test,
+                id,
+                collapsed,
+            }
+        })
+        const dataBlob = { ...data, tests }
+        this.data = { ...dataBlob }
+        this.renderData = { ...dataBlob }
+        setCollapsedIds(collapsedIds)
+    }
+
+    get allData() {
+        return { ...this.data }
+    }
+
+    resetRender() {
+        this.renderData = { ...this.data }
+    }
+
+    setRender(data) {
+        this.renderData.tests = [...data]
+    }
+
+    toggleCollapsedItem(id) {
+        this.renderData.tests = this.renderData.tests.map((test) =>
+            test.id === id ? { ...test, collapsed: !test.collapsed } : test,
+        )
+    }
+
+    set allCollapsed(collapsed) {
+        this.renderData = { ...this.renderData, tests: [...this.renderData.tests.map((test) => (
+            { ...test, collapsed }
+        ))] }
+    }
+
+    get testSubset() {
+        return [...this.renderData.tests]
+    }
+
+    get environment() {
+        return this.renderData.environment
+    }
+
+    get initialSort() {
+        return this.data.initialSort
+    }
+}
+
+module.exports = {
+    manager: new DataManager(),
+}
+
+},{"./storage.js":8}],2:[function(require,module,exports){
+const mediaViewer = require('./mediaviewer.js')
+const templateEnvRow = document.getElementById('template_environment_row')
+const templateResult = document.getElementById('template_results-table__tbody')
+
+function htmlToElements(html) {
+    const temp = document.createElement('template')
+    temp.innerHTML = html
+    return temp.content.childNodes
+}
+
+const find = (selector, elem) => {
+    if (!elem) {
+        elem = document
+    }
+    return elem.querySelector(selector)
+}
+
+const findAll = (selector, elem) => {
+    if (!elem) {
+        elem = document
+    }
+    return [...elem.querySelectorAll(selector)]
+}
+
+const dom = {
+    getStaticRow: (key, value) => {
+        const envRow = templateEnvRow.content.cloneNode(true)
+        const isObj = typeof value === 'object' && value !== null
+        const values = isObj ? Object.keys(value).map((k) => `${k}: ${value[k]}`) : null
+
+        const valuesElement = htmlToElements(
+            values ? `<ul>${values.map((val) => `<li>${val}</li>`).join('')}<ul>` : `<div>${value}</div>`)[0]
+        const td = findAll('td', envRow)
+        td[0].textContent = key
+        td[1].appendChild(valuesElement)
+
+        return envRow
+    },
+    getResultTBody: ({ testId, id, log, extras, resultsTableRow, tableHtml, result, collapsed }) => {
+        const resultBody = templateResult.content.cloneNode(true)
+        resultBody.querySelector('tbody').classList.add(result.toLowerCase())
+        resultBody.querySelector('tbody').id = testId
+        resultBody.querySelector('.collapsible').dataset.id = id
+
+        resultsTableRow.forEach((html) => {
+            const t = document.createElement('template')
+            t.innerHTML = html
+            resultBody.querySelector('.collapsible').appendChild(t.content)
+        })
+
+        if (log) {
+            // Wrap lines starting with "E" with span.error to color those lines red
+            const wrappedLog = log.replace(/^E.*$/gm, (match) => `<span class="error">${match}</span>`)
+            resultBody.querySelector('.log').innerHTML = wrappedLog
+        } else {
+            resultBody.querySelector('.log').remove()
+        }
+
+        if (collapsed) {
+            resultBody.querySelector('.collapsible > td')?.classList.add('collapsed')
+            resultBody.querySelector('.extras-row').classList.add('hidden')
+        } else {
+            resultBody.querySelector('.collapsible > td')?.classList.remove('collapsed')
+        }
+
+        const media = []
+        extras?.forEach(({ name, format_type, content }) => {
+            if (['image', 'video'].includes(format_type)) {
+                media.push({ path: content, name, format_type })
+            }
+
+            if (format_type === 'html') {
+                resultBody.querySelector('.extraHTML').insertAdjacentHTML('beforeend', `<div>${content}</div>`)
+            }
+        })
+        mediaViewer.setup(resultBody, media)
+
+        // Add custom html from the pytest_html_results_table_html hook
+        tableHtml?.forEach((item) => {
+            resultBody.querySelector('td[class="extra"]').insertAdjacentHTML('beforeend', item)
+        })
+
+        return resultBody
+    },
+}
+
+module.exports = {
+    dom,
+    htmlToElements,
+    find,
+    findAll,
+}
+
+},{"./mediaviewer.js":6}],3:[function(require,module,exports){
+const { manager } = require('./datamanager.js')
+const { doSort } = require('./sort.js')
+const storageModule = require('./storage.js')
+
+const getFilteredSubSet = (filter) =>
+    manager.allData.tests.filter(({ result }) => filter.includes(result.toLowerCase()))
+
+const doInitFilter = () => {
+    const currentFilter = storageModule.getVisible()
+    const filteredSubset = getFilteredSubSet(currentFilter)
+    manager.setRender(filteredSubset)
+}
+
+const doFilter = (type, show) => {
+    if (show) {
+        storageModule.showCategory(type)
+    } else {
+        storageModule.hideCategory(type)
+    }
+
+    const currentFilter = storageModule.getVisible()
+    const filteredSubset = getFilteredSubSet(currentFilter)
+    manager.setRender(filteredSubset)
+
+    const sortColumn = storageModule.getSort()
+    doSort(sortColumn, true)
+}
+
+module.exports = {
+    doFilter,
+    doInitFilter,
+}
+
+},{"./datamanager.js":1,"./sort.js":7,"./storage.js":8}],4:[function(require,module,exports){
+const { redraw, bindEvents, renderStatic } = require('./main.js')
+const { doInitFilter } = require('./filter.js')
+const { doInitSort } = require('./sort.js')
+const { manager } = require('./datamanager.js')
+const data = JSON.parse(document.getElementById('data-container').dataset.jsonblob)
+
+function init() {
+    manager.setManager(data)
+    doInitFilter()
+    doInitSort()
+    renderStatic()
+    redraw()
+    bindEvents()
+}
+
+init()
+
+},{"./datamanager.js":1,"./filter.js":3,"./main.js":5,"./sort.js":7}],5:[function(require,module,exports){
+const { dom, find, findAll } = require('./dom.js')
+const { manager } = require('./datamanager.js')
+const { doSort } = require('./sort.js')
+const { doFilter } = require('./filter.js')
+const {
+    getVisible,
+    getCollapsedIds,
+    setCollapsedIds,
+    getSort,
+    getSortDirection,
+    possibleFilters,
+} = require('./storage.js')
+
+const removeChildren = (node) => {
+    while (node.firstChild) {
+        node.removeChild(node.firstChild)
+    }
+}
+
+const renderStatic = () => {
+    const renderEnvironmentTable = () => {
+        const environment = manager.environment
+        const rows = Object.keys(environment).map((key) => dom.getStaticRow(key, environment[key]))
+        const table = document.getElementById('environment')
+        removeChildren(table)
+        rows.forEach((row) => table.appendChild(row))
+    }
+    renderEnvironmentTable()
+}
+
+const addItemToggleListener = (elem) => {
+    elem.addEventListener('click', ({ target }) => {
+        const id = target.parentElement.dataset.id
+        manager.toggleCollapsedItem(id)
+
+        const collapsedIds = getCollapsedIds()
+        if (collapsedIds.includes(id)) {
+            const updated = collapsedIds.filter((item) => item !== id)
+            setCollapsedIds(updated)
+        } else {
+            collapsedIds.push(id)
+            setCollapsedIds(collapsedIds)
+        }
+        redraw()
+    })
+}
+
+const renderContent = (tests) => {
+    const sortAttr = getSort(manager.initialSort)
+    const sortAsc = JSON.parse(getSortDirection())
+    const rows = tests.map(dom.getResultTBody)
+    const table = document.getElementById('results-table')
+    const tableHeader = document.getElementById('results-table-head')
+
+    const newTable = document.createElement('table')
+    newTable.id = 'results-table'
+
+    // remove all sorting classes and set the relevant
+    findAll('.sortable', tableHeader).forEach((elem) => elem.classList.remove('asc', 'desc'))
+    tableHeader.querySelector(`.sortable[data-column-type="${sortAttr}"]`)?.classList.add(sortAsc ? 'desc' : 'asc')
+    newTable.appendChild(tableHeader)
+
+    if (!rows.length) {
+        const emptyTable = document.getElementById('template_results-table__body--empty').content.cloneNode(true)
+        newTable.appendChild(emptyTable)
+    } else {
+        rows.forEach((row) => {
+            if (!!row) {
+                findAll('.collapsible td:not(.col-links', row).forEach(addItemToggleListener)
+                find('.logexpander', row).addEventListener('click',
+                    (evt) => evt.target.parentNode.classList.toggle('expanded'),
+                )
+                newTable.appendChild(row)
+            }
+        })
+    }
+
+    table.replaceWith(newTable)
+}
+
+const renderDerived = () => {
+    const currentFilter = getVisible()
+    possibleFilters.forEach((result) => {
+        const input = document.querySelector(`input[data-test-result="${result}"]`)
+        input.checked = currentFilter.includes(result)
+    })
+}
+
+const bindEvents = () => {
+    const filterColumn = (evt) => {
+        const { target: element } = evt
+        const { testResult } = element.dataset
+
+        doFilter(testResult, element.checked)
+        const collapsedIds = getCollapsedIds()
+        const updated = manager.renderData.tests.map((test) => {
+            return {
+                ...test,
+                collapsed: collapsedIds.includes(test.id),
+            }
+        })
+        manager.setRender(updated)
+        redraw()
+    }
+
+    const header = document.getElementById('environment-header')
+    header.addEventListener('click', () => {
+        const table = document.getElementById('environment')
+        table.classList.toggle('hidden')
+        header.classList.toggle('collapsed')
+    })
+
+    findAll('input[name="filter_checkbox"]').forEach((elem) => {
+        elem.addEventListener('click', filterColumn)
+    })
+
+    findAll('.sortable').forEach((elem) => {
+        elem.addEventListener('click', (evt) => {
+            const { target: element } = evt
+            const { columnType } = element.dataset
+            doSort(columnType)
+            redraw()
+        })
+    })
+
+    document.getElementById('show_all_details').addEventListener('click', () => {
+        manager.allCollapsed = false
+        setCollapsedIds([])
+        redraw()
+    })
+    document.getElementById('hide_all_details').addEventListener('click', () => {
+        manager.allCollapsed = true
+        const allIds = manager.renderData.tests.map((test) => test.id)
+        setCollapsedIds(allIds)
+        redraw()
+    })
+}
+
+const redraw = () => {
+    const { testSubset } = manager
+
+    renderContent(testSubset)
+    renderDerived()
+}
+
+module.exports = {
+    redraw,
+    bindEvents,
+    renderStatic,
+}
+
+},{"./datamanager.js":1,"./dom.js":2,"./filter.js":3,"./sort.js":7,"./storage.js":8}],6:[function(require,module,exports){
+class MediaViewer {
+    constructor(assets) {
+        this.assets = assets
+        this.index = 0
+    }
+
+    nextActive() {
+        this.index = this.index === this.assets.length - 1 ? 0 : this.index + 1
+        return [this.activeFile, this.index]
+    }
+
+    prevActive() {
+        this.index = this.index === 0 ? this.assets.length - 1 : this.index -1
+        return [this.activeFile, this.index]
+    }
+
+    get currentIndex() {
+        return this.index
+    }
+
+    get activeFile() {
+        return this.assets[this.index]
+    }
+}
+
+
+const setup = (resultBody, assets) => {
+    if (!assets.length) {
+        resultBody.querySelector('.media').classList.add('hidden')
+        return
+    }
+
+    const mediaViewer = new MediaViewer(assets)
+    const container = resultBody.querySelector('.media-container')
+    const leftArrow = resultBody.querySelector('.media-container__nav--left')
+    const rightArrow = resultBody.querySelector('.media-container__nav--right')
+    const mediaName = resultBody.querySelector('.media__name')
+    const counter = resultBody.querySelector('.media__counter')
+    const imageEl = resultBody.querySelector('img')
+    const sourceEl = resultBody.querySelector('source')
+    const videoEl = resultBody.querySelector('video')
+
+    const setImg = (media, index) => {
+        if (media?.format_type === 'image') {
+            imageEl.src = media.path
+
+            imageEl.classList.remove('hidden')
+            videoEl.classList.add('hidden')
+        } else if (media?.format_type === 'video') {
+            sourceEl.src = media.path
+
+            videoEl.classList.remove('hidden')
+            imageEl.classList.add('hidden')
+        }
+
+        mediaName.innerText = media?.name
+        counter.innerText = `${index + 1} / ${assets.length}`
+    }
+    setImg(mediaViewer.activeFile, mediaViewer.currentIndex)
+
+    const moveLeft = () => {
+        const [media, index] = mediaViewer.prevActive()
+        setImg(media, index)
+    }
+    const doRight = () => {
+        const [media, index] = mediaViewer.nextActive()
+        setImg(media, index)
+    }
+    const openImg = () => {
+        window.open(mediaViewer.activeFile.path, '_blank')
+    }
+    if (assets.length === 1) {
+        container.classList.add('media-container--fullscreen')
+    } else {
+        leftArrow.addEventListener('click', moveLeft)
+        rightArrow.addEventListener('click', doRight)
+    }
+    imageEl.addEventListener('click', openImg)
+}
+
+module.exports = {
+    setup,
+}
+
+},{}],7:[function(require,module,exports){
+const { manager } = require('./datamanager.js')
+const storageModule = require('./storage.js')
+
+const genericSort = (list, key, ascending, customOrder) => {
+    let sorted
+    if (customOrder) {
+        sorted = list.sort((a, b) => {
+            const aValue = a.result.toLowerCase()
+            const bValue = b.result.toLowerCase()
+
+            const aIndex = customOrder.findIndex((item) => item.toLowerCase() === aValue)
+            const bIndex = customOrder.findIndex((item) => item.toLowerCase() === bValue)
+
+            // Compare the indices to determine the sort order
+            return aIndex - bIndex
+        })
+    } else {
+        sorted = list.sort((a, b) => a[key] === b[key] ? 0 : a[key] > b[key] ? 1 : -1)
+    }
+
+    if (ascending) {
+        sorted.reverse()
+    }
+    return sorted
+}
+
+const durationSort = (list, ascending) => {
+    const parseDuration = (duration) => {
+        if (duration.includes(':')) {
+            // If it's in the format "HH:mm:ss"
+            const [hours, minutes, seconds] = duration.split(':').map(Number)
+            return (hours * 3600 + minutes * 60 + seconds) * 1000
+        } else {
+            // If it's in the format "nnn ms"
+            return parseInt(duration)
+        }
+    }
+    const sorted = list.sort((a, b) => parseDuration(a['duration']) - parseDuration(b['duration']))
+    if (ascending) {
+        sorted.reverse()
+    }
+    return sorted
+}
+
+const doInitSort = () => {
+    const type = storageModule.getSort(manager.initialSort)
+    const ascending = storageModule.getSortDirection()
+    const list = manager.testSubset
+    const initialOrder = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed', 'Skipped', 'Passed']
+
+    storageModule.setSort(type)
+    storageModule.setSortDirection(ascending)
+
+    if (type?.toLowerCase() === 'original') {
+        manager.setRender(list)
+    } else {
+        let sortedList
+        switch (type) {
+        case 'duration':
+            sortedList = durationSort(list, ascending)
+            break
+        case 'result':
+            sortedList = genericSort(list, type, ascending, initialOrder)
+            break
+        default:
+            sortedList = genericSort(list, type, ascending)
+            break
+        }
+        manager.setRender(sortedList)
+    }
+}
+
+const doSort = (type, skipDirection) => {
+    const newSortType = storageModule.getSort(manager.initialSort) !== type
+    const currentAsc = storageModule.getSortDirection()
+    let ascending
+    if (skipDirection) {
+        ascending = currentAsc
+    } else {
+        ascending = newSortType ? false : !currentAsc
+    }
+    storageModule.setSort(type)
+    storageModule.setSortDirection(ascending)
+
+    const list = manager.testSubset
+    const sortedList = type === 'duration' ? durationSort(list, ascending) : genericSort(list, type, ascending)
+    manager.setRender(sortedList)
+}
+
+module.exports = {
+    doInitSort,
+    doSort,
+}
+
+},{"./datamanager.js":1,"./storage.js":8}],8:[function(require,module,exports){
+const possibleFilters = [
+    'passed',
+    'skipped',
+    'failed',
+    'error',
+    'xfailed',
+    'xpassed',
+    'rerun',
+]
+
+const getVisible = () => {
+    const url = new URL(window.location.href)
+    const settings = new URLSearchParams(url.search).get('visible')
+    const lower = (item) => {
+        const lowerItem = item.toLowerCase()
+        if (possibleFilters.includes(lowerItem)) {
+            return lowerItem
+        }
+        return null
+    }
+    return settings === null ?
+        possibleFilters :
+        [...new Set(settings?.split(',').map(lower).filter((item) => item))]
+}
+
+const hideCategory = (categoryToHide) => {
+    const url = new URL(window.location.href)
+    const visibleParams = new URLSearchParams(url.search).get('visible')
+    const currentVisible = visibleParams ? visibleParams.split(',') : [...possibleFilters]
+    const settings = [...new Set(currentVisible)].filter((f) => f !== categoryToHide).join(',')
+
+    url.searchParams.set('visible', settings)
+    window.history.pushState({}, null, unescape(url.href))
+}
+
+const showCategory = (categoryToShow) => {
+    if (typeof window === 'undefined') {
+        return
+    }
+    const url = new URL(window.location.href)
+    const currentVisible = new URLSearchParams(url.search).get('visible')?.split(',').filter(Boolean) ||
+        [...possibleFilters]
+    const settings = [...new Set([categoryToShow, ...currentVisible])]
+    const noFilter = possibleFilters.length === settings.length || !settings.length
+
+    noFilter ? url.searchParams.delete('visible') : url.searchParams.set('visible', settings.join(','))
+    window.history.pushState({}, null, unescape(url.href))
+}
+
+const getSort = (initialSort) => {
+    const url = new URL(window.location.href)
+    let sort = new URLSearchParams(url.search).get('sort')
+    if (!sort) {
+        sort = initialSort || 'result'
+    }
+    return sort
+}
+
+const setSort = (type) => {
+    const url = new URL(window.location.href)
+    url.searchParams.set('sort', type)
+    window.history.pushState({}, null, unescape(url.href))
+}
+
+const getCollapsedCategory = (renderCollapsed) => {
+    let categories
+    if (typeof window !== 'undefined') {
+        const url = new URL(window.location.href)
+        const collapsedItems = new URLSearchParams(url.search).get('collapsed')
+        switch (true) {
+        case !renderCollapsed && collapsedItems === null:
+            categories = ['passed']
+            break
+        case collapsedItems?.length === 0 || /^["']{2}$/.test(collapsedItems):
+            categories = []
+            break
+        case /^all$/.test(collapsedItems) || collapsedItems === null && /^all$/.test(renderCollapsed):
+            categories = [...possibleFilters]
+            break
+        default:
+            categories = collapsedItems?.split(',').map((item) => item.toLowerCase()) || renderCollapsed
+            break
+        }
+    } else {
+        categories = []
+    }
+    return categories
+}
+
+const getSortDirection = () => JSON.parse(sessionStorage.getItem('sortAsc')) || false
+const setSortDirection = (ascending) => sessionStorage.setItem('sortAsc', ascending)
+
+const getCollapsedIds = () => JSON.parse(sessionStorage.getItem('collapsedIds')) || []
+const setCollapsedIds = (list) => sessionStorage.setItem('collapsedIds', JSON.stringify(list))
+
+module.exports = {
+    getVisible,
+    hideCategory,
+    showCategory,
+    getCollapsedIds,
+    setCollapsedIds,
+    getSort,
+    setSort,
+    getSortDirection,
+    setSortDirection,
+    getCollapsedCategory,
+    possibleFilters,
+}
+
+},{}]},{},[4]);
+    </script>
+  </footer>
+</html>
