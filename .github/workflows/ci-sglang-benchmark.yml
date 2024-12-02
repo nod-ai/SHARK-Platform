@@ -4,6 +4,18 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
+# =================================== README ===================================
+# The `benchmark_sglang` job in this CI is mostly dependent on code outside
+# of the `shark-ai` repo itself. By including it here, we are able to maintain
+# an apples-to-apples comparison between shortfin and SGLang performance in a
+# centralized location, as we place more effort in shortfin LLM performance, and
+# WHILE WE WORK TOWARDS A BETTER ALTERNATIVE.
+
+# We should not be generally repeating this pattern, and should never repeat
+# this pattern outside of specifically benchmarking shortfin apps against
+# external projects, as part of an organized and clearly defined effort.
+# ==============================================================================
+
 name: SGLang Llama Benchmarking Tests
 
 on:
