@@ -36,7 +36,7 @@ jobs:
     env:
       PIP_CACHE_DIR: "${{ github.workspace }}/.pip-cache"
       SHARK_PLATFORM_REPO_ROOT: ${{ github.workspace }}
-      VENV_DIR: ${{ github.workspace }}/venv
+      VENV_DIR: ${{ github.workspace }}/.venv
     steps:
       - name: "Setting up Python"
         id: setup_python

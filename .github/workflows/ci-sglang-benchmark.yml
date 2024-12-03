@@ -34,7 +34,7 @@ jobs:
         shell: bash
     env:
       PIP_CACHE_DIR: "${{ github.workspace }}/.pip-cache"
-      VENV_DIR: ${{ github.workspace }}/venv
+      VENV_DIR: ${{ github.workspace }}/.venv
     steps:
       - name: Get Current Date
         id: date
