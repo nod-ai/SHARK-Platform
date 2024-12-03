@@ -85,7 +85,6 @@ jobs:
     env:
       PIP_CACHE_DIR: "${{ github.workspace }}/.pip-cache"
       HF_HOME: "/data/huggingface"
-      SHARK_PLATFORM_REPO_ROOT: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
