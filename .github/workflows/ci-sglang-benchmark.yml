@@ -19,6 +19,8 @@
 name: SGLang Llama Benchmarking Tests
 
 on:
+  # TODO: Remove after validating in CI
+  pull_request:
   workflow_dispatch:
   schedule:
     # Weekdays at 4:00 AM UTC = 9:00 PM PST.
@@ -95,7 +97,6 @@ jobs:
           path: shortfin_index.html
 
   benchmark_sglang:
-    if: ${{ github.repository_owner == 'nod-ai' || github.event_name != 'schedule' }}
     name: "SGLang Serving Benchmark With SGLang"
     needs: benchmark_shortfin
     strategy:
@@ -128,9 +129,6 @@ jobs:
       - name: Install pip deps
         run: |
           python -m pip install --no-compile --upgrade pip
-          # Note: Only sharktank is required to use `hf_datasets` script
-          # for downloading model weights.
-          pip install --no-compile -r requirements.txt -e sharktank/
 
       - name: Install SGLang
         run: pip install "git+https://github.com/nod-ai/sglang.git#subdirectory=python"
@@ -192,13 +190,8 @@ jobs:
           path: sglang_index.html
 
   merge_and_upload_reports:
-    if: ${{ github.repository_owner == 'nod-ai' || github.event_name != 'schedule' }}
     name: "Merge and upload benchmark reports"
     needs: [benchmark_shortfin, benchmark_sglang]
-    strategy:
-      matrix:
-        version: [3.11]
-      fail-fast: false
     runs-on: ubuntu-24.04
     defaults:
       run:
@@ -208,7 +201,7 @@ jobs:
         id: setup_python
         uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
         with:
-          python-version: ${{matrix.version}}
+          python-version: 3.11
 
       - name: Install pytest-html-merger
         run: pip install pytest-html-merger
@@ -225,11 +218,10 @@ jobs:
           name: sglang_benchmark
           path: reports
 
-      - name: Create merged report directory
-        run: mkdir merged_reports
-
       - name: Merge html reports
-        run: pytest_html_merger -i reports -o merged_reports/index.html
+        run: |
+          mkdir merged_reports
+          pytest_html_merger -i reports -o merged_reports/index.html
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@4f9cc6602d3f66b9c108549d475ec49e8ef4d45e # v4.0.0
