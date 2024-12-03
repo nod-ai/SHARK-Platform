@@ -188,7 +188,8 @@ jobs:
 
   merge_and_upload_reports:
     name: "Merge and upload benchmark reports"
-    if: success() || needs.benchmark_shortfin.result == 'success' || needs.benchmark_sglang.result == 'success'
+    needs: [benchmark_shortfin, benchmark_sglang]
+    if: needs.benchmark_shortfin.result == 'success' || needs.benchmark_sglang.result == 'success'
     runs-on: ubuntu-24.04
     defaults:
       run:
