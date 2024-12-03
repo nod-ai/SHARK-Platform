@@ -37,20 +37,6 @@ def pre_process_model(request, tmp_path_factory):
 
     export_paged_llm_v1(mlir_path, config_path, model_path, batch_sizes)
 
-    config = {
-        "module_name": "module",
-        "module_abi_version": 1,
-        "max_seq_len": 131072,
-        "attn_head_count": 8,
-        "attn_head_dim": 128,
-        "prefill_batch_sizes": batch_sizes,
-        "decode_batch_sizes": batch_sizes,
-        "transformer_block_count": 32,
-        "paged_kv_cache": {"block_seq_stride": 16, "device_block_count": 256},
-    }
-    with open(config_path, "w") as file:
-        json.dump(config, file)
-
     compile_model(mlir_path, vmfb_path, settings)
 
     return tmp_dir
