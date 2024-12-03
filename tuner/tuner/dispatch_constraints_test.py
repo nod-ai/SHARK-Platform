@@ -39,7 +39,7 @@ def test_generate_solutions(tuner_ctx: common.TunerContext) -> None:
         matmul_size, lhs_type, rhs_type, res_type, common.DispatchKind.mmt
     )
     configs = dispatch_constraints.generate_solutions(
-        tuner_ctx.logger,
+        tuner_ctx,
         problem_size,
         4,
         [

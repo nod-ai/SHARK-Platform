@@ -51,7 +51,6 @@ function(shortfin_public_library)
     shortfin_components_to_static_libs(_STATIC_COMPONENTS ${_RULE_COMPONENTS})
     add_library("${_RULE_NAME}-static" STATIC ${_RULE_SRCS})
     target_compile_definitions("${_RULE_NAME}-static" INTERFACE
-      _SHORTFIN_USING_DYLIB
       ${_usage_compile_definitions}
     )
     target_include_directories("${_RULE_NAME}-static" INTERFACE ${_usage_include_directories})
