@@ -40,6 +40,8 @@ jobs:
     runs-on: mi300-sdxl-kernel
 
     steps:
+    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
     - name: Install dependencies
       run: |
         if dpkg -s cmake &>/dev/null; then
@@ -52,11 +54,6 @@ jobs:
         else
           sudo apt install ninja -y
         fi
-
-    - name: Checkout repository
-      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      with:
-        submodules: false
 
     - name: Checkout IREE repo
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
