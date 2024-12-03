@@ -38,7 +38,7 @@ from .dispatch_parser import *
 
 tune_logger = logging.getLogger("tune")
 
-
+# TODO: remove the argument 'workgroup_sizes' and 'reduction_sizes'.
 def apply_configuration(
     template: list[str],
     configuration: Configuration,
