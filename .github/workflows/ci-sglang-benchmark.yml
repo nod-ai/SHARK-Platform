@@ -98,8 +98,6 @@ jobs:
 
   benchmark_sglang:
     name: "SGLang Serving Benchmark With SGLang"
-    needs: benchmark_shortfin
-    if: always()
     strategy:
       matrix:
         version: [3.11]
@@ -190,7 +188,7 @@ jobs:
 
   merge_and_upload_reports:
     name: "Merge and upload benchmark reports"
-    needs: [benchmark_shortfin, benchmark_sglang]
+    if: success() || needs.benchmark_shortfin.result == 'success' || needs.benchmark_sglang.result == 'success'
     runs-on: ubuntu-24.04
     defaults:
       run:
