@@ -47,41 +47,48 @@ def test_get_shaped_type_to_str(tuner_ctx: common.TunerContext) -> None:
     assert str(common.ShapedType([-1, 2, 3], tuner_ctx.type.f16)) == "?x2x3xf16"
 
 
-def test_gpu_pipeline_options() -> None:
-    options = common.GpuPipelineOptions()
-    assert options.all_default()
+def test_gpu_pipeline_options(tuner_ctx: common.TunerContext) -> None:
+    options = iree_gpu.PipelineOptionsAttr.get()
     assert str(options) == "#iree_gpu.pipeline_options<>"
 
-    options.prefetch_shared_memory = True
-    assert not options.all_default()
+    options = iree_gpu.PipelineOptionsAttr.get(prefetch_shared_memory=True)
     assert str(options) == "#iree_gpu.pipeline_options<prefetch_shared_memory = true>"
 
-    options.no_reduce_shared_memory_bank_conflicts = False
+    options = iree_gpu.PipelineOptionsAttr.get(
+        prefetch_shared_memory=True, no_reduce_shared_memory_bank_conflicts=False
+    )
     assert (
         str(options)
         == "#iree_gpu.pipeline_options<prefetch_shared_memory = true, no_reduce_shared_memory_bank_conflicts = false>"
     )
 
-    options = common.GpuPipelineOptions()
-    options.reorder_workgroups_strategy = common.ReorderWorkgroupsStrategy.TRANSPOSE
-    assert not options.all_default()
+    options = iree_gpu.PipelineOptionsAttr.get(
+        reorder_workgroups_strategy=iree_gpu.ReorderWorkgroupsStrategyAttr.get(
+            iree_gpu.ReorderWorkgroupsStrategy.Transpose
+        )
+    )
     assert (
         str(options)
-        == "#iree_gpu.pipeline_options<reorder_workgroups_strategy = Transpose>"
+        == "#iree_gpu.pipeline_options<reorder_workgroups_strategy = <Transpose>>"
     )
 
 
-def test_get_pipeline_config(mlir_ctx: ir.Context) -> None:
+def test_get_pipeline_config(tuner_ctx: common.TunerContext) -> None:
     mma_intrinsic = iree_gpu.MMAIntrinsic.MFMA_F32_16x16x16_F16
     mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
+    lowering_config = common.get_lowering_config(
+        tuner_ctx=tuner_ctx,
+        mma_kind=mma_attr,
+        workgroup=[4, 8, 0],
+        reduction=[0, 0, 16],
+        subgroup_m_count=1,
+        subgroup_n_count=1,
+    )
     config = common.Configuration(
         subgroup_size=32,
         workgroup_size=[16, 16, 1],
-        intrinsic=mma_attr,
-        tile_sizes=[4, 8, 16],
-        subgroup_m_count=1,
-        subgroup_n_count=1,
-        gpu_pipeline_options=common.GpuPipelineOptions(),
+        lowering_config=lowering_config,
+        gpu_pipeline_options=iree_gpu.PipelineOptionsAttr.get(),
         waves_per_eu=2,
     )
     config1_str: str = common.get_pipeline_config(config)
@@ -91,7 +98,9 @@ def test_get_pipeline_config(mlir_ctx: ir.Context) -> None:
     config2_str: str = common.get_pipeline_config(config)
     assert config2_str == ', llvm_func_attrs = {"amdgpu-waves-per-eu" = "4"}'
 
-    config.gpu_pipeline_options.prefetch_shared_memory = True
+    config.gpu_pipeline_options = iree_gpu.PipelineOptionsAttr.get(
+        prefetch_shared_memory=True
+    )
     config3_str = common.get_pipeline_config(config)
     assert (
         config3_str
@@ -182,3 +191,30 @@ def test_get_compatible_mfma_intrinsics(tuner_ctx: common.TunerContext) -> None:
         )
         == []
     )
+
+
+def test_get_lowering_config(tuner_ctx: common.TunerContext) -> None:
+    lowering_config = common.get_lowering_config(
+        tuner_ctx=tuner_ctx,
+        workgroup=[4, 8, 0],
+        reduction=[0, 0, 16],
+        subgroup_m_count=1,
+        subgroup_n_count=1,
+    )
+
+    assert (
+        str(lowering_config)
+        == "#iree_gpu.lowering_config<{reduction = [0, 0, 16], subgroup_m_count = 1 : i64, subgroup_n_count = 1 : i64, workgroup = [4, 8, 0]}>"
+    )
+
+    config = common.Configuration(
+        subgroup_size=32,
+        workgroup_size=[16, 16, 1],
+        lowering_config=lowering_config,
+        gpu_pipeline_options=iree_gpu.PipelineOptionsAttr.get(),
+        waves_per_eu=2,
+    )
+
+    assert common.get_intrinsic(config) is None
+    assert common.get_subgroup_m_count(config) == 1
+    assert common.get_subgroup_n_count(config) == 1

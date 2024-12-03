@@ -42,39 +42,59 @@ def test_parse_tensor_type(tuner_ctx: common.TunerContext) -> None:
 def test_get_mmt_tile_sizes(tuner_ctx: common.TunerContext) -> None:
     mma_intrinsic = iree_gpu.MMAIntrinsic.MFMA_F32_16x16x16_F16
     mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
+    lowering_config = common.get_lowering_config(
+        tuner_ctx=tuner_ctx,
+        mma_kind=mma_attr,
+        workgroup=[128, 320, 0],
+        reduction=[0, 0, 32],
+        subgroup_m_count=1,
+        subgroup_n_count=4,
+    )
     config = dispatch_parser.Configuration(
         subgroup_size=0,
         workgroup_size=[],
-        intrinsic=mma_attr,
-        tile_sizes=[128, 320, 32],
-        subgroup_m_count=0,
-        subgroup_n_count=0,
-        gpu_pipeline_options=common.GpuPipelineOptions(),
+        lowering_config=lowering_config,
+        gpu_pipeline_options=iree_gpu.PipelineOptionsAttr.get(),
         waves_per_eu=0,
     )
-    assert dispatch_parser.get_mmt_tile_sizes(config) == [128, 320, 32]
+    assert dispatch_parser.get_mmt_workgroup_sizes(config) == [128, 320, 0]
+    assert dispatch_parser.get_mmt_reduction_sizes(config) == [0, 0, 32]
 
 
 def test_get_conv_tile_sizes(tuner_ctx: common.TunerContext) -> None:
     mma_intrinsic = iree_gpu.MMAIntrinsic.MFMA_F32_16x16x16_F16
     mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
+    lowering_config = common.get_lowering_config(
+        tuner_ctx=tuner_ctx,
+        mma_kind=mma_attr,
+        workgroup=[464, 320, 0],
+        reduction=[0, 0, 16],
+        subgroup_m_count=1,
+        subgroup_n_count=4,
+    )
     config = dispatch_parser.Configuration(
         subgroup_size=64,
         workgroup_size=[256, 1, 1],
-        intrinsic=mma_attr,
-        tile_sizes=[464, 320, 16],
-        subgroup_m_count=1,
-        subgroup_n_count=4,
-        gpu_pipeline_options=common.GpuPipelineOptions(),
+        lowering_config=lowering_config,
+        gpu_pipeline_options=iree_gpu.PipelineOptionsAttr.get(),
         waves_per_eu=1,
     )
-    assert dispatch_parser.ConvParser().get_conv_tile_sizes(config) == [
+    assert dispatch_parser.ConvParser().get_conv_workgroup_sizes(config) == [
         1,
         1,
         464,
         320,
         1,
         1,
+        0,
+    ]
+    assert dispatch_parser.ConvParser().get_conv_reduction_sizes(config) == [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
         16,
     ]
 
@@ -82,24 +102,29 @@ def test_get_conv_tile_sizes(tuner_ctx: common.TunerContext) -> None:
 def test_get_contract_tile_sizes(tuner_ctx: common.TunerContext) -> None:
     mma_intrinsic = iree_gpu.MMAIntrinsic.MFMA_F32_16x16x16_F16
     mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
+    lowering_config = common.get_lowering_config(
+        tuner_ctx=tuner_ctx,
+        mma_kind=mma_attr,
+        workgroup=[4, 8, 0],
+        reduction=[0, 0, 16],
+        subgroup_m_count=1,
+        subgroup_n_count=1,
+    )
     config = dispatch_parser.Configuration(
         subgroup_size=32,
         workgroup_size=[16, 16, 1],
-        intrinsic=mma_attr,
-        tile_sizes=[4, 8, 16],
-        subgroup_m_count=1,
-        subgroup_n_count=1,
-        gpu_pipeline_options=common.GpuPipelineOptions(),
+        lowering_config=lowering_config,
+        gpu_pipeline_options=iree_gpu.PipelineOptionsAttr.get(),
         waves_per_eu=2,
     )
-    assert dispatch_parser.get_contract_tile_sizes(config, "mnk") == [4, 8, 16]
-    assert dispatch_parser.get_contract_tile_sizes(config, "nmk") == [8, 4, 16]
-    assert dispatch_parser.get_contract_tile_sizes(config, "knm") == [16, 8, 4]
-    assert dispatch_parser.get_contract_tile_sizes(config, "kkk") == [
-        16,
-        16,
-        16,
-    ]
+    assert dispatch_parser.get_contract_workgroup_sizes(config, "mnk") == [4, 8, 0]
+    assert dispatch_parser.get_contract_reduction_sizes(config, "mnk") == [0, 0, 16]
+    assert dispatch_parser.get_contract_workgroup_sizes(config, "nmk") == [8, 4, 0]
+    assert dispatch_parser.get_contract_reduction_sizes(config, "nmk") == [0, 0, 16]
+    assert dispatch_parser.get_contract_workgroup_sizes(config, "knm") == [0, 8, 4]
+    assert dispatch_parser.get_contract_reduction_sizes(config, "knm") == [16, 0, 0]
+    assert dispatch_parser.get_contract_workgroup_sizes(config, "kkk") == [0, 0, 0]
+    assert dispatch_parser.get_contract_reduction_sizes(config, "kkk") == [16, 16, 16]
 
 
 def test_get_shapes_mmt(tuner_ctx: common.TunerContext) -> None:

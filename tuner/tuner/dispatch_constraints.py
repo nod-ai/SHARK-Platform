@@ -10,8 +10,10 @@
 import z3  # type: ignore
 from typing import Iterator
 
+from iree.compiler import ir  # type: ignore
 
 from iree.compiler.dialects import iree_gpu  # type: ignore
+from iree.compiler.dialects import iree_codegen  # type: ignore
 
 from .common import *
 
@@ -172,13 +174,13 @@ def getMMAAttr(
 
 
 def generate_solutions(
-    logger: logging.Logger,
+    tuner_ctx: TunerContext,
     problem_size: ProblemSize,
     num_subgrups: int,
     mma_intrinsics: list[iree_gpu.MMAIntrinsic],
 ) -> Iterator[Configuration]:
     M, N, K = problem_size.MNK
-    logger.info(f"{M},{N},{K}")
+    tuner_ctx.logger.info(f"{M},{N},{K}")
     m, n, k = z3.Int("m"), z3.Int("n"), z3.Int("k")
     subgroup_size = z3.Int("subgroup_size")
     intrinsic_mn = z3.Int("intrinsic_mn")
@@ -216,27 +218,37 @@ def generate_solutions(
         mma_intrinsics,
     )
     solver.add(z3.simplify(z3.And(constraints)))
-    logger.debug(f"Initial constraints: {solver}")
+    tuner_ctx.logger.debug(f"Initial constraints: {solver}")
+
     i = 0
     while solver.check() == z3.sat:
         model = solver.model()
         lookup = lambda var: model[var].as_long()
-
+        mma_attr = getMMAAttr(
+            problem_size.res_type.element_type,
+            lookup(intrinsic_mn),
+            lookup(intrinsic_mn),
+            lookup(intrinsic_k),
+            problem_size.lhs_type.element_type,
+            problem_size.rhs_type.element_type,
+        )
+        lowering_config = get_lowering_config(
+            tuner_ctx=tuner_ctx,
+            mma_kind=mma_attr,
+            workgroup=[lookup(m), lookup(n), 0],
+            reduction=[
+                0,
+                0,
+                lookup(k),
+            ],
+            subgroup_m_count=lookup(sg_m_cnt),
+            subgroup_n_count=lookup(sg_n_cnt),
+        )
         config = Configuration(
             lookup(subgroup_size),
             [lookup(wg_x), lookup(wg_y), lookup(wg_z)],
-            getMMAAttr(
-                problem_size.res_type.element_type,
-                lookup(intrinsic_mn),
-                lookup(intrinsic_mn),
-                lookup(intrinsic_k),
-                problem_size.lhs_type.element_type,
-                problem_size.rhs_type.element_type,
-            ),
-            [lookup(m), lookup(n), lookup(k)],
-            lookup(sg_m_cnt),
-            lookup(sg_n_cnt),
-            GpuPipelineOptions(),
+            lowering_config,
+            iree_gpu.PipelineOptionsAttr.get(),
             lookup(waves_per_eu),
         )
         solver.add(z3.simplify(z3.Not(z3.And(list(x == model[x] for x in all_vars)))))

@@ -39,7 +39,7 @@ def test_apply_params_mmt(tuner_ctx: common.TunerContext) -> None:
     mlir_template = [
         "<intrinsic = #iree_gpu.mma_layout<MFMA_F32_32x32x8_F16>, subgroup_m_count = 16, subgroup_n_count = 16>",
         "<LLVMGPUVectorDistribute workgroup_size = [16, 16] subgroup_size = 16,",
-        "<tile_sizes = [[8, 8, 8]]>",
+        "<workgroup = [8, 8, 8], reduction = [8, 8, 8]>",
         "gpu_pipeline_options = #iree_gpu.pipeline_options<reorder_workgroups_strategy = None>",
         '{llvm_func_attrs = {"amdgpu-waves-per-eu" = "4"}',
     ]
@@ -48,14 +48,21 @@ def test_apply_params_mmt(tuner_ctx: common.TunerContext) -> None:
 
     mma_intrinsic = iree_gpu.MMAIntrinsic.MFMA_F32_16x16x16_F16
     mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
+    lowering_config = common.get_lowering_config(
+        tuner_ctx=tuner_ctx,
+        mma_kind=mma_attr,
+        workgroup=[8, 8, 0],
+        reduction=[0, 0, 8],
+        subgroup_m_count=16,
+        subgroup_n_count=16,
+    )
     config = common.Configuration(
         subgroup_size=16,
         workgroup_size=[16, 16, 1],
-        intrinsic=mma_attr,
-        tile_sizes=[8, 8, 8],
-        subgroup_m_count=16,
-        subgroup_n_count=16,
-        gpu_pipeline_options=common.GpuPipelineOptions(prefetch_shared_memory=True),
+        lowering_config=lowering_config,
+        gpu_pipeline_options=iree_gpu.PipelineOptionsAttr.get(
+            prefetch_shared_memory=True
+        ),
         waves_per_eu=8,
     )
 
@@ -82,7 +89,8 @@ def test_apply_params_mmt(tuner_ctx: common.TunerContext) -> None:
         "LLVMGPUVectorDistribute workgroup_size = [16, 16, 1] subgroup_size = 16"
         in modified
     )
-    assert "tile_sizes = [[8, 8, 8]]" in modified
+    assert "workgroup = [8, 8, 0]" in modified
+    assert "reduction = [0, 0, 8]" in modified
     assert (
         "gpu_pipeline_options = #iree_gpu.pipeline_options<prefetch_shared_memory = true>"
         in modified
@@ -94,7 +102,7 @@ def test_apply_params_conv(tuner_ctx: common.TunerContext) -> None:
     mlir_template = [
         "<intrinsic = #iree_gpu.mma_layout<MFMA_F32_16x16x16_F16>, subgroup_m_count = 16, subgroup_n_count = 16>",
         "<LLVMGPUVectorDistribute workgroup_size = [256, 1, 1] subgroup_size = 64,",
-        "<tile_sizes = [[1, 1, 64, 128, 1, 1, 32]]>",
+        "<workgroup = [1, 1, 64, 128, 1, 1, 32], reduction = [1, 1, 64, 128, 1, 1, 32]>",
         'gpu_pipeline_options = #iree_gpu.pipeline_options<prefetch_shared_memory = true>, {llvm_func_attrs = {"amdgpu-waves-per-eu" = "4"}',
     ]
 
@@ -102,15 +110,22 @@ def test_apply_params_conv(tuner_ctx: common.TunerContext) -> None:
 
     mma_intrinsic = iree_gpu.MMAIntrinsic.MFMA_F32_16x16x16_F16
     mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
+    lowering_config = common.get_lowering_config(
+        tuner_ctx=tuner_ctx,
+        mma_kind=mma_attr,
+        workgroup=[464, 320, 0],
+        reduction=[0, 0, 16],
+        subgroup_m_count=1,
+        subgroup_n_count=4,
+    )
     config = common.Configuration(
         subgroup_size=64,
         workgroup_size=[256, 1, 1],
-        intrinsic=mma_attr,
-        tile_sizes=[464, 320, 16],
-        subgroup_m_count=1,
-        subgroup_n_count=4,
-        gpu_pipeline_options=common.GpuPipelineOptions(
-            reorder_workgroups_strategy=common.ReorderWorkgroupsStrategy.TRANSPOSE
+        lowering_config=lowering_config,
+        gpu_pipeline_options=iree_gpu.PipelineOptionsAttr.get(
+            reorder_workgroups_strategy=iree_gpu.ReorderWorkgroupsStrategyAttr.get(
+                iree_gpu.ReorderWorkgroupsStrategy.Transpose
+            )
         ),
         waves_per_eu=2,
     )
@@ -131,7 +146,6 @@ def test_apply_params_conv(tuner_ctx: common.TunerContext) -> None:
 
     assert modified
     modified = remove_comments(modified)
-
     assert embeddable
     assert (
         "intrinsic = #iree_gpu.mma_layout<MFMA_F32_16x16x16_F16>, subgroup_m_count = 1, subgroup_n_count = 4"
@@ -141,9 +155,10 @@ def test_apply_params_conv(tuner_ctx: common.TunerContext) -> None:
         "LLVMGPUVectorDistribute workgroup_size = [256, 1, 1] subgroup_size = 64"
         in modified
     )
-    assert "tile_sizes = [[1, 1, 464, 320, 1, 1, 16]]" in modified
+    assert "workgroup = [1, 1, 464, 320, 1, 1, 0]" in modified
+    assert "reduction = [0, 0, 0, 0, 0, 0, 16]" in modified
     assert (
-        "gpu_pipeline_options = #iree_gpu.pipeline_options<reorder_workgroups_strategy = Transpose>"
+        "gpu_pipeline_options = #iree_gpu.pipeline_options<reorder_workgroups_strategy = <Transpose>>"
         in modified
     )
     assert '{llvm_func_attrs = {"amdgpu-waves-per-eu" = "2"}' in modified
@@ -153,7 +168,7 @@ def test_apply_params_contract(tuner_ctx: common.TunerContext) -> None:
     mlir_template = [
         "<intrinsic = #iree_gpu.mma_layout<MFMA_F32_16x16x16_F16>, subgroup_m_count = 2, subgroup_n_count = 2>}>",
         "<LLVMGPUVectorDistribute workgroup_size = [128, 2, 1] subgroup_size = 64,",
-        "<tile_sizes = [[1, 1, 1, 64, 64, 128]]>",
+        "<workgroup = [1, 1, 1, 64, 64, 128], reduction = [1, 1, 1, 64, 64, 128]>",
         '{llvm_func_attrs = {"amdgpu-waves-per-eu" = "1"}',
     ]
 
@@ -168,14 +183,19 @@ def test_apply_params_contract(tuner_ctx: common.TunerContext) -> None:
 
     mma_intrinsic = iree_gpu.MMAIntrinsic.MFMA_F32_32x32x8_F16
     mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
+    lowering_config = common.get_lowering_config(
+        tuner_ctx=tuner_ctx,
+        mma_kind=mma_attr,
+        workgroup=[480, 384, 0],
+        reduction=[0, 0, 32],
+        subgroup_m_count=1,
+        subgroup_n_count=4,
+    )
     config = common.Configuration(
         subgroup_size=64,
         workgroup_size=[256, 1, 1],
-        intrinsic=mma_attr,
-        tile_sizes=[480, 384, 32],
-        subgroup_m_count=1,
-        subgroup_n_count=4,
-        gpu_pipeline_options=common.GpuPipelineOptions(),
+        lowering_config=lowering_config,
+        gpu_pipeline_options=iree_gpu.PipelineOptionsAttr.get(),
         waves_per_eu=2,
     )
 
@@ -194,7 +214,8 @@ def test_apply_params_contract(tuner_ctx: common.TunerContext) -> None:
         "LLVMGPUVectorDistribute workgroup_size = [256, 1, 1] subgroup_size = 64"
         in new_mlir
     )
-    assert "tile_sizes = [[1, 480, 384, 32]]" in new_mlir
+    assert "workgroup = [1, 480, 384, 0]" in new_mlir
+    assert "reduction = [0, 0, 0, 32]" in new_mlir
     assert '{llvm_func_attrs = {"amdgpu-waves-per-eu" = "2"}' in new_mlir
 
 
@@ -202,7 +223,7 @@ def test_apply_params_batch_matmul(tuner_ctx: common.TunerContext) -> None:
     mlir_template = [
         "<intrinsic = #iree_gpu.mma_layout<MFMA_F32_16x16x16_F16>, subgroup_m_count = 4, subgroup_n_count = 1>}>",
         "<LLVMGPUVectorDistribute workgroup_size = [64, 4, 1] subgroup_size = 64,",
-        "<tile_sizes = [[1, 128, 64, 64]]>",
+        "<workgroup = [1, 128, 64, 64], reduction = [1, 128, 64, 64]>",
         '{llvm_func_attrs = {"amdgpu-waves-per-eu" = "1"}',
     ]
 
@@ -217,14 +238,19 @@ def test_apply_params_batch_matmul(tuner_ctx: common.TunerContext) -> None:
 
     mma_intrinsic = iree_gpu.MMAIntrinsic.MFMA_F32_32x32x8_F16
     mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
+    lowering_config = common.get_lowering_config(
+        tuner_ctx=tuner_ctx,
+        mma_kind=mma_attr,
+        workgroup=[416, 320, 0],
+        reduction=[0, 0, 128],
+        subgroup_m_count=2,
+        subgroup_n_count=2,
+    )
     config = common.Configuration(
         subgroup_size=64,
         workgroup_size=[128, 2, 1],
-        intrinsic=mma_attr,
-        tile_sizes=[416, 320, 128],
-        subgroup_m_count=2,
-        subgroup_n_count=2,
-        gpu_pipeline_options=common.GpuPipelineOptions(),
+        lowering_config=lowering_config,
+        gpu_pipeline_options=iree_gpu.PipelineOptionsAttr.get(),
         waves_per_eu=2,
     )
 
@@ -247,7 +273,8 @@ def test_apply_params_batch_matmul(tuner_ctx: common.TunerContext) -> None:
         "LLVMGPUVectorDistribute workgroup_size = [128, 2, 1] subgroup_size = 64"
         in modified
     )
-    assert "tile_sizes = [[1, 416, 320, 128]]" in modified
+    assert "workgroup = [1, 416, 320, 0]" in modified
+    assert "reduction = [0, 0, 0, 128]" in modified
     assert '{llvm_func_attrs = {"amdgpu-waves-per-eu" = "2"}' in modified
 
 
@@ -255,7 +282,7 @@ def test_apply_params_batch_mmt_float(tuner_ctx: common.TunerContext) -> None:
     mlir_template = [
         "<intrinsic = #iree_gpu.mma_layout<MFMA_F32_16x16x16_F16>, subgroup_m_count = 4, subgroup_n_count = 1>}>",
         "<LLVMGPUVectorDistribute workgroup_size = [64, 4, 1] subgroup_size = 64,",
-        "<tile_sizes = [[1, 128, 128, 64]]>",
+        "<workgroup = [1, 128, 128, 64], reduction = [1, 128, 128, 64]>",
         '{llvm_func_attrs = {"amdgpu-waves-per-eu" = "1"}',
     ]
 
@@ -269,14 +296,19 @@ def test_apply_params_batch_mmt_float(tuner_ctx: common.TunerContext) -> None:
 
     mma_intrinsic = iree_gpu.MMAIntrinsic.MFMA_F32_16x16x16_F16
     mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
+    lowering_config = common.get_lowering_config(
+        tuner_ctx=tuner_ctx,
+        mma_kind=mma_attr,
+        workgroup=[128, 64, 0],
+        reduction=[0, 0, 128],
+        subgroup_m_count=2,
+        subgroup_n_count=2,
+    )
     config = common.Configuration(
         subgroup_size=64,
         workgroup_size=[128, 2, 1],
-        intrinsic=mma_attr,
-        tile_sizes=[128, 64, 128],
-        subgroup_m_count=2,
-        subgroup_n_count=2,
-        gpu_pipeline_options=common.GpuPipelineOptions(),
+        lowering_config=lowering_config,
+        gpu_pipeline_options=iree_gpu.PipelineOptionsAttr.get(),
         waves_per_eu=2,
     )
 
@@ -297,7 +329,8 @@ def test_apply_params_batch_mmt_float(tuner_ctx: common.TunerContext) -> None:
         "LLVMGPUVectorDistribute workgroup_size = [128, 2, 1] subgroup_size = 64"
         in modified
     )
-    assert "tile_sizes = [[1, 128, 64, 128]]" in modified
+    assert "workgroup = [1, 128, 64, 0]" in modified
+    assert "reduction = [0, 0, 0, 128]" in modified
     assert '{llvm_func_attrs = {"amdgpu-waves-per-eu" = "2"}' in modified
 
 
@@ -305,7 +338,7 @@ def test_apply_params_batch_mmt_int(tuner_ctx: common.TunerContext) -> None:
     mlir_template = [
         "<intrinsic = #iree_gpu.mma_layout<MFMA_I32_16x16x32_I8>, subgroup_m_count = 4, subgroup_n_count = 1>}>",
         "<LLVMGPUVectorDistribute workgroup_size = [64, 4, 1] subgroup_size = 64,",
-        "<tile_sizes = [[1, 128, 128, 64]]>",
+        "<workgroup = [1, 128, 128, 64], reduction = [1, 128, 128, 64]>",
         '{llvm_func_attrs = {"amdgpu-waves-per-eu" = "1"}',
     ]
 
@@ -319,14 +352,19 @@ def test_apply_params_batch_mmt_int(tuner_ctx: common.TunerContext) -> None:
 
     mma_intrinsic = iree_gpu.MMAIntrinsic.MFMA_I32_32x32x16_I8
     mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
+    lowering_config = common.get_lowering_config(
+        tuner_ctx=tuner_ctx,
+        mma_kind=mma_attr,
+        workgroup=[128, 64, 0],
+        reduction=[0, 0, 128],
+        subgroup_m_count=2,
+        subgroup_n_count=2,
+    )
     config = common.Configuration(
         subgroup_size=64,
         workgroup_size=[128, 2, 1],
-        intrinsic=mma_attr,
-        tile_sizes=[128, 64, 128],
-        subgroup_m_count=2,
-        subgroup_n_count=2,
-        gpu_pipeline_options=common.GpuPipelineOptions(),
+        lowering_config=lowering_config,
+        gpu_pipeline_options=iree_gpu.PipelineOptionsAttr.get(),
         waves_per_eu=4,
     )
 
@@ -349,7 +387,8 @@ def test_apply_params_batch_mmt_int(tuner_ctx: common.TunerContext) -> None:
         "LLVMGPUVectorDistribute workgroup_size = [128, 2, 1] subgroup_size = 64"
         in modified
     )
-    assert "tile_sizes = [[1, 128, 64, 128]]" in modified
+    assert "workgroup = [1, 128, 64, 0]" in modified
+    assert "reduction = [0, 0, 0, 128]" in modified
     assert '{llvm_func_attrs = {"amdgpu-waves-per-eu" = "4"}' in modified
 
     assert embeddable
@@ -369,7 +408,8 @@ def test_apply_params_batch_mmt_int(tuner_ctx: common.TunerContext) -> None:
         "%config = transform.param.constant #iree_codegen.compilation_info<"
         in embeddable
     )
-    assert "tile_sizes = [[1, 128, 64, 128]]" in embeddable
+    assert "workgroup = [128, 64, 0]" in embeddable
+    assert "reduction = [0, 0, 128]" in embeddable
     assert 'llvm_func_attrs = {"amdgpu-waves-per-eu" = "4"}' in embeddable
     assert "workgroup_size = [128, 2, 1] subgroup_size = 64" in embeddable
 
@@ -378,7 +418,7 @@ def test_apply_params_broadcast_rhs_mmt(tuner_ctx: common.TunerContext) -> None:
     mlir_template = [
         "<intrinsic = #iree_gpu.mma_layout<MFMA_I32_16x16x32_I8>, subgroup_m_count = 4, subgroup_n_count = 1>}>",
         "<LLVMGPUVectorDistribute workgroup_size = [64, 4, 1] subgroup_size = 64,",
-        "<tile_sizes = [[1, 128, 128, 64]]>",
+        "<workgroup = [1, 128, 128, 64]], reduction = [1, 128, 128, 64]>",
         '{llvm_func_attrs = {"amdgpu-waves-per-eu" = "1"}',
     ]
 
@@ -392,14 +432,19 @@ def test_apply_params_broadcast_rhs_mmt(tuner_ctx: common.TunerContext) -> None:
 
     mma_intrinsic = iree_gpu.MMAIntrinsic.MFMA_I32_32x32x16_I8
     mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
+    lowering_config = common.get_lowering_config(
+        tuner_ctx=tuner_ctx,
+        mma_kind=mma_attr,
+        workgroup=[128, 64, 0],
+        reduction=[0, 0, 128],
+        subgroup_m_count=2,
+        subgroup_n_count=2,
+    )
     config = common.Configuration(
         subgroup_size=64,
         workgroup_size=[128, 2, 1],
-        intrinsic=mma_attr,
-        tile_sizes=[128, 64, 128],
-        subgroup_m_count=2,
-        subgroup_n_count=2,
-        gpu_pipeline_options=common.GpuPipelineOptions(),
+        lowering_config=lowering_config,
+        gpu_pipeline_options=iree_gpu.PipelineOptionsAttr.get(),
         waves_per_eu=4,
     )
 
@@ -425,7 +470,8 @@ def test_apply_params_broadcast_rhs_mmt(tuner_ctx: common.TunerContext) -> None:
         "LLVMGPUVectorDistribute workgroup_size = [128, 2, 1] subgroup_size = 64"
         in modified
     )
-    assert "tile_sizes = [[1, 128, 64, 128]]" in modified
+    assert "workgroup = [1, 128, 64, 0]" in modified
+    assert "reduction = [0, 0, 0, 128]" in modified
     assert '{llvm_func_attrs = {"amdgpu-waves-per-eu" = "4"}' in modified
 
     assert embeddable
@@ -446,7 +492,8 @@ def test_apply_params_broadcast_rhs_mmt(tuner_ctx: common.TunerContext) -> None:
         "%config = transform.param.constant #iree_codegen.compilation_info<"
         in embeddable
     )
-    assert "tile_sizes = [[1, 128, 64, 128]]" in embeddable
+    assert "workgroup = [128, 64, 0]" in embeddable
+    assert "reduction = [0, 0, 128]" in embeddable
     assert 'llvm_func_attrs = {"amdgpu-waves-per-eu" = "4"}' in embeddable
     assert "workgroup_size = [128, 2, 1] subgroup_size = 64" in embeddable
 
@@ -454,7 +501,7 @@ def test_apply_params_broadcast_rhs_mmt(tuner_ctx: common.TunerContext) -> None:
 def test_detect_broadcast_rhs_mmt(tuner_ctx: common.TunerContext) -> None:
     mlir_lines = [
         r"%18 = tensor.empty() : tensor<2x1024x10240xi32>",
-        r"%19 = linalg.fill {lowering_config = #iree_codegen.lowering_config<tile_sizes = [[1, 64, 128, 128]]>} ins(%c0_i32 : i32) outs(%18 : tensor<2x1024x10240xi32>) -> tensor<2x1024x10240xi32>",
+        r"%19 = linalg.fill {lowering_config = #iree_codegen.lowering_config<workgroup = [[1, 64, 128, 0]], reduction = [[0, 0, 0, 128]]>} ins(%c0_i32 : i32) outs(%18 : tensor<2x1024x10240xi32>) -> tensor<2x1024x10240xi32>",
         r'%20 = linalg.generic {indexing_maps = [affine_map<(d0, d1, d2, d3) -> (d0, d1, d3)>, affine_map<(d0, d1, d2, d3) -> (d2, d3)>, affine_map<(d0, d1, d2, d3) -> (d0, d1, d2)>], iterator_types = ["parallel", "parallel", "parallel", "reduction"]} ins(%11, %12 : tensor<2x1024x1280xi8>, tensor<10240x1280xi8>) outs(%19 : tensor<2x1024x10240xi32>) attrs =  {lowering_config = #iree_codegen.lowering_config<tile_sizes = [[1, 64, 128, 128]]>} {',
     ]
     assert candidate_gen.ContractionTuner("mk", "nk", "mnk").is_broadcast_rhs_mmt(

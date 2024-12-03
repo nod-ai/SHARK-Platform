@@ -8,9 +8,66 @@
 Base class for kv caches.
 """
 
-from typing import List
+from typing import List, Iterable, Protocol
 from .page_pool import PageInfo
 import math
+from abc import ABC, abstractmethod
+from .page_pool import PagePool
+
+# logging
+import logging
+
+logger = logging.getLogger(__name__)
+
+# exception for when cache allocation failed
+class CacheAllocationFailure(Exception):
+    pass
+
+
+class PageAllocation(ABC):
+    """Abstract base class for page allocations in the cache."""
+
+    @property
+    @abstractmethod
+    def pages(self) -> List[PageInfo]:
+        """Returns the list of pages that were allocated."""
+        pass
+
+    @abstractmethod
+    def publish_pages(self, up_to_page_index) -> None:
+        """Makes pages[0:up_to_page_index] available to other requests."""
+        pass
+
+    @abstractmethod
+    def release_pages(self) -> None:
+        """Releases the allocation's reference to pages."""
+        pass
+
+
+class BasePageAttentionCacheAllocation(PageAllocation):
+    """Represents a page allocation in the cache."""
+
+    def __init__(self, pages: Iterable[PageInfo], cache: "BasePagedAttentionCache"):
+        self._pages = tuple(pages)
+        self._cache = cache
+        self._is_released = False
+
+    @property
+    def pages(self) -> List[PageInfo]:
+        return list(self._pages)
+
+    def publish_pages(self, up_to_page_index) -> None:
+        pass
+
+    def release_pages(self) -> None:
+        if self._is_released:
+            logger.warning("Releasing already-released allocation")
+            return
+        self._cache.page_pool.release_pages(self._pages)
+        self._is_released = True
+
+    def __rerp__(self) -> str:
+        return f"BasePageAttentionCacheAllocation(pages={self._pages}, cache={self._cache})"
 
 
 class BasePagedAttentionCache:
@@ -33,13 +90,13 @@ class BasePagedAttentionCache:
         - Reference counting prevents eviction of in-use pages
     """
 
-    def __init__(self, page_pool, tokens_per_page):
+    def __init__(self, page_pool: PagePool, tokens_per_page: int):
         self.page_pool = page_pool
         self.tokens_per_page = tokens_per_page
 
     def acquire_pages_for_tokens(
         self, tokens: List[int], extra_token_slots: int = 1
-    ) -> tuple[list[PageInfo], int]:
+    ) -> PageAllocation:
         """
         Given a list of tokens, return a list of pages and a start position to continue generation from.
 
@@ -57,24 +114,7 @@ class BasePagedAttentionCache:
         pages_needed = math.ceil(token_count / self.tokens_per_page)
         pages = self.page_pool.acquire_free_pages(pages_needed)
 
-        n_cached_tokens = 0
+        if pages is None:
+            raise CacheAllocationFailure()
 
-        return pages, n_cached_tokens
-
-    def publish_pages(self, tokens, pages) -> None:
-        """
-        Given a list of tokens and pages containing KV corresponding to these tokens, make these pages available to other requests.
-
-        Associates the tokens with the pages, and mark them as done writing.
-
-        It is assumed that hereafter, the calling request will not modify these pages, at least not the positions [0:len(tokens)].
-        """
-
-        pass  # the base implementation doesn't cache unfinished requests.
-
-    def release_pages(self, tokens, pages):
-        """
-        Decrement reference count for these pages. When reference count is zero, they will be elegible for eviction.
-        """
-        # in the base implementation, the pages can be owned by 1 request max, so they can be instantly release
-        self.page_pool.release_pages(pages)
+        return BasePageAttentionCacheAllocation(pages, cache=self)
