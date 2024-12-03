@@ -73,16 +73,21 @@ def test_gpu_pipeline_options(tuner_ctx: common.TunerContext) -> None:
     )
 
 
-def test_get_pipeline_config(mlir_ctx: ir.Context) -> None:
+def test_get_pipeline_config(tuner_ctx: common.TunerContext) -> None:
     mma_intrinsic = iree_gpu.MMAIntrinsic.MFMA_F32_16x16x16_F16
     mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
+    lowering_config = common.get_lowering_config(
+        tuner_ctx=tuner_ctx,
+        mma_kind=mma_attr,
+        workgroup=[4, 8, 0],
+        reduction=[0, 0, 16],
+        subgroup_m_count=1,
+        subgroup_n_count=1,
+    )
     config = common.Configuration(
         subgroup_size=32,
         workgroup_size=[16, 16, 1],
-        intrinsic=mma_attr,
-        tile_sizes=[4, 8, 16],
-        subgroup_m_count=1,
-        subgroup_n_count=1,
+        lowering_config=lowering_config,
         gpu_pipeline_options=iree_gpu.PipelineOptionsAttr.get(),
         waves_per_eu=2,
     )
@@ -186,3 +191,30 @@ def test_get_compatible_mfma_intrinsics(tuner_ctx: common.TunerContext) -> None:
         )
         == []
     )
+
+
+def test_get_lowering_config(tuner_ctx: common.TunerContext) -> None:
+    lowering_config = common.get_lowering_config(
+        tuner_ctx=tuner_ctx,
+        workgroup=[4, 8, 0],
+        reduction=[0, 0, 16],
+        subgroup_m_count=1,
+        subgroup_n_count=1,
+    )
+
+    assert (
+        str(lowering_config)
+        == "#iree_gpu.lowering_config<{reduction = [0, 0, 16], subgroup_m_count = 1 : i64, subgroup_n_count = 1 : i64, workgroup = [4, 8, 0]}>"
+    )
+
+    config = common.Configuration(
+        subgroup_size=32,
+        workgroup_size=[16, 16, 1],
+        lowering_config=lowering_config,
+        gpu_pipeline_options=iree_gpu.PipelineOptionsAttr.get(),
+        waves_per_eu=2,
+    )
+
+    assert common.get_intrinsic(config) is None
+    assert common.get_subgroup_m_count(config) == 1
+    assert common.get_subgroup_n_count(config) == 1
