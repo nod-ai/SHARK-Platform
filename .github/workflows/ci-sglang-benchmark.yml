@@ -34,6 +34,7 @@ jobs:
         shell: bash
     env:
       PIP_CACHE_DIR: "${{ github.workspace }}/.pip-cache"
+      VENV_DIR: ${{ github.workspace }}/venv
     steps:
       - name: Get Current Date
         id: date
@@ -44,6 +45,8 @@ jobs:
         uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
         with:
           python-version: ${{matrix.version}}
+      - name: Create Python venv
+        run: python -m venv ${VENV_DIR}
 
       - name: "Checkout Code"
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -57,6 +60,7 @@ jobs:
 
       - name: Install pip deps
         run: |
+          source ${VENV_DIR}/bin/activate
           python -m pip install --no-compile --upgrade pip
           # Note: We install in three steps in order to satisfy requirements
           # from non default locations first. Installing the PyTorch CPU
@@ -74,11 +78,13 @@ jobs:
             iree-base-runtime==3.0.0rc20241118 \
             "numpy<2.0"
 
-      - name: Install SGLang
-        run: pip install "git+https://github.com/nod-ai/sglang.git#subdirectory=python"
+          # Install SGLang
+          pip install "git+https://github.com/nod-ai/sglang.git#subdirectory=python"
 
       - name: Launch Shortfin Server
-        run: pytest -v app_tests/benchmark_tests/llm/sglang_benchmarks/sglang_benchmark_test.py --log-cli-level=INFO --html=out/llm/sglang/index.html
+        run: |
+          source ${VENV_DIR}/bin/activate
+          pytest -v app_tests/benchmark_tests/llm/sglang_benchmarks/sglang_benchmark_test.py --log-cli-level=INFO --html=out/llm/sglang/index.html
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@4f9cc6602d3f66b9c108549d475ec49e8ef4d45e # v4.0.0
