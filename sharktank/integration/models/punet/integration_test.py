@@ -143,6 +143,7 @@ def sdxl_fp16_export_mlir(sdxl_fp16_dataset, temp_dir):
     return output_path
 
 
+@pytest.mark.punet_quick
 @pytest.mark.model_punet
 @pytest.mark.export
 def test_sdxl_export_fp16_mlir(sdxl_fp16_export_mlir):
@@ -166,6 +167,7 @@ def sdxl_int8_export_mlir(sdxl_int8_dataset, temp_dir):
     return output_path
 
 
+@pytest.mark.punet_quick
 @pytest.mark.model_punet
 @pytest.mark.export
 def test_sdxl_export_int8_mlir(sdxl_int8_export_mlir):
