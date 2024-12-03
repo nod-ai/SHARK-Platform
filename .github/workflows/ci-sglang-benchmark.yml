@@ -93,7 +93,7 @@ jobs:
       - name: Upload pytest report
         uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
         with:
-          name: sglang_reports
+          name: shortfin_benchmark
           path: shortfin_index.html
 
   benchmark_sglang:
@@ -190,7 +190,7 @@ jobs:
       - name: Upload pytest report
         uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
         with:
-          name: sglang_reports
+          name: sglang_benchmark
           path: sglang_index.html
 
   merge_and_upload_reports:
@@ -214,17 +214,20 @@ jobs:
 
       - name: Install pytest-html-merger
         run: pip install pytest-html-merger
+
       - name: Download reports
         uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
         with:
-          name: slgang_reports
+          name: |
+            shortfin_benchmark
+            sglang_benchmark
           path: reports
 
       - name: Create merged report directory
         run: mkdir merged_reports
 
       - name: Merge html reports
-        run: pytest_html_merger -i reports -o merged_reports/index.html
+        run: pytest_html_merger -i reports/*/*.html -o merged_reports/index.html
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@4f9cc6602d3f66b9c108549d475ec49e8ef4d45e # v4.0.0
