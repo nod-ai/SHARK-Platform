@@ -40,7 +40,7 @@ if(NOT WIN32)
 endif()
 
 # Pins
-set(SHORTFIN_IREE_GIT_TAG "iree-3.0.0rc20241118")
+set(SHORTFIN_IREE_GIT_TAG "iree-3.1.0rc20241203")
 
 # build options
 option(SHORTFIN_BUILD_PYTHON_BINDINGS "Builds Python Bindings" OFF)
