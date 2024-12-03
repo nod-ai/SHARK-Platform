@@ -585,7 +585,7 @@ def tune(
         tune_logger.debug(str(problem_size))
         configs = []
         for i, config in enumerate(
-            generate_solutions(tune_logger, problem_size, num_subgroups, mma_list)
+            generate_solutions(tuner_context, problem_size, num_subgroups, mma_list)
         ):
             if i >= limit:
                 break

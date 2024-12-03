@@ -174,13 +174,13 @@ def getMMAAttr(
 
 
 def generate_solutions(
-    logger: logging.Logger,
+    tuner_ctx: TunerContext,
     problem_size: ProblemSize,
     num_subgrups: int,
     mma_intrinsics: list[iree_gpu.MMAIntrinsic],
 ) -> Iterator[Configuration]:
     M, N, K = problem_size.MNK
-    logger.info(f"{M},{N},{K}")
+    tuner_ctx.logger.info(f"{M},{N},{K}")
     m, n, k = z3.Int("m"), z3.Int("n"), z3.Int("k")
     subgroup_size = z3.Int("subgroup_size")
     intrinsic_mn = z3.Int("intrinsic_mn")
@@ -218,11 +218,7 @@ def generate_solutions(
         mma_intrinsics,
     )
     solver.add(z3.simplify(z3.And(constraints)))
-    logger.debug(f"Initial constraints: {solver}")
-
-    int_type = ir.IntegerType.get_signless(64)
-
-    tuner_ctx = TunerContext(ir.Context(), logger)
+    tuner_ctx.logger.debug(f"Initial constraints: {solver}")
 
     i = 0
     while solver.check() == z3.sat:
