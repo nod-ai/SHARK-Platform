@@ -14,20 +14,20 @@ from sglang import bench_serving
 
 from .utils import SGLangBenchmarkArgs, log_jsonl_result
 
-from integration_tests.llm.utils import wait_for_server, download_with_hf_datasets
+from integration_tests.llm.utils import download_tokenizer, wait_for_server
 
 logger = logging.getLogger(__name__)
 
 
 @pytest.mark.parametrize(
-    "request_rate,model_name",
-    [(req_rate, "llama3_8B_fp16") for req_rate in [1, 2, 4, 8, 16, 32]],
+    "request_rate,tokenizer_id",
+    [(req_rate, "NousResearch/Meta-Llama-3-8B") for req_rate in [1, 2, 4, 8, 16, 32]],
 )
-def test_sglang_benchmark(request_rate, model_name, sglang_args, tmp_path_factory):
+def test_sglang_benchmark(request_rate, tokenizer_id, sglang_args, tmp_path_factory):
     tmp_dir = tmp_path_factory.mktemp("sglang_benchmark_test")
 
     # Download tokenizer for llama3_8B_fp16
-    download_with_hf_datasets(tmp_dir, model_name)
+    download_tokenizer(tmp_dir, tokenizer_id)
 
     logger.info("Beginning SGLang benchmark test...")
 
