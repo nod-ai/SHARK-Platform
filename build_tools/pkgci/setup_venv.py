@@ -64,14 +64,15 @@ There are several modes in which to use this script:
 You must have the `gh` command line tool installed and authenticated if you
 will be fetching artifacts.
 """
+
+from glob import glob
+from pathlib import Path
 from typing import Optional, Dict, Tuple
 
 import argparse
 import functools
-from glob import glob
 import json
-import sys
-from pathlib import Path
+import os
 import platform
 import subprocess
 import sys
@@ -200,14 +201,15 @@ def install_with_index(python_exe, wheels):
     # numpy. We could try a solution like https://stackoverflow.com/a/76124424.
     for artifact_path, package_name in wheels:
         cmd = [
-            str(python_exe),
-            "-m",
+            "uv",
             "pip",
             "install",
             "--pre",
             "-f",
             str(artifact_path),
             package_name,
+            "--python",
+            str(python_exe),
         ]
         print(f"\nRunning command: {' '.join([str(c) for c in cmd])}")
         subprocess.check_call(cmd)
@@ -219,8 +221,7 @@ def install_without_index(python_exe, packages, wheels):
     # but what we said.
     for artifact_path, package_name in wheels:
         cmd = [
-            str(python_exe),
-            "-m",
+            "uv",
             "pip",
             "install",
             "--no-deps",
@@ -229,6 +230,8 @@ def install_without_index(python_exe, packages, wheels):
             str(artifact_path),
             "--force-reinstall",
             package_name,
+            "--python",
+            str(python_exe),
         ]
         print(f"\nRunning command: {' '.join([str(c) for c in cmd])}")
         subprocess.check_call(cmd)
@@ -245,79 +248,16 @@ def install_without_index(python_exe, packages, wheels):
 
     for requirements_file in requirements_files:
         cmd = [
-            str(python_exe),
-            "-m",
+            "uv",
             "pip",
             "install",
             "-r",
             str(REPO_ROOT / requirements_file),
+            "--python",
+            str(python_exe),
         ]
         print(f"\nRunning command: {' '.join([str(c) for c in cmd])}")
         subprocess.check_call(cmd)
-
-
-def main(args):
-    # Look up the workflow run for a ref.
-    if args.fetch_git_ref:
-        latest_gh_workflow = get_latest_workflow_run_id_for_ref(args.fetch_git_ref)
-        args.fetch_git_ref = ""
-        args.fetch_gh_workflow = str(latest_gh_workflow)
-        return main(args)
-
-    # Make sure we have an artifact path if fetching.
-    if not args.artifact_path and args.fetch_gh_workflow:
-        with tempfile.TemporaryDirectory() as td:
-            args.artifact_path = td
-            return main(args)
-
-    # Parse command-delimited list of packages from args.
-    packages = args.packages.split(",")
-    print("Installing packages:", packages)
-
-    artifact_prefix = f"{platform.system().lower()}_{platform.machine()}"
-    wheels = []
-    for package_name in packages:
-        wheels.append(find_wheel(args, artifact_prefix, package_name))
-    print("Installing wheels:", wheels)
-
-    # Set up venv.
-    venv_path = args.venv_dir
-    python_exe = find_venv_python(venv_path)
-
-    if not python_exe:
-        print(f"Creating venv at {str(venv_path)}")
-        subprocess.check_call([sys.executable, "-m", "venv", str(venv_path)])
-        python_exe = find_venv_python(venv_path)
-        if not python_exe:
-            raise RuntimeError("Error creating venv")
-        subprocess.check_call(
-            [python_exe, "-m", "pip", "install", "--upgrade", "pip", "--quiet"]
-        )
-
-    # Install the PyTorch CPU wheels first to save multiple minutes and a lot of bandwidth.
-    cmd = [
-        str(python_exe),
-        "-m",
-        "pip",
-        "install",
-        "--no-compile",
-        "-r",
-        str(REPO_ROOT / "pytorch-cpu-requirements.txt"),
-    ]
-    print(f"\nRunning command: {' '.join([str(c) for c in cmd])}")
-    subprocess.check_call(cmd)
-
-    if args.install_using_index:
-        install_with_index(python_exe, wheels)
-    else:
-        install_without_index(python_exe, packages, wheels)
-
-    # Log which packages are installed.
-    print("")
-    print(f"Checking packages with 'pip freeze':")
-    subprocess.check_call([str(python_exe), "-m", "pip", "freeze"])
-
-    return 0
 
 
 def find_wheel(args, artifact_prefix: str, package_name: str) -> Tuple[Path, str]:
@@ -357,6 +297,81 @@ def find_wheel(args, artifact_prefix: str, package_name: str) -> Tuple[Path, str
     if not has_package():
         raise RuntimeError(f"Could not find {package_name} in {artifact_path}")
     return (artifact_path, package_name)
+
+
+def main(args):
+    # Look up the workflow run for a ref.
+    if args.fetch_git_ref:
+        latest_gh_workflow = get_latest_workflow_run_id_for_ref(args.fetch_git_ref)
+        args.fetch_git_ref = ""
+        args.fetch_gh_workflow = str(latest_gh_workflow)
+        return main(args)
+
+    # Make sure we have an artifact path if fetching.
+    if not args.artifact_path and args.fetch_gh_workflow:
+        with tempfile.TemporaryDirectory() as td:
+            args.artifact_path = td
+            return main(args)
+
+    # Parse command-delimited list of packages from args.
+    packages = args.packages.split(",")
+    print("Installing packages:", packages)
+
+    artifact_prefix = f"{platform.system().lower()}_{platform.machine()}"
+    wheels = []
+    for package_name in packages:
+        wheels.append(find_wheel(args, artifact_prefix, package_name))
+    print("Installing wheels:", wheels)
+
+    # Set up venv using 'uv' (https://docs.astral.sh/uv/).
+    # We could use 'pip', but 'uv' is much faster at installing packages.
+    venv_path = args.venv_dir
+    python_exe = find_venv_python(venv_path)
+
+    if not python_exe:
+        print(f"Creating venv at {str(venv_path)}")
+
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "uv"])
+        subprocess.check_call(["uv", "venv", str(venv_path), "--python", "3.11"])
+        python_exe = find_venv_python(venv_path)
+        if not python_exe:
+            raise RuntimeError("Error creating venv")
+
+    # Install the PyTorch CPU wheels first to save multiple minutes and a lot of bandwidth.
+    cmd = [
+        "uv",
+        "pip",
+        "install",
+        "-r",
+        str(REPO_ROOT / "pytorch-cpu-requirements.txt"),
+        "--python",
+        str(python_exe),
+    ]
+    print(f"\nRunning command: {' '.join([str(c) for c in cmd])}")
+    subprocess.check_call(cmd)
+
+    if args.install_using_index:
+        install_with_index(python_exe, wheels)
+    else:
+        install_without_index(python_exe, packages, wheels)
+
+    # Log which packages are installed.
+    print("")
+    print(f"Checking packages with 'uv pip freeze':")
+    subprocess.check_call(
+        [
+            "uv",
+            "pip",
+            "freeze",
+            "--python",
+            str(python_exe),
+        ]
+    )
+
+    print("")
+    print(f"venv setup using uv, activate with:\n  source {venv_path}/bin/activate")
+
+    return 0
 
 
 if __name__ == "__main__":
