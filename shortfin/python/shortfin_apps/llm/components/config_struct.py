@@ -11,20 +11,20 @@ Parameters that are intrinsic to a specific model.
 In a typical transformer model, the KV cache is organized similar to (mapped to
 our parameter names below):
     k = tensor.empty(transformer_block_count, batch_size, seq,
-                    attn_head_count, attn_head_dim)
+                    attn_head_count_kv, attn_head_dim)
     v = ...
 
 For context, a popular model has parameters of:
     attn_dtype_size = 2  # (fp16)
     max_seq_len = 2048
     transformer_block_count = 32
-    attn_head_count = 32
+    attn_head_count_kv = 32
     attn_head_dim = 128   # (dim / head_count)
 
 If paging, then we primarily care about the organization of a single block, where
 a block represents a single position in the sequence for a single item in the batch.
 Therefore, it will be organized like:
-    block = torch.empty(transformer_block_count, 2, attn_head_count, attn_head_dim)
+    block = torch.empty(transformer_block_count, 2, attn_head_count_kv, attn_head_dim)
 
 In this scenario, we declare that one block holds the KV cache for all transformer
 block layers because it reduces the accounting. As such, for the above example,
@@ -80,6 +80,7 @@ dataclasses_json.cfg.global_config.decoders[sfnp.DType] = _decode_dtype
 class PagedKVCacheParams:
     """Parameters for the paged KV cache."""
 
+    attention_head_count_kv: int
     # Position stride per attention block
     block_seq_stride: int
 
@@ -90,8 +91,13 @@ class PagedKVCacheParams:
 @dataclass_json(undefined=Undefined.RAISE)
 @dataclass
 class ModelParams:
-    """Parameters for a specific compiled model, sufficient to do cache planning and
-    invocations."""
+    """
+    Parameters for a specific compiled model, sufficient to do cache planning and
+    invocations.
+
+    Compatibility should be maintained with function generate_params_json in
+    sharktank/sharktank/examples/export_paged_llm_v1.py
+    """
 
     # Maximum length of a sequence including prompt and output.
     max_seq_len: int
@@ -157,7 +163,7 @@ class ModelParams:
         size = 1
         size *= self.transformer_block_count
         size *= 2  # K and V cache line
-        size *= self.attn_head_count
+        size *= self.paged_kv_cache.attention_head_count_kv
         size *= self.attn_head_dim
         return size
 
