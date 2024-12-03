@@ -19,6 +19,8 @@
 name: SGLang Llama Benchmarking Tests
 
 on:
+  # TODO: Temporary trigger to validate workflow
+  pull_request:
   workflow_dispatch:
   schedule:
     # Weekdays at 4:00 AM UTC = 9:00 PM PST.
@@ -61,7 +63,7 @@ jobs:
         id: cache-pip
         with:
           path: ${{ env.PIP_CACHE_DIR }}
-          key: pip-${{ steps.setup_python.outputs.python-version }}-${{ hashFiles('*requirements*.txt','shortfin/requirements*.txt','sharktank/requirements*.txt') }}
+          key: pip-${{ matrix.version }}-${{ hashFiles('*requirements*.txt','shortfin/requirements*.txt','sharktank/requirements*.txt') }}
 
       - name: Install pip deps
         run: |
@@ -86,15 +88,13 @@ jobs:
         run: pip install "git+https://github.com/nod-ai/sglang.git#subdirectory=python"
 
       - name: Run Shortfin Benchmark Tests
-        run: pytest -v app_tests/benchmark_tests/llm/sglang_benchmarks/shortfin_benchmark_test.py --log-cli-level=INFO --html=out/llm/shortfin/index.html
+        run: pytest -v app_tests/benchmark_tests/llm/sglang_benchmarks/shortfin_benchmark_test.py --log-cli-level=INFO --html=shortfin_index.html --self-contained-html
 
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@4f9cc6602d3f66b9c108549d475ec49e8ef4d45e # v4.0.0
+      - name: Upload pytest report
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
         with:
-          github_token: ${{ secrets.SHARK_PLATFORM_GH_TOKEN }}
-          publish_dir: ./out/llm/shortfin
-          destination_dir: ./llm/sgl_benchmark/shortfin
-          keep_files: true
+          name: sglang_reports
+          path: shortfin_index.html
 
   benchmark_sglang:
     if: ${{ github.repository_owner == 'nod-ai' || github.event_name != 'schedule' }}
@@ -178,7 +178,7 @@ jobs:
 
       - name: Run SGLang Benchmark Tests
         run: |
-          pytest -v app_tests/benchmark_tests/llm/sglang_benchmarks/sglang_benchmark_test.py --port 30000 --log-cli-level=INFO --html=out/llm/sglang/index.html
+          pytest -v app_tests/benchmark_tests/llm/sglang_benchmarks/sglang_benchmark_test.py --port 30000 --log-cli-level=INFO --html=sglang_index.html --self-contained-html
 
       - name: Stop sglang-server
         run: docker stop sglang-server || true # Stop container if it's running
@@ -187,10 +187,49 @@ jobs:
       - name: Cleanup SGLang Image
         run: docker image rm lmsysorg/sglang:v0.3.5.post1-rocm620
 
+      - name: Upload pytest report
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
+        with:
+          name: sglang_reports
+          path: sglang_index.html
+
+  merge_and_upload_reports:
+    if: ${{ github.repository_owner == 'nod-ai' || github.event_name != 'schedule' }}
+    name: "Merge and upload benchmark reports"
+    needs: [benchmark_shortfin, benchmark_sglang]
+    strategy:
+      matrix:
+        version: [3.11]
+      fail-fast: false
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: "Setting up Python"
+        id: setup_python
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+        with:
+          python-version: ${{matrix.version}}
+
+      - name: Install pytest-html-merger
+        run: pip install pytest-html-merger
+      - name: Download reports
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
+        with:
+          name: slgang_reports
+          path: reports
+
+      - name: Create merged report directory
+        run: mkdir merged_reports
+
+      - name: Merge html reports
+        run: pytest_html_merger -i reports -o merged_reports/index.html
+
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@4f9cc6602d3f66b9c108549d475ec49e8ef4d45e # v4.0.0
         with:
           github_token: ${{ secrets.SHARK_PLATFORM_GH_TOKEN }}
-          publish_dir: ./out/llm/sglang
-          destination_dir: ./llm/sgl_benchmark/sglang
+          publish_dir: merged_reports
+          destination_dir: ./llm/sglang
           keep_files: true
