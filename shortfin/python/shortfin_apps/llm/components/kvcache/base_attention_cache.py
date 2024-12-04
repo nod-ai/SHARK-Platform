@@ -34,8 +34,12 @@ class PageAllocation(ABC):
         pass
 
     @abstractmethod
-    def publish_pages(self, up_to_page_index) -> None:
-        """Makes pages[0:up_to_page_index] available to other requests."""
+    def publish_pages_for_tokens(
+        self, tokens, *, publish_incomplete_page=False
+    ) -> None:
+        """
+        Makes pages available to other requests. For details, reference the derived class in trie_attention_cache.py.
+        """
         pass
 
     @abstractmethod
@@ -43,8 +47,15 @@ class PageAllocation(ABC):
         """Releases the allocation's reference to pages."""
         pass
 
+    @abstractmethod
+    def extend_allocation(self, tokens, *, extra_token_slots=0) -> None:
+        """
+        Extends the allocation to include additional tokens. For details, reference the derived class in trie_attention_cache.py.
+        """
+        pass
 
-class BasePageAttentionCacheAllocation(PageAllocation):
+
+class BasePagedAttentionCacheAllocation(PageAllocation):
     """Represents a page allocation in the cache."""
 
     def __init__(self, pages: Iterable[PageInfo], cache: "BasePagedAttentionCache"):
@@ -56,18 +67,33 @@ class BasePageAttentionCacheAllocation(PageAllocation):
     def pages(self) -> List[PageInfo]:
         return list(self._pages)
 
-    def publish_pages(self, up_to_page_index) -> None:
+    def publish_pages_for_tokens(
+        self, tokens, *, publish_incomplete_page=False
+    ) -> None:
         pass
 
     def release_pages(self) -> None:
         if self._is_released:
             logger.warning("Releasing already-released allocation")
             return
-        self._cache.page_pool.release_pages(self._pages)
+        self._cache.page_pool.free_pages(self._pages)
         self._is_released = True
 
+    def extend_allocation(self, tokens, *, extra_token_slots=0) -> None:
+        # assert old tokens are a prefix of incoming tokens
+        # if we don't have enough pages to hold the tokens, we need to allocate more pages
+        token_count = len(tokens) + extra_token_slots
+        pages_needed = math.ceil(token_count / self._cache.tokens_per_page)
+        if pages_needed > len(self._pages):
+            new_pages = self._cache.page_pool.acquire_free_pages(
+                pages_needed - len(self._pages)
+            )
+            if new_pages is None:
+                raise CacheAllocationFailure()
+            self._pages += tuple(new_pages)
+
     def __rerp__(self) -> str:
-        return f"BasePageAttentionCacheAllocation(pages={self._pages}, cache={self._cache})"
+        return f"BasePagedAttentionCacheAllocation(pages={self._pages}, cache={self._cache})"
 
 
 class BasePagedAttentionCache:
@@ -117,4 +143,4 @@ class BasePagedAttentionCache:
         if pages is None:
             raise CacheAllocationFailure()
 
-        return BasePageAttentionCacheAllocation(pages, cache=self)
+        return BasePagedAttentionCacheAllocation(pages, cache=self)
