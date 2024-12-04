@@ -40,6 +40,8 @@ jobs:
     runs-on: mi300-sdxl-kernel
 
     steps:
+    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
     - name: Install dependencies
       run: |
         if dpkg -s cmake &>/dev/null; then
@@ -53,18 +55,13 @@ jobs:
           sudo apt install ninja -y
         fi
 
-    - name: Checkout repository
-      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      with:
-        submodules: false
-
     - name: Checkout IREE repo
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       with:
         repository: iree-org/iree
         path: ${{ env.IREE_REPO_DIR }}
         submodules: false
-        ref: iree-3.0.0rc20241118
+        ref: iree-3.1.0rc20241204
 
     - name: Initalize IREE submodules
       working-directory: ${{ env.IREE_REPO_DIR }}

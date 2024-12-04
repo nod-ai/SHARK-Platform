@@ -227,6 +227,8 @@ class T5Config:
             == properties["t5.attention.layer_norm_rms_epsilon"]
         )
 
+        all_kwargs = {"vocab_size": None, "feed_forward_proj": None}
+
         gguf_to_config_names_map = {
             "t5.context_length": ["context_length"],
             "t5.embedding_length": ["d_model"],
@@ -236,11 +238,9 @@ class T5Config:
             "t5.attention.key_length": ["d_kv"],
             "t5.attention.layer_norm_epsilon": ["layer_norm_epsilon"],
             "t5.attention.relative_buckets_count": ["relative_attention_num_buckets"],
-            "t5.decoder_start_token_id": ["decoder_start_token_id"],
             "tokenizer.ggml.eos_token_id": ["eos_token_id"],
             "tokenizer.ggml.padding_token_id": ["pad_token_id"],
         }
-        all_kwargs = {"vocab_size": None, "feed_forward_proj": None}
         all_kwargs.update(
             {
                 config_name: properties[gguf_name]
@@ -248,6 +248,19 @@ class T5Config:
                 for config_name in config_names
             }
         )
+
+        gguf_to_optional_config_names_map = {
+            "t5.decoder_start_token_id": ["decoder_start_token_id"],
+        }
+        all_kwargs.update(
+            {
+                config_name: properties[gguf_name]
+                for gguf_name, config_names in gguf_to_optional_config_names_map.items()
+                for config_name in config_names
+                if gguf_name in properties
+            }
+        )
+
         if "tokenizer.ggml.tokens" in properties:
             all_kwargs["vocab_size"] = len(properties["tokenizer.ggml.tokens"])
         all_kwargs.update(kwargs)

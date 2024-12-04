@@ -15,7 +15,7 @@ If you're looking to use SHARK check out our [User Guide](docs/user_guide.md). F
 
 <!-- TODO: features list here? -->
 
-[![PyPI version](https://badge.fury.io/py/shortfin.svg)](https://badge.fury.io/py/shortfin) [![CI - shortfin](https://github.com/nod-ai/shark-ai/actions/workflows/ci_linux_x64-libshortfin.yml/badge.svg?event=push)](https://github.com/nod-ai/shark-ai/actions/workflows/ci_linux_x64-libshortfin.yml?query=event%3Apush)
+[![PyPI version](https://badge.fury.io/py/shortfin.svg)](https://badge.fury.io/py/shortfin) [![CI - shortfin](https://github.com/nod-ai/shark-ai/actions/workflows/ci-libshortfin.yml/badge.svg?event=push)](https://github.com/nod-ai/shark-ai/actions/workflows/ci-libshortfin.yml?query=event%3Apush)
 
 The shortfin sub-project is SHARK's high performance inference library and
 serving engine.

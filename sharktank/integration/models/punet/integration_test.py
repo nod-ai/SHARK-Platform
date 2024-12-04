@@ -89,12 +89,13 @@ def sdxl_fp16_dataset(sdxl_fp16_base_files, temp_dir):
 def sdxl_int8_base_files():
     from huggingface_hub import hf_hub_download
 
-    REPO_ID = "amd-shark/sdxl-quant-models"
-    REVISION = "942e771bf0c2657a8b33380103d04747a75dfa4a"
+    REPO_ID = "amd-shark/sdxl-quant-int8"
+    SUBFOLDER = "mi300_all_sym_8_step14_fp32"
+    REVISION = "efda8afb35fd72c1769e02370b320b1011622958"
 
     def download(filename):
         return hf_hub_download(
-            repo_id=REPO_ID, subfolder="unet/int8", filename=filename, revision=REVISION
+            repo_id=REPO_ID, subfolder=SUBFOLDER, filename=filename, revision=REVISION
         )
 
     return {
@@ -142,6 +143,7 @@ def sdxl_fp16_export_mlir(sdxl_fp16_dataset, temp_dir):
     return output_path
 
 
+@pytest.mark.punet_quick
 @pytest.mark.model_punet
 @pytest.mark.export
 def test_sdxl_export_fp16_mlir(sdxl_fp16_export_mlir):
@@ -165,6 +167,7 @@ def sdxl_int8_export_mlir(sdxl_int8_dataset, temp_dir):
     return output_path
 
 
+@pytest.mark.punet_quick
 @pytest.mark.model_punet
 @pytest.mark.export
 def test_sdxl_export_int8_mlir(sdxl_int8_export_mlir):

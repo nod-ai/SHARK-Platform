@@ -10,8 +10,10 @@
 import z3  # type: ignore
 from typing import Iterator
 
+from iree.compiler import ir  # type: ignore
 
 from iree.compiler.dialects import iree_gpu  # type: ignore
+from iree.compiler.dialects import iree_codegen  # type: ignore
 
 from .common import *
 
@@ -25,10 +27,18 @@ def get_mfma_intrinsic_constraints(
 ) -> z3.BoolRef:
     compatible_intrinsics = get_compatible_mfma_intrinsics(problem_size, mma_intrinsics)
     assert len(compatible_intrinsics) > 0, "No compatible intrinsics found"
+
+    mma_attrs = [iree_gpu.MMAAttr.get(mfma) for mfma in compatible_intrinsics]
+    mnk_shapes = [mma_attr.mnk_shape for mma_attr in mma_attrs]
+
     return z3.Or(
         *(
-            z3.And(intrinsic_m == mfma.m, intrinsic_n == mfma.n, intrinsic_k == mfma.k)
-            for mfma in compatible_intrinsics
+            z3.And(
+                intrinsic_m == m,
+                intrinsic_n == n,
+                intrinsic_k == k,
+            )
+            for m, n, k in mnk_shapes
         )
     )
 
@@ -134,14 +144,43 @@ def generate_constraints(
     return constraints
 
 
+def getMMAAttr(
+    output_type: ir.IntegerType | ir.FloatType,
+    m: int,
+    n: int,
+    k: int,
+    lhs_type: ir.IntegerType | ir.FloatType,
+    rhs_type: ir.IntegerType | ir.FloatType,
+) -> iree_gpu.MMAAttr:
+    for mma_intrinsic in iree_gpu.MMAIntrinsic:
+        mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
+        a_type, b_type, c_type = mma_attr.abc_element_types
+        mnk = mma_attr.mnk_shape
+        if (
+            a_type == lhs_type
+            and b_type == rhs_type
+            and c_type == output_type
+            and m == mnk[0]
+            and n == mnk[1]
+            and k == mnk[2]
+        ):
+            return mma_attr
+        # If no matching intrinsic is found, raise an exception
+    raise ValueError(
+        f"No matching MMA intrinsic found for "
+        f"output_type={output_type}, lhs_type={lhs_type}, rhs_type={rhs_type}, "
+        f"m={m}, n={n}, k={k}."
+    )
+
+
 def generate_solutions(
-    logger: logging.Logger,
+    tuner_ctx: TunerContext,
     problem_size: ProblemSize,
     num_subgrups: int,
     mma_intrinsics: list[iree_gpu.MMAIntrinsic],
 ) -> Iterator[Configuration]:
     M, N, K = problem_size.MNK
-    logger.info(f"{M},{N},{K}")
+    tuner_ctx.logger.info(f"{M},{N},{K}")
     m, n, k = z3.Int("m"), z3.Int("n"), z3.Int("k")
     subgroup_size = z3.Int("subgroup_size")
     intrinsic_mn = z3.Int("intrinsic_mn")
@@ -179,26 +218,37 @@ def generate_solutions(
         mma_intrinsics,
     )
     solver.add(z3.simplify(z3.And(constraints)))
-    logger.debug(f"Initial constraints: {solver}")
+    tuner_ctx.logger.debug(f"Initial constraints: {solver}")
+
     i = 0
     while solver.check() == z3.sat:
         model = solver.model()
         lookup = lambda var: model[var].as_long()
-
+        mma_attr = getMMAAttr(
+            problem_size.res_type.element_type,
+            lookup(intrinsic_mn),
+            lookup(intrinsic_mn),
+            lookup(intrinsic_k),
+            problem_size.lhs_type.element_type,
+            problem_size.rhs_type.element_type,
+        )
+        lowering_config = get_lowering_config(
+            tuner_ctx=tuner_ctx,
+            mma_kind=mma_attr,
+            workgroup=[lookup(m), lookup(n), 0],
+            reduction=[
+                0,
+                0,
+                lookup(k),
+            ],
+            subgroup_m_count=lookup(sg_m_cnt),
+            subgroup_n_count=lookup(sg_n_cnt),
+        )
         config = Configuration(
             lookup(subgroup_size),
             [lookup(wg_x), lookup(wg_y), lookup(wg_z)],
-            MfmaIntrinsic(
-                problem_size.res_type.element_type,
-                lookup(intrinsic_mn),
-                lookup(intrinsic_mn),
-                lookup(intrinsic_k),
-                problem_size.lhs_type.element_type,
-            ),
-            [lookup(m), lookup(n), lookup(k)],
-            lookup(sg_m_cnt),
-            lookup(sg_n_cnt),
-            GpuPipelineOptions(),
+            lowering_config,
+            iree_gpu.PipelineOptionsAttr.get(),
             lookup(waves_per_eu),
         )
         solver.add(z3.simplify(z3.Not(z3.And(list(x == model[x] for x in all_vars)))))

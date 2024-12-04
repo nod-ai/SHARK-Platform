@@ -11,7 +11,13 @@ from pathlib import Path
 import shortfin as sf
 import shortfin.array as sfnp
 
-from .cache import AttnPageCache
+from .kvcache.base_attention_cache import (
+    BasePagedAttentionCache,
+    CacheAllocationFailure,
+    PageAllocation,
+)
+from .kvcache.trie_attention_cache import TriePagedAttentionCache
+from .kvcache.page_pool import PagePoolConfig, PagePool, PageInfo
 from .config_struct import ModelParams
 from .manager import SystemManager
 from .messages import InferenceExecRequest, InferencePhase, StrobeMessage
@@ -54,9 +60,28 @@ class GenerateService:
 
         # Scope dependent objects.
         self.batcher = BatcherProcess(self)
-        self.page_cache = AttnPageCache(
-            devices=self.main_fiber.devices_dict.values(), model_params=model_params
+        page_pool_config = PagePoolConfig(
+            dtype=model_params.attn_dtype,
+            alloc_page_count=model_params.paged_kv_cache.device_block_count,
+            paged_kv_block_size_elements=model_params.paged_kv_block_size_elements,
         )
+        page_pool = PagePool(
+            devices=self.main_fiber.devices_dict.values(), config=page_pool_config
+        )
+        if model_params.paged_kv_cache.prefix_sharing_algorithm == "trie":
+            self.page_cache = TriePagedAttentionCache(
+                page_pool=page_pool,
+                tokens_per_page=model_params.paged_kv_cache.block_seq_stride,
+            )
+        elif model_params.paged_kv_cache.prefix_sharing_algorithm == "none":
+            self.page_cache = BasePagedAttentionCache(
+                page_pool=page_pool,
+                tokens_per_page=model_params.paged_kv_cache.block_seq_stride,
+            )
+        else:
+            raise ValueError(
+                f"Unknown model_params.paged_kv_cache.prefix_sharing_algorithm {model_params.paged_kv_cache.prefix_sharing_algorithm}. Currently only supporting 'trie' and 'none'."
+            )
 
         self.program_isolation = PROG_ISOLATIONS[program_isolation]
 
@@ -200,7 +225,7 @@ class BatcherProcess(sf.Process):
         self.pending_prefills.clear()
         logger.debug("Post boarding cache state: %r", cache)
 
-    def board_prefills(self, cache: AttnPageCache):
+    def board_prefills(self, cache: BasePagedAttentionCache):
         # Fill prefill flights.
         pending_prefills = self.pending_prefills
         if len(pending_prefills) == 0:
@@ -209,7 +234,7 @@ class BatcherProcess(sf.Process):
             self.service,
             InferencePhase.PREFILL,
             self.page_seq_stride,
-            cache.page_tables,
+            cache.page_pool.page_tables,
         )
         for prefill_request in pending_prefills:
             assert prefill_request.phase == InferencePhase.PREFILL
@@ -218,13 +243,18 @@ class BatcherProcess(sf.Process):
             needed_pages = math.ceil(
                 len(prefill_request.input_token_ids) / self.page_seq_stride
             )
-            pages = cache.acquire_free_pages(needed_pages)
-            if pages is None:
+            # allocate kv cache pages
+            try:
+                allocation = cache.acquire_pages_for_tokens(
+                    prefill_request.input_token_ids,
+                    extra_token_slots=0,  # prefill needs no extra kvcache slots to write to
+                )
+            except CacheAllocationFailure:
                 logger.debug("Cannot fulfill request for %d pages", needed_pages)
                 continue
-            else:
-                logger.debug("Allocated %d cache pages to request", len(pages))
-                prefill_request.lock_initial_cache_pages(cache, pages)
+            logger.debug(f"Successfully acquired allocation: {allocation}")
+            prefill_request.free_cache_pages()
+            prefill_request.allocation = allocation
 
             # Can flight this request.
             exec_process.exec_requests.append(prefill_request)
@@ -236,35 +266,24 @@ class BatcherProcess(sf.Process):
             # And takeoff.
             exec_process.launch()
 
-    def board_decodes(self, cache: AttnPageCache):
+    def board_decodes(self, cache: BasePagedAttentionCache):
         # Fill decode flights.
         pending_decodes = self.pending_decodes
         if len(pending_decodes) == 0:
             return
         exec_process = InferenceExecutorProcess(
-            self.service, InferencePhase.DECODE, self.page_seq_stride, cache.page_tables
+            self.service,
+            InferencePhase.DECODE,
+            self.page_seq_stride,
+            cache.page_pool.page_tables,
         )
         for decode_request in pending_decodes:
             assert decode_request.phase == InferencePhase.DECODE
             if len(exec_process.exec_requests) >= self.ideal_batch_size:
                 break
-            incoming_token_count = len(decode_request.input_token_ids)
-            needed_pages = math.ceil(
-                (decode_request.start_position + incoming_token_count)
-                / self.page_seq_stride
+            decode_request.allocation.extend_allocation(
+                decode_request.input_token_ids, extra_token_slots=1
             )
-            if needed_pages > len(decode_request.locked_pages):
-                pages = cache.acquire_free_pages(needed_pages)
-                if pages is None:
-                    logger.debug(
-                        "Cannot fulfill decode request for %d pages", needed_pages
-                    )
-                    continue
-                else:
-                    logger.debug(
-                        "Allocated %d cache pages to decode request", len(pages)
-                    )
-                decode_request.lock_new_cache_pages(cache, pages)
 
             # Can flight this request.
             exec_process.exec_requests.append(decode_request)
@@ -416,6 +435,12 @@ class InferenceExecutorProcess(sf.Process):
             )
             # Invoke. Logits are of shape [bs, bsl, d].
             (logits,) = await fn(*args, fiber=self.fiber)
+
+            # publish cache pages
+            for r in self.exec_requests:
+                total_tokens = r.start_position + len(r.input_token_ids)
+                number_of_complete_pages = total_tokens // seq_stride
+                r.publish_allocated_pages(number_of_complete_pages)
 
             # Return results.
             for i in range(req_count):

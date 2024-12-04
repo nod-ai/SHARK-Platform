@@ -212,6 +212,7 @@ def build_cmake_configuration(CMAKE_BUILD_DIR: Path, extra_cmake_args=[]):
         "-DSHORTFIN_BUNDLE_DEPS=ON",
         f"-DCMAKE_BUILD_TYPE={cfg}",
         "-DSHORTFIN_BUILD_PYTHON_BINDINGS=ON",
+        "-DSHORTFIN_BUILD_TESTS=OFF",
         f"-DPython3_EXECUTABLE={sys.executable}",
     ] + extra_cmake_args
 
@@ -225,6 +226,7 @@ def build_cmake_configuration(CMAKE_BUILD_DIR: Path, extra_cmake_args=[]):
     add_env_cmake_setting(cmake_args, "SHORTFIN_ENABLE_LTO", default_value="ON")
     add_env_cmake_setting(cmake_args, "SHORTFIN_IREE_SOURCE_DIR")
     add_env_cmake_setting(cmake_args, "SHORTFIN_ENABLE_ASAN")
+    add_env_cmake_setting(cmake_args, "SHORTFIN_ENABLE_TOKENIZERS", default_value="OFF")
 
     # Only do a from-scratch configure if not already configured.
     cmake_cache_file = os.path.join(CMAKE_BUILD_DIR, "CMakeCache.txt")

@@ -72,8 +72,12 @@ class StaticScaledQuantizerTest(TempDirTestBase):
         )
         ssq = self._roundtrip(ssq, "_ssq")
         self.assertEqual(ssq.axis, 1)
-        torch.testing.assert_close(ssq.scale, torch.tensor([0.2, 0.4, 0.8]))
-        torch.testing.assert_close(ssq.reciprocal_scale, torch.tensor([5.0, 2.5, 1.25]))
+        torch.testing.assert_close(
+            ssq.scale, torch.tensor([0.2, 0.4, 0.8], dtype=torch.float32)
+        )
+        torch.testing.assert_close(
+            ssq.reciprocal_scale, torch.tensor([5.0, 2.5, 1.25], dtype=torch.float32)
+        )
         self.assertIs(ssq.dtype, torch.float16)
 
     def testPerAxisQuantDequant(self):

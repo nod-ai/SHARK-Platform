@@ -1,0 +1,146 @@
+# Copyright 2024 Advanced Micro Devices, Inc.
+#
+# Licensed under the Apache License v2.0 with LLVM Exceptions.
+# See https://llvm.org/LICENSE.txt for license information.
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+
+name: CI - shortfin
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/ci-libshortfin.yml'
+      - 'shortfin/**'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/ci-libshortfin.yml'
+      - 'shortfin/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  # A PR number if a pull request and otherwise the commit hash. This cancels
+  # queued and in-progress runs for the same PR (presubmit) or commit
+  # (postsubmit). The workflow name is prepended to avoid conflicts between
+  # different workflows.
+  group: ${{ github.workflow }}-${{ github.event.number || github.sha }}
+  cancel-in-progress: true
+
+env:
+  IREE_REPO_DIR: ${{ github.workspace }}/iree
+  LIBSHORTFIN_DIR: ${{ github.workspace }}/shortfin/
+
+jobs:
+  build-and-test:
+    name: "Unit tests :: ${{ matrix.name }} :: ${{ matrix.python-version }}"
+    runs-on: ${{ matrix.runs-on }}
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        name: ["Ubuntu (Clang)(full)", "Ubuntu (Clang)(host-only)", "Ubuntu (GCC)", "Windows (MSVC)"]
+        python-version: ["3.10", "3.11", "3.12"]
+        include:
+          - name: Ubuntu (Clang)(full)
+            runs-on: ubuntu-24.04
+            cmake-options:
+              -DCMAKE_C_COMPILER=clang-18 -DCMAKE_CXX_COMPILER=clang++-18 -DCMAKE_LINKER_TYPE=LLD
+            additional-packages: clang lld
+          - name: Ubuntu (Clang)(host-only)
+            runs-on: ubuntu-24.04
+            # In this configuration, also build static+dynamic in order to verify
+            # that path structurally works.
+            cmake-options:
+              -DCMAKE_C_COMPILER=clang-18 -DCMAKE_CXX_COMPILER=clang++-18 -DCMAKE_LINKER_TYPE=LLD -DSHORTFIN_HAVE_AMDGPU=OFF -DSHORTFIN_BUILD_STATIC=ON -DSHORTFIN_BUILD_DYNAMIC=ON
+            additional-packages: clang lld
+          - name: Ubuntu (GCC)
+            runs-on: ubuntu-24.04
+          - name: Windows (MSVC)
+            runs-on: windows-2022
+        exclude:
+          # Only test Python 3.12 with GCC
+          - name: Ubuntu (GCC)
+            python-version: "3.10"
+          - name: Ubuntu (GCC)
+            python-version: "3.11"
+          # TODO: Include additional Python versions for Windows after build got fixed
+          - name: Windows (MSVC)
+            python-version: "3.10"
+          - name: Windows (MSVC)
+            python-version: "3.11"
+
+    steps:
+    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+    - name: (Linux) Install dependencies
+      if: "runner.os == 'Linux'"
+      run: |
+        sudo apt update
+        sudo apt install cmake ninja-build ${{matrix.additional-packages}}
+
+    - name: (Windows) Configure MSVC
+      if: "runner.os == 'Windows'"
+      uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+
+    - name: Checkout IREE repo
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      with:
+        repository: iree-org/iree
+        path: ${{ env.IREE_REPO_DIR }}
+        submodules: false
+        ref: iree-3.1.0rc20241204
+
+    - name: Initalize IREE submodules
+      working-directory: ${{ env.IREE_REPO_DIR }}
+      run : |
+        git submodule update --init --depth 1 -- third_party/benchmark
+        git submodule update --init --depth 1 -- third_party/cpuinfo/
+        git submodule update --init --depth 1 -- third_party/flatcc
+        git submodule update --init --depth 1 -- third_party/googletest
+        git submodule update --init --depth 1 -- third_party/hip-build-deps/
+
+    - name: "Setup Python ${{ matrix.python-version }}"
+      uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: "pip"
+        cache-dependency-path: |
+          'shortfin/requirements-tests.txt'
+          'shortfin/requirements-iree-compiler.txt'
+    - name: Install Python packages
+      working-directory: ${{ env.LIBSHORTFIN_DIR }}
+      run: |
+        pip install -r requirements-tests.txt
+        pip install -r requirements-iree-compiler.txt
+        pip freeze
+
+    - name: Build shortfin
+      working-directory: ${{ env.LIBSHORTFIN_DIR }}
+      run: |
+        mkdir build
+        cmake -GNinja \
+          -S. \
+          -Bbuild \
+          -DSHORTFIN_IREE_SOURCE_DIR="${{ env.IREE_REPO_DIR }}" \
+          -DSHORTFIN_BUILD_PYTHON_BINDINGS=ON \
+          ${{matrix.cmake-options}}
+        cmake --build build --target all
+
+    - name: pip install shortfin
+      if: ${{ matrix.name != 'Ubuntu (Clang)(host-only)'}}
+      working-directory: ${{ env.LIBSHORTFIN_DIR }}
+      run: |
+        pip install -v -e build/
+
+    - name: Test shortfin
+      if: ${{ matrix.name != 'Ubuntu (Clang)(host-only)'}}
+      working-directory: ${{ env.LIBSHORTFIN_DIR }}
+      run: |
+        ctest --timeout 30 --output-on-failure --test-dir build
+        pytest -s --durations=10
