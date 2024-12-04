@@ -76,6 +76,8 @@ jobs:
             python-version: "3.11"
 
     steps:
+    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
     - name: (Linux) Install dependencies
       if: "runner.os == 'Linux'"
       run: |
@@ -85,11 +87,6 @@ jobs:
     - name: (Windows) Configure MSVC
       if: "runner.os == 'Windows'"
       uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
-
-    - name: Checkout repository
-      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      with:
-        submodules: false
 
     - name: Checkout IREE repo
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
