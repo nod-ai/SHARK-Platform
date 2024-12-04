@@ -37,7 +37,7 @@ env:
 jobs:
   build-and-test:
     name: Build and test
-    runs-on: mi300-sdxl-kernel
+    runs-on: mi300x-4
 
     steps:
     - name: Install dependencies
