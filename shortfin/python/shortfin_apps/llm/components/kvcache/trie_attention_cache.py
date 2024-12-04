@@ -12,6 +12,26 @@ from .base_attention_cache import (
 
 
 @dataclass
+class RefCount:
+    """
+    A reference counter to replace simple int.
+    """
+
+    count: int = 0
+
+    def increment(self) -> int:
+        self.count += 1
+        return self.count
+
+    def decrement(self) -> int:
+        self.count -= 1
+        return self.count
+
+    def is_empty(self) -> bool:
+        return self.count <= 0
+
+
+@dataclass
 class TrieNode:
     """Node of the block trie for paged attention cache.
 
@@ -32,7 +52,7 @@ class TrieNode:
     page: PageInfo
     children: Optional[Dict[Tuple[int, ...], "TrieNode"]] = None
     parent: Optional["TrieNode"] = None
-    ref_count: int = 0
+    ref_count: RefCount
     access_time: float = 0.0
 
     def __post_init__(self) -> None:
@@ -40,6 +60,7 @@ class TrieNode:
         if self.children is None:
             self.children = {}
         self.access_time = time.monotonic()
+        self.ref_count = RefCount()
 
     def create_child(self, tokens: Tuple[int, ...], page: PageInfo) -> "TrieNode":
         """Create a new child node with the given tokens and page.
@@ -165,8 +186,8 @@ class TriePagedAttentionCacheAllocation(PageAllocation):
 
         # Update reference counts
         if unpublished_tokens:
-            cur_node.ref_count += 1
-            self.last_cached_node.ref_count -= 1
+            cur_node.ref_count.increment()
+            self.last_cached_node.ref_count.decrement()
             self.last_cached_node = cur_node
 
         self.number_of_published_pages = number_of_pages_to_publish
@@ -180,7 +201,7 @@ class TriePagedAttentionCacheAllocation(PageAllocation):
         if self._is_released:
             return
 
-        self.last_cached_node.ref_count -= 1
+        self.last_cached_node.ref_count.decrement()
         self._is_released = True
 
     def extend_allocation(self, tokens: List[int], *, extra_token_slots=0) -> None:
@@ -328,7 +349,7 @@ class TriePagedAttentionCache(BasePagedAttentionCache):
         tokens = tuple(tokens)
 
         cur_node, matched_pages = self._match(tokens)
-        cur_node.ref_count += 1
+        cur_node.ref_count.increment()
 
         n_cached_tokens = len(matched_pages) * self.tokens_per_page
         remaining_length = len(tokens) - n_cached_tokens + extra_token_slots
@@ -378,7 +399,9 @@ class TriePagedAttentionCache(BasePagedAttentionCache):
 
         # Initialize heap with unreferenced leaves
         unused_leaf_heap = [
-            (leaf.access_time, leaf) for leaf in self.leaves if leaf.ref_count == 0
+            (leaf.access_time, leaf)
+            for leaf in self.leaves
+            if leaf.ref_count.is_empty()
         ]
         heapq.heapify(unused_leaf_heap)
 
@@ -393,7 +416,7 @@ class TriePagedAttentionCache(BasePagedAttentionCache):
             # If parent becomes childless, it becomes a leaf
             if parent is not self.root and not parent.children:
                 self.leaves.add(parent)
-                if parent.ref_count == 0:
+                if parent.ref_count.is_empty():
                     heapq.heappush(unused_leaf_heap, (parent.access_time, parent))
 
         if pages_to_evict:
