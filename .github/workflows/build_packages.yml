@@ -30,7 +30,6 @@ jobs:
         uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
         with:
           python-version: 3.12
-          cache: "pip"
       - name: Install Python packages
         run: |
           pip install packaging
@@ -131,6 +130,7 @@ jobs:
       env:
         OUTPUT_DIR: "${{ github.workspace }}/bindist"
         OVERRIDE_PYTHON_VERSIONS: "${{ matrix.python-version }}"
+        SHORTFIN_ENABLE_TRACING: "ON"
       run: |
         [ -e ./bindist/* ] && rm ./bindist/*
         ./c/shortfin/build_tools/build_linux_package.sh
