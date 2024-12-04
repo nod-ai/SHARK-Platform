@@ -70,6 +70,8 @@ jobs:
           pip install "git+https://github.com/nod-ai/sglang.git#subdirectory=python"
           pip install sentence_transformers
 
+          pip freeze
+
       - name: Run Integration Tests
         run: |
           source ${VENV_DIR}/bin/activate

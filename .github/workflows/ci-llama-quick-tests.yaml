@@ -69,6 +69,8 @@ jobs:
             iree-base-compiler \
             iree-base-runtime
 
+          pip freeze
+
       - name: Run llama 8b f16 decomposed test
         run: |
           source ${VENV_DIR}/bin/activate

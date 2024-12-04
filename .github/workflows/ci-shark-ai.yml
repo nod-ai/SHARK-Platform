@@ -67,6 +67,8 @@ jobs:
             iree-base-compiler \
             iree-base-runtime
 
+          pip freeze
+
       - name: Run LLM Integration Tests
         run: |
           source ${VENV_DIR}/bin/activate

@@ -81,6 +81,8 @@ jobs:
           # Install SGLang
           pip install "git+https://github.com/nod-ai/sglang.git#subdirectory=python"
 
+          pip freeze
+
       - name: Run Shortfin Benchmark Tests
         run: |
           source ${VENV_DIR}/bin/activate

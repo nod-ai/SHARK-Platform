@@ -68,6 +68,8 @@ jobs:
             iree-base-compiler \
             iree-base-runtime
 
+          pip freeze
+
       - name: Run perplexity test with vmfb
         run: |
           source ${VENV_DIR}/bin/activate
