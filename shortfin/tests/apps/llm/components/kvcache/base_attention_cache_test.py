@@ -10,7 +10,7 @@ from typing import List, Optional, Set
 
 from shortfin_apps.llm.components.kvcache.base_attention_cache import (
     BasePagedAttentionCache,
-    BasePageAttentionCacheAllocation,
+    BasePagedAttentionCacheAllocation,
     CacheAllocationFailure,
 )
 from shortfin_apps.llm.components.kvcache.page_pool import PagePool, PageInfo

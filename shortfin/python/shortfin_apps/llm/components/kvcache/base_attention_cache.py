@@ -34,7 +34,9 @@ class PageAllocation(ABC):
         pass
 
     @abstractmethod
-    def publish_pages_for_tokens(self, tokens, publish_incomplete_page=False) -> None:
+    def publish_pages_for_tokens(
+        self, tokens, *, publish_incomplete_page=False
+    ) -> None:
         """
         Makes pages available to other requests. For details, reference the derived class in trie_attention_cache.py.
         """
@@ -46,14 +48,14 @@ class PageAllocation(ABC):
         pass
 
     @abstractmethod
-    def extend_allocation(self, tokens, extra_token_slots=0) -> None:
+    def extend_allocation(self, tokens, *, extra_token_slots=0) -> None:
         """
         Extends the allocation to include additional tokens. For details, reference the derived class in trie_attention_cache.py.
         """
         pass
 
 
-class BasePageAttentionCacheAllocation(PageAllocation):
+class BasePagedAttentionCacheAllocation(PageAllocation):
     """Represents a page allocation in the cache."""
 
     def __init__(self, pages: Iterable[PageInfo], cache: "BasePagedAttentionCache"):
@@ -65,7 +67,9 @@ class BasePageAttentionCacheAllocation(PageAllocation):
     def pages(self) -> List[PageInfo]:
         return list(self._pages)
 
-    def publish_pages_for_tokens(self, tokens, publish_incomplete_page=False) -> None:
+    def publish_pages_for_tokens(
+        self, tokens, *, publish_incomplete_page=False
+    ) -> None:
         pass
 
     def release_pages(self) -> None:
@@ -75,7 +79,7 @@ class BasePageAttentionCacheAllocation(PageAllocation):
         self._cache.page_pool.free_pages(self._pages)
         self._is_released = True
 
-    def extend_allocation(self, tokens, extra_token_slots=0) -> None:
+    def extend_allocation(self, tokens, *, extra_token_slots=0) -> None:
         # assert old tokens are a prefix of incoming tokens
         # if we don't have enough pages to hold the tokens, we need to allocate more pages
         token_count = len(tokens) + extra_token_slots
@@ -89,7 +93,7 @@ class BasePageAttentionCacheAllocation(PageAllocation):
             self._pages += tuple(new_pages)
 
     def __rerp__(self) -> str:
-        return f"BasePageAttentionCacheAllocation(pages={self._pages}, cache={self._cache})"
+        return f"BasePagedAttentionCacheAllocation(pages={self._pages}, cache={self._cache})"
 
 
 class BasePagedAttentionCache:
@@ -139,4 +143,4 @@ class BasePagedAttentionCache:
         if pages is None:
             raise CacheAllocationFailure()
 
-        return BasePageAttentionCacheAllocation(pages, cache=self)
+        return BasePagedAttentionCacheAllocation(pages, cache=self)

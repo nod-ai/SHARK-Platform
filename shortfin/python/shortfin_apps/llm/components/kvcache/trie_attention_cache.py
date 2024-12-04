@@ -103,7 +103,9 @@ class TriePagedAttentionCacheAllocation(PageAllocation):
     def pages(self) -> List[PageInfo]:
         return self._pages
 
-    def publish_pages_for_tokens(self, tokens, publish_incomplete_page=False) -> None:
+    def publish_pages_for_tokens(
+        self, tokens, *, publish_incomplete_page=False
+    ) -> None:
         """Make pages available in the cache for the specified tokens.
 
         Args:
@@ -181,7 +183,7 @@ class TriePagedAttentionCacheAllocation(PageAllocation):
         self.last_cached_node.ref_count -= 1
         self._is_released = True
 
-    def extend_allocation(self, tokens: List[int], extra_token_slots=0) -> None:
+    def extend_allocation(self, tokens: List[int], *, extra_token_slots=0) -> None:
         """Extend the current allocation to accommodate additional tokens.
 
         Args:
