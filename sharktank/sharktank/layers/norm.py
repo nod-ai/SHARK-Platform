@@ -52,10 +52,9 @@ class LayerNorm(ThetaLayer):
     ):
         super().__init__(theta)
         self.weight = self.theta_tensor(weight_name)
+        self.bias = None
         if bias_name in self.theta.keys:
             self.bias = self.theta_tensor(bias_name)
-        else:
-            self.bias = None
         self.eps = eps
 
     def forward(self, x: torch.Tensor):

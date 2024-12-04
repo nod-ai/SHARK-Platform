@@ -381,8 +381,7 @@ class InferenceTensor(ABC):
     def size(self, dim: Optional[int] = None) -> tuple[int]:
         if dim is None:
             return tuple(self.shape)
-        else:
-            return self.shape[dim]
+        return self.shape[dim]
 
     def transpose(self, dim0: int, dim1: int) -> "AnyTensor":
         from ..ops import transpose
