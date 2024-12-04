@@ -154,11 +154,12 @@ class TriePagedAttentionCacheAllocation(PageAllocation):
 
         tokens_per_page = self.cache.tokens_per_page
 
-        number_of_pages_to_publish = len(tokens) / tokens_per_page
         if publish_incomplete_page:
-            number_of_pages_to_publish = math.ceil(number_of_pages_to_publish)
+            number_of_pages_to_publish = -(
+                len(tokens) // -tokens_per_page
+            )  # ceil division
         else:
-            number_of_pages_to_publish = math.floor(number_of_pages_to_publish)
+            number_of_pages_to_publish = len(tokens) // tokens_per_page
 
         # Create token blocks for unpublished pages
         start_token_index = self.number_of_published_pages * tokens_per_page
