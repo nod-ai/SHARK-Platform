@@ -128,3 +128,40 @@ def make_mmdit_double_block_theta(dtype: torch.dtype | None = None) -> Theta:
             ),
         }
     )
+
+
+def make_mmdit_single_block_theta(dtype: torch.dtype | None = None) -> Theta:
+    return Theta(
+        {
+            "attn.norm.key_norm.weight": DefaultPrimitiveTensor(  #
+                data=make_rand_torch((128,), dtype=dtype)
+            ),
+            "attn.norm.query_norm.weight": DefaultPrimitiveTensor(  #
+                data=make_rand_torch((128,), dtype=dtype)
+            ),
+            "attn.proj.bias": DefaultPrimitiveTensor(
+                data=make_rand_torch((3072,), dtype=dtype)
+            ),
+            "attn.proj.weight": DefaultPrimitiveTensor(
+                data=make_rand_torch((3072, 3072), dtype=dtype)
+            ),
+            "linear1.bias": DefaultPrimitiveTensor(
+                data=make_rand_torch((21504), dtype=dtype)
+            ),
+            "linear1.weight": DefaultPrimitiveTensor(
+                data=make_rand_torch((21504, 3072), dtype=dtype)
+            ),
+            "linear2.bias": DefaultPrimitiveTensor(
+                data=make_rand_torch((3072), dtype=dtype)
+            ),
+            "linear2.weight": DefaultPrimitiveTensor(
+                data=make_rand_torch((3072, 15360), dtype=dtype)
+            ),
+            "mod.lin.bias": DefaultPrimitiveTensor(
+                data=make_rand_torch((9216,), dtype=dtype)
+            ),
+            "mod.lin.weight": DefaultPrimitiveTensor(
+                data=make_rand_torch((9216, 3072), dtype=dtype)
+            ),
+        }
+    )

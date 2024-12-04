@@ -144,3 +144,46 @@ class MMDITDoubleBlock(ThetaLayer):
         txt = txt + txt_mod2.gate * txt_mlp_out3
 
         return img, txt
+
+
+class MMDITSingleBlock(ThetaLayer):
+    def __init__(self, theta, num_heads: int):
+        super().__init__(theta)
+
+        self.num_heads = num_heads
+        self.add_module("mod", ModulationLayer(theta("mod"), double=False))
+        self.add_module(
+            "attn_norm_q", RMSNormLayer(theta("attn.norm.query_norm"), epsilon=1e-6)
+        )
+        self.add_module(
+            "attn_norm_k", RMSNormLayer(theta("attn.norm.key_norm"), epsilon=1e-6)
+        )
+        self.add_module("attn_proj", LinearLayer(theta("attn.proj")))
+
+        self.add_module("linear1", LinearLayer(theta("linear1")))
+        self.add_module("linear2", LinearLayer(theta("linear2")))
+        self.hidden_size = 3072  # todo
+        self.mlp_hidden_dim = 3072  # todo
+
+    def forward(self, x: Tensor, vec: Tensor, pe: Tensor) -> tuple[Tensor, Tensor]:
+        mod, _ = self.mod(vec)
+        x_norm = ops.layer_norm(x, None, None, eps=1e-6)
+        x_mod = (1 + mod.scale) * x_norm + mod.shift
+        x_lin = self.linear1(x_mod)
+        print("x_lin_shape", x_lin.shape)
+        qkv, mlp = torch.split(
+            x_lin, [3 * self.hidden_size, 4 * self.mlp_hidden_dim], dim=-1
+        )  # todo
+
+        qkv_2 = qkv.view(qkv.shape[0], qkv.shape[1], 3, self.num_heads, -1)  #
+        qkv_3 = ops.permute(qkv_2, (2, 0, 3, 1, 4))
+        q, k, v = qkv_3
+        # q, k, v = rearrange(qkv, "B L (K H D) -> K B H L D", K=3, H=self.num_heads)
+        q, k = qk_norm(q, k, v, self.attn_norm_q, self.attn_norm_k)
+
+        # compute attention
+        attn = attention(q, k, v, pe=pe)
+        # compute activation in mlp stream, cat again and run second linear layer
+        gelu = ops.elementwise(F.gelu, mlp)
+        output = self.linear2(torch.cat((attn, gelu), 2))
+        return x + mod.gate * output
