@@ -52,7 +52,7 @@ class TrieNode:
     page: PageInfo
     children: Optional[Dict[Tuple[int, ...], "TrieNode"]] = None
     parent: Optional["TrieNode"] = None
-    ref_count: RefCount
+    ref_count: RefCount = None
     access_time: float = 0.0
 
     def __post_init__(self) -> None:
