@@ -51,7 +51,7 @@ def make_llama_attention_block_theta(
     )
 
 
-def make_mmdit_block_theta(dtype: torch.dtype | None = None) -> Theta:
+def make_mmdit_double_block_theta(dtype: torch.dtype | None = None) -> Theta:
     return Theta(
         {
             "img_attn.norm.key_norm.weight": DefaultPrimitiveTensor(  #
