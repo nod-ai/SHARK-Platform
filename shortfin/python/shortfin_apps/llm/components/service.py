@@ -16,6 +16,7 @@ from .kvcache.base_attention_cache import (
     CacheAllocationFailure,
     PageAllocation,
 )
+from .kvcache.trie_attention_cache import TriePagedAttentionCache
 from .kvcache.page_pool import PagePoolConfig, PagePool, PageInfo
 from .config_struct import ModelParams
 from .manager import SystemManager
@@ -67,10 +68,20 @@ class GenerateService:
         page_pool = PagePool(
             devices=self.main_fiber.devices_dict.values(), config=page_pool_config
         )
-        self.page_cache = BasePagedAttentionCache(
-            page_pool=page_pool,
-            tokens_per_page=model_params.paged_kv_cache.block_seq_stride,
-        )
+        if model_params.paged_kv_cache.prefix_sharing_algorithm == "trie":
+            self.page_cache = TriePagedAttentionCache(
+                page_pool=page_pool,
+                tokens_per_page=model_params.paged_kv_cache.block_seq_stride,
+            )
+        elif model_params.paged_kv_cache.prefix_sharing_algorithm == "none":
+            self.page_cache = BasePagedAttentionCache(
+                page_pool=page_pool,
+                tokens_per_page=model_params.paged_kv_cache.block_seq_stride,
+            )
+        else:
+            raise ValueError(
+                f"Unknown model_params.paged_kv_cache.prefix_sharing_algorithm {model_params.paged_kv_cache.prefix_sharing_algorithm}. Currently only supporting 'trie' and 'none'."
+            )
 
         self.program_isolation = PROG_ISOLATIONS[program_isolation]
 
@@ -270,21 +281,9 @@ class BatcherProcess(sf.Process):
             assert decode_request.phase == InferencePhase.DECODE
             if len(exec_process.exec_requests) >= self.ideal_batch_size:
                 break
-            incoming_token_count = len(decode_request.input_token_ids)
-
-            try:
-                allocation = cache.acquire_pages_for_tokens(
-                    decode_request.input_token_ids,
-                    extra_token_slots=1,  # need 1 extra slot to write result.
-                )
-            except CacheAllocationFailure:
-                logger.debug(
-                    "Cannot fulfill request for %d tokens",
-                    len(decode_request.input_token_ids),
-                )
-
-            decode_request.free_cache_pages()
-            decode_request.allocation = allocation
+            decode_request.allocation.extend_allocation(
+                decode_request.input_token_ids, extra_token_slots=1
+            )
 
             # Can flight this request.
             exec_process.exec_requests.append(decode_request)

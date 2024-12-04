@@ -37,8 +37,7 @@ jobs:
       PIP_CACHE_DIR: "${{ github.workspace }}/.pip-cache"
       VENV_DIR: ${{ github.workspace }}/.venv
     steps:
-      - name: "Checkout Code"
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: "Setting up Python"
         id: setup_python
@@ -53,7 +52,7 @@ jobs:
         id: cache-pip
         with:
           path: ${{ env.PIP_CACHE_DIR }}
-          key: pip-${{ steps.setup_python.outputs.python-version }}-${{ hashFiles('*requirements.txt') }}
+          key: pip-${{ steps.setup_python.outputs.python-version }}-${{ hashFiles('*requirements*.txt','shortfin/requirements*.txt','sharktank/requirements*.txt') }}
 
       - name: Install pip deps
         run: |
@@ -69,7 +68,7 @@ jobs:
 
           # Use newest possible releases to be able to track commits that may
           # cause errors.
-          pip install -f https://iree.dev/pip-release-links.html --upgrade \
+          pip install -f https://iree.dev/pip-release-links.html --upgrade --pre \
             iree-base-compiler \
             iree-base-runtime \
             "numpy<2.0"

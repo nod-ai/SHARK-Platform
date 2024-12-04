@@ -86,6 +86,8 @@ class PagedKVCacheParams:
     # Size of the cache on each device.
     device_block_count: int
 
+    prefix_sharing_algorithm: str = "none"  # currently supporting none and trie
+
 
 @dataclass_json(undefined=Undefined.RAISE)
 @dataclass
