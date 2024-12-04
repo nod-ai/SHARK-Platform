@@ -10,7 +10,7 @@ from typing import List, Optional, Set
 
 from shortfin_apps.llm.components.kvcache.base_attention_cache import (
     BasePagedAttentionCache,
-    BasePageAttentionCacheAllocation,
+    BasePagedAttentionCacheAllocation,
     CacheAllocationFailure,
 )
 from shortfin_apps.llm.components.kvcache.page_pool import PagePool, PageInfo
@@ -32,7 +32,7 @@ class MockPagePool(PagePool):
         except queue.Empty:
             return None
 
-    def release_pages(self, pages):
+    def free_pages(self, pages):
         for page in pages:
             self._queue.put(page)
 
