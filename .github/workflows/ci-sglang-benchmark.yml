@@ -45,7 +45,7 @@ jobs:
       run:
         shell: bash
     env:
-      PIP_CACHE_DIR: "${{ github.workspace }}/.pip-cache"
+      VENV_DIR: ${{ github.workspace }}/.venv
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
@@ -54,16 +54,12 @@ jobs:
         uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
         with:
           python-version: ${{matrix.version}}
-
-      - name: Cache Pip Packages
-        uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4.1.2
-        id: cache-pip
-        with:
-          path: ${{ env.PIP_CACHE_DIR }}
-          key: pip-${{ matrix.version }}-${{ hashFiles('*requirements*.txt','shortfin/requirements*.txt','sharktank/requirements*.txt') }}
+      - name: Create Python venv
+        run: python -m venv ${VENV_DIR}
 
       - name: Install pip deps
         run: |
+          source ${VENV_DIR}/bin/activate
           python -m pip install --no-compile --upgrade pip
           # Note: We install in three steps in order to satisfy requirements
           # from non default locations first. Installing the PyTorch CPU
@@ -81,11 +77,15 @@ jobs:
             iree-base-runtime==3.1.0rc20241204 \
             "numpy<2.0"
 
-      - name: Install SGLang
-        run: pip install "git+https://github.com/nod-ai/sglang.git#subdirectory=python"
+          # Install SGLang
+          pip install "git+https://github.com/nod-ai/sglang.git#subdirectory=python"
+
+          pip freeze
 
       - name: Run Shortfin Benchmark Tests
-        run: pytest -v app_tests/benchmark_tests/llm/sglang_benchmarks/shortfin_benchmark_test.py --log-cli-level=INFO --html=shortfin_index.html --self-contained-html
+        run: |
+          source ${VENV_DIR}/bin/activate
+          pytest -v app_tests/benchmark_tests/llm/sglang_benchmarks/shortfin_benchmark_test.py --log-cli-level=INFO --html=shortfin_index.html --self-contained-html
 
       - name: Upload pytest report
         uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
@@ -103,8 +103,6 @@ jobs:
     defaults:
       run:
         shell: bash
-    env:
-      PIP_CACHE_DIR: "${{ github.workspace }}/.pip-cache"
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
@@ -113,13 +111,6 @@ jobs:
         uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
         with:
           python-version: ${{matrix.version}}
-
-      - name: Cache Pip Packages
-        uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4.1.2
-        id: cache-pip
-        with:
-          path: ${{ env.PIP_CACHE_DIR }}
-          key: pip-${{ matrix.version }}
 
       - name: Install SGLang
         run: |

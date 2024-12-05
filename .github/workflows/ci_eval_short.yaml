@@ -34,7 +34,7 @@ jobs:
       run:
         shell: bash
     env:
-      PIP_CACHE_DIR: "${{ github.workspace }}/.pip-cache"
+      VENV_DIR: ${{ github.workspace }}/.venv
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
@@ -43,16 +43,12 @@ jobs:
         uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
         with:
           python-version: ${{matrix.version}}
-
-      - name: Cache Pip Packages
-        uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4.1.2
-        id: cache-pip
-        with:
-          path: ${{ env.PIP_CACHE_DIR }}
-          key: pip-${{ steps.setup_python.outputs.python-version }}-${{ hashFiles('*requirements*.txt','sharktank/requirements*.txt') }}
+      - name: Create Python venv
+        run: python -m venv ${VENV_DIR}
 
       - name: Install sharktank deps
         run: |
+          source ${VENV_DIR}/bin/activate
           python -m pip install --no-compile --upgrade pip
           # Note: We install in three steps in order to satisfy requirements
           # from non default locations first. Installing the PyTorch CPU
@@ -71,5 +67,9 @@ jobs:
             iree-base-compiler \
             iree-base-runtime
 
+          pip freeze
+
       - name: Run perplexity test with vmfb
-        run:  pytest -n 8 -v -s sharktank/tests/evaluate/perplexity_iree_test.py --bs=5 --iree-device='hip://6' --iree-hip-target=gfx942 --iree-hal-target-backends=rocm --llama3-8b-f16-model-path=/data/llama3.1/8b/llama8b_f16.irpa --llama3-8b-tokenizer-path=/data/llama3.1/8b/tokenizer_config.json
+        run: |
+          source ${VENV_DIR}/bin/activate
+          pytest -n 8 -v -s sharktank/tests/evaluate/perplexity_iree_test.py --bs=5 --iree-device='hip://6' --iree-hip-target=gfx942 --iree-hal-target-backends=rocm --llama3-8b-f16-model-path=/data/llama3.1/8b/llama8b_f16.irpa --llama3-8b-tokenizer-path=/data/llama3.1/8b/tokenizer_config.json
