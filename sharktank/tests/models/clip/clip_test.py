@@ -4,22 +4,39 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
+from collections import OrderedDict
 import functools
+import iree.compiler
+import os
 from parameterized import parameterized
+from copy import copy
 import pytest
 import torch
 from torch.utils._pytree import tree_map
 from typing import Optional
 from unittest import TestCase
 import transformers
-from transformers import CLIPTextModel as TransformersCLIPTextModel, CLIPTokenizer
+from transformers import CLIPTextModel as HfCLIPTextModel, CLIPTokenizer
 from transformers.models.clip.modeling_clip import (
-    CLIPAttention as TransformersCLIPAttention,
-    CLIPEncoderLayer as TransformersCLIPEncoderLayer,
-    CLIPEncoder as TransformersCLIPEncoder,
+    CLIPAttention as HfCLIPAttention,
+    CLIPEncoderLayer as HfCLIPEncoderLayer,
+    CLIPEncoder as HfCLIPEncoder,
 )
 
-from sharktank.types import DefaultPrimitiveTensor
+from sharktank.utils.iree import (
+    get_iree_devices,
+    load_iree_module,
+    run_iree_module_function,
+    prepare_iree_module_function_args,
+    call_torch_module_function,
+    flatten_for_iree_signature,
+    iree_to_torch,
+)
+from sharktank.types import (
+    DefaultPrimitiveTensor,
+    dtype_to_serialized_short_name,
+    Dataset,
+)
 from sharktank.transforms.dataset import set_float_dtype
 from sharktank.utils.hf_datasets import get_dataset
 from sharktank.utils.math import cosine_similarity
@@ -30,11 +47,18 @@ from sharktank.utils.testing import (
     test_prompts,
 )
 from sharktank.models.clip.export import (
+    export_clip_text_model_mlir,
     export_clip_text_model_dataset_from_hugging_face,
-    transformers_clip_attention_to_theta,
-    transformers_clip_encoder_layer_to_theta,
-    transformers_clip_encoder_to_theta,
-    transformers_clip_text_model_to_theta,
+    hugging_face_clip_attention_to_theta,
+    hugging_face_clip_encoder_layer_to_theta,
+    hugging_face_clip_encoder_to_theta,
+    hugging_face_clip_text_model_to_dataset,
+    hugging_face_clip_text_model_to_theta,
+    clip_text_model_to_dataset,
+)
+from sharktank.models.clip.testing import (
+    make_random_input_token_sequences,
+    make_clip_text_model_random_theta,
 )
 from sharktank.models.clip import (
     ClipAttention,
@@ -48,21 +72,271 @@ from sharktank import ops
 with_clip_data = pytest.mark.skipif("not config.getoption('with_clip_data')")
 
 
-@pytest.mark.usefixtures("path_prefix")
-class ClipExportTest(TempDirTestBase):
+def assert_last_hidden_states_close(
+    actual: torch.Tensor, expected: torch.Tensor, atol: float
+):
+    """The cosine similarity has been suggested to compare encoder states.
+
+    Dehua Peng, Zhipeng Gui, Huayi Wu -
+    Interpreting the Curse of Dimensionality from Distance Concentration and Manifold
+    Effect (2023)
+
+    shows that cosine and all Minkowski distances suffer from the curse of
+    dimensionality.
+    The cosine similarity ignores the vector magnitudes. We can probably come up with a
+    better metric, but this is maybe good enough.
+    """
+    cosine_similarity_per_token = cosine_similarity(
+        actual,
+        expected,
+        dim=-1,
+    )
+    torch.testing.assert_close(
+        cosine_similarity_per_token,
+        torch.ones_like(cosine_similarity_per_token),
+        atol=atol,
+        rtol=0,
+    )
+
+
+@pytest.mark.usefixtures("caching", "path_prefix")
+class ClipTextIreeTest(TempDirTestBase):
     def setUp(self):
         super().setUp()
+        torch.random.manual_seed(12345)
         if self.path_prefix is None:
             self.path_prefix = f"{self._temp_dir}/"
 
     @with_clip_data
     def testSmokeExportLargeF32FromHuggingFace(self):
-        repo_id = "openai/clip-vit-large-patch14"
+        huggingface_repo_id = "openai/clip-vit-large-patch14"
+        huggingface_repo_id_as_path = (
+            f"{huggingface_repo_id.replace('/', '__').replace('-', '_')}"
+        )
         get_dataset(
-            repo_id,
+            huggingface_repo_id,
         ).download()
-        output_path = f"{self.path_prefix}{repo_id.replace('/', '--')}.irpa"
-        export_clip_text_model_dataset_from_hugging_face(repo_id, output_path)
+        target_dtype_name = dtype_to_serialized_short_name(torch.float32)
+        target_model_path_prefix = f"{self.path_prefix}{huggingface_repo_id_as_path}_text_model_{target_dtype_name}"
+        output_path = f"{target_model_path_prefix}.irpa"
+        export_clip_text_model_dataset_from_hugging_face(
+            huggingface_repo_id, output_path
+        )
+
+    @with_clip_data
+    def testCompareLargeIreeF32AgainstTorchEagerF32(self):
+        self.runTestCompareIreeAgainstPretrainedTorchEager(
+            "openai/clip-vit-large-patch14",
+            reference_dtype=torch.float32,
+            target_dtype=torch.float32,
+            atol=1e-5,
+        )
+
+    @with_clip_data
+    def testCompareLargeIreeBf16AgainstTorchEagerF32(self):
+        self.runTestCompareIreeAgainstPretrainedTorchEager(
+            "openai/clip-vit-large-patch14",
+            reference_dtype=torch.float32,
+            target_dtype=torch.bfloat16,
+            # The observed error is 1.43e-2. We leave a bit of margin.
+            atol=3e-3,
+        )
+
+    @with_clip_data
+    def testCompareToyModelIreeF32AgainstTorchEagerF32(self):
+        self.runTestCompareToyModelIreeAgainstTorch(
+            reference_dtype=torch.float32, target_dtype=torch.float32, atol=1e-5
+        )
+
+    @with_clip_data
+    def testCompareToyModelIreeBf16AgainstTorchEagerF32(self):
+        self.runTestCompareToyModelIreeAgainstTorch(
+            reference_dtype=torch.float32, target_dtype=torch.bfloat16, atol=1e-3
+        )
+
+    @torch.no_grad()
+    def runTestCompareIreeAgainstTorchEagerWithInputTokens(
+        self,
+        reference_model: ClipTextModel,
+        target_dtype: torch.dtype,
+        input_ids: torch.LongTensor,
+        atol: float,
+        file_artifact_prefix_name: str,
+    ):
+        reference_dtype_name = dtype_to_serialized_short_name(
+            reference_model.config.dtype
+        )
+        target_dtype_name = dtype_to_serialized_short_name(target_dtype)
+        reference_model_path_prefix = (
+            f"{self.path_prefix}{file_artifact_prefix_name}_{reference_dtype_name}"
+        )
+        target_model_path_prefix = (
+            f"{self.path_prefix}{file_artifact_prefix_name}_{target_dtype_name}"
+        )
+
+        target_config = copy(reference_model.config)
+        target_config.dtype = target_dtype
+        reference_dataset = clip_text_model_to_dataset(reference_model)
+        target_dataset = Dataset(
+            root_theta=reference_dataset.root_theta.transform(
+                functools.partial(set_float_dtype, dtype=target_config.dtype)
+            ),
+            properties=target_config.to_properties(),
+        )
+
+        parameters_path = f"{target_model_path_prefix}.irpa"
+        if not self.caching or not os.path.exists(parameters_path):
+            target_dataset.save(parameters_path)
+
+        dataset = Dataset.load(parameters_path)
+        target_config = ClipTextConfig.from_properties(dataset.properties)
+        input_args = OrderedDict([("input_ids", input_ids)])
+        batch_size = input_ids.shape[0]
+
+        mlir_path = f"{target_model_path_prefix}.mlir"
+        if not self.caching or not os.path.exists(mlir_path):
+            export_clip_text_model_mlir(
+                parameters_path, batch_sizes=[batch_size], mlir_output_path=mlir_path
+            )
+        iree_module_path = f"{target_model_path_prefix}.vmfb"
+        if not self.caching or not os.path.exists(iree_module_path):
+            iree.compiler.compile_file(
+                mlir_path,
+                output_file=iree_module_path,
+                extra_args=["--iree-hal-target-device=hip", "--iree-hip-target=gfx942"],
+            )
+
+        reference_result_dict = call_torch_module_function(
+            module=reference_model,
+            function_name="forward",
+            kwargs=input_args,
+            trace_path_prefix=f"{reference_model_path_prefix}_torch_",
+        )
+        expected_outputs = flatten_for_iree_signature(reference_result_dict)
+
+        iree_devices = get_iree_devices(driver="hip", device_count=1)
+        iree_module, iree_vm_context, iree_vm_instance = load_iree_module(
+            module_path=iree_module_path,
+            devices=iree_devices,
+            parameters_path=parameters_path,
+        )
+        iree_args = prepare_iree_module_function_args(
+            args=flatten_for_iree_signature(input_args), devices=iree_devices
+        )
+        iree_result = iree_to_torch(
+            *run_iree_module_function(
+                module=iree_module,
+                vm_context=iree_vm_context,
+                args=iree_args,
+                driver="hip",
+                function_name=f"forward_bs{batch_size}",
+                trace_path_prefix=f"{target_model_path_prefix}_iree_",
+            )
+        )
+        actual_outputs = [
+            ops.to(iree_result[i], dtype=expected_outputs[i].dtype)
+            for i in range(len(expected_outputs))
+        ]
+
+        actual_last_hidden_states = actual_outputs[0]
+        expected_last_hidden_states = expected_outputs[0]
+
+        assert_last_hidden_states_close(
+            actual_last_hidden_states, expected_last_hidden_states, atol
+        )
+
+    def runTestCompareRandomModelIreeAgainstTorch(
+        self,
+        reference_config: ClipTextConfig,
+        target_dtype: torch.dtype,
+        batch_size: int,
+        atol: float,
+        file_artifact_prefix_name: str,
+    ):
+        input_ids = make_random_input_token_sequences(
+            batch_size=batch_size, config=reference_config
+        )
+        reference_theta = make_clip_text_model_random_theta(reference_config)
+        reference_model = ClipTextModel(theta=reference_theta, config=reference_config)
+        self.runTestCompareIreeAgainstTorchEagerWithInputTokens(
+            reference_model=reference_model,
+            target_dtype=target_dtype,
+            input_ids=input_ids,
+            atol=atol,
+            file_artifact_prefix_name=file_artifact_prefix_name,
+        )
+
+    def runTestCompareToyModelIreeAgainstTorch(
+        self, reference_dtype: torch.dtype, target_dtype: torch.dtype, atol: float
+    ):
+        batch_size = 4
+        num_attention_heads = 5
+        vocab_size = 11
+        reference_config = ClipTextConfig(
+            vocab_size=vocab_size,
+            hidden_size=13 * num_attention_heads,
+            intermediate_size=7,
+            projection_dim=3,
+            num_attention_heads=num_attention_heads,
+            max_position_embeddings=17,
+            layer_norm_eps=1e-4,
+            num_hidden_layers=2,
+            bos_token_id=vocab_size - 2,
+            eos_token_id=vocab_size - 1,
+            dtype=reference_dtype,
+        )
+        file_artifact_prefix_name = "clip_text_model_toy"
+        self.runTestCompareRandomModelIreeAgainstTorch(
+            reference_config=reference_config,
+            target_dtype=target_dtype,
+            batch_size=batch_size,
+            atol=atol,
+            file_artifact_prefix_name=file_artifact_prefix_name,
+        )
+
+    def runTestCompareIreeAgainstPretrainedTorchEager(
+        self,
+        huggingface_repo_id: str,
+        reference_dtype: torch.dtype,
+        target_dtype: torch.dtype,
+        atol: Optional[float] = None,
+    ):
+        get_dataset(
+            huggingface_repo_id,
+        ).download()
+
+        huggingface_repo_id_as_path = (
+            f"{huggingface_repo_id.replace('/', '__').replace('-', '_')}"
+        )
+        file_artifact_prefix_name = f"{huggingface_repo_id_as_path}_text_model"
+
+        hf_model: HfCLIPTextModel = HfCLIPTextModel.from_pretrained(
+            huggingface_repo_id, torch_dtype=reference_dtype
+        )
+        reference_dataset = hugging_face_clip_text_model_to_dataset(hf_model)
+        config = ClipTextConfig.from_hugging_face_clip_text_model_config(
+            hf_model.config
+        )
+        reference_model = ClipTextModel(
+            theta=reference_dataset.root_theta, config=config
+        )
+
+        tokenizer: CLIPTokenizer = CLIPTokenizer.from_pretrained(huggingface_repo_id)
+        input_ids = tokenizer(
+            test_prompts,
+            truncation=True,
+            max_length=reference_model.config.max_position_embeddings,
+            padding="max_length",
+            return_tensors="pt",
+        )["input_ids"]
+
+        self.runTestCompareIreeAgainstTorchEagerWithInputTokens(
+            reference_model=reference_model,
+            target_dtype=target_dtype,
+            input_ids=input_ids,
+            atol=atol,
+            file_artifact_prefix_name=file_artifact_prefix_name,
+        )
 
 
 @pytest.mark.usefixtures("get_model_artifacts")
@@ -70,7 +344,6 @@ class ClipTextEagerTest(TestCase):
     def setUp(self):
         super().setUp()
         torch.random.manual_seed(12345)
-        torch.no_grad()
 
     def runTestCompareTorchEagerAgainstHuggingFace(
         self,
@@ -86,16 +359,14 @@ class ClipTextEagerTest(TestCase):
             huggingface_repo_id,
         ).download()
 
-        reference_model: TransformersCLIPTextModel = (
-            TransformersCLIPTextModel.from_pretrained(
-                huggingface_repo_id, torch_dtype=reference_dtype
-            )
+        reference_model: HfCLIPTextModel = HfCLIPTextModel.from_pretrained(
+            huggingface_repo_id, torch_dtype=reference_dtype
         )
 
-        theta = transformers_clip_text_model_to_theta(reference_model)
+        theta = hugging_face_clip_text_model_to_theta(reference_model)
         theta.rename_tensors_to_paths()
         theta = theta.transform(functools.partial(set_float_dtype, dtype=target_dtype))
-        config = ClipTextConfig.from_transformers_clip_text_config(
+        config = ClipTextConfig.from_hugging_face_clip_text_model_config(
             reference_model.config
         )
         model = ClipTextModel(theta, config)
@@ -119,16 +390,10 @@ class ClipTextEagerTest(TestCase):
             actual_outputs,
         )
 
-        cosine_similarity_per_token = cosine_similarity(
+        assert_last_hidden_states_close(
             actual_outputs["last_hidden_state"],
             expected_outputs["last_hidden_state"],
-            dim=-1,
-        )
-        torch.testing.assert_close(
-            cosine_similarity_per_token,
-            torch.ones_like(cosine_similarity_per_token),
             atol=atol,
-            rtol=0,
         )
 
     @with_clip_data
@@ -146,6 +411,7 @@ class ClipTextEagerTest(TestCase):
             "openai/clip-vit-large-patch14",
             reference_dtype=torch.float32,
             target_dtype=torch.bfloat16,
+            # The observed error is 3.66e-4. We leave a bit of margin.
             atol=1e-3,
         )
 
@@ -180,15 +446,17 @@ class ClipTextEagerTest(TestCase):
             bos_token_id=vocab_size - 2,
             eos_token_id=vocab_size - 1,
         )
-        reference_model = TransformersCLIPTextModel(
+        reference_model = HfCLIPTextModel(
             reference_config,
         )
         reference_model.eval()
 
-        theta = transformers_clip_text_model_to_theta(reference_model)
+        theta = hugging_face_clip_text_model_to_theta(reference_model)
         theta.rename_tensors_to_paths()
         theta = theta.transform(functools.partial(set_float_dtype, dtype=target_dtype))
-        config = ClipTextConfig.from_transformers_clip_text_config(reference_config)
+        config = ClipTextConfig.from_hugging_face_clip_text_model_config(
+            reference_config
+        )
         model = ClipTextModel(theta, config)
 
         input_ids = torch.randint(low=0, high=vocab_size, size=[batch_size, tgt_len])
@@ -210,7 +478,6 @@ class ClipAttentionTest(TestCase):
     def setUp(self):
         super().setUp()
         torch.random.manual_seed(12345)
-        torch.no_grad()
 
     @parameterized.expand(
         [
@@ -241,15 +508,17 @@ class ClipAttentionTest(TestCase):
             projection_dim=3,
             num_attention_heads=num_attention_heads,
         )
-        reference_model = TransformersCLIPAttention(
+        reference_model = HfCLIPAttention(
             reference_config,
         )
         reference_model.eval()
 
-        theta = transformers_clip_attention_to_theta(reference_model)
+        theta = hugging_face_clip_attention_to_theta(reference_model)
         theta.rename_tensors_to_paths()
         theta = theta.transform(functools.partial(set_float_dtype, dtype=target_dtype))
-        config = ClipTextConfig.from_transformers_clip_text_config(reference_config)
+        config = ClipTextConfig.from_hugging_face_clip_text_model_config(
+            reference_config
+        )
         model = ClipAttention(theta, config)
 
         reference_hidden_states = make_rand_torch(
@@ -292,7 +561,6 @@ class ClipEncoderLayerTest(TestCase):
     def setUp(self):
         super().setUp()
         torch.random.manual_seed(12345)
-        torch.no_grad()
 
     @parameterized.expand(
         [
@@ -321,15 +589,17 @@ class ClipEncoderLayerTest(TestCase):
             num_attention_heads=num_attention_heads,
             layer_norm_eps=1e-4,
         )
-        reference_model = TransformersCLIPEncoderLayer(
+        reference_model = HfCLIPEncoderLayer(
             reference_config,
         )
         reference_model.eval()
 
-        theta = transformers_clip_encoder_layer_to_theta(reference_model)
+        theta = hugging_face_clip_encoder_layer_to_theta(reference_model)
         theta.rename_tensors_to_paths()
         theta = theta.transform(functools.partial(set_float_dtype, dtype=target_dtype))
-        config = ClipTextConfig.from_transformers_clip_text_config(reference_config)
+        config = ClipTextConfig.from_hugging_face_clip_text_model_config(
+            reference_config
+        )
         model = ClipEncoderLayer(theta, config)
 
         reference_hidden_states = make_rand_torch(
@@ -372,7 +642,6 @@ class ClipEncoderTest(TestCase):
     def setUp(self):
         super().setUp()
         torch.random.manual_seed(12345)
-        torch.no_grad()
 
     @parameterized.expand(
         [
@@ -402,15 +671,17 @@ class ClipEncoderTest(TestCase):
             layer_norm_eps=1e-4,
             num_hidden_layers=2,
         )
-        reference_model = TransformersCLIPEncoder(
+        reference_model = HfCLIPEncoder(
             reference_config,
         )
         reference_model.eval()
 
-        theta = transformers_clip_encoder_to_theta(reference_model)
+        theta = hugging_face_clip_encoder_to_theta(reference_model)
         theta.rename_tensors_to_paths()
         theta = theta.transform(functools.partial(set_float_dtype, dtype=target_dtype))
-        config = ClipTextConfig.from_transformers_clip_text_config(reference_config)
+        config = ClipTextConfig.from_hugging_face_clip_text_model_config(
+            reference_config
+        )
         model = ClipEncoder(theta, config)
 
         reference_inputs_embeds = make_rand_torch(

@@ -21,10 +21,10 @@ from transformers.modeling_attn_mask_utils import (
 )
 from collections import OrderedDict
 
-from ...layers import BaseLayer, LinearLayer, LayerNorm, TokenEmbeddingLayer
+from ...layers import ThetaLayer, LinearLayer, LayerNorm, TokenEmbeddingLayer
 from ... import ops
 from ...types.theta import Theta, Dataset
-from ...types.tensors import DefaultPrimitiveTensor
+from ...types.tensors import AnyTensor, DefaultPrimitiveTensor
 from ...layers.configs import ClipTextConfig
 from ...layers.activations import ACT2FN
 
@@ -68,11 +68,11 @@ class ClipTextEmbeddings(nn.Module):
         return embeddings
 
 
-class ClipAttention(BaseLayer):
+class ClipAttention(ThetaLayer):
     """Multi-headed attention from 'Attention Is All You Need' paper"""
 
     def __init__(self, theta: Theta, config: ClipTextConfig):
-        super().__init__()
+        super().__init__(theta)
         self.embed_dim = config.hidden_size
         self.num_heads = config.num_attention_heads
         self.head_dim = self.embed_dim // self.num_heads
@@ -182,9 +182,9 @@ class ClipAttention(BaseLayer):
         return attn_output, attn_weights_reshaped
 
 
-class ClipMlp(BaseLayer):
+class ClipMlp(ThetaLayer):
     def __init__(self, theta: Theta, config: ClipTextConfig):
-        super().__init__()
+        super().__init__(theta)
         self.config = config
         self.activation_fn = ACT2FN[config.hidden_act]
         self.fc1 = LinearLayer(theta("fc1"))
@@ -197,9 +197,9 @@ class ClipMlp(BaseLayer):
         return hidden_states
 
 
-class ClipEncoderLayer(BaseLayer):
+class ClipEncoderLayer(ThetaLayer):
     def __init__(self, theta: Theta, config: ClipTextConfig):
-        super().__init__()
+        super().__init__(theta)
         self.embed_dim = config.hidden_size
         self.self_attn = ClipAttention(theta=theta("self_attn"), config=config)
         self.layer_norm1 = LayerNorm(
@@ -251,14 +251,14 @@ class ClipEncoderLayer(BaseLayer):
         return outputs
 
 
-class ClipEncoder(BaseLayer):
+class ClipEncoder(ThetaLayer):
     """
     Transformer encoder consisting of `config.num_hidden_layers` self attention layers. Each layer is a
     [`ClipEncoderLayer`].
     """
 
     def __init__(self, theta: Theta, config: ClipTextConfig):
-        super().__init__()
+        super().__init__(theta)
         self.config = config
         self.layers = nn.ModuleList(
             [
@@ -356,9 +356,9 @@ class ClipEncoder(BaseLayer):
         )
 
 
-class ClipTextTransformer(nn.Module):
+class ClipTextTransformer(ThetaLayer):
     def __init__(self, theta: Theta, config: ClipTextConfig):
-        super().__init__()
+        super().__init__(theta)
         self.config = config
         embed_dim = config.hidden_size
         self.embeddings = ClipTextEmbeddings(theta=theta("embeddings"), config=config)
@@ -475,9 +475,9 @@ class ClipTextTransformer(nn.Module):
         )
 
 
-class ClipTextModel(BaseLayer):
+class ClipTextModel(ThetaLayer):
     def __init__(self, theta: Theta, config: ClipTextConfig):
-        super().__init__()
+        super().__init__(theta)
         self.config = config
         self.text_model = ClipTextTransformer(theta=theta("text_model"), config=config)
 
@@ -486,6 +486,19 @@ class ClipTextModel(BaseLayer):
 
     def set_input_embeddings(self, value):
         self.text_model.embeddings.token_embedding = value
+
+    def sample_inputs(self, batch_size: int) -> OrderedDict[str, AnyTensor]:
+        return OrderedDict(
+            [
+                (
+                    "input_ids",
+                    torch.empty(
+                        size=[batch_size, self.config.max_position_embeddings],
+                        dtype=torch.long,
+                    ),
+                )
+            ]
+        )
 
     def forward(
         self,
