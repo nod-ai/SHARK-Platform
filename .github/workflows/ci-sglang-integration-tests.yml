@@ -34,7 +34,7 @@ jobs:
       run:
         shell: bash
     env:
-      PIP_CACHE_DIR: "${{ github.workspace }}/.pip-cache"
+      VENV_DIR: ${{ github.workspace }}/.venv
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
@@ -43,16 +43,12 @@ jobs:
         uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
         with:
           python-version: ${{matrix.version}}
-
-      - name: Cache Pip Packages
-        uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4.1.2
-        id: cache-pip
-        with:
-          path: ${{ env.PIP_CACHE_DIR }}
-          key: pip-${{ steps.setup_python.outputs.python-version }}-${{ hashFiles('*requirements*.txt','shortfin/requirements*.txt','sharktank/requirements*.txt') }}
+      - name: Create Python venv
+        run: python -m venv ${VENV_DIR}
 
       - name: Install pip deps
         run: |
+          source ${VENV_DIR}/bin/activate
           python -m pip install --no-compile --upgrade pip
           # Note: We install in three steps in order to satisfy requirements
           # from non default locations first. Installing the PyTorch CPU
@@ -69,11 +65,13 @@ jobs:
             iree-base-runtime \
             "numpy<2.0"
 
-      - name: Install SGLang
-        run: pip install "git+https://github.com/nod-ai/sglang.git#subdirectory=python"
+          # Install SGLang and sentence_transformers
+          pip install "git+https://github.com/nod-ai/sglang.git#subdirectory=python"
+          pip install sentence_transformers
 
-      - name: Install sentence_transformers
-        run: pip install sentence_transformers
+          pip freeze
 
       - name: Run Integration Tests
-        run: pytest -v app_tests/integration_tests/llm/sglang --log-cli-level=INFO
+        run: |
+          source ${VENV_DIR}/bin/activate
+          pytest -v app_tests/integration_tests/llm/sglang --log-cli-level=INFO
