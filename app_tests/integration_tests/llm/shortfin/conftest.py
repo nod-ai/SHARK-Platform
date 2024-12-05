@@ -51,6 +51,7 @@ def model_test_dir(request, tmp_path_factory):
     tokenizer_id = request.param["tokenizer_id"]
     settings = request.param["settings"]
     batch_sizes = request.param["batch_sizes"]
+    prefix_sharing_algorithm = request.param["prefix_sharing_algorithm"]
 
     tmp_dir = tmp_path_factory.mktemp("cpu_llm_server_test")
     hf_home = os.environ.get("HF_HOME", None)
@@ -83,7 +84,11 @@ def model_test_dir(request, tmp_path_factory):
             "prefill_batch_sizes": batch_sizes,
             "decode_batch_sizes": batch_sizes,
             "transformer_block_count": 26,
-            "paged_kv_cache": {"block_seq_stride": 16, "device_block_count": 256},
+            "paged_kv_cache": {
+                "block_seq_stride": 16,
+                "device_block_count": 256,
+                "prefix_sharing_algorithm": prefix_sharing_algorithm,
+            },
         }
         logger.info(f"Saving edited config to: {edited_config_path}\n")
         logger.info(f"Config: {json.dumps(config, indent=2)}")

@@ -212,6 +212,7 @@ def build_cmake_configuration(CMAKE_BUILD_DIR: Path, extra_cmake_args=[]):
         "-DSHORTFIN_BUNDLE_DEPS=ON",
         f"-DCMAKE_BUILD_TYPE={cfg}",
         "-DSHORTFIN_BUILD_PYTHON_BINDINGS=ON",
+        "-DSHORTFIN_BUILD_TESTS=OFF",
         f"-DPython3_EXECUTABLE={sys.executable}",
     ] + extra_cmake_args
 
