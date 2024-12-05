@@ -5,6 +5,10 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
+# CLIP text model
+# It is based on
+# https://github.com/huggingface/transformers/blob/v4.40-release/src/transformers/models/clip/modeling_clip.py
+
 from typing import Any, Optional, Tuple, Union
 import torch
 from torch import nn
@@ -423,24 +427,14 @@ class ClipTextTransformer(nn.Module):
         )
         last_hidden_state = self.final_layer_norm(last_hidden_state)
 
-        if self.eos_token_id == 2:
-            # The `eos_token_id` was incorrect before PR #24773: Let's keep what have been done here.
-            # A CLIP model with such `eos_token_id` in the config can't work correctly with extra new tokens added
-            # ------------------------------------------------------------
-            # text_embeds.shape = [batch_size, sequence_length, transformer.width]
-            # take features from the eot embedding (eot_token is the highest number in each sequence)
-            # casting to torch.int for onnx compatibility: argmax doesn't support int64 inputs with opset 14
-            pooled_output = last_hidden_state[
-                torch.arange(last_hidden_state.shape[0]),
-                input_ids.argmax(dim=-1),
-            ]
-        else:
-            # The config gets updated `eos_token_id` from PR #24773 (so the use of exta new tokens is possible)
-            pooled_output = last_hidden_state[
-                torch.arange(last_hidden_state.shape[0]),
-                # We need to get the first position of `eos_token_id` value (`pad_token_ids` might equal to `eos_token_id`)
-                (input_ids == self.eos_token_id).int().argmax(dim=-1),
-            ]
+        # We don't support this variant.
+        assert self.eos_token_id != 2
+
+        pooled_output = last_hidden_state[
+            torch.arange(last_hidden_state.shape[0]),
+            # We need to get the first position of `eos_token_id` value (`pad_token_ids` might equal to `eos_token_id`)
+            (input_ids == self.eos_token_id).int().argmax(dim=-1),
+        ]
 
         if not return_dict:
             return (last_hidden_state, pooled_output) + encoder_outputs[1:]
