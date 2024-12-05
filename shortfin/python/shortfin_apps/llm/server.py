@@ -91,8 +91,10 @@ async def health() -> Response:
 
 
 async def generate_request(gen_req: GenerateReqInput, request: Request):
+    logger.info(f"Received Request: {gen_req.rid}")
     service = services["default"]
     gen_req.post_init()
+    logger.info(f"Servicing Request: {str(gen_req.rid)}")
     responder = FastAPIResponder(request)
     ClientGenerateBatchProcess(service, gen_req, responder).launch()
     return await responder.response

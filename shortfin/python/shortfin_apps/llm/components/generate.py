@@ -7,6 +7,7 @@
 import asyncio
 import io
 import logging
+from pprint import pformat
 
 import shortfin as sf
 import shortfin.array as sfnp
@@ -65,11 +66,23 @@ class GenerateItemProcess(sf.Process):
                 exec.reset(InferencePhase.DECODE)
                 exec.input_token_ids.append(token_int)
                 exec.start_position += 1
+                logger.info(
+                    f"======== SNB GenerateItemD input_ids: ========\n{exec.input_token_ids}\n================"
+                )
                 self.client.batcher.submit(exec)
                 await exec.done
+                logger.info(
+                    f"======== SNB GenerateItemD result_logits: ========\n{exec.result_logits}\n================"
+                )
                 token = sfnp.argmax(exec.result_logits)
                 token_int = token.items[0]
+                logger.info(
+                    f"======== SNB GenerateItemD Token_int: ========\n{token_int}\n================"
+                )
                 self.append_token(token_int)
+                logger.info(
+                    f"======== SNB GenerateItemD result_ids: ========\n{self.result_token_ids}\n================"
+                )
                 if token_int == self.eos_token_id:
                     break
         finally:
@@ -123,6 +136,14 @@ class ClientGenerateBatchProcess(sf.Process):
             gen_processes = []
             # TODO: We should send this to an executor and await the results.
             input_batch = self.tokenize()
+            try:
+                encodings = [input_encoding.ids for input_encoding in input_batch]
+                formatted_encodings = pformat(encodings, width=120, compact=True)
+                logger.info(
+                    f"======== SNB Input Batch ========:\n{formatted_encodings}\n======== END ========"
+                )
+            except Exception as e:
+                logger.error(f"Error in first log: {e!r}")
             for index, input_tokens in enumerate(input_batch):
                 gen_process = GenerateItemProcess(
                     self,
@@ -149,13 +170,26 @@ class ClientGenerateBatchProcess(sf.Process):
                 result_texts = self.tokenizer.decode(
                     [p.result_token_ids for p in gen_processes]
                 )
-                for result_text in result_texts:
-                    out.write(b"data: ")
-                    out.write(result_text.encode())
-                    out.write(b"\n\n")
-                self.responder.send_response(out.getvalue())
+                raw_encodings = [p.result_token_ids for p in gen_processes]
+                try:
+                    for i, result_text in enumerate(result_texts):
+                        out.write(b"data: ")
+                        formatted_encodings = pformat(
+                            raw_encodings, width=120, compact=True
+                        )
+                        logger.info(
+                            f"======== SNB Result ======== {i}:\n{formatted_encodings}\n======== END ========"
+                        )
+                        out.write(result_text.encode())
+                        out.write(b"\n\n")
+                    self.responder.send_response(out.getvalue())
+                except Exception as e:
+                    logger.error(f"Error in second log: {e!r}")
         finally:
             self.responder.ensure_response()
+            logger.info(
+                f"\n\n================ Done with {str(self.gen_req.rid)} ================\n\n\n\n"
+            )
 
     def stream_results(self, gen_process: GenerateItemProcess):
         if not self.gen_req.stream:

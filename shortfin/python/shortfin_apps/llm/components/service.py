@@ -6,7 +6,9 @@
 
 import asyncio
 import logging
+import numpy as np
 from pathlib import Path
+from pprint import pformat
 
 import shortfin as sf
 import shortfin.array as sfnp
@@ -209,7 +211,7 @@ class BatcherProcess(sf.Process):
         if waiting_count == 0:
             return
         if waiting_count < self.ideal_batch_size and self.strobes < 2:
-            logger.info("Waiting a bit longer to fill flight")
+            # logger.info("Waiting a bit longer to fill flight")
             return
         self.strobes = 0
         cache = self.service.page_cache
@@ -284,6 +286,8 @@ class BatcherProcess(sf.Process):
             decode_request.allocation.extend_allocation(
                 decode_request.input_token_ids, extra_token_slots=1
             )
+            input_ids = pformat(decode_request.input_token_ids, width=120, compact=True)
+            logger.info(f"SNB board_decodes input_ids: {input_ids}")
 
             # Can flight this request.
             exec_process.exec_requests.append(decode_request)
@@ -318,10 +322,20 @@ class InferenceExecutorProcess(sf.Process):
         self.exec_requests: list[InferenceExecRequest] = []
         self.page_tables = page_tables
 
+    def dump_np_array(self, array, filename):
+        # Ensure the filename ends with .npy
+        if not filename.endswith(".npy"):
+            filename += ".npy"
+
+        # Save the array to the file
+        np.save(filename, array)
+        print(f"Array saved to {filename}")
+
     async def run(self):
         try:
             is_decode = self.phase == InferencePhase.DECODE
             req_bs = len(self.exec_requests)
+            logger.info(f"SNB Service, req_bs: {req_bs}")
             seq_stride = self.seq_stride
             # Select an entrypoint for the batch.
             if is_decode:
@@ -340,13 +354,16 @@ class InferenceExecutorProcess(sf.Process):
                 for r in self.exec_requests:
                     assert r.start_position == 0
 
+            extra_token_slots = (
+                1 if self.phase == InferencePhase.DECODE else r.start_position
+            )
             bsl = max(
-                (r.start_position + len(r.input_token_ids)) for r in self.exec_requests
+                (extra_token_slots + len(r.input_token_ids)) for r in self.exec_requests
             )
             bsl = int(math.ceil(bsl / seq_stride) * seq_stride)
             block_count = bsl // seq_stride
             req_count = len(self.exec_requests)
-            logger.debug("Prefill bs=%d, bsl=%d", bs, bsl)
+            logger.info("SNB service, Prefill bs=%d, bsl=%d", bs, bsl)
 
             # Prepare inputs.
             # TODO: Better support in shortfin for h2d. The best way to do it is
@@ -373,6 +390,10 @@ class InferenceExecutorProcess(sf.Process):
                             m.items = self.exec_requests[i].input_token_ids
                         elif self.phase == InferencePhase.DECODE:
                             m.items = self.exec_requests[i].input_token_ids[-1:]
+                            logger.info(
+                                f"SNB Service, exec_requests{i}, input_token_ids: {self.exec_requests[i].input_token_ids[-1:]}"
+                            )
+                    logger.info(f"SNB Service, tokens_host, {i}: {tokens_host.items}")
             tokens_host.copy_to(tokens)
 
             # For prefill, populate seq_lens
@@ -391,6 +412,7 @@ class InferenceExecutorProcess(sf.Process):
                 with start_positions_host.map(discard=True) as m:
                     m.fill(0)
                     m.items = [req.start_position for req in self.exec_requests]
+                    logger.info(f"SNB Service start_positions: {m.items}")
                 start_positions_host.copy_to(start_positions)
 
                 seq_lens_host = seq_lens.for_transfer()
@@ -400,15 +422,24 @@ class InferenceExecutorProcess(sf.Process):
                         req.start_position + len(req.input_token_ids)
                         for req in self.exec_requests
                     ]
+                    logger.info(f"SNB Service seq_lens: {m.items}")
                 seq_lens_host.copy_to(seq_lens)
 
             # Populate cache pages.
             seq_block_ids_host = seq_block_ids.for_transfer()
-            for i in range(bs):
-                with seq_block_ids_host.view(i).map(discard=True) as m:
-                    m.fill(0)
-                    if i < req_count:
-                        m.items = self.exec_requests[i].cache_page_indices(block_count)
+            logger.info(f"SNB Block Count: {block_count}")
+            seq_block_ids_items = [
+                item
+                for i in range(bs)
+                if i < req_count
+                for item in self.exec_requests[i].cache_page_indices(block_count)
+            ]
+            with seq_block_ids_host.map(discard=True) as m:
+                m.fill(0)
+                m.items = seq_block_ids_items
+                logger.info(
+                    f"SNB Service seq_block_ids, {id(self.service)}: {seq_block_ids_host.items}"
+                )
             seq_block_ids_host.copy_to(seq_block_ids)
 
             # V1 args:
@@ -428,18 +459,56 @@ class InferenceExecutorProcess(sf.Process):
             else:
                 args = [tokens, seq_lens, seq_block_ids]
             args.extend(self.page_tables)
+            logger.info(f"Page Table Length: {len(self.page_tables)}")
             logger.info(
                 "INVOKE %r: %s",
                 fn,
                 "".join([f"\n  {i}: {ary.shape}" for i, ary in enumerate(args)]),
             )
+
+            import time
+
+            ts = time.monotonic()
+            # TODO(SNB): Uncomment this to dump cache state before invocation
+            # logger.info("PAGE TABLES BEFORE")
+            # for index, page in enumerate(self.page_tables):
+            #     page_host = page.for_transfer()
+            #     page_host.copy_from(page)
+            #     seq_block_id = seq_block_ids_host.items[index]
+            #     file_path = f"np_dumps_2/{self.phase}_{req_bs}_{ts}_{seq_block_id}_before.npy"
+            #     np_arr = np.array(page_host)
+            #     self.dump_np_array(np_arr, file_path)
+
             # Invoke. Logits are of shape [bs, bsl, d].
             (logits,) = await fn(*args, fiber=self.fiber)
 
+            # TODO(SNB): Uncomment this to dump cache state after invocation
+            # logger.info("PAGE TABLES AFTER")
+            # for index, page in enumerate(self.page_tables):
+            #     page_host = page.for_transfer()
+            #     page_host.copy_from(page)
+            #     seq_block_id = seq_block_ids_host.items[index]
+            #     file_path = f"np_dumps_2/{self.phase}_{req_bs}_{ts}_{seq_block_id}_after.npy"
+            #     np_arr = np.array(page_host)
+            #     self.dump_np_array(np_arr, file_path)
+
+            # TODO(SNB): Uncomment this to dump logits after invocation
+            # logits_host = logits.for_transfer()
+            # logits_host.copy_from(logits)
+            # logger.info(f"Logit Shape: {np.array(logits_host).shape}")
+            # if self.phase == InferencePhase.DECODE:
+            #     file_path = f"np_dumps_2/{ts}_decode_logits.npy"
+            #     np_arr = np.array(logits_host)
+            #     self.dump_np_array(np_arr, file_path)
+
             # publish cache pages
-            for r in self.exec_requests:
+            for i, r in enumerate(self.exec_requests):
+                logger.info(f"SNB Publish for req {i}")
                 total_tokens = r.start_position + len(r.input_token_ids)
                 number_of_complete_pages = total_tokens // seq_stride
+                logger.info(
+                    f"SNB Service, publishing: {number_of_complete_pages} pages, for {r.input_token_ids}"
+                )
                 r.publish_allocated_pages(number_of_complete_pages)
 
             # Return results.
@@ -456,6 +525,12 @@ class InferenceExecutorProcess(sf.Process):
                     await device0
                 else:
                     req.result_logits = logits_item
+
+                logits_item_np = np.array(req.result_logits)
+                logits_item_np_out = pformat(logits_item_np, width=25)
+                logger.info(
+                    f"SNB Service, logits_item_np_out, {i}: {logits_item_np_out}"
+                )
                 req.done.set_success()
 
         except Exception:

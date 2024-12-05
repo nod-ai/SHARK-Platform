@@ -38,7 +38,7 @@ native_handler = NativeHandler()
 native_handler.setFormatter(NativeFormatter())
 
 # TODO: Source from env vars.
-logger.setLevel(logging.WARNING)
+logger.setLevel(logging.DEBUG)
 logger.addHandler(native_handler)
 
 
@@ -47,6 +47,6 @@ def configure_main_logger(module_suffix: str = "__main__") -> logging.Logger:
     Returns a logger that can be used for the main module itself.
     """
     logging.root.addHandler(native_handler)
-    logging.root.setLevel(logging.WARNING)  # TODO: source from env vars
+    logging.root.setLevel(logging.DEBUG)  # TODO: source from env vars
     main_module = sys.modules["__main__"]
     return logging.getLogger(f"{main_module.__package__}.{module_suffix}")
