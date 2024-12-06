@@ -58,7 +58,7 @@ jobs:
 
           # Use newest possible releases to be able to track commits that may
           # cause errors.
-          pip install -f https://iree.dev/pip-release-links.html --upgrade --pre \
+          pip install -f https://iree.dev/pip-release-links.html --pre --upgrade \
             iree-base-compiler \
             iree-base-runtime \
             iree-turbine \

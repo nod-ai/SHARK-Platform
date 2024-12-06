@@ -61,7 +61,7 @@ jobs:
 
           # Install nightly IREE packages.
           # We could also pin to a known working or stable version.
-          pip install -f https://iree.dev/pip-release-links.html --pre \
+          pip install -f https://iree.dev/pip-release-links.html --pre --upgrade \
             iree-base-compiler \
             iree-base-runtime \
             iree-turbine

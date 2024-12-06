@@ -117,7 +117,7 @@ jobs:
 
           # Install nightly iree-turbine.
           # We could also pin to a known working or stable version.
-          pip install -f https://iree.dev/pip-release-links.html --pre \
+          pip install -f https://iree.dev/pip-release-links.html --pre --upgrade \
             iree-turbine
 
       - name: Run perplexity test with Torch
