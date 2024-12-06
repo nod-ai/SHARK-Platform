@@ -44,6 +44,7 @@ class VaeModel(torch.nn.Module):
                 )
 
     def decode(self, inp):
+        # The reference vae decode does not do scaling and leaves it for the sdxl pipeline. We integrate it into vae for pipeline performance so using the hardcoded values from the config.json here
         img = 1 / 0.13025 * inp
         x = self.vae.decode(img, return_dict=False)[0]
         return (x / 2 + 0.5).clamp(0, 1)

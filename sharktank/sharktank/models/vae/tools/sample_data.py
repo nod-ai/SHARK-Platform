@@ -12,7 +12,6 @@ import torch
 
 
 def get_random_inputs(dtype, device, bs: int = 2):
-    torch.random.manual_seed(42)
     height = 1024
     width = 1024
     return torch.rand(bs, 4, width // 8, height // 8, dtype=dtype).to(device)
