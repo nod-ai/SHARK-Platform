@@ -54,8 +54,6 @@ jobs:
           # from non default locations first. Installing the PyTorch CPU
           # wheels saves multiple minutes and a lot of bandwidth on runner setup.
           pip install --no-compile -r pytorch-cpu-requirements.txt
-          pip install --no-compile -f https://iree.dev/pip-release-links.html --src deps \
-            -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
           pip install --no-compile -r requirements.txt -e sharktank/ shortfin/
 
           # Use newest possible releases to be able to track commits that may
@@ -63,6 +61,7 @@ jobs:
           pip install -f https://iree.dev/pip-release-links.html --upgrade --pre \
             iree-base-compiler \
             iree-base-runtime \
+            iree-turbine \
             "numpy<2.0"
 
           # Install SGLang and sentence_transformers

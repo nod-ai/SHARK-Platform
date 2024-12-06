@@ -59,14 +59,12 @@ jobs:
           pip install --no-compile -r pytorch-cpu-requirements.txt
           pip install --no-compile -r requirements.txt -r sharktank/requirements-tests.txt -e sharktank/
 
-          # Install latest iree-turbine.
-          pip install --no-compile -f https://iree.dev/pip-release-links.html --src deps \
-            -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
-
-          # Test with nightly releases, not what iree-turbine uses.
-          pip install -f https://iree.dev/pip-release-links.html --upgrade --pre \
+          # Install nightly IREE packages.
+          # We could also pin to a known working or stable version.
+          pip install -f https://iree.dev/pip-release-links.html --pre \
             iree-base-compiler \
-            iree-base-runtime
+            iree-base-runtime \
+            iree-turbine
 
           pip freeze
 

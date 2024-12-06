@@ -86,26 +86,19 @@ deactivate
 
 ## Installing newer versions of dependencies
 
-To install the `iree-turbine` package from the latest source:
+To install all IREE packages from nightly releases:
+
+```bash
+pip install -f https://iree.dev/pip-release-links.html --upgrade --pre \
+  iree-base-compiler \
+  iree-base-runtime \
+  iree-turbine
+```
+
+To install an editable `iree-turbine` package from the latest source:
 
 ```bash
 pip install --src deps \
-  -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
-```
-
-To install the `iree-base-compiler` and `iree-base-runtime` packages from
-nightly releases:
-
-```bash
-pip install -f https://iree.dev/pip-release-links.html --upgrade --pre \
-  iree-base-compiler iree-base-runtime
-```
-
-To install all three packages together:
-
-```bash
-pip install -f https://iree.dev/pip-release-links.html --upgrade --pre \
-  iree-base-compiler iree-base-runtime --src deps \
   -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
 ```
 
