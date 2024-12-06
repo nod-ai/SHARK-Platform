@@ -28,6 +28,7 @@ from ... import ops
 from ...types.theta import Theta
 from ...types.tensors import AnyTensor
 from ...layers import FFN, T5Config
+from ...layers.activations import ACT2FN
 
 __all__ = [
     "T5Config",
@@ -41,13 +42,6 @@ __all__ = [
 ]
 
 logger = logging.getLogger(__name__)
-
-
-ACT2FN = {
-    "gelu": nn.functional.gelu,
-    "gelu_new": ops.gelu_tanh_approximation,
-    "relu": nn.functional.relu,
-}
 
 
 class T5LayerFF(nn.Module):

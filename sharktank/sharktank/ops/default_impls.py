@@ -158,13 +158,13 @@ def elementwise_ternary(operator, x, y, z, *args, **kwargs):
 
 # Embedding Lookup
 @embedding_lookup.override(Tensor, Tensor)
-def embedding_lookup_default(input, embedding_matrix, dtype: dtype):
+def embedding_lookup_default(input, embedding_matrix, dtype: Optional[dtype]):
     return F.embedding(unbox_tensor(input), unbox_tensor(embedding_matrix).to(dtype))
 
 
 @embedding_lookup.override(Tensor, QuantizedTensor)
 def embedding_lookup_Tensor_QuantizedTensor(
-    input, embedding_matrix: QuantizedTensor, dtype: dtype
+    input, embedding_matrix: QuantizedTensor, dtype: Optional[dtype]
 ):
     dequant = embedding_matrix.unpack().dequant(dtype=dtype)
     return F.embedding(unbox_tensor(input), dequant)
