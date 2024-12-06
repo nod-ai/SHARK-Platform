@@ -51,7 +51,7 @@ def make_llama_attention_block_theta(
     )
 
 
-def make_mmdit_double_block_theta(
+def make_mmdit_double_block_random_theta(
     in_channels: int = 128,
     hidden_size: int = 3072,
     mlp_ratio: float = 4.0,
@@ -141,7 +141,7 @@ def make_mmdit_double_block_theta(
     )
 
 
-def make_mmdit_single_block_theta(
+def make_mmdit_single_block_random_theta(
     in_channels: int = 128,
     hidden_size: int = 3072,
     mlp_ratio: float = 4.0,

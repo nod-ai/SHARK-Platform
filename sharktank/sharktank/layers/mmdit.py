@@ -162,23 +162,22 @@ class MMDITSingleBlock(ThetaLayer):
 
         self.add_module("linear1", LinearLayer(theta("linear1")))
         self.add_module("linear2", LinearLayer(theta("linear2")))
-        self.hidden_size = 3072  # todo
-        self.mlp_hidden_dim = 3072  # todo
+        # TODO: There should be a way to refactor out the following two constants and just reference model shapes
+        self.hidden_size = 3072
+        self.mlp_hidden_dim = 3072
 
     def forward(self, x: Tensor, vec: Tensor, pe: Tensor) -> tuple[Tensor, Tensor]:
         mod, _ = self.mod(vec)
         x_norm = ops.layer_norm(x, None, None, eps=1e-6)
         x_mod = (1 + mod.scale) * x_norm + mod.shift
         x_lin = self.linear1(x_mod)
-        print("x_lin_shape", x_lin.shape)
         qkv, mlp = torch.split(
             x_lin, [3 * self.hidden_size, 4 * self.mlp_hidden_dim], dim=-1
-        )  # todo
+        )
 
         qkv_2 = qkv.view(qkv.shape[0], qkv.shape[1], 3, self.num_heads, -1)  #
         qkv_3 = ops.permute(qkv_2, (2, 0, 3, 1, 4))
         q, k, v = qkv_3
-        # q, k, v = rearrange(qkv, "B L (K H D) -> K B H L D", K=3, H=self.num_heads)
         q, k = qk_norm(q, k, v, self.attn_norm_q, self.attn_norm_k)
 
         # compute attention
