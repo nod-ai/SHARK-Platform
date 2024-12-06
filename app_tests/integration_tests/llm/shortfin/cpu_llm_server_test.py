@@ -4,6 +4,7 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
+import concurrent.futures
 import logging
 import os
 import pytest
@@ -31,7 +32,7 @@ gpu_settings = {
 }
 
 
-def do_generate(prompt, port):
+def do_generate(prompt, port, concurrent_requests=1):
     logger.info("Generating request...")
     headers = {"Content-Type": "application/json"}
     # Create a GenerateReqInput-like structure
@@ -48,22 +49,40 @@ def do_generate(prompt, port):
     logger.info("Prompt text:")
     logger.info(data["text"])
     BASE_URL = f"http://localhost:{port}"
-    response = requests.post(f"{BASE_URL}/generate", headers=headers, json=data)
-    logger.info(f"Generate endpoint status code: {response.status_code}")
-    if response.status_code == 200:
-        logger.info("Generated text:")
-        data = response.text
-        assert data.startswith("data: ")
-        data = data[6:]
-        assert data.endswith("\n\n")
-        data = data[:-2]
-        return data
-    else:
-        response.raise_for_status()
+
+    response_data = []
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=concurrent_requests
+    ) as executor:
+        futures = [
+            executor.submit(
+                lambda: requests.post(
+                    f"{BASE_URL}/generate", headers=headers, json=data
+                )
+            )
+            for _ in range(concurrent_requests)
+        ]
+        for future in concurrent.futures.as_completed(futures):
+            response = future.result()
+
+            logger.info(f"Generate endpoint status code: {response.status_code}")
+            if response.status_code == 200:
+                logger.info("Generated text:")
+                data = response.text
+                assert data.startswith("data: ")
+                data = data[6:]
+                assert data.endswith("\n\n")
+                data = data[:-2]
+                logger.info(data)
+                response_data.append(data)
+            else:
+                response.raise_for_status()
+
+    return response_data
 
 
 @pytest.mark.parametrize(
-    "model_test_dir,llm_server",
+    "model_test_dir,write_config,llm_server",
     [
         pytest.param(
             {
@@ -72,8 +91,8 @@ def do_generate(prompt, port):
                 "tokenizer_id": "openlm-research/open_llama_3b_v2",
                 "settings": CPU_SETTINGS,
                 "batch_sizes": [1, 4],
-                "prefix_sharing_algorithm": "trie",
             },
+            {"batch_sizes": [1, 4], "prefix_sharing_algorithm": "none"},
             {"model_file": "open-llama-3b-v2-f16.gguf", "settings": CPU_SETTINGS},
         ),
         pytest.param(
@@ -83,8 +102,8 @@ def do_generate(prompt, port):
                 "tokenizer_id": "openlm-research/open_llama_3b_v2",
                 "settings": CPU_SETTINGS,
                 "batch_sizes": [1, 4],
-                "prefix_sharing_algorithm": "none",
             },
+            {"batch_sizes": [1, 4], "prefix_sharing_algorithm": "trie"},
             {"model_file": "open-llama-3b-v2-f16.gguf", "settings": CPU_SETTINGS},
         ),
     ],
@@ -100,7 +119,7 @@ def test_llm_server(llm_server, available_port):
         "Sending HTTP Generation Request"
         + start_log_group("Sending HTTP Generation Request")
     )
-    output = do_generate(PROMPT, available_port)
+    output = do_generate(PROMPT, available_port)[0]
     # log to GITHUB_STEP_SUMMARY if we are in a GitHub Action
     if "GITHUB_ACTION" in os.environ:
         with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
@@ -108,9 +127,72 @@ def test_llm_server(llm_server, available_port):
             f.write("LLM results:\n")
             f.write(f"- llm_prompt:`{PROMPT}`\n")
             f.write(f"- llm_output:`{output}`\n")
-    logger.info(output)
     if not output.startswith(expected_output_prefix):
         raise AccuracyValidationException(
             f"Expected '{output}' to start with '{expected_output_prefix}'"
         )
     logger.info("HTTP Generation Request Successful" + end_log_group())
+
+
+@pytest.mark.parametrize(
+    "model_test_dir,write_config,llm_server",
+    [
+        pytest.param(
+            {
+                "repo_id": "SlyEcho/open_llama_3b_v2_gguf",
+                "model_file": "open-llama-3b-v2-f16.gguf",
+                "tokenizer_id": "openlm-research/open_llama_3b_v2",
+                "settings": CPU_SETTINGS,
+                "batch_sizes": [1, 4],
+            },
+            {"batch_sizes": [1, 4], "prefix_sharing_algorithm": "none"},
+            {"model_file": "open-llama-3b-v2-f16.gguf", "settings": CPU_SETTINGS},
+        ),
+        pytest.param(
+            {
+                "repo_id": "SlyEcho/open_llama_3b_v2_gguf",
+                "model_file": "open-llama-3b-v2-f16.gguf",
+                "tokenizer_id": "openlm-research/open_llama_3b_v2",
+                "settings": CPU_SETTINGS,
+                "batch_sizes": [1, 4],
+            },
+            {"batch_sizes": [1, 4], "prefix_sharing_algorithm": "trie"},
+            {"model_file": "open-llama-3b-v2-f16.gguf", "settings": CPU_SETTINGS},
+        ),
+    ],
+    indirect=True,
+)
+@pytest.mark.parametrize(
+    "concurrent_requests",
+    [2, 4, 8],
+)
+@pytest.mark.xfail(
+    raises=AccuracyValidationException,
+    reason="Concurreny issues in Shortfin batch processing",
+)
+def test_llm_server_concurrent(llm_server, available_port, concurrent_requests):
+    logger.info("Testing concurrent invocations")
+
+    assert llm_server.poll() is None
+    PROMPT = "1 2 3 4 5 "
+    expected_output_prefix = "6 7 8"
+    logger.info(
+        "Sending HTTP Generation Request"
+        + start_log_group("Sending HTTP Generation Request")
+    )
+    outputs = do_generate(PROMPT, available_port, concurrent_requests)
+
+    for output in outputs:
+        # log to GITHUB_STEP_SUMMARY if we are in a GitHub Action
+        if "GITHUB_ACTION" in os.environ:
+            with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
+                # log prompt
+                f.write("LLM results:\n")
+                f.write(f"- llm_prompt:`{PROMPT}`\n")
+                f.write(f"- llm_output:`{output}`\n")
+
+        if not output.startswith(expected_output_prefix):
+            raise AccuracyValidationException(
+                f"Expected '{output}' to start with '{expected_output_prefix}'"
+            )
+        logger.info("HTTP Generation Request Successful" + end_log_group())
