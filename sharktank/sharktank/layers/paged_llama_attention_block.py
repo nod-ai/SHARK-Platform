@@ -74,7 +74,9 @@ class PagedLlamaAttentionBlock(ThetaLayer):
             self.cache_quantizer: Optional[QuantizerTensor] = theta.optional_tensor(
                 "kv_cache.quantizer"
             )
-
+        self.softmax_quantizer: Optional[QuantizerTensor] = theta.optional_tensor(
+            "softmax_quantizer"
+        )
         if theta.optional_tensor("attn_output_norm") is None:
             self.add_module(
                 "attn_output_norm",
@@ -177,7 +179,11 @@ class PagedLlamaAttentionBlock(ThetaLayer):
             xv = repeat_kv(xv)
 
         # Fake quant is already dequantized when stored in the cache.
-        if self.cache_quantizer and not self.fake_quant:
+        if (
+            self.cache_quantizer
+            and not self.fake_quant
+            and self.attention_kernel != "fp8"
+        ):
             xk = self.cache_quantizer.dequantize_raw_tensor(
                 xk, torch.float16, name="xk_deq"
             )
@@ -189,8 +195,16 @@ class PagedLlamaAttentionBlock(ThetaLayer):
         keys = xk.transpose(1, 2)
         values = xv.transpose(1, 2)
 
-        if self.attention_kernel == "decomposed":
+        if self.attention_kernel == "decomposed" or self.attention_kernel == "fp8":
+            """general algorithm for fp8 case:
+            fp8 q, k, v (kv cache is in fp8, q output is requantized in its linear layer
+            weights = fp8_matmul(q, k) outputs into fp16:
+            probs = f16or32_softmax(weights)
+            fp8_matmul(quantize(probs), values)  -> outputs into f16
+            """
             attn_weights = ops.matmul(xq, keys.transpose(2, 3))
+            if self.attention_kernel == "fp8":
+                attn_weights = ops.to(attn_weights, torch.float16)
             if self.attention_scale is None:
                 attn_weights = attn_weights / math.sqrt(self.head_dim)
             else:
@@ -211,7 +225,10 @@ class PagedLlamaAttentionBlock(ThetaLayer):
             attn_weights = ops.softmax(
                 ops.to(attn_weights, dtype=torch.float32), dim=-1
             )
-            attn_weights = ops.to(attn_weights, dtype=xq.dtype)
+            if self.attention_kernel == "fp8":
+                attn_weights = self.softmax_quantizer.quantize(attn_weights).unpack().qs
+            else:
+                attn_weights = ops.to(attn_weights, dtype=xq.dtype)
             attn_output = ops.matmul(
                 attn_weights, values
             )  # (bs, heads, slen, head_dim)
