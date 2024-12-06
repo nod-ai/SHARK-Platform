@@ -44,6 +44,10 @@ class TorchGenerator:
         self.tokenizer = tokenizer
         if model.cache.is_paged:
             self.shared_cache_state = model.cache.paged.allocate(page_cache_size)
+            if model.config.tensor_parallelism_size != 1:
+                sharded_cache_state = model.cache.paged.shard_state(
+                    self.shared_cache_state
+                )
             self.free_pages = list(range(1, page_cache_size))
         else:
             self.shared_cache_state = None
@@ -54,12 +58,18 @@ class TorchGenerator:
         return self.model.cache.block_seq_stride
 
     def begin_batch(self, prompts: list[str]):
-        token_ids, seq_lens = self.tokenizer.encode(
-            prompts, pad_to_multiple_of=self.model.cache.pad_sequence_stride
-        )
+        # token_ids, seq_lens = self.tokenizer.encode(
+        #     prompts, pad_to_multiple_of=self.model.cache.pad_sequence_stride
+        # )
 
-        token_ids = torch.tensor(token_ids, device=self.model.device)
-        seq_lens = torch.tensor(seq_lens, device=self.model.device)
+        # token_ids = torch.tensor(token_ids, device=self.model.device)
+        # seq_lens = torch.tensor(seq_lens, device=self.model.device)
+        import numpy as np
+
+        token_ids = torch.from_numpy(
+            np.load("/data/llama3.1/weights/8b/prefill_args_bs4_128/random_tokens.npy")
+        )
+        seq_lens = torch.tensor([128] * 4, device=self.model.device)
         if self.shared_cache_state is not None:
             cache_state = self.shared_cache_state
         else:
@@ -310,16 +320,16 @@ def main():
         intermediates_saver.save_file(
             args.save_intermediates_path + "_prefill.safetensors"
         )
-    counter = 0
-    while not batch.done:
-        batch.decode()
-        if args.save_intermediates_path:
-            intermediates_saver.save_file(
-                args.save_intermediates_path + f"_step_{counter}.safetensors"
-            )
-        print(f":: Result tokens: {batch.results}")
-        batch.print_current_results()
-        counter += 1
+    # counter = 0
+    # while not batch.done:
+    #     batch.decode()
+    #     if args.save_intermediates_path:
+    #         intermediates_saver.save_file(
+    #             args.save_intermediates_path + f"_step_{counter}.safetensors"
+    #         )
+    #     print(f":: Result tokens: {batch.results}")
+    #     batch.print_current_results()
+    #     counter += 1
 
 
 if __name__ == "__main__":
