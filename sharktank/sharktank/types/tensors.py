@@ -378,6 +378,11 @@ class InferenceTensor(ABC):
             shape = args[0]
         return reshape(self, shape)
 
+    def squeeze(self, dim: Optional[int] = None) -> "AnyTensor":
+        from ..ops import squeeze
+
+        return squeeze(self, dim)
+
     def transpose(self, dim0: int, dim1: int) -> "AnyTensor":
         from ..ops import transpose
 
@@ -392,11 +397,6 @@ class InferenceTensor(ABC):
         from ..ops import unsqueeze
 
         return unsqueeze(self, dim)
-
-    def squeeze(self, dim: Optional[int] = None) -> "AnyTensor":
-        from ..ops import squeeze
-
-        return squeeze(self, dim)
 
     def view(self, *args: Union[List[List[int]], List[int]]) -> "AnyTensor":
         from ..ops import view
