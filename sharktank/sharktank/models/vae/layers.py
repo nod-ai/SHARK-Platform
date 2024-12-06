@@ -197,13 +197,12 @@ class UNetMidBlock2D(ThetaLayer):
         attn_groups: Optional[int] = None,
     ):
         super().__init__(theta)
-        attentions = []
 
         resnet_groups = resnet_groups if resnet_time_scale_shift == "default" else None
 
         # there is always at least one resnet
         if resnet_time_scale_shift == "spatial":
-            # TODO
+            # TODO Implement ResnetBlockCondNorm2d block for spatial time scale shift
             raise AssertionError(f"ResnetBlockCondNorm2d not yet implemented")
         else:
             resnets = [
@@ -218,24 +217,22 @@ class UNetMidBlock2D(ThetaLayer):
                     dropout=dropout,
                 )
             ]
-        for _ in range(num_layers):
-            if add_attention:
-                attentions.append(
-                    AttentionLayer(
-                        theta("attentions")(0),
-                        heads=1,
-                        dim_head=attention_head_dim,
-                        rescale_output_factor=1.0,
-                        eps=resnet_eps,
-                        norm_num_groups=attn_groups,
-                        residual_connection=True,
-                    )
-                )
-            else:
-                attentions.append(None)
+        # TODO: loop through num_layers properly. Works for sdxl vae specifically but removed for export reasons
+        if add_attention:
+            self.attention = AttentionLayer(
+                theta("attentions")(0),
+                heads=1,
+                dim_head=attention_head_dim,
+                rescale_output_factor=1.0,
+                eps=resnet_eps,
+                norm_num_groups=attn_groups,
+                residual_connection=True,
+            )
+        else:
+            self.attention = None
 
         if resnet_time_scale_shift == "spatial":
-            # TODO
+            # TODO Implement ResnetBlock2D for spatial time scale shift support
             raise AssertionError(
                 f"ResnetBlock2D spatial time scale shift not yet implemented"
             )
@@ -252,16 +249,13 @@ class UNetMidBlock2D(ThetaLayer):
                     dropout=dropout,
                 )
             )
-        self.attentions = nn.ModuleList(attentions)
-        self.resnets = resnets
+        self.resnets = nn.ModuleList(resnets)
 
     def forward(
         self, hidden_states: torch.Tensor, temb: Optional[torch.Tensor] = None
     ) -> torch.Tensor:
         hidden_states = self.resnets[0](hidden_states, temb)
-        for attn, resnet in zip(self.attentions, self.resnets[1:]):
-            if attn is not None:
-                hidden_states = attn(hidden_states)
-            hidden_states = resnet(hidden_states, temb)
-
+        if self.attention is not None:
+            hidden_states = self.attention(hidden_states)
+        hidden_states = self.resnets[1](hidden_states, temb)
         return hidden_states

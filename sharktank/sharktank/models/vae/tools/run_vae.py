@@ -103,8 +103,10 @@ def main(argv):
         inputs = get_random_inputs(dtype=dtype, device=device, bs=args.bs)
 
     if args.export:
+        # TODO move export from a run_vae file
         output = export_vae(mdl, inputs, args.decomp_attn)
         output.save_mlir(args.export)
+        print("exported VAE model. Skipping eager execution")
     else:
         # Save intermediates.
         intermediates_saver = None
