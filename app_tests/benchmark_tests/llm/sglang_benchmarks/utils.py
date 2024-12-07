@@ -49,6 +49,7 @@ class SGLangBenchmarkArgs:
             disable_stream=False,
             disable_ignore_eos=False,
             lora_name=None,
+            profile=False,
         )
 
     def __repr__(self):
