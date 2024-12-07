@@ -65,3 +65,4 @@ def test_sglang_benchmark(request_rate, tokenizer_id, sglang_args, tmp_path_fact
         log_jsonl_result(benchmark_args.output_file)
     except Exception as e:
         logger.error(e)
+        raise e

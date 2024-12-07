@@ -19,6 +19,8 @@
 name: SGLang Llama Benchmarking Tests
 
 on:
+  # TODO: Remove after validation
+  pull_request:
   workflow_dispatch:
   schedule:
     # Weekdays at 4:00 AM UTC = 9:00 PM PST.
