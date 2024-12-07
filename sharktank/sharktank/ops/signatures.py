@@ -54,6 +54,7 @@ __all__ = [
     "sharded_cat",
     "sharded_sum",
     "softmax",
+    "squeeze",
     "to",
     "transfer_to_logical_device",
     "transpose",
@@ -1086,6 +1087,25 @@ def _unsqueeze_trampoline(
 ) -> AnyTensor:
     tensors = (tensor,)
     for override in d.find_overrides(tensors):
+        result = override(tensor, dim)
+        if result is not NotImplemented:
+            return override, result
+    else:
+        d.fail(tensors)
+
+
+@overridable
+def squeeze(tensor, dim: Optional[int]) -> AnyTensor:
+    """See torch.squeeze"""
+    ...
+
+
+@squeeze.trampoline
+def _squeeze_trampoline(
+    d: SignatureDispatcher, tensor, dim: Optional[int]
+) -> AnyTensor:
+    tensors = (tensor,)
+    for override in d.find_overrides(tensor):
         result = override(tensor, dim)
         if result is not NotImplemented:
             return override, result
