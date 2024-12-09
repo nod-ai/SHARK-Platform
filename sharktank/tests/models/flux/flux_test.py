@@ -30,6 +30,8 @@ def make_rand_torch(shape: list[int], dtype: torch.dtype | None = torch.float32)
     return torch.rand(shape, dtype=dtype) * 2 - 1
 
 
+# TODO: Refactor this to a function that generates random toy weights, possibly
+# to another file
 dtype = torch.float32
 in_channels = 64
 in_channels2 = 128
