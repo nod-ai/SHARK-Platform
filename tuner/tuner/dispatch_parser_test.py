@@ -80,24 +80,8 @@ def test_get_conv_tile_sizes(tuner_ctx: common.TunerContext) -> None:
         gpu_pipeline_options=iree_gpu.PipelineOptionsAttr.get(),
         waves_per_eu=1,
     )
-    assert config.lowering_config.workgroup_tile_sizes == [
-        1,
-        1,
-        464,
-        320,
-        1,
-        1,
-        0,
-    ]
-    assert config.lowering_config.reduction_tile_sizes == [
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        16,
-    ]
+    assert config.lowering_config.workgroup_tile_sizes == [1, 1, 464, 320, 1, 1, 0]
+    assert config.lowering_config.reduction_tile_sizes == [0, 0, 0, 0, 0, 0, 16]
 
 
 def test_get_contract_tile_sizes(tuner_ctx: common.TunerContext) -> None:
