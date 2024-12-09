@@ -62,9 +62,6 @@ class VaeSDXLDecoderTest(unittest.TestCase):
             filename="vae/vae.safetensors",
         )
         torch.manual_seed(12345)
-
-    @pytest.mark.dependency()
-    def testIrpaConversion(self):
         f32_dataset = import_hf_config(
             "sdxl_vae/vae/config.json",
             "sdxl_vae/vae/diffusion_pytorch_model.safetensors",
@@ -75,7 +72,6 @@ class VaeSDXLDecoderTest(unittest.TestCase):
         )
         f16_dataset.save("sdxl_vae/vae_f16.irpa", io_report_callback=print)
 
-    @pytest.mark.dependency(depends=["testIrpaConversion"])
     def testCompareF32EagerVsHuggingface(self):
         dtype = getattr(torch, "float32")
         inputs = get_random_inputs(dtype=dtype, device="cpu", bs=1)
@@ -89,7 +85,6 @@ class VaeSDXLDecoderTest(unittest.TestCase):
         torch.testing.assert_close(ref_results, results)
 
     @pytest.mark.skip(reason="running fp16 on cpu is extremely slow")
-    @pytest.mark.dependency(depends=["testIrpaConversion"])
     def testCompareF16EagerVsHuggingface(self):
         dtype = getattr(torch, "float32")
         inputs = get_random_inputs(dtype=dtype, device="cpu", bs=1)
@@ -102,7 +97,6 @@ class VaeSDXLDecoderTest(unittest.TestCase):
 
         torch.testing.assert_close(ref_results, results)
 
-    @pytest.mark.dependency(depends=["testIrpaConversion"])
     def testVaeIreeVsHuggingFace(self):
         dtype = getattr(torch, "float32")
         inputs = get_random_inputs(dtype=dtype, device="cpu", bs=1)
