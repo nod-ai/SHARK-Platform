@@ -22,7 +22,6 @@ from .paged_llama_attention_block import PagedLlamaAttentionBlock
 
 
 def qk_norm(q, k, v, rms_q, rms_k):
-    print(q.shape, k.shape, rms_q.weight.shape, rms_k.weight.shape)
     return rms_q(q).to(v), rms_k(k).to(v)
 
 
