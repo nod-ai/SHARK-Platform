@@ -25,6 +25,12 @@ def make_rand_torch(shape: list[int], dtype: Optional[torch.dtype] = torch.float
     return torch.rand(shape, dtype=dtype) * 2 - 1
 
 
+def make_random_mask(shape: tuple[int], dtype: Optional[torch.dtype] = None):
+    mask = make_rand_torch(shape=shape, dtype=dtype)
+    mask = (mask >= 0).to(dtype=dtype)
+    return mask
+
+
 class TempDirTestBase(unittest.TestCase):
     def setUp(self):
         self._temp_dir = Path(tempfile.mkdtemp(type(self).__qualname__))
@@ -196,3 +202,11 @@ def skip(*decorator_args, **decorator_kwargs):
         return test_item
 
     return decorator
+
+
+test_prompts = [
+    "Studies have been shown that owning a dog is good for you",
+    "The horse went into the river",
+    "We need at least one sentence long enough so that it spans more than one padding block which by default is of size 16.",
+    "Make the batch size 4",
+]

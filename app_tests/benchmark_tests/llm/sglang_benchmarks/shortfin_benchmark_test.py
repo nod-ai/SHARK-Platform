@@ -21,8 +21,10 @@ from .utils import (
 )
 
 from integration_tests.llm.utils import (
+    end_log_group,
     find_available_port,
     start_llm_server,
+    start_log_group,
 )
 
 logger = logging.getLogger(__name__)
@@ -44,26 +46,39 @@ device_settings = {
     ],
 )
 @pytest.mark.parametrize(
-    "pre_process_model",
+    "pre_process_model,write_config",
     [
-        (
+        pytest.param(
             {
                 "model_name": "llama3_8B_fp16",
                 "model_param_file_name": "meta-llama-3.1-8b-instruct.f16.gguf",
                 "settings": device_settings,
                 "batch_sizes": [1, 4],
-            }
-        )
+            },
+            {"batch_sizes": [1, 4], "prefix_sharing_algorithm": "none"},
+        ),
+        pytest.param(
+            {
+                "model_name": "llama3_8B_fp16",
+                "model_param_file_name": "meta-llama-3.1-8b-instruct.f16.gguf",
+                "settings": device_settings,
+                "batch_sizes": [1, 4],
+            },
+            {"batch_sizes": [1, 4], "prefix_sharing_algorithm": "trie"},
+        ),
     ],
     indirect=True,
 )
-def test_shortfin_benchmark(request_rate, model_param_file_name, pre_process_model):
+def test_shortfin_benchmark(
+    request_rate, model_param_file_name, pre_process_model, write_config
+):
     # TODO: Remove when multi-device is fixed
     os.environ["ROCR_VISIBLE_DEVICES"] = "1"
 
     tmp_dir = pre_process_model
 
-    config_path = tmp_dir / "config.json"
+    config_path = write_config
+    prefix_sharing_algorithm = config_path.stem.split("_")[-1]
     vmfb_path = tmp_dir / "model.vmfb"
     tokenizer_path = tmp_dir / "tokenizer.json"
     model_path = tmp_dir / model_param_file_name
@@ -90,12 +105,17 @@ def test_shortfin_benchmark(request_rate, model_param_file_name, pre_process_mod
     )
     output_file = (
         tmp_dir
-        / f"{benchmark_args.backend}_{benchmark_args.num_prompt}_{benchmark_args.request_rate}.jsonl"
+        / f"{benchmark_args.backend}_{benchmark_args.num_prompt}_{benchmark_args.request_rate}_{prefix_sharing_algorithm}.jsonl"
     )
     benchmark_args.output_file = output_file
 
-    logger.info("Running SGLang Benchmark with the following args:")
-    logger.info(benchmark_args)
+    logger.info(
+        f"Starting benchmark run with prefix sharing algorith {prefix_sharing_algorithm}..."
+        + start_log_group(f"Benchmark run with {prefix_sharing_algorithm} algorithm")
+    )
+    logger.info("Running SGLang Benchmark with the following settings:")
+    logger.info(f"Prefix sharing algorith: {prefix_sharing_algorithm}")
+    logger.info(f"Benchmark Args: {benchmark_args}")
     try:
         start = time.time()
         with patch.object(bench_serving, "print", side_effect=logger.info):
@@ -107,8 +127,9 @@ def test_shortfin_benchmark(request_rate, model_param_file_name, pre_process_mod
             benchmark_process.join()
 
         logger.info(f"Benchmark run completed in {str(time.time() - start)} seconds")
-        logger.info("======== RESULTS ========")
+        logger.info("\n\n======== RESULTS ========")
         log_jsonl_result(benchmark_args.output_file)
+        logger.info("Benchmark run successful" + end_log_group())
     except Exception as e:
         logger.error(e)
 

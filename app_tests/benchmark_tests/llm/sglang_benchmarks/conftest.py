@@ -4,7 +4,9 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
+import hashlib
 import json
+import logging
 import os
 import pytest
 import sys
@@ -14,14 +16,31 @@ sys.path.append(
 )
 from integration_tests.llm.utils import (
     compile_model,
+    end_log_group,
     export_paged_llm_v1,
     download_with_hf_datasets,
+    start_log_group,
 )
+
+logger = logging.getLogger(__name__)
+
+MODEL_DIR_CACHE = {}
 
 
 @pytest.fixture(scope="module")
 def pre_process_model(request, tmp_path_factory):
     tmp_dir = tmp_path_factory.mktemp("sglang_benchmark_test")
+
+    logger.info(
+        "Preparing model artifacts..." + start_log_group("Preparing model artifacts")
+    )
+
+    param_key = hashlib.md5(str(request.param).encode()).hexdigest()
+    if (directory := MODEL_DIR_CACHE.get(param_key)) is not None:
+        logger.info(
+            f"Reusing existing model artifacts directory: {directory}" + end_log_group()
+        )
+        return MODEL_DIR_CACHE[param_key]
 
     model_name = request.param["model_name"]
     model_param_file_name = request.param["model_param_file_name"]
@@ -37,6 +56,25 @@ def pre_process_model(request, tmp_path_factory):
 
     export_paged_llm_v1(mlir_path, config_path, model_path, batch_sizes)
 
+    compile_model(mlir_path, vmfb_path, settings)
+
+    logger.info("Model artifacts setup successfully" + end_log_group())
+    MODEL_DIR_CACHE[param_key] = tmp_dir
+    return tmp_dir
+
+
+@pytest.fixture(scope="module")
+def write_config(request, pre_process_model):
+    batch_sizes = request.param["batch_sizes"]
+    prefix_sharing_algorithm = request.param["prefix_sharing_algorithm"]
+
+    logger.info("Writing config file..." + start_log_group("Writing config file"))
+
+    config_path = (
+        pre_process_model
+        / f"{'_'.join(str(bs) for bs in batch_sizes)}_{prefix_sharing_algorithm}.json"
+    )
+
     config = {
         "module_name": "module",
         "module_abi_version": 1,
@@ -46,14 +84,20 @@ def pre_process_model(request, tmp_path_factory):
         "prefill_batch_sizes": batch_sizes,
         "decode_batch_sizes": batch_sizes,
         "transformer_block_count": 32,
-        "paged_kv_cache": {"block_seq_stride": 16, "device_block_count": 256},
+        "paged_kv_cache": {
+            "block_seq_stride": 16,
+            "device_block_count": 256,
+            "prefix_sharing_algorithm": prefix_sharing_algorithm,
+        },
     }
-    with open(config_path, "w") as file:
-        json.dump(config, file)
 
-    compile_model(mlir_path, vmfb_path, settings)
+    logger.info(f"Saving edited config to: {config_path}\n")
+    logger.info(f"Config: {json.dumps(config, indent=2)}")
+    with open(config_path, "w") as f:
+        json.dump(config, f)
 
-    return tmp_dir
+    logger.info("Config file successfully written" + end_log_group())
+    yield config_path
 
 
 def pytest_addoption(parser):

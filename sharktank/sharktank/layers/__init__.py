@@ -9,7 +9,7 @@ from .conv import Conv2DLayer
 from .kv_cache import BaseKVCache, DirectKVCache, PagedKVCache
 from .causal_llm import BaseCausalLMModel
 from .linear import LinearLayer
-from .norm import RMSNormLayer
+from .norm import RMSNormLayer, LayerNorm
 from .rotary_embedding import RotaryEmbeddingLayer
 from .token_embedding import TokenEmbeddingLayer
 from .llama_attention_block import LlamaAttentionBlock
