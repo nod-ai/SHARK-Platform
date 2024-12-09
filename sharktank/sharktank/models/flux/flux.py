@@ -193,7 +193,7 @@ class FluxModelV1(ThetaLayer):
             img = block(img, vec=vec, pe=pe)
         img = img[:, txt.shape[1] :, ...]
 
-        img = self.final_layer(img, vec)  # (N, T, patch_size ** 2 * out_channels)
+        img = self.last_layer(img, vec)  # (N, T, patch_size ** 2 * out_channels)
         return img
 
 
@@ -276,15 +276,14 @@ class LastLayer(ThetaLayer):
         theta: Theta,
     ):
         super().__init__(theta)
-        self.outlinear = self.add_module("outlinear", LinearLayer(theta("outlinear")))
-        self.ada_linear = self.add_module(
-            "ada_linear", LinearLayer(theta("ada_linear"))
-        )
+        self.add_module("outlinear", LinearLayer(theta("outlinear")))
+        self.add_module("ada_linear", LinearLayer(theta("ada_linear")))
 
     def forward(self, x: AnyTensor, vec: AnyTensor) -> AnyTensor:
-        silu = ops.elementwise(nn.SiLU(), x)
+        silu = ops.elementwise(nn.SiLU(), vec)
         lin = self.ada_linear(silu)
         shift, scale = lin.chunk(2, dim=1)
+        print(x.shape, shift.shape, scale.shape)
         x = (1 + scale[:, None, :]) * layer_norm(x) + shift[:, None, :]
-        x = self.out_linear(x)
+        x = self.outlinear(x)
         return x
