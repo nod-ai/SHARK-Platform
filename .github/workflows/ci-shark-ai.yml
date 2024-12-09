@@ -55,16 +55,12 @@ jobs:
           pip install --no-compile -r pytorch-cpu-requirements.txt
           pip install --no-compile -r requirements.txt -e sharktank/ shortfin/
 
-          # Install latest iree-tubrine.
-          pip install --no-compile -f https://iree.dev/pip-release-links.html --src deps \
-            -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
-
-          # Try with the latest IREE nightly releases, not what iree-turbine pins.
+          # Install nightly IREE packages.
           # We could also pin to a known working or stable version.
-          # This should eventually stabilize. Do the best we can for now.
-          pip install -f https://iree.dev/pip-release-links.html --upgrade --pre \
+          pip install -f https://iree.dev/pip-release-links.html --pre --upgrade \
             iree-base-compiler \
-            iree-base-runtime
+            iree-base-runtime \
+            iree-turbine
 
           pip freeze
 
