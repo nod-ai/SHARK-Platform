@@ -1,8 +1,13 @@
 # Copyright 2024 Advanced Micro Devices, Inc.
+# Copyright 2024 Black Forest Labs. Inc. and Flux Authors
+# Copyright 2024 Advanced Micro Devices, Inc.
 #
 # Licensed under the Apache License v2.0 with LLVM Exceptions.
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+"""MMDIT Layers adapted from black-forest-labs' flux implementation
+https://github.com/black-forest-labs/flux/blob/main/src/flux/model.py
+"""
 
 import math
 from typing import Optional
@@ -46,51 +51,12 @@ class FluxParams:
 
 
 class FluxModelV1(ThetaLayer):
-    """LlamaModel with a paged KV cache and supporting variable sequence
-    length batched inference.
-
-    As both the caching and batching setup is complicated, this model variant
-    is modular, intending to be instantiated and used in an overall assembly
-    vs trying to providing one-stop methods that do everything.
-
-    The inference procedure is typically:
-
-    1. Initialize the PagedKVCache state tensors.
-    2. Generate an input mask given a vector of sequence lengths.
-    3. Generate an attention mask from the input mask.
-    4. Allocate a block mapping table.
-    5. Invoke prefill() with a batch of sequences.
-    6. Extract tokens from batched logits.
-    7. Iteratively invoke decode() for as long as there are sequences needing
-       to be serviced.
-
-    Various samplers and schedulers can be interleaved throughout.
-
-    In the case of tensor sharding (config.tensor_parallelism_size > 1) the model's KV
-    cache head dimension is sharded.
-    The number of KV cache heads must be divisible by the parallelism size.
-    With this sharding approach the KV cache is not replicated across devices.
-    The cache is split across the devices while the indexing logic/computation is
-    replicated.
-    All other arguments aside from the cache state are replicated.
-    After the attention we all-reduce.
-    The the first fully connected layer is split along the parallel dimension.
-    This drives that the reduction dimension is split for the second FC layer.
-    We return the unreduced tensor. The user is free to reduce it to obtain the
-    unsharded result or chain it with other tensor-parallel operations.
-    """
+    """FluxModel adapted from Black Forest Lab's implementation."""
 
     def __init__(self, theta: Theta, params: FluxParams):
-        # hp = config.hp
         super().__init__(
             theta,
         )
-        # self.config = config
-        # self.hp = hp
-        # self.cache = create_kv_cache(self.config)
-        # self.activation_dtype = config.activation_dtype
-        # self.use_hf = config.use_hf
-        # self.attention_kernel = config.attention_kernel
 
         self.in_channels = params.in_channels
         self.out_channels = self.in_channels
@@ -109,10 +75,9 @@ class FluxModelV1(ThetaLayer):
             dim=pe_dim, theta=params.theta, axes_dim=params.axes_dim
         )
         self.add_module("img_in", LinearLayer(theta("img_in")))
-        # self.time_in = MLPEmbedder(in_dim=256, hidden_dim=self.hidden_size) # lin silu lin
+        # TODO: Refactor this pattern to an MLPEmbedder like src implementatio
         self.add_module("time_in_0", LinearLayer(theta("time_in.0")))
         self.add_module("time_in_1", LinearLayer(theta("time_in.1")))
-        # self.vector_in = MLPEmbedder(params.vec_in_dim, self.hidden_size)
         self.add_module("vector_in_0", LinearLayer(theta("vector_in.0")))
         self.add_module("vector_in_1", LinearLayer(theta("vector_in.1")))
         self.guidance = False
@@ -202,6 +167,8 @@ class FluxModelV1(ThetaLayer):
 ################################################################################
 
 
+# TODO: Refactor these functions to other files. Rope can probably be merged with
+# our rotary embedding layer, some of these functions are shared with layers/mmdit.py
 def timestep_embedding(
     t: AnyTensor, dim, max_period=10000, time_factor: float = 1000.0
 ):
