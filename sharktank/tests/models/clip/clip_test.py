@@ -59,6 +59,7 @@ from sharktank.models.clip.export import (
 from sharktank.models.clip.testing import (
     make_random_input_token_sequences,
     make_clip_text_model_random_theta,
+    export_clip_text_model_iree_test_data,
 )
 from sharktank.models.clip import (
     ClipAttention,
@@ -95,6 +96,11 @@ class ClipTextIreeTest(TempDirTestBase):
         export_clip_text_model_dataset_from_hugging_face(
             huggingface_repo_id, output_path
         )
+
+    def testSmokeExportToyIreeTestData(self):
+        from sharktank.models.clip.export_toy_text_model_iree_test_data import main
+
+        main([f"--output-path-prefix={self.path_prefix}clip_toy_text_model"])
 
     @with_clip_data
     def testCompareLargeIreeF32AgainstTorchEagerF32(self):
@@ -147,30 +153,24 @@ class ClipTextIreeTest(TempDirTestBase):
             f"{self.path_prefix}{file_artifact_prefix_name}_{target_dtype_name}"
         )
 
-        target_config = copy(reference_model.config)
-        target_config.dtype = target_dtype
-        reference_dataset = clip_text_model_to_dataset(reference_model)
-        target_dataset = Dataset(
-            root_theta=reference_dataset.root_theta.transform(
-                functools.partial(set_float_dtype, dtype=target_config.dtype)
-            ),
-            properties=target_config.to_properties(),
-        )
-
         parameters_path = f"{target_model_path_prefix}.irpa"
-        if not self.caching or not os.path.exists(parameters_path):
-            target_dataset.save(parameters_path)
-
-        dataset = Dataset.load(parameters_path)
-        target_config = ClipTextConfig.from_properties(dataset.properties)
         input_args = OrderedDict([("input_ids", input_ids)])
         batch_size = input_ids.shape[0]
-
         mlir_path = f"{target_model_path_prefix}.mlir"
-        if not self.caching or not os.path.exists(mlir_path):
-            export_clip_text_model_mlir(
-                parameters_path, batch_sizes=[batch_size], mlir_output_path=mlir_path
+
+        if (
+            not self.caching
+            or not os.path.exists(mlir_path)
+            or not os.path.exists(parameters_path)
+        ):
+            export_clip_text_model_iree_test_data(
+                reference_model=reference_model,
+                target_dtype=target_dtype,
+                input_ids=input_ids,
+                target_mlir_output_path=mlir_path,
+                target_iree_parameters_output_path=parameters_path,
             )
+
         iree_module_path = f"{target_model_path_prefix}.vmfb"
         if not self.caching or not os.path.exists(iree_module_path):
             iree.compiler.compile_file(
@@ -211,11 +211,11 @@ class ClipTextIreeTest(TempDirTestBase):
             for i in range(len(expected_outputs))
         ]
 
-        actual_last_hidden_states = actual_outputs[0]
-        expected_last_hidden_states = expected_outputs[0]
+        actual_last_hidden_state = actual_outputs[0]
+        expected_last_hidden_state = expected_outputs[0]
 
         assert_text_encoder_state_close(
-            actual_last_hidden_states, expected_last_hidden_states, atol
+            actual_last_hidden_state, expected_last_hidden_state, atol
         )
 
     def runTestCompareRandomModelIreeAgainstTorch(
