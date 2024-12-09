@@ -382,7 +382,7 @@ class InferenceTensor(ABC):
         if dim is None:
             return tuple(self.shape)
         return self.shape[dim]
-    
+
     def squeeze(self, dim: Optional[int] = None) -> "AnyTensor":
         from ..ops import squeeze
 
