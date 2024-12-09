@@ -57,8 +57,9 @@ def test_get_mmt_tile_sizes(tuner_ctx: common.TunerContext) -> None:
         gpu_pipeline_options=iree_gpu.PipelineOptionsAttr.get(),
         waves_per_eu=0,
     )
-    assert dispatch_parser.get_mmt_workgroup_sizes(config) == [128, 320, 0]
-    assert dispatch_parser.get_mmt_reduction_sizes(config) == [0, 0, 32]
+    lowering_config = config.lowering_config
+    assert lowering_config.workgroup_tile_sizes == [128, 320, 0]
+    assert lowering_config.reduction_tile_sizes == [0, 0, 32]
 
 
 def test_get_conv_tile_sizes(tuner_ctx: common.TunerContext) -> None:
@@ -67,8 +68,8 @@ def test_get_conv_tile_sizes(tuner_ctx: common.TunerContext) -> None:
     lowering_config = common.get_lowering_config(
         tuner_ctx=tuner_ctx,
         mma_kind=mma_attr,
-        workgroup=[464, 320, 0],
-        reduction=[0, 0, 16],
+        workgroup=[1, 1, 464, 320, 1, 1, 0],
+        reduction=[0, 0, 0, 0, 0, 0, 16],
         subgroup_m_count=1,
         subgroup_n_count=4,
     )
@@ -79,7 +80,7 @@ def test_get_conv_tile_sizes(tuner_ctx: common.TunerContext) -> None:
         gpu_pipeline_options=iree_gpu.PipelineOptionsAttr.get(),
         waves_per_eu=1,
     )
-    assert dispatch_parser.ConvParser().get_conv_workgroup_sizes(config) == [
+    assert config.lowering_config.workgroup_tile_sizes == [
         1,
         1,
         464,
@@ -88,7 +89,7 @@ def test_get_conv_tile_sizes(tuner_ctx: common.TunerContext) -> None:
         1,
         0,
     ]
-    assert dispatch_parser.ConvParser().get_conv_reduction_sizes(config) == [
+    assert config.lowering_config.reduction_tile_sizes == [
         0,
         0,
         0,

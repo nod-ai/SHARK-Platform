@@ -106,15 +106,15 @@ def test_apply_params_conv(tuner_ctx: common.TunerContext) -> None:
         'gpu_pipeline_options = #iree_gpu.pipeline_options<prefetch_shared_memory = true>, {llvm_func_attrs = {"amdgpu-waves-per-eu" = "4"}',
     ]
 
-    n, oh, ow, oc, fh, fw, ic = 2, 64, 64, 640, 3, 3, 640
+    n, oh, ow, oc, fh, fw, ic = 2, 64, 64, 640, 3, 3, 16
 
     mma_intrinsic = iree_gpu.MMAIntrinsic.MFMA_F32_16x16x16_F16
     mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
     lowering_config = common.get_lowering_config(
         tuner_ctx=tuner_ctx,
         mma_kind=mma_attr,
-        workgroup=[464, 320, 0],
-        reduction=[0, 0, 16],
+        workgroup=[n, oh, ow, oc, fh, fw, 0],
+        reduction=[0, 0, 0, 0, 0, 0, ic],
         subgroup_m_count=1,
         subgroup_n_count=4,
     )
@@ -155,7 +155,7 @@ def test_apply_params_conv(tuner_ctx: common.TunerContext) -> None:
         "LLVMGPUVectorDistribute workgroup_size = [256, 1, 1] subgroup_size = 64"
         in modified
     )
-    assert "workgroup = [1, 1, 464, 320, 1, 1, 0]" in modified
+    assert "workgroup = [2, 64, 64, 640, 3, 3, 0]" in modified
     assert "reduction = [0, 0, 0, 0, 0, 0, 16]" in modified
     assert (
         "gpu_pipeline_options = #iree_gpu.pipeline_options<reorder_workgroups_strategy = <Transpose>>"
@@ -186,8 +186,8 @@ def test_apply_params_contract(tuner_ctx: common.TunerContext) -> None:
     lowering_config = common.get_lowering_config(
         tuner_ctx=tuner_ctx,
         mma_kind=mma_attr,
-        workgroup=[480, 384, 0],
-        reduction=[0, 0, 32],
+        workgroup=[1, 480, 384, 0],
+        reduction=[0, 0, 0, 32],
         subgroup_m_count=1,
         subgroup_n_count=4,
     )
@@ -241,8 +241,8 @@ def test_apply_params_batch_matmul(tuner_ctx: common.TunerContext) -> None:
     lowering_config = common.get_lowering_config(
         tuner_ctx=tuner_ctx,
         mma_kind=mma_attr,
-        workgroup=[416, 320, 0],
-        reduction=[0, 0, 128],
+        workgroup=[1, 416, 320, 0],
+        reduction=[0, 0, 0, 128],
         subgroup_m_count=2,
         subgroup_n_count=2,
     )
@@ -299,8 +299,8 @@ def test_apply_params_batch_mmt_float(tuner_ctx: common.TunerContext) -> None:
     lowering_config = common.get_lowering_config(
         tuner_ctx=tuner_ctx,
         mma_kind=mma_attr,
-        workgroup=[128, 64, 0],
-        reduction=[0, 0, 128],
+        workgroup=[1, 128, 64, 0],
+        reduction=[0, 0, 0, 128],
         subgroup_m_count=2,
         subgroup_n_count=2,
     )
@@ -355,8 +355,8 @@ def test_apply_params_batch_mmt_int(tuner_ctx: common.TunerContext) -> None:
     lowering_config = common.get_lowering_config(
         tuner_ctx=tuner_ctx,
         mma_kind=mma_attr,
-        workgroup=[128, 64, 0],
-        reduction=[0, 0, 128],
+        workgroup=[1, 128, 64, 0],
+        reduction=[0, 0, 0, 128],
         subgroup_m_count=2,
         subgroup_n_count=2,
     )
@@ -408,8 +408,8 @@ def test_apply_params_batch_mmt_int(tuner_ctx: common.TunerContext) -> None:
         "%config = transform.param.constant #iree_codegen.compilation_info<"
         in embeddable
     )
-    assert "workgroup = [128, 64, 0]" in embeddable
-    assert "reduction = [0, 0, 128]" in embeddable
+    assert "workgroup = [1, 128, 64, 0]" in embeddable
+    assert "reduction = [0, 0, 0, 128]" in embeddable
     assert 'llvm_func_attrs = {"amdgpu-waves-per-eu" = "4"}' in embeddable
     assert "workgroup_size = [128, 2, 1] subgroup_size = 64" in embeddable
 
@@ -435,8 +435,8 @@ def test_apply_params_broadcast_rhs_mmt(tuner_ctx: common.TunerContext) -> None:
     lowering_config = common.get_lowering_config(
         tuner_ctx=tuner_ctx,
         mma_kind=mma_attr,
-        workgroup=[128, 64, 0],
-        reduction=[0, 0, 128],
+        workgroup=[1, 128, 64, 0],
+        reduction=[0, 0, 0, 128],
         subgroup_m_count=2,
         subgroup_n_count=2,
     )
@@ -492,8 +492,8 @@ def test_apply_params_broadcast_rhs_mmt(tuner_ctx: common.TunerContext) -> None:
         "%config = transform.param.constant #iree_codegen.compilation_info<"
         in embeddable
     )
-    assert "workgroup = [128, 64, 0]" in embeddable
-    assert "reduction = [0, 0, 128]" in embeddable
+    assert "workgroup = [1, 128, 64, 0]" in embeddable
+    assert "reduction = [0, 0, 0, 128]" in embeddable
     assert 'llvm_func_attrs = {"amdgpu-waves-per-eu" = "4"}' in embeddable
     assert "workgroup_size = [128, 2, 1] subgroup_size = 64" in embeddable
 

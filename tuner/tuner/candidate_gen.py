@@ -38,16 +38,19 @@ from .dispatch_parser import *
 
 tune_logger = logging.getLogger("tune")
 
-# TODO: remove the argument 'workgroup_sizes' and 'reduction_sizes'.
+
 def apply_configuration(
     template: list[str],
     configuration: Configuration,
-    workgroup_sizes: list[int],
-    reduction_sizes: list[int],
 ) -> str:
-    intrinsic = get_intrinsic(configuration)
-    subgroup_m_count = get_subgroup_m_count(configuration)
-    subgroup_n_count = get_subgroup_n_count(configuration)
+    lowering_config = configuration.lowering_config
+    intrinsic = lowering_config.mma_kind
+    (
+        subgroup_m_count,
+        subgroup_n_count,
+    ) = lowering_config.subgroup_count_mn
+    workgroup_sizes = lowering_config.workgroup_tile_sizes
+    reduction_sizes = lowering_config.reduction_tile_sizes
     tune_logger.info(f"Applying: {configuration}")
     expr0 = re.compile(
         r"<intrinsic = #iree_gpu\.mma_layout<(.+)>, subgroup_m_count = ([0-9]+), subgroup_n_count = ([0-9]+)>"
@@ -125,9 +128,12 @@ class MmtTuner(DispatchTuner, MmtParser):
     def get_transform_function_mmt(
         self, problem_size: ProblemSize, functionName: str, configuration: Configuration
     ) -> str:
-        intrinsic = get_intrinsic(configuration)
-        subgroup_m_count = get_subgroup_m_count(configuration)
-        subgroup_n_count = get_subgroup_n_count(configuration)
+        lowering_config = configuration.lowering_config
+        intrinsic = lowering_config.mma_kind
+        (
+            subgroup_m_count,
+            subgroup_n_count,
+        ) = lowering_config.subgroup_count_mn
 
         wg_x, wg_y, wg_z = configuration.workgroup_size
         extra_config = get_pipeline_config(configuration)
@@ -167,8 +173,6 @@ class MmtTuner(DispatchTuner, MmtParser):
         modified += apply_configuration(
             template,
             configuration,
-            get_mmt_workgroup_sizes(configuration),
-            get_mmt_reduction_sizes(configuration),
         )
         embeddable = indent(
             self.get_transform_function_mmt(problem_size, f"match_op", configuration),
@@ -193,15 +197,12 @@ class ConvTuner(DispatchTuner, ConvParser):
         filter = f"tensor<{problem_size.rhs_type}>"
         output = f"tensor<{dynamic_batch_output_ty}>"
 
-        workgroup_sizes = ", ".join(
-            map(str, self.get_conv_workgroup_sizes(configuration))
-        )
-        reduction_sizes = ", ".join(
-            map(str, self.get_conv_reduction_sizes(configuration))
-        )
-        intrinsic = get_intrinsic(configuration)
-        subgroup_m_count = get_subgroup_m_count(configuration)
-        subgroup_n_count = get_subgroup_n_count(configuration)
+        lowering_config = configuration.lowering_config
+        intrinsic = lowering_config.mma_kind
+        (
+            subgroup_m_count,
+            subgroup_n_count,
+        ) = lowering_config.subgroup_count_mn
 
         wg_x, wg_y, wg_z = configuration.workgroup_size
         extra_config = get_pipeline_config(configuration)
@@ -246,8 +247,6 @@ class ConvTuner(DispatchTuner, ConvParser):
         modified += apply_configuration(
             template,
             configuration,
-            self.get_conv_workgroup_sizes(configuration),
-            self.get_conv_reduction_sizes(configuration),
         )
         embeddable = indent(
             self.get_transform_function_conv(problem_size, f"match_op", configuration),
@@ -263,15 +262,12 @@ class ContractionTuner(DispatchTuner, ContractionParser):
         functionName: str,
         configuration: Configuration,
     ) -> str:
-        workgroup_sizes = ", ".join(
-            map(str, get_batch_mmt_workgroup_sizes(configuration))
-        )
-        reduction_sizes = ", ".join(
-            map(str, get_batch_mmt_reduction_sizes(configuration))
-        )
-        intrinsic = get_intrinsic(configuration)
-        subgroup_m_count = get_subgroup_m_count(configuration)
-        subgroup_n_count = get_subgroup_n_count(configuration)
+        lowering_config = configuration.lowering_config
+        intrinsic = lowering_config.mma_kind
+        (
+            subgroup_m_count,
+            subgroup_n_count,
+        ) = lowering_config.subgroup_count_mn
 
         wg_x, wg_y, wg_z = configuration.workgroup_size
         extra_config = get_pipeline_config(configuration)
@@ -316,8 +312,6 @@ transform.yield %generic, %config : !transform.any_op, !transform.any_param
         modified += apply_configuration(
             template,
             configuration,
-            get_batch_mmt_workgroup_sizes(configuration),
-            get_batch_mmt_reduction_sizes(configuration),
         )
 
         embeddable = indent(
@@ -345,8 +339,6 @@ transform.yield %generic, %config : !transform.any_op, !transform.any_param
             apply_configuration(
                 template,
                 configuration,
-                get_contract_workgroup_sizes(configuration, self.tile_dims),
-                get_contract_reduction_sizes(configuration, self.tile_dims),
             ),
             "",
         )
@@ -359,9 +351,12 @@ class BatchMmtTuner(DispatchTuner, BatchMmtParser):
         functionName: str,
         configuration: Configuration,
     ) -> str:
-        intrinsic = get_intrinsic(configuration)
-        subgroup_m_count = get_subgroup_m_count(configuration)
-        subgroup_n_count = get_subgroup_n_count(configuration)
+        lowering_config = configuration.lowering_config
+        intrinsic = lowering_config.mma_kind
+        (
+            subgroup_m_count,
+            subgroup_n_count,
+        ) = lowering_config.subgroup_count_mn
 
         wg_x, wg_y, wg_z = configuration.workgroup_size
         extra_config = get_pipeline_config(configuration)
@@ -403,8 +398,6 @@ transform.yield %generic, %config : !transform.any_op, !transform.any_param
         modified += apply_configuration(
             template,
             configuration,
-            get_batch_mmt_workgroup_sizes(configuration),
-            get_batch_mmt_reduction_sizes(configuration),
         )
 
         embeddable = indent(
@@ -428,9 +421,12 @@ class BatchMatmulTuner(DispatchTuner, BatchMatmulParser):
         input1 = f"tensor<{problem_size.rhs_type}>"
         output = f"tensor<{problem_size.res_type}>"
 
-        intrinsic = get_intrinsic(configuration)
-        subgroup_m_count = get_subgroup_m_count(configuration)
-        subgroup_n_count = get_subgroup_n_count(configuration)
+        lowering_config = configuration.lowering_config
+        intrinsic = lowering_config.mma_kind
+        (
+            subgroup_m_count,
+            subgroup_n_count,
+        ) = lowering_config.subgroup_count_mn
 
         wg_x, wg_y, wg_z = configuration.workgroup_size
         extra_config = get_pipeline_config(configuration)
@@ -476,8 +472,6 @@ class BatchMatmulTuner(DispatchTuner, BatchMatmulParser):
         modified += apply_configuration(
             template,
             configuration,
-            get_contract_workgroup_sizes(configuration, self.tile_dims),
-            get_contract_reduction_sizes(configuration, self.tile_dims),
         )
 
         embeddable = indent(

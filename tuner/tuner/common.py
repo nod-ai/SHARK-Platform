@@ -119,40 +119,6 @@ class Configuration:
     waves_per_eu: int
 
 
-def get_intrinsic(config: Configuration) -> Optional[iree_gpu.MMAAttr]:
-    if "mma_kind" in config.lowering_config.attributes:
-        return config.lowering_config.attributes["mma_kind"]
-    return None
-
-
-def get_workgroup_tile_sizes(config: Configuration) -> list[int]:
-    if "workgroup" in config.lowering_config.attributes:
-        workgroup_attrs = config.lowering_config.attributes["workgroup"]
-        return [attr.value for attr in workgroup_attrs]
-    return []
-
-
-def get_reduction_tile_sizes(config: Configuration) -> list[int]:
-    if "reduction" in config.lowering_config.attributes:
-        reduction_attrs = config.lowering_config.attributes["reduction"]
-        return [attr.value for attr in reduction_attrs]
-    return []
-
-
-def get_subgroup_m_count(config: Configuration) -> Optional[int]:
-    if "subgroup_m_count" in config.lowering_config.attributes:
-        attr = config.lowering_config.attributes["subgroup_m_count"]
-        return attr.value
-    return None
-
-
-def get_subgroup_n_count(config: Configuration) -> Optional[int]:
-    if "subgroup_n_count" in config.lowering_config.attributes:
-        attr = config.lowering_config.attributes["subgroup_n_count"]
-        return attr.value
-    return None
-
-
 def get_lowering_config(
     tuner_ctx: TunerContext,
     **kwargs: Any,
