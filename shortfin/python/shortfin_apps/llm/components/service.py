@@ -442,6 +442,7 @@ class InferenceExecutorProcess(sf.Process):
             # pre-invocation args dump
             try:
                 from .debug_service import pre_invocation_debug_dump
+
                 await pre_invocation_debug_dump(
                     phase=self.phase,
                     is_decode=is_decode,
@@ -458,17 +459,14 @@ class InferenceExecutorProcess(sf.Process):
                     seq_lens=seq_lens,
                     seq_block_ids=seq_block_ids,
                     model_params=self.service.model_params,
-                    args=args
+                    args=args,
                 )
             except Exception as e:
                 err_msg = (
-                    f"Error Type: {type(e).__name__}\n"
-                    f"Error Message: {str(e)}\n"
+                    f"Error Type: {type(e).__name__}\n" f"Error Message: {str(e)}\n"
                 )
-                logger.info(
-                    f"Non-critical failure: debug logging failed due to {e}"
-                )
-                
+                logger.info(f"Non-critical failure: debug logging failed due to {e}")
+
             # invoke VMFB
             (logits,) = await fn(*args, fiber=self.fiber)
 
