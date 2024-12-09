@@ -28,14 +28,11 @@ from .tensors import (
     PrimitiveTensor,
     QuantizedTensor,
     InferenceTensorMetadata,
+    DefaultPrimitiveTensor,
     REGISTERED_INFERENCE_TENSOR_CLASSES,
 )
 
-__all__ = [
-    "Dataset",
-    "flat_to_nested_dict",
-    "Theta",
-]
+__all__ = ["Dataset", "flat_to_nested_dict", "Theta", "torch_module_to_theta"]
 
 IOReportCallback = Callable[[str], None]
 
@@ -214,6 +211,15 @@ class Theta:
         """
         for path, tensor in self.flatten().items():
             tensor.name = path
+
+
+def torch_module_to_theta(module: torch.nn.Module) -> Theta:
+    return Theta(
+        {
+            name: DefaultPrimitiveTensor(data=param)
+            for name, param in module.named_parameters()
+        }
+    )
 
 
 def flat_to_nested_dict(flat: dict[str, Any]) -> dict[str, Any]:
