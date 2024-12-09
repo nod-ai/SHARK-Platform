@@ -438,7 +438,38 @@ class InferenceExecutorProcess(sf.Process):
                 fn,
                 "".join([f"\n  {i}: {ary.shape}" for i, ary in enumerate(args)]),
             )
-            # Invoke. Logits are of shape [bs, bsl, d].
+
+            # pre-invocation args dump
+            try:
+                from .debug_service import pre_invocation_debug_dump
+                await pre_invocation_debug_dump(
+                    phase=self.phase,
+                    is_decode=is_decode,
+                    device0=device0,
+                    fn=fn,
+                    req_bs=req_bs,
+                    bsl=bsl,
+                    seq_stride=seq_stride,
+                    block_count=block_count,
+                    req_count=req_count,
+                    exec_requests=self.exec_requests,
+                    tokens=tokens,
+                    start_positions=start_positions if is_decode else None,
+                    seq_lens=seq_lens,
+                    seq_block_ids=seq_block_ids,
+                    model_params=self.service.model_params,
+                    args=args
+                )
+            except Exception as e:
+                err_msg = (
+                    f"Error Type: {type(e).__name__}\n"
+                    f"Error Message: {str(e)}\n"
+                )
+                logger.info(
+                    f"Non-critical failure: debug logging failed due to {e}"
+                )
+                
+            # invoke VMFB
             (logits,) = await fn(*args, fiber=self.fiber)
 
             # publish cache pages
