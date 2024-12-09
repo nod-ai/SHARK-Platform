@@ -5,7 +5,7 @@
 # Licensed under the Apache License v2.0 with LLVM Exceptions.
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-"""MMDIT Layers adapted from black-forest-labs' flux implementation
+"""Model adapted from black-forest-labs' flux implementation
 https://github.com/black-forest-labs/flux/blob/main/src/flux/model.py
 """
 
