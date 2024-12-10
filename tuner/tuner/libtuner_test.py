@@ -502,4 +502,4 @@ def test_validate_devices_with_invalid_device() -> None:
 
 
 def test_enum_collision():
-    from iree.compiler.dialects import linalg, vector  # type: ignore
+    from iree.compiler.dialects import linalg, vector, iree_gpu, iree_codegen, iree_input  # type: ignore
