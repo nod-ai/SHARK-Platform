@@ -4,7 +4,8 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-from iree.compiler import ir
+from iree.compiler import ir  # type: ignore
+
 
 # substitute replace=True so that colliding registration don't error
 def register_attribute_builder(kind, replace=True):
@@ -13,5 +14,6 @@ def register_attribute_builder(kind, replace=True):
         return func
 
     return decorator_builder
+
 
 ir.register_attribute_builder = register_attribute_builder
