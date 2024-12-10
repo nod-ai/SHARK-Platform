@@ -87,10 +87,35 @@ def write_config(request, model_test_dir):
     batch_sizes = request.param["batch_sizes"]
     prefix_sharing_algorithm = request.param["prefix_sharing_algorithm"]
 
+    # Construct the new config filename
     config_path = (
         model_test_dir
         / f"{'_'.join(str(bs) for bs in batch_sizes)}_{prefix_sharing_algorithm}.json"
     )
+
+    # Read the base config file
+    base_config_path = model_test_dir / "config.json"
+    with open(base_config_path, "r") as f:
+        config = json.load(f)
+
+    # Override specific fields
+    config.update(
+        {
+            "prefill_batch_sizes": batch_sizes,
+            "decode_batch_sizes": batch_sizes,
+            "paged_kv_cache": {
+                **config.get(
+                    "paged_kv_cache", {}
+                ),  # Preserve other paged_kv_cache settings
+                "prefix_sharing_algorithm": prefix_sharing_algorithm,
+            },
+        }
+    )
+    logger.info(f"Saving edited config to: {config_path}\n")
+    logger.info(f"Config: {json.dumps(config, indent=2)}")
+    with open(config_path, "w") as f:
+        json.dump(config, f)
+
     yield config_path
 
 
