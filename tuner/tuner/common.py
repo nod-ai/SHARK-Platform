@@ -118,6 +118,10 @@ class Configuration:
     waves_per_eu: int
 
 
+# The key name for GPUPipelineOptionsAttr in the translation info config dictionary.
+GPU_PIPELINE_OPTIONS = "gpu_pipeline_options"
+
+
 def get_lowering_config(
     tuner_ctx: TunerContext,
     **kwargs: Any,
@@ -159,7 +163,7 @@ def get_lowering_config(
 def get_pipeline_config(configuration: Configuration) -> str:
     extra_config = ""
     pipeline_options = configuration.translation_info.configuration[
-        "gpu_pipeline_options"
+        GPU_PIPELINE_OPTIONS
     ]
     if pipeline_options != iree_gpu.PipelineOptionsAttr.get():
         extra_config += f", gpu_pipeline_options = {pipeline_options}"

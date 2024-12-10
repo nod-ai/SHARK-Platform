@@ -248,11 +248,8 @@ def generate_solutions(
             iree_codegen.DispatchLoweringPassPipeline.LLVMGPUVectorDistribute
         )
         pipeline_option = iree_gpu.PipelineOptionsAttr.get()
-        # TODO: expose the function getDictKeyName() from GPUPipelineOptionsAttr to
-        # get the key name 'gpu_pipeline_options'in the translation info config dictionary
-        pipeline_option_dict = ir.DictAttr.get(
-            {"gpu_pipeline_options": pipeline_option}
-        )
+        pipeline_option_dict = ir.DictAttr.get({GPU_PIPELINE_OPTIONS: pipeline_option})
+
         translation_info = iree_codegen.TranslationInfoAttr.get(
             pipeline_attr,
             None,
