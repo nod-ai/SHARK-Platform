@@ -18,6 +18,8 @@ from dataclasses import asdict, dataclass, field
 from typing import Any, Optional
 import torch
 
+from ...types.tensors import serialized_name_to_dtype, dtype_to_serialized_name
+
 __all__ = ["ClipTextConfig", "LlamaHParams", "LlamaModelConfig", "T5Config"]
 
 
@@ -287,9 +289,10 @@ class ClipTextConfig:
     output_attentions: bool = False
     output_hidden_states: bool = False
     use_return_dict: bool = True
+    dtype: torch.dtype = torch.float32
 
     @staticmethod
-    def from_transformers_clip_text_config(
+    def from_hugging_face_clip_text_model_config(
         config: "transformers.CLIPTextConfig",
     ) -> "ClipTextConfig":
         return ClipTextConfig(
@@ -308,7 +311,30 @@ class ClipTextConfig:
             output_attentions=config.output_attentions,
             output_hidden_states=config.output_hidden_states,
             use_return_dict=config.use_return_dict,
+            dtype=config.torch_dtype or torch.float32,
         )
 
-    def as_properties(self) -> dict[str, Any]:
-        return asdict(self)
+    def to_hugging_face_clip_text_model_config(self) -> "transformers.CLIPTextConfig":
+        kwargs = self.to_properties()
+        kwargs["torch_dtype"] = kwargs["dtype"]
+        del kwargs["dtype"]
+        kwargs["return_dict"] = kwargs["use_return_dict"]
+        del kwargs["use_return_dict"]
+        from transformers import CLIPTextConfig
+
+        return CLIPTextConfig(**kwargs)
+
+    @staticmethod
+    def from_properties(properties: dict[str, Any]) -> "ClipTextConfig":
+        kwargs = dict(properties)
+        kwargs.pop("SHARK_DATASET_VERSION")
+        if "dtype" in kwargs and kwargs["dtype"] is not None:
+            kwargs["dtype"] = serialized_name_to_dtype(kwargs["dtype"])
+
+        return ClipTextConfig(**kwargs)
+
+    def to_properties(self) -> dict[str, Any]:
+        res = asdict(self)
+        if self.dtype is not None:
+            res["dtype"] = dtype_to_serialized_name(self.dtype)
+        return res

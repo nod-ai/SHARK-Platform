@@ -214,12 +214,14 @@ class Theta:
 
 
 def torch_module_to_theta(module: torch.nn.Module) -> Theta:
-    return Theta(
+    res = Theta(
         {
             name: DefaultPrimitiveTensor(data=param)
             for name, param in module.named_parameters()
         }
     )
+    res.rename_tensors_to_paths()
+    return res
 
 
 def flat_to_nested_dict(flat: dict[str, Any]) -> dict[str, Any]:
