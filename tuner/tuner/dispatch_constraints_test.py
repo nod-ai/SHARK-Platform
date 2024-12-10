@@ -14,6 +14,7 @@ import z3  # type: ignore
 from typing import Generator
 
 from iree.compiler import ir  # type: ignore
+from iree.compiler.dialects import iree_gpu  # type: ignore
 
 from . import common
 from . import dispatch_constraints
@@ -37,7 +38,18 @@ def test_generate_solutions(tuner_ctx: common.TunerContext) -> None:
     problem_size = common.ProblemSize(
         matmul_size, lhs_type, rhs_type, res_type, common.DispatchKind.mmt
     )
-    configs = dispatch_constraints.generate_solutions(tuner_ctx.logger, problem_size, 4)
+    configs = dispatch_constraints.generate_solutions(
+        tuner_ctx,
+        problem_size,
+        4,
+        [
+            iree_gpu.MMAIntrinsic.MFMA_F32_16x16x16_F16,
+            iree_gpu.MMAIntrinsic.MFMA_F32_32x32x8_F16,
+            iree_gpu.MMAIntrinsic.MFMA_I32_16x16x32_I8,
+            iree_gpu.MMAIntrinsic.MFMA_I32_32x32x16_I8,
+        ],
+    )
+
     assert configs is not None
 
 
@@ -115,6 +127,12 @@ def test_generate_constraints_valid_input(tuner_ctx: common.TunerContext) -> Non
         sg_m_cnt,
         sg_n_cnt,
         waves_per_eu,
+        [
+            iree_gpu.MMAIntrinsic.MFMA_F32_16x16x16_F16,
+            iree_gpu.MMAIntrinsic.MFMA_F32_32x32x8_F16,
+            iree_gpu.MMAIntrinsic.MFMA_I32_16x16x32_I8,
+            iree_gpu.MMAIntrinsic.MFMA_I32_32x32x16_I8,
+        ],
     )
 
     solver = z3.Solver()
@@ -160,6 +178,12 @@ def test_generate_constraints_invalid_input(tuner_ctx: common.TunerContext) -> N
         sg_m_cnt,
         sg_n_cnt,
         waves_per_eu,
+        [
+            iree_gpu.MMAIntrinsic.MFMA_F32_16x16x16_F16,
+            iree_gpu.MMAIntrinsic.MFMA_F32_32x32x8_F16,
+            iree_gpu.MMAIntrinsic.MFMA_I32_16x16x32_I8,
+            iree_gpu.MMAIntrinsic.MFMA_I32_32x32x16_I8,
+        ],
     )
     constraints.append(m > 1000)  # Adding an additional unsatisfiable constraint
 

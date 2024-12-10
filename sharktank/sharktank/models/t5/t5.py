@@ -28,6 +28,7 @@ from ... import ops
 from ...types.theta import Theta
 from ...types.tensors import AnyTensor
 from ...layers import FFN, T5Config
+from ...layers.activations import ACT2FN
 
 __all__ = [
     "T5Config",
@@ -41,13 +42,6 @@ __all__ = [
 ]
 
 logger = logging.getLogger(__name__)
-
-
-ACT2FN = {
-    "gelu": nn.functional.gelu,
-    "gelu_new": ops.gelu_tanh_approximation,
-    "relu": nn.functional.relu,
-}
 
 
 class T5LayerFF(nn.Module):
@@ -684,7 +678,9 @@ class T5Stack(BaseLayer):
         self.add_module(
             "final_layer_norm",
             RMSNormLayer(
-                theta(f"{theta_prefix}.output_norm"), epsilon=config.layer_norm_epsilon
+                theta(f"{theta_prefix}.output_norm"),
+                epsilon=config.layer_norm_epsilon,
+                dtype=config.activation_dtype,
             ),
         )
 
@@ -1046,7 +1042,9 @@ class T5Encoder(BaseLayer):
         super().__init__()
         self.add_module(
             "token_embedding",
-            TokenEmbeddingLayer(theta("token_embd"), dtype=config.activation_dtype),
+            TokenEmbeddingLayer(
+                theta("token_embd"), dtype=theta("token_embd").tensor("weight").dtype
+            ),
         )
 
         encoder_config = copy.deepcopy(config)

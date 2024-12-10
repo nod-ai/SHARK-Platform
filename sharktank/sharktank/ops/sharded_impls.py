@@ -397,7 +397,9 @@ def elementwise_binary_replicated_lhs_unsharded_rhs(
 # Embedding Lookup
 @embedding_lookup.override(ReplicatedTensor, ReplicatedTensor)
 def embedding_lookup_default(
-    input: ReplicatedTensor, embedding_matrix: ReplicatedTensor, dtype: torch.dtype
+    input: ReplicatedTensor,
+    embedding_matrix: ReplicatedTensor,
+    dtype: Optional[torch.dtype],
 ):
     assert input.shard_count == embedding_matrix.shard_count
     shards = [

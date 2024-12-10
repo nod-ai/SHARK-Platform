@@ -33,9 +33,10 @@ jobs:
       run:
         shell: bash
     env:
-      PIP_CACHE_DIR: "${{ github.workspace }}/.pip-cache"
       VENV_DIR: ${{ github.workspace }}/.venv
     steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
       - name: Get Current Date
         id: date
         run: echo "::set-output name=date::$(date +'%Y-%m-%d')"
@@ -45,19 +46,12 @@ jobs:
         uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
         with:
           python-version: ${{matrix.version}}
-
-      - name: "Checkout Code"
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-
-      - name: Cache Pip Packages
-        uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4.1.2
-        id: cache-pip
-        with:
-          path: ${{ env.PIP_CACHE_DIR }}
-          key: pip-${{ steps.setup_python.outputs.python-version }}-${{ hashFiles('*requirements.txt') }}
+      - name: Create Python venv
+        run: python -m venv ${VENV_DIR}
 
       - name: Install pip deps
         run: |
+          source ${VENV_DIR}/bin/activate
           python -m pip install --no-compile --upgrade pip
           # Note: We install in three steps in order to satisfy requirements
           # from non default locations first. Installing the PyTorch CPU
@@ -65,18 +59,19 @@ jobs:
           pip install --no-compile -r pytorch-cpu-requirements.txt
           pip install --no-compile -r requirements.txt -r sharktank/requirements-tests.txt -e sharktank/
 
-          # Install latest iree-turbine.
-          pip install --no-compile -f https://iree.dev/pip-release-links.html --src deps \
-            -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
-
-
-          # Test with nightly releases, not what iree-turbine uses.
-          pip install -f https://iree.dev/pip-release-links.html --upgrade --pre \
+          # Install nightly IREE packages.
+          # We could also pin to a known working or stable version.
+          pip install -f https://iree.dev/pip-release-links.html --pre --upgrade \
             iree-base-compiler \
-            iree-base-runtime
+            iree-base-runtime \
+            iree-turbine
+
+          pip freeze
 
       - name: Run llama tests
-        run: pytest sharktank/tests/models/llama/benchmark_amdgpu_test.py -v -s --run-nightly-llama-tests --iree-hip-target=gfx942 --html=out/llm/llama/benchmark/index.html
+        run: |
+          source ${VENV_DIR}/bin/activate
+          pytest sharktank/tests/models/llama/benchmark_amdgpu_test.py -v -s --run-nightly-llama-tests --iree-hip-target=gfx942 --iree-device=hip://7 --html=out/llm/llama/benchmark/index.html
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@4f9cc6602d3f66b9c108549d475ec49e8ef4d45e # v4.0.0

@@ -5,7 +5,7 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 """
-Usage: python -m pytest candidate_gen_test.py
+Usage: python -m pytest common_test.py
 """
 
 import pytest
@@ -14,6 +14,7 @@ from . import common
 from typing import Generator
 
 from iree.compiler import ir  # type: ignore
+from iree.compiler.dialects import iree_gpu  # type: ignore
 
 
 @pytest.fixture
@@ -46,39 +47,48 @@ def test_get_shaped_type_to_str(tuner_ctx: common.TunerContext) -> None:
     assert str(common.ShapedType([-1, 2, 3], tuner_ctx.type.f16)) == "?x2x3xf16"
 
 
-def test_gpu_pipeline_options() -> None:
-    options = common.GpuPipelineOptions()
-    assert options.all_default()
+def test_gpu_pipeline_options(tuner_ctx: common.TunerContext) -> None:
+    options = iree_gpu.PipelineOptionsAttr.get()
     assert str(options) == "#iree_gpu.pipeline_options<>"
 
-    options.prefetch_shared_memory = True
-    assert not options.all_default()
+    options = iree_gpu.PipelineOptionsAttr.get(prefetch_shared_memory=True)
     assert str(options) == "#iree_gpu.pipeline_options<prefetch_shared_memory = true>"
 
-    options.no_reduce_shared_memory_bank_conflicts = False
+    options = iree_gpu.PipelineOptionsAttr.get(
+        prefetch_shared_memory=True, no_reduce_shared_memory_bank_conflicts=False
+    )
     assert (
         str(options)
         == "#iree_gpu.pipeline_options<prefetch_shared_memory = true, no_reduce_shared_memory_bank_conflicts = false>"
     )
 
-    options = common.GpuPipelineOptions()
-    options.reorder_workgroups_strategy = common.ReorderWorkgroupsStrategy.TRANSPOSE
-    assert not options.all_default()
+    options = iree_gpu.PipelineOptionsAttr.get(
+        reorder_workgroups_strategy=iree_gpu.ReorderWorkgroupsStrategyAttr.get(
+            iree_gpu.ReorderWorkgroupsStrategy.Transpose
+        )
+    )
     assert (
         str(options)
-        == "#iree_gpu.pipeline_options<reorder_workgroups_strategy = Transpose>"
+        == "#iree_gpu.pipeline_options<reorder_workgroups_strategy = <Transpose>>"
     )
 
 
-def test_get_pipeline_config(mlir_ctx: ir.Context) -> None:
+def test_get_pipeline_config(tuner_ctx: common.TunerContext) -> None:
+    mma_intrinsic = iree_gpu.MMAIntrinsic.MFMA_F32_16x16x16_F16
+    mma_attr = iree_gpu.MMAAttr.get(mma_intrinsic)
+    lowering_config = common.get_lowering_config(
+        tuner_ctx=tuner_ctx,
+        mma_kind=mma_attr,
+        workgroup=[4, 8, 0],
+        reduction=[0, 0, 16],
+        subgroup_m_count=1,
+        subgroup_n_count=1,
+    )
     config = common.Configuration(
         subgroup_size=32,
         workgroup_size=[16, 16, 1],
-        intrinsic=common.MfmaIntrinsic.mfma_f32_16x16x16_f16(),
-        tile_sizes=[4, 8, 16],
-        subgroup_m_count=1,
-        subgroup_n_count=1,
-        gpu_pipeline_options=common.GpuPipelineOptions(),
+        lowering_config=lowering_config,
+        gpu_pipeline_options=iree_gpu.PipelineOptionsAttr.get(),
         waves_per_eu=2,
     )
     config1_str: str = common.get_pipeline_config(config)
@@ -88,17 +98,14 @@ def test_get_pipeline_config(mlir_ctx: ir.Context) -> None:
     config2_str: str = common.get_pipeline_config(config)
     assert config2_str == ', llvm_func_attrs = {"amdgpu-waves-per-eu" = "4"}'
 
-    config.gpu_pipeline_options.prefetch_shared_memory = True
+    config.gpu_pipeline_options = iree_gpu.PipelineOptionsAttr.get(
+        prefetch_shared_memory=True
+    )
     config3_str = common.get_pipeline_config(config)
     assert (
         config3_str
         == ', gpu_pipeline_options = #iree_gpu.pipeline_options<prefetch_shared_memory = true>, llvm_func_attrs = {"amdgpu-waves-per-eu" = "4"}'
     )
-
-
-def test_mfma_intrinsic_to_str(mlir_ctx: ir.Context) -> None:
-    assert str(common.MfmaIntrinsic.mfma_f32_16x16x16_f16()) == "MFMA_F32_16x16x16_F16"
-    assert str(common.MfmaIntrinsic.mfma_i32_32x32x16_i8()) == "MFMA_I32_32x32x16_I8"
 
 
 def test_get_compatible_mfma_intrinsics(tuner_ctx: common.TunerContext) -> None:
@@ -109,10 +116,14 @@ def test_get_compatible_mfma_intrinsics(tuner_ctx: common.TunerContext) -> None:
             common.ShapedType([1280, 1280], tuner_ctx.type.f16),
             common.ShapedType([2048, 1280], tuner_ctx.type.f32),
             common.DispatchKind.mmt,
-        )
+        ),
+        [
+            iree_gpu.MMAIntrinsic.MFMA_F32_16x16x16_F16,
+            iree_gpu.MMAIntrinsic.MFMA_F32_32x32x8_F16,
+        ],
     ) == [
-        common.MfmaIntrinsic.mfma_f32_16x16x16_f16(),
-        common.MfmaIntrinsic.mfma_f32_32x32x8_f16(),
+        iree_gpu.MMAIntrinsic.MFMA_F32_16x16x16_F16,
+        iree_gpu.MMAIntrinsic.MFMA_F32_32x32x8_F16,
     ]
 
     assert common.get_compatible_mfma_intrinsics(
@@ -122,10 +133,14 @@ def test_get_compatible_mfma_intrinsics(tuner_ctx: common.TunerContext) -> None:
             common.ShapedType([1280, 1280], tuner_ctx.type.i8),
             common.ShapedType([2048, 1280], tuner_ctx.type.i32),
             common.DispatchKind.mmt,
-        )
+        ),
+        [
+            iree_gpu.MMAIntrinsic.MFMA_I32_16x16x32_I8,
+            iree_gpu.MMAIntrinsic.MFMA_I32_32x32x16_I8,
+        ],
     ) == [
-        common.MfmaIntrinsic.mfma_i32_16x16x32_i8(),
-        common.MfmaIntrinsic.mfma_i32_32x32x16_i8(),
+        iree_gpu.MMAIntrinsic.MFMA_I32_16x16x32_I8,
+        iree_gpu.MMAIntrinsic.MFMA_I32_32x32x16_I8,
     ]
 
     assert common.get_compatible_mfma_intrinsics(
@@ -135,8 +150,70 @@ def test_get_compatible_mfma_intrinsics(tuner_ctx: common.TunerContext) -> None:
             common.ShapedType([64, 640, 320], tuner_ctx.type.f32),
             common.ShapedType([64, 968, 320], tuner_ctx.type.f32),
             common.DispatchKind.batch_matmul,
-        )
+        ),
+        [
+            iree_gpu.MMAIntrinsic.MFMA_F32_16x16x16_F16,
+            iree_gpu.MMAIntrinsic.MFMA_F32_32x32x8_F16,
+        ],
     ) == [
-        common.MfmaIntrinsic.mfma_f32_16x16x16_f16(),
-        common.MfmaIntrinsic.mfma_f32_32x32x8_f16(),
+        iree_gpu.MMAIntrinsic.MFMA_F32_16x16x16_F16,
+        iree_gpu.MMAIntrinsic.MFMA_F32_32x32x8_F16,
     ]
+
+    assert common.get_compatible_mfma_intrinsics(
+        common.ProblemSize(
+            common.MatmulSize(968, 320, 640, 64),
+            common.ShapedType([64, 968, 640], tuner_ctx.type.f32),
+            common.ShapedType([64, 640, 320], tuner_ctx.type.f32),
+            common.ShapedType([64, 968, 320], tuner_ctx.type.f32),
+            common.DispatchKind.batch_matmul,
+        ),
+        [
+            iree_gpu.MMAIntrinsic.MFMA_F32_32x32x8_F16,
+        ],
+    ) == [
+        iree_gpu.MMAIntrinsic.MFMA_F32_32x32x8_F16,
+    ]
+
+    assert (
+        common.get_compatible_mfma_intrinsics(
+            common.ProblemSize(
+                common.MatmulSize(968, 320, 640, 64),
+                common.ShapedType([64, 968, 640], tuner_ctx.type.f32),
+                common.ShapedType([64, 640, 320], tuner_ctx.type.f32),
+                common.ShapedType([64, 968, 320], tuner_ctx.type.f32),
+                common.DispatchKind.batch_matmul,
+            ),
+            [
+                iree_gpu.MMAIntrinsic.MFMA_I32_16x16x32_I8,
+                iree_gpu.MMAIntrinsic.MFMA_I32_32x32x16_I8,
+            ],
+        )
+        == []
+    )
+
+
+def test_get_lowering_config(tuner_ctx: common.TunerContext) -> None:
+    lowering_config = common.get_lowering_config(
+        tuner_ctx=tuner_ctx,
+        workgroup=[4, 8, 0],
+        reduction=[0, 0, 16],
+        subgroup_m_count=1,
+        subgroup_n_count=1,
+    )
+
+    assert (
+        str(lowering_config)
+        == "#iree_gpu.lowering_config<{reduction = [0, 0, 16], subgroup_m_count = 1 : i64, subgroup_n_count = 1 : i64, workgroup = [4, 8, 0]}>"
+    )
+
+    config = common.Configuration(
+        subgroup_size=32,
+        workgroup_size=[16, 16, 1],
+        lowering_config=lowering_config,
+        gpu_pipeline_options=iree_gpu.PipelineOptionsAttr.get(),
+        waves_per_eu=2,
+    )
+
+    assert config.lowering_config.mma_kind is None
+    assert config.lowering_config.subgroup_count_mn == (1, 1)

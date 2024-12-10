@@ -29,6 +29,7 @@ __all__ = [
     "expand",
     "flatten",
     "gather",
+    "gelu_sigmoid_approximation",
     "gelu_tanh_approximation",
     "get_index",
     "gemm",
@@ -228,7 +229,7 @@ def _elementwise_trampoline(d: SignatureDispatcher, operator, *args, **kwargs):
 
 @overridable
 def embedding_lookup(
-    input: AnyTensor, embedding_matrix: AnyTensor, dtype: dtype
+    input: AnyTensor, embedding_matrix: AnyTensor, dtype: Optional[dtype]
 ) -> AnyTensor:
     """Performs the equivalent of F.embedding(input, embedding_matrix).
 
@@ -241,7 +242,10 @@ def embedding_lookup(
 
 @embedding_lookup.trampoline
 def _embedding_lookup_trampoline(
-    d: SignatureDispatcher, input: AnyTensor, embedding_matrix: AnyTensor, dtype: dtype
+    d: SignatureDispatcher,
+    input: AnyTensor,
+    embedding_matrix: AnyTensor,
+    dtype: Optional[dtype],
 ):
     tensors = (input, embedding_matrix)
     for override in d.find_overrides(tensors):
@@ -374,6 +378,13 @@ def _gather_trampoline(
             return override, result
     else:
         d.fail(dispatch_args)
+
+
+def gelu_sigmoid_approximation(input: AnyTensor) -> AnyTensor:
+    """Applies GELU approximation that is fast but somewhat inaccurate.
+    See: https://github.com/hendrycks/GELUs
+    """
+    return input * elementwise(torch.sigmoid, 1.702 * input)
 
 
 def gelu_tanh_approximation(input: AnyTensor) -> AnyTensor:
@@ -582,12 +593,14 @@ def layer_norm(
 def _layer_norm_trampoline(
     d: SignatureDispatcher,
     input: AnyTensor,
-    weight: AnyTensor,
+    weight: Optional[AnyTensor],
     bias: Optional[AnyTensor],
     *,
     eps: float,
 ):
-    tensors = [input, weight]
+    tensors = [input]
+    if weight is not None:
+        tensors.append(bias)
     if bias is not None:
         tensors.append(bias)
     for override in d.find_overrides(tensors):

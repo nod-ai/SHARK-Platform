@@ -15,7 +15,7 @@ import time
 import requests
 from transformers import AutoTokenizer
 
-logger = logging.getLogger("__name__")
+logger = logging.getLogger(__name__)
 
 
 class AccuracyValidationException(RuntimeError):

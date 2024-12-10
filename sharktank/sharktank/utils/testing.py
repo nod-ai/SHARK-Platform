@@ -4,6 +4,7 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
+from typing import Optional
 import contextlib
 from pathlib import Path
 import os
@@ -20,8 +21,14 @@ from ..types import *
 
 # Range of torch.rand() is [0,1)
 # Range of torch.rand() * 2 - 1 is [-1, 1), includes negative values
-def make_rand_torch(shape, dtype=torch.float32):
+def make_rand_torch(shape: list[int], dtype: Optional[torch.dtype] = torch.float32):
     return torch.rand(shape, dtype=dtype) * 2 - 1
+
+
+def make_random_mask(shape: tuple[int], dtype: Optional[torch.dtype] = None):
+    mask = make_rand_torch(shape=shape, dtype=dtype)
+    mask = (mask >= 0).to(dtype=dtype)
+    return mask
 
 
 class TempDirTestBase(unittest.TestCase):
@@ -195,3 +202,11 @@ def skip(*decorator_args, **decorator_kwargs):
         return test_item
 
     return decorator
+
+
+test_prompts = [
+    "Studies have been shown that owning a dog is good for you",
+    "The horse went into the river",
+    "We need at least one sentence long enough so that it spans more than one padding block which by default is of size 16.",
+    "Make the batch size 4",
+]
