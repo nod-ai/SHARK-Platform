@@ -499,3 +499,7 @@ def test_validate_devices_with_invalid_device() -> None:
                     exit_program=True,
                 )
                 assert expected_call in mock_handle_error.call_args_list
+
+
+def test_enum_collision():
+    from iree.compiler.dialects import linalg, vector, iree_gpu, iree_codegen, iree_input  # type: ignore
