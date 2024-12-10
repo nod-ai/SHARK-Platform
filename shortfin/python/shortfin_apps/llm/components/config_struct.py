@@ -168,7 +168,7 @@ class ModelParams:
         size = 1
         size *= self.transformer_block_count
         size *= 2  # K and V cache line
-        size *= self.attn_head_count
+        size *= self.paged_kv_cache.attention_head_count_kv
         size *= self.attn_head_dim
         return size
 

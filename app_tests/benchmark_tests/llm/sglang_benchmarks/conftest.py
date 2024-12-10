@@ -64,18 +64,18 @@ def pre_process_model(request, tmp_path_factory):
 
 
 @pytest.fixture(scope="module")
-def write_config(request, model_test_dir):
+def write_config(request, pre_process_model):
     batch_sizes = request.param["batch_sizes"]
     prefix_sharing_algorithm = request.param["prefix_sharing_algorithm"]
 
     # Construct the new config filename
     config_path = (
-        model_test_dir
+        pre_process_model
         / f"{'_'.join(str(bs) for bs in batch_sizes)}_{prefix_sharing_algorithm}.json"
     )
 
     # Read the base config file
-    base_config_path = model_test_dir / "config.json"
+    base_config_path = pre_process_model / "config.json"
     with open(base_config_path, "r") as f:
         config = json.load(f)
 
