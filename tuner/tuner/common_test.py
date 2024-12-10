@@ -86,10 +86,12 @@ def test_get_pipeline_config(tuner_ctx: common.TunerContext) -> None:
         subgroup_n_count=1,
     )
     pipeline_attr = iree_codegen.DispatchLoweringPassPipelineAttr.get(
-        iree_codegen.DispatchLoweringPassPipeline.None_
+        iree_codegen.DispatchLoweringPassPipeline.LLVMGPUVectorize
     )
     pipeline_option = iree_gpu.PipelineOptionsAttr.get()
-    pipeline_option_dict = ir.DictAttr.get({"gpu_pipeline_options": pipeline_option})
+    pipeline_option_dict = ir.DictAttr.get(
+        {common.GPU_PIPELINE_OPTIONS: pipeline_option}
+    )
     translation_info = iree_codegen.TranslationInfoAttr.get(
         pipeline_attr, None, [16, 16, 1], 32, pipeline_option_dict
     )
@@ -106,7 +108,9 @@ def test_get_pipeline_config(tuner_ctx: common.TunerContext) -> None:
     assert config2_str == ', llvm_func_attrs = {"amdgpu-waves-per-eu" = "4"}'
 
     pipeline_option = iree_gpu.PipelineOptionsAttr.get(prefetch_shared_memory=True)
-    pipeline_option_dict = ir.DictAttr.get({"gpu_pipeline_options": pipeline_option})
+    pipeline_option_dict = ir.DictAttr.get(
+        {common.GPU_PIPELINE_OPTIONS: pipeline_option}
+    )
     translation_info = iree_codegen.TranslationInfoAttr.get(
         pipeline_attr, None, [16, 16, 1], 32, pipeline_option_dict
     )
@@ -222,10 +226,12 @@ def test_get_lowering_config(tuner_ctx: common.TunerContext) -> None:
     )
 
     pipeline_attr = iree_codegen.DispatchLoweringPassPipelineAttr.get(
-        iree_codegen.DispatchLoweringPassPipeline.None_
+        iree_codegen.DispatchLoweringPassPipeline.LLVMGPUVectorize
     )
     pipeline_option = iree_gpu.PipelineOptionsAttr.get()
-    pipeline_option_dict = ir.DictAttr.get({"gpu_pipeline_options": pipeline_option})
+    pipeline_option_dict = ir.DictAttr.get(
+        {common.GPU_PIPELINE_OPTIONS: pipeline_option}
+    )
     translation_info = iree_codegen.TranslationInfoAttr.get(
         pipeline_attr, None, [16, 16, 1], 32, pipeline_option_dict
     )

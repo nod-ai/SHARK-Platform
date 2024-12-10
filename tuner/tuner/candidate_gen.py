@@ -52,7 +52,7 @@ def apply_configuration(
     workgroup_sizes = lowering_config.workgroup_tile_sizes
     reduction_sizes = lowering_config.reduction_tile_sizes
     gpu_pipeline_options = configuration.translation_info.configuration[
-        "gpu_pipeline_options"
+        GPU_PIPELINE_OPTIONS
     ]
     tune_logger.info(f"Applying: {configuration}")
     expr0 = re.compile(

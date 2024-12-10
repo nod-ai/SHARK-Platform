@@ -52,10 +52,12 @@ def test_get_mmt_tile_sizes(tuner_ctx: common.TunerContext) -> None:
         subgroup_n_count=4,
     )
     pipeline_attr = iree_codegen.DispatchLoweringPassPipelineAttr.get(
-        iree_codegen.DispatchLoweringPassPipeline.None_
+        iree_codegen.DispatchLoweringPassPipeline.LLVMGPUVectorize
     )
     pipeline_option = iree_gpu.PipelineOptionsAttr.get()
-    pipeline_option_dict = ir.DictAttr.get({"gpu_pipeline_options": pipeline_option})
+    pipeline_option_dict = ir.DictAttr.get(
+        {common.GPU_PIPELINE_OPTIONS: pipeline_option}
+    )
     translation_info = iree_codegen.TranslationInfoAttr.get(
         pipeline_attr, None, [], 0, pipeline_option_dict
     )
@@ -81,10 +83,12 @@ def test_get_conv_tile_sizes(tuner_ctx: common.TunerContext) -> None:
         subgroup_n_count=4,
     )
     pipeline_attr = iree_codegen.DispatchLoweringPassPipelineAttr.get(
-        iree_codegen.DispatchLoweringPassPipeline.None_
+        iree_codegen.DispatchLoweringPassPipeline.LLVMGPUVectorize
     )
     pipeline_option = iree_gpu.PipelineOptionsAttr.get()
-    pipeline_option_dict = ir.DictAttr.get({"gpu_pipeline_options": pipeline_option})
+    pipeline_option_dict = ir.DictAttr.get(
+        {common.GPU_PIPELINE_OPTIONS: pipeline_option}
+    )
     translation_info = iree_codegen.TranslationInfoAttr.get(
         pipeline_attr, None, [256, 1, 1], 64, pipeline_option_dict
     )
@@ -109,10 +113,12 @@ def test_get_contract_tile_sizes(tuner_ctx: common.TunerContext) -> None:
         subgroup_n_count=1,
     )
     pipeline_attr = iree_codegen.DispatchLoweringPassPipelineAttr.get(
-        iree_codegen.DispatchLoweringPassPipeline.None_
+        iree_codegen.DispatchLoweringPassPipeline.LLVMGPUVectorize
     )
     pipeline_option = iree_gpu.PipelineOptionsAttr.get()
-    pipeline_option_dict = ir.DictAttr.get({"gpu_pipeline_options": pipeline_option})
+    pipeline_option_dict = ir.DictAttr.get(
+        {common.GPU_PIPELINE_OPTIONS: pipeline_option}
+    )
     translation_info = iree_codegen.TranslationInfoAttr.get(
         pipeline_attr, None, [16, 16, 1], 32, pipeline_option_dict
     )
