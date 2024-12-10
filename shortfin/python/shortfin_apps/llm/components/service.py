@@ -29,6 +29,14 @@ PROG_ISOLATIONS = {
     isolation.name.lower(): isolation for isolation in sf.ProgramIsolation
 }
 
+import os
+
+SHORTFIN_DEBUG_LLM_SERVICE = os.getenv(
+    "SHORTFIN_DEBUG_LLM_SERVICE", "False"
+).lower() in ("true", "yes", "1", "y")
+if SHORTFIN_DEBUG_LLM_SERVICE:
+    from .debug_service import pre_invocation_debug_dump
+
 
 class GenerateService:
     """Top level service interface for generating text against a model."""
@@ -440,32 +448,8 @@ class InferenceExecutorProcess(sf.Process):
             )
 
             # pre-invocation args dump
-            try:
-                from .debug_service import pre_invocation_debug_dump
-
-                await pre_invocation_debug_dump(
-                    phase=self.phase,
-                    is_decode=is_decode,
-                    device0=device0,
-                    fn=fn,
-                    req_bs=req_bs,
-                    bsl=bsl,
-                    seq_stride=seq_stride,
-                    block_count=block_count,
-                    req_count=req_count,
-                    exec_requests=self.exec_requests,
-                    tokens=tokens,
-                    start_positions=start_positions if is_decode else None,
-                    seq_lens=seq_lens,
-                    seq_block_ids=seq_block_ids,
-                    model_params=self.service.model_params,
-                    args=args,
-                )
-            except Exception as e:
-                err_msg = (
-                    f"Error Type: {type(e).__name__}\n" f"Error Message: {str(e)}\n"
-                )
-                logger.info(f"Non-critical failure: debug logging failed due to {e}")
+            if SHORTFIN_DEBUG_LLM_SERVICE:
+                await pre_invocation_debug_dump(executor=self, local_vars=locals())
 
             # invoke VMFB
             (logits,) = await fn(*args, fiber=self.fiber)

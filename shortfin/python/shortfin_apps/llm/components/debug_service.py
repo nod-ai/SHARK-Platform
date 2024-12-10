@@ -15,7 +15,7 @@ from pathlib import Path
 import json
 import numpy as np
 import pandas as pd
-from typing import List
+from typing import List, Dict, Any
 from pprint import pformat
 
 logger = logging.getLogger(__name__)
@@ -30,9 +30,9 @@ if SHORTFIN_DEBUG_LLM_SERVICE:
     logger.info("DEBUG_LLM_SERVICE=True")
     dump_id = 0
     boot_timestamp = datetime.now().isoformat()
-    DEBUG_DATA_DIR = Path.home() / "sfdebug"
+    DEBUG_DATA_DIR = Path.home() / ".shortfin/debug/"
     DUMP_DIR_THIS_SESSION = (
-        DEBUG_DATA_DIR / f"llm_service_invocation_dumps_from_{boot_timestamp}"
+        DEBUG_DATA_DIR / "llm_service_invocation_dumps" / "{boot_timestamp}"
     )
     DUMP_DIR_THIS_SESSION.mkdir(parents=True, exist_ok=False)
     logger.info(
@@ -41,26 +41,28 @@ if SHORTFIN_DEBUG_LLM_SERVICE:
 
 
 async def pre_invocation_debug_dump(
-    phase,
-    is_decode,
-    device0,
-    fn,
-    req_bs,
-    bsl,
-    seq_stride,
-    block_count,
-    req_count,
-    exec_requests,
-    tokens,
-    start_positions,
-    seq_lens,
-    seq_block_ids,
-    model_params,
-    args,
+    executor: "InferenceExecutorProcess", local_vars: Dict[str, Any]
 ):
     """Comprehensive debug dump before inference invocation."""
-    if not SHORTFIN_DEBUG_LLM_SERVICE:
-        return
+
+    # Extract variables from locals
+    is_decode = local_vars["is_decode"]
+    device0 = local_vars["device0"]
+    fn = local_vars["fn"]
+    req_bs = local_vars["req_bs"]
+    bsl = local_vars["bsl"]
+    seq_stride = local_vars["seq_stride"]
+    block_count = local_vars["block_count"]
+    req_count = local_vars["req_count"]
+    tokens = local_vars["tokens"]
+    start_positions = local_vars.get("start_positions")
+    seq_lens = local_vars["seq_lens"]
+    seq_block_ids = local_vars["seq_block_ids"]
+    args = local_vars["args"]
+
+    phase = executor.phase
+    exec_requests = executor.exec_requests
+    model_params = executor.service.model_params
 
     global dump_id
     dump_path = DUMP_DIR_THIS_SESSION / f"{dump_id}"
