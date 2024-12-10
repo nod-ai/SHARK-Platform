@@ -488,14 +488,20 @@ class ClipTextModel(ThetaLayer):
         self.text_model.embeddings.token_embedding = value
 
     def sample_inputs(self, batch_size: int) -> OrderedDict[str, AnyTensor]:
+        input_ids = (
+            torch.arange(
+                start=0,
+                end=batch_size * self.config.max_position_embeddings,
+                dtype=torch.long,
+            )
+            % self.config.vocab_size
+        )
+        input_ids = input_ids.reshape([batch_size, self.config.max_position_embeddings])
         return OrderedDict(
             [
                 (
                     "input_ids",
-                    torch.empty(
-                        size=[batch_size, self.config.max_position_embeddings],
-                        dtype=torch.long,
-                    ),
+                    input_ids,
                 )
             ]
         )
