@@ -14,6 +14,7 @@ from typing import Generator
 
 from iree.compiler import ir  # type: ignore
 from iree.compiler.dialects import iree_gpu  # type: ignore
+from iree.compiler.dialects import iree_codegen  # type: ignore
 
 from . import candidate_gen
 from . import common
@@ -56,13 +57,17 @@ def test_apply_params_mmt(tuner_ctx: common.TunerContext) -> None:
         subgroup_m_count=16,
         subgroup_n_count=16,
     )
+    pipeline_attr = iree_codegen.DispatchLoweringPassPipelineAttr.get(
+        iree_codegen.DispatchLoweringPassPipeline.None_
+    )
+    pipeline_option = iree_gpu.PipelineOptionsAttr.get(prefetch_shared_memory=True)
+    pipeline_option_dict = ir.DictAttr.get({"gpu_pipeline_options": pipeline_option})
+    translation_info = iree_codegen.TranslationInfoAttr.get(
+        pipeline_attr, None, [16, 16, 1], 16, pipeline_option_dict
+    )
     config = common.Configuration(
-        subgroup_size=16,
-        workgroup_size=[16, 16, 1],
+        translation_info=translation_info,
         lowering_config=lowering_config,
-        gpu_pipeline_options=iree_gpu.PipelineOptionsAttr.get(
-            prefetch_shared_memory=True
-        ),
         waves_per_eu=8,
     )
 
@@ -118,15 +123,21 @@ def test_apply_params_conv(tuner_ctx: common.TunerContext) -> None:
         subgroup_m_count=1,
         subgroup_n_count=4,
     )
+    pipeline_attr = iree_codegen.DispatchLoweringPassPipelineAttr.get(
+        iree_codegen.DispatchLoweringPassPipeline.None_
+    )
+    pipeline_option = iree_gpu.PipelineOptionsAttr.get(
+        reorder_workgroups_strategy=iree_gpu.ReorderWorkgroupsStrategyAttr.get(
+            iree_gpu.ReorderWorkgroupsStrategy.Transpose
+        )
+    )
+    pipeline_option_dict = ir.DictAttr.get({"gpu_pipeline_options": pipeline_option})
+    translation_info = iree_codegen.TranslationInfoAttr.get(
+        pipeline_attr, None, [256, 1, 1], 64, pipeline_option_dict
+    )
     config = common.Configuration(
-        subgroup_size=64,
-        workgroup_size=[256, 1, 1],
+        translation_info=translation_info,
         lowering_config=lowering_config,
-        gpu_pipeline_options=iree_gpu.PipelineOptionsAttr.get(
-            reorder_workgroups_strategy=iree_gpu.ReorderWorkgroupsStrategyAttr.get(
-                iree_gpu.ReorderWorkgroupsStrategy.Transpose
-            )
-        ),
         waves_per_eu=2,
     )
 
@@ -191,11 +202,17 @@ def test_apply_params_contract(tuner_ctx: common.TunerContext) -> None:
         subgroup_m_count=1,
         subgroup_n_count=4,
     )
+    pipeline_attr = iree_codegen.DispatchLoweringPassPipelineAttr.get(
+        iree_codegen.DispatchLoweringPassPipeline.None_
+    )
+    pipeline_option = iree_gpu.PipelineOptionsAttr.get()
+    pipeline_option_dict = ir.DictAttr.get({"gpu_pipeline_options": pipeline_option})
+    translation_info = iree_codegen.TranslationInfoAttr.get(
+        pipeline_attr, None, [256, 1, 1], 64, pipeline_option_dict
+    )
     config = common.Configuration(
-        subgroup_size=64,
-        workgroup_size=[256, 1, 1],
+        translation_info=translation_info,
         lowering_config=lowering_config,
-        gpu_pipeline_options=iree_gpu.PipelineOptionsAttr.get(),
         waves_per_eu=2,
     )
 
@@ -246,11 +263,17 @@ def test_apply_params_batch_matmul(tuner_ctx: common.TunerContext) -> None:
         subgroup_m_count=2,
         subgroup_n_count=2,
     )
+    pipeline_attr = iree_codegen.DispatchLoweringPassPipelineAttr.get(
+        iree_codegen.DispatchLoweringPassPipeline.None_
+    )
+    pipeline_option = iree_gpu.PipelineOptionsAttr.get()
+    pipeline_option_dict = ir.DictAttr.get({"gpu_pipeline_options": pipeline_option})
+    translation_info = iree_codegen.TranslationInfoAttr.get(
+        pipeline_attr, None, [128, 2, 1], 64, pipeline_option_dict
+    )
     config = common.Configuration(
-        subgroup_size=64,
-        workgroup_size=[128, 2, 1],
+        translation_info=translation_info,
         lowering_config=lowering_config,
-        gpu_pipeline_options=iree_gpu.PipelineOptionsAttr.get(),
         waves_per_eu=2,
     )
 
@@ -304,11 +327,17 @@ def test_apply_params_batch_mmt_float(tuner_ctx: common.TunerContext) -> None:
         subgroup_m_count=2,
         subgroup_n_count=2,
     )
+    pipeline_attr = iree_codegen.DispatchLoweringPassPipelineAttr.get(
+        iree_codegen.DispatchLoweringPassPipeline.None_
+    )
+    pipeline_option = iree_gpu.PipelineOptionsAttr.get()
+    pipeline_option_dict = ir.DictAttr.get({"gpu_pipeline_options": pipeline_option})
+    translation_info = iree_codegen.TranslationInfoAttr.get(
+        pipeline_attr, None, [128, 2, 1], 64, pipeline_option_dict
+    )
     config = common.Configuration(
-        subgroup_size=64,
-        workgroup_size=[128, 2, 1],
+        translation_info=translation_info,
         lowering_config=lowering_config,
-        gpu_pipeline_options=iree_gpu.PipelineOptionsAttr.get(),
         waves_per_eu=2,
     )
 
@@ -360,11 +389,17 @@ def test_apply_params_batch_mmt_int(tuner_ctx: common.TunerContext) -> None:
         subgroup_m_count=2,
         subgroup_n_count=2,
     )
+    pipeline_attr = iree_codegen.DispatchLoweringPassPipelineAttr.get(
+        iree_codegen.DispatchLoweringPassPipeline.None_
+    )
+    pipeline_option = iree_gpu.PipelineOptionsAttr.get()
+    pipeline_option_dict = ir.DictAttr.get({"gpu_pipeline_options": pipeline_option})
+    translation_info = iree_codegen.TranslationInfoAttr.get(
+        pipeline_attr, None, [128, 2, 1], 64, pipeline_option_dict
+    )
     config = common.Configuration(
-        subgroup_size=64,
-        workgroup_size=[128, 2, 1],
+        translation_info=translation_info,
         lowering_config=lowering_config,
-        gpu_pipeline_options=iree_gpu.PipelineOptionsAttr.get(),
         waves_per_eu=4,
     )
 
@@ -440,11 +475,17 @@ def test_apply_params_broadcast_rhs_mmt(tuner_ctx: common.TunerContext) -> None:
         subgroup_m_count=2,
         subgroup_n_count=2,
     )
+    pipeline_attr = iree_codegen.DispatchLoweringPassPipelineAttr.get(
+        iree_codegen.DispatchLoweringPassPipeline.None_
+    )
+    pipeline_option = iree_gpu.PipelineOptionsAttr.get()
+    pipeline_option_dict = ir.DictAttr.get({"gpu_pipeline_options": pipeline_option})
+    translation_info = iree_codegen.TranslationInfoAttr.get(
+        pipeline_attr, None, [128, 2, 1], 64, pipeline_option_dict
+    )
     config = common.Configuration(
-        subgroup_size=64,
-        workgroup_size=[128, 2, 1],
+        translation_info=translation_info,
         lowering_config=lowering_config,
-        gpu_pipeline_options=iree_gpu.PipelineOptionsAttr.get(),
         waves_per_eu=4,
     )
 

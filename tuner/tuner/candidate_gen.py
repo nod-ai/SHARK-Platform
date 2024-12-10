@@ -51,6 +51,9 @@ def apply_configuration(
     ) = lowering_config.subgroup_count_mn
     workgroup_sizes = lowering_config.workgroup_tile_sizes
     reduction_sizes = lowering_config.reduction_tile_sizes
+    gpu_pipeline_options = configuration.translation_info.configuration[
+        "gpu_pipeline_options"
+    ]
     tune_logger.info(f"Applying: {configuration}")
     expr0 = re.compile(
         r"<intrinsic = #iree_gpu\.mma_layout<(.+)>, subgroup_m_count = ([0-9]+), subgroup_n_count = ([0-9]+)>"
@@ -63,10 +66,10 @@ def apply_configuration(
     expr4 = re.compile(r"gpu_pipeline_options = #iree_gpu\.pipeline_options<([^>]*)>")
     expr5 = re.compile(r"\"amdgpu-waves-per-eu\" = \"([0-9])\"")
     repl0 = f"<intrinsic = {intrinsic}, subgroup_m_count = {subgroup_m_count}, subgroup_n_count = {subgroup_n_count}>"
-    repl1 = f'LLVMGPUVectorDistribute workgroup_size = [{", ".join(map(str, configuration.workgroup_size))}] subgroup_size = {configuration.subgroup_size},'
+    repl1 = f'LLVMGPUVectorDistribute workgroup_size = [{", ".join(map(str, configuration.translation_info.workgroup_size))}] subgroup_size = {configuration.translation_info.subgroup_size},'
     repl2 = f"workgroup = {workgroup_sizes}"
     repl3 = f"reduction = {reduction_sizes}"
-    repl4 = f"gpu_pipeline_options = {configuration.gpu_pipeline_options}"
+    repl4 = f"gpu_pipeline_options = {gpu_pipeline_options}"
     repl5 = f'"amdgpu-waves-per-eu" = "{configuration.waves_per_eu}"'
 
     new_mlir = ""
@@ -135,7 +138,7 @@ class MmtTuner(DispatchTuner, MmtParser):
             subgroup_n_count,
         ) = lowering_config.subgroup_count_mn
 
-        wg_x, wg_y, wg_z = configuration.workgroup_size
+        wg_x, wg_y, wg_z = configuration.translation_info.workgroup_size
         extra_config = get_pipeline_config(configuration)
         return f"""
     transform.named_sequence @{functionName}(%matmul: !transform.any_op {{transform.readonly}}) -> (!transform.any_op, !transform.any_param) {{
@@ -147,7 +150,7 @@ class MmtTuner(DispatchTuner, MmtParser):
     %config = transform.param.constant #iree_codegen.compilation_info<
         lowering_config = {configuration.lowering_config}>,
         translation_info = #iree_codegen.translation_info<LLVMGPUVectorDistribute
-        workgroup_size = [{wg_x}, {wg_y}, {wg_z}] subgroup_size = {configuration.subgroup_size},
+        workgroup_size = [{wg_x}, {wg_y}, {wg_z}] subgroup_size = {configuration.translation_info.subgroup_size},
         {{mma_schedule = #iree_gpu.mma_schedule<
             intrinsic = {intrinsic},
             subgroup_m_count = {subgroup_m_count}, subgroup_n_count = {subgroup_n_count}>
@@ -204,7 +207,7 @@ class ConvTuner(DispatchTuner, ConvParser):
             subgroup_n_count,
         ) = lowering_config.subgroup_count_mn
 
-        wg_x, wg_y, wg_z = configuration.workgroup_size
+        wg_x, wg_y, wg_z = configuration.translation_info.workgroup_size
         extra_config = get_pipeline_config(configuration)
 
         return f"""
@@ -219,7 +222,7 @@ class ConvTuner(DispatchTuner, ConvParser):
         %config = transform.param.constant #iree_codegen.compilation_info<
         lowering_config = {configuration.lowering_config}>,
         translation_info = #iree_codegen.translation_info<LLVMGPUVectorDistribute
-        workgroup_size = [{wg_x}, {wg_y}, {wg_z}] subgroup_size = {configuration.subgroup_size},
+        workgroup_size = [{wg_x}, {wg_y}, {wg_z}] subgroup_size = {configuration.translation_info.subgroup_size},
             {{mma_schedule = #iree_gpu.mma_schedule<
                 intrinsic = {intrinsic},
                 subgroup_m_count = {subgroup_m_count}, subgroup_n_count = {subgroup_n_count}>
@@ -269,7 +272,7 @@ class ContractionTuner(DispatchTuner, ContractionParser):
             subgroup_n_count,
         ) = lowering_config.subgroup_count_mn
 
-        wg_x, wg_y, wg_z = configuration.workgroup_size
+        wg_x, wg_y, wg_z = configuration.translation_info.workgroup_size
         extra_config = get_pipeline_config(configuration)
 
         lhs_dynamic_batch = problem_size.lhs_type
@@ -286,7 +289,7 @@ transform.iree.match.cast_compatible_type %rhs = tensor<{problem_size.rhs_type}>
 %config = transform.param.constant #iree_codegen.compilation_info<
     lowering_config = {configuration.lowering_config}>,
     translation_info = #iree_codegen.translation_info<LLVMGPUVectorDistribute
-    workgroup_size = [{wg_x}, {wg_y}, {wg_z}] subgroup_size = {configuration.subgroup_size},
+    workgroup_size = [{wg_x}, {wg_y}, {wg_z}] subgroup_size = {configuration.translation_info.subgroup_size},
     {{mma_schedule = #iree_gpu.mma_schedule<
         intrinsic = {intrinsic},
         subgroup_m_count = {subgroup_m_count}, subgroup_n_count = {subgroup_n_count}>
@@ -358,7 +361,7 @@ class BatchMmtTuner(DispatchTuner, BatchMmtParser):
             subgroup_n_count,
         ) = lowering_config.subgroup_count_mn
 
-        wg_x, wg_y, wg_z = configuration.workgroup_size
+        wg_x, wg_y, wg_z = configuration.translation_info.workgroup_size
         extra_config = get_pipeline_config(configuration)
 
         return f"""
@@ -371,7 +374,7 @@ transform.iree.match.cast_compatible_type %rhs = tensor<{problem_size.rhs_type}>
 %config = transform.param.constant #iree_codegen.compilation_info<
     lowering_config = {configuration.lowering_config}>,
     translation_info = #iree_codegen.translation_info<LLVMGPUVectorDistribute
-    workgroup_size = [{wg_x}, {wg_y}, {wg_z}] subgroup_size = {configuration.subgroup_size},
+    workgroup_size = [{wg_x}, {wg_y}, {wg_z}] subgroup_size = {configuration.translation_info.subgroup_size},
     {{mma_schedule = #iree_gpu.mma_schedule<
         intrinsic = {intrinsic},
         subgroup_m_count = {subgroup_m_count}, subgroup_n_count = {subgroup_n_count}>
@@ -428,7 +431,7 @@ class BatchMatmulTuner(DispatchTuner, BatchMatmulParser):
             subgroup_n_count,
         ) = lowering_config.subgroup_count_mn
 
-        wg_x, wg_y, wg_z = configuration.workgroup_size
+        wg_x, wg_y, wg_z = configuration.translation_info.workgroup_size
         extra_config = get_pipeline_config(configuration)
 
         return f"""
@@ -443,7 +446,7 @@ class BatchMatmulTuner(DispatchTuner, BatchMatmulParser):
         %config = transform.param.constant #iree_codegen.compilation_info<
         lowering_config = {configuration.lowering_config}>,
         translation_info = #iree_codegen.translation_info<LLVMGPUPadAndVectorDistribute
-        workgroup_size = [{wg_x}, {wg_y}, {wg_z}] subgroup_size = {configuration.subgroup_size},
+        workgroup_size = [{wg_x}, {wg_y}, {wg_z}] subgroup_size = {configuration.translation_info.subgroup_size},
             {{mma_schedule = #iree_gpu.mma_schedule<
                 intrinsic = {intrinsic},
                 subgroup_m_count = {subgroup_m_count}, subgroup_n_count = {subgroup_n_count}>
