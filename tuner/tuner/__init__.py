@@ -9,7 +9,7 @@ from iree.compiler import ir
 # substitute replace=True so that colliding registration don't error
 def register_attribute_builder(kind, replace=True):
     def decorator_builder(func):
-        AttrBuilder.insert(kind, func, replace=replace)
+        ir.AttrBuilder.insert(kind, func, replace=replace)
         return func
 
     return decorator_builder
