@@ -39,8 +39,8 @@ from sharktank.types import (
 )
 from sharktank.transforms.dataset import set_float_dtype
 from sharktank.utils.hf_datasets import get_dataset
-from sharktank.utils.math import cosine_similarity
 from sharktank.utils.testing import (
+    assert_text_encoder_state_close,
     make_rand_torch,
     make_random_mask,
     TempDirTestBase,
@@ -70,33 +70,6 @@ from sharktank.layers.configs.llm_configs import ClipTextConfig
 from sharktank import ops
 
 with_clip_data = pytest.mark.skipif("not config.getoption('with_clip_data')")
-
-
-def assert_last_hidden_states_close(
-    actual: torch.Tensor, expected: torch.Tensor, atol: float
-):
-    """The cosine similarity has been suggested to compare encoder states.
-
-    Dehua Peng, Zhipeng Gui, Huayi Wu -
-    Interpreting the Curse of Dimensionality from Distance Concentration and Manifold
-    Effect (2023)
-
-    shows that cosine and all Minkowski distances suffer from the curse of
-    dimensionality.
-    The cosine similarity ignores the vector magnitudes. We can probably come up with a
-    better metric, but this is maybe good enough.
-    """
-    cosine_similarity_per_token = cosine_similarity(
-        actual,
-        expected,
-        dim=-1,
-    )
-    torch.testing.assert_close(
-        cosine_similarity_per_token,
-        torch.ones_like(cosine_similarity_per_token),
-        atol=atol,
-        rtol=0,
-    )
 
 
 @pytest.mark.usefixtures("caching", "path_prefix")
@@ -241,7 +214,7 @@ class ClipTextIreeTest(TempDirTestBase):
         actual_last_hidden_states = actual_outputs[0]
         expected_last_hidden_states = expected_outputs[0]
 
-        assert_last_hidden_states_close(
+        assert_text_encoder_state_close(
             actual_last_hidden_states, expected_last_hidden_states, atol
         )
 
@@ -390,7 +363,7 @@ class ClipTextEagerTest(TestCase):
             actual_outputs,
         )
 
-        assert_last_hidden_states_close(
+        assert_text_encoder_state_close(
             actual_outputs["last_hidden_state"],
             expected_outputs["last_hidden_state"],
             atol=atol,
