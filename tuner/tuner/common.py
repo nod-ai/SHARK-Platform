@@ -14,6 +14,7 @@ from typing import Any
 from iree.compiler import ir  # type: ignore
 
 from iree.compiler.dialects import iree_gpu  # type: ignore
+from iree.compiler.dialects import iree_codegen  # type: ignore
 
 
 class CommonTypes:
@@ -112,10 +113,8 @@ def get_compatible_mfma_intrinsics(
 
 @dataclass
 class Configuration:
-    subgroup_size: int
-    workgroup_size: list[int]
+    translation_info: iree_codegen.TranslationInfoAttr
     lowering_config: iree_gpu.LoweringConfigAttr
-    gpu_pipeline_options: iree_gpu.PipelineOptionsAttr
     waves_per_eu: int
 
 
@@ -159,7 +158,9 @@ def get_lowering_config(
 
 def get_pipeline_config(configuration: Configuration) -> str:
     extra_config = ""
-    pipeline_options = configuration.gpu_pipeline_options
+    pipeline_options = configuration.translation_info.configuration[
+        "gpu_pipeline_options"
+    ]
     if pipeline_options != iree_gpu.PipelineOptionsAttr.get():
         extra_config += f", gpu_pipeline_options = {pipeline_options}"
 
