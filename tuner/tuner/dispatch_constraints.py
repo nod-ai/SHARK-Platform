@@ -247,17 +247,25 @@ def generate_solutions(
         pipeline_attr = iree_codegen.DispatchLoweringPassPipelineAttr.get(
             iree_codegen.DispatchLoweringPassPipeline.LLVMGPUVectorDistribute
         )
-        pipeline_option = iree_gpu.PipelineOptionsAttr.get()
-        pipeline_option_dict = ir.DictAttr.get({GPU_PIPELINE_OPTIONS: pipeline_option})
+        pipeline_options = iree_gpu.PipelineOptionsAttr.get()
+        waves_per_eu_dict = ir.DictAttr.get(
+            {WAVES_PER_EU_KEY: ir.StringAttr.get(str(lookup(waves_per_eu)))}
+        )
+        config_dict = ir.DictAttr.get(
+            {
+                GPU_PIPELINE_OPTIONS_KEY: pipeline_options,
+                LLVM_FUNC_ATTRS_KEY: waves_per_eu_dict,
+            }
+        )
 
         translation_info = iree_codegen.TranslationInfoAttr.get(
             pipeline_attr,
             None,
             [lookup(wg_x), lookup(wg_y), lookup(wg_z)],
             lookup(subgroup_size),
-            pipeline_option_dict,
+            config_dict,
         )
-        config = Configuration(translation_info, lowering_config, lookup(waves_per_eu))
+        config = Configuration(translation_info, lowering_config)
         solver.add(z3.simplify(z3.Not(z3.And(list(x == model[x] for x in all_vars)))))
         i += 1
         yield config

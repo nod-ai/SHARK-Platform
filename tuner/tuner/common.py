@@ -115,11 +115,14 @@ def get_compatible_mfma_intrinsics(
 class Configuration:
     translation_info: iree_codegen.TranslationInfoAttr
     lowering_config: iree_gpu.LoweringConfigAttr
-    waves_per_eu: int
 
 
 # The key name for GPUPipelineOptionsAttr in the translation info config dictionary.
-GPU_PIPELINE_OPTIONS = "gpu_pipeline_options"
+GPU_PIPELINE_OPTIONS_KEY = "gpu_pipeline_options"
+# The key name for llvm_func_attrs attribute in the translation info config dictionary.
+LLVM_FUNC_ATTRS_KEY = "llvm_func_attrs"
+# The Key name for the 'amdgpu-waves-per-eu' within the llvm_func_attrs attribute.
+WAVES_PER_EU_KEY = "amdgpu-waves-per-eu"
 
 
 def get_lowering_config(
@@ -158,19 +161,6 @@ def get_lowering_config(
         lowering_config_dict[key] = promoted_value
     lowering_config_attrs = ir.DictAttr.get(lowering_config_dict)
     return iree_gpu.LoweringConfigAttr.get(lowering_config_attrs)
-
-
-def get_pipeline_config(configuration: Configuration) -> str:
-    extra_config = ""
-    pipeline_options = configuration.translation_info.configuration[
-        GPU_PIPELINE_OPTIONS
-    ]
-    if pipeline_options != iree_gpu.PipelineOptionsAttr.get():
-        extra_config += f", gpu_pipeline_options = {pipeline_options}"
-
-    if configuration.waves_per_eu != 2:
-        extra_config += f', llvm_func_attrs = {{"amdgpu-waves-per-eu" = "{configuration.waves_per_eu}"}}'
-    return extra_config
 
 
 def read_input_mlir(filename: str) -> list[str]:
