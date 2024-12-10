@@ -52,19 +52,22 @@ def test_get_mmt_tile_sizes(tuner_ctx: common.TunerContext) -> None:
         subgroup_n_count=4,
     )
     pipeline_attr = iree_codegen.DispatchLoweringPassPipelineAttr.get(
-        iree_codegen.DispatchLoweringPassPipeline.LLVMGPUVectorize
+        iree_codegen.DispatchLoweringPassPipeline.LLVMGPUVectorDistribute
     )
-    pipeline_option = iree_gpu.PipelineOptionsAttr.get()
-    pipeline_option_dict = ir.DictAttr.get(
-        {common.GPU_PIPELINE_OPTIONS: pipeline_option}
+    pipeline_options = iree_gpu.PipelineOptionsAttr.get()
+    waves_per_eu_dict = ir.DictAttr.get({"amdgpu-waves-per-eu": ir.StringAttr.get("0")})
+    config_dict = ir.DictAttr.get(
+        {
+            common.GPU_PIPELINE_OPTIONS_KEY: pipeline_options,
+            common.LLVM_FUNC_ATTRS_KEY: waves_per_eu_dict,
+        }
     )
     translation_info = iree_codegen.TranslationInfoAttr.get(
-        pipeline_attr, None, [], 0, pipeline_option_dict
+        pipeline_attr, None, [], 0, config_dict
     )
     config = common.Configuration(
         translation_info=translation_info,
         lowering_config=lowering_config,
-        waves_per_eu=0,
     )
     lowering_config = config.lowering_config
     assert lowering_config.workgroup_tile_sizes == [128, 320, 0]
@@ -83,19 +86,22 @@ def test_get_conv_tile_sizes(tuner_ctx: common.TunerContext) -> None:
         subgroup_n_count=4,
     )
     pipeline_attr = iree_codegen.DispatchLoweringPassPipelineAttr.get(
-        iree_codegen.DispatchLoweringPassPipeline.LLVMGPUVectorize
+        iree_codegen.DispatchLoweringPassPipeline.LLVMGPUVectorDistribute
     )
-    pipeline_option = iree_gpu.PipelineOptionsAttr.get()
-    pipeline_option_dict = ir.DictAttr.get(
-        {common.GPU_PIPELINE_OPTIONS: pipeline_option}
+    pipeline_options = iree_gpu.PipelineOptionsAttr.get()
+    waves_per_eu_dict = ir.DictAttr.get({"amdgpu-waves-per-eu": ir.StringAttr.get("1")})
+    config_dict = ir.DictAttr.get(
+        {
+            common.GPU_PIPELINE_OPTIONS_KEY: pipeline_options,
+            common.LLVM_FUNC_ATTRS_KEY: waves_per_eu_dict,
+        }
     )
     translation_info = iree_codegen.TranslationInfoAttr.get(
-        pipeline_attr, None, [256, 1, 1], 64, pipeline_option_dict
+        pipeline_attr, None, [256, 1, 1], 64, config_dict
     )
     config = common.Configuration(
         translation_info=translation_info,
         lowering_config=lowering_config,
-        waves_per_eu=1,
     )
     assert config.lowering_config.workgroup_tile_sizes == [1, 1, 464, 320, 1, 1, 0]
     assert config.lowering_config.reduction_tile_sizes == [0, 0, 0, 0, 0, 0, 16]
@@ -113,19 +119,22 @@ def test_get_contract_tile_sizes(tuner_ctx: common.TunerContext) -> None:
         subgroup_n_count=1,
     )
     pipeline_attr = iree_codegen.DispatchLoweringPassPipelineAttr.get(
-        iree_codegen.DispatchLoweringPassPipeline.LLVMGPUVectorize
+        iree_codegen.DispatchLoweringPassPipeline.LLVMGPUVectorDistribute
     )
-    pipeline_option = iree_gpu.PipelineOptionsAttr.get()
-    pipeline_option_dict = ir.DictAttr.get(
-        {common.GPU_PIPELINE_OPTIONS: pipeline_option}
+    pipeline_options = iree_gpu.PipelineOptionsAttr.get()
+    waves_per_eu_dict = ir.DictAttr.get({"amdgpu-waves-per-eu": ir.StringAttr.get("2")})
+    config_dict = ir.DictAttr.get(
+        {
+            common.GPU_PIPELINE_OPTIONS_KEY: pipeline_options,
+            common.LLVM_FUNC_ATTRS_KEY: waves_per_eu_dict,
+        }
     )
     translation_info = iree_codegen.TranslationInfoAttr.get(
-        pipeline_attr, None, [16, 16, 1], 32, pipeline_option_dict
+        pipeline_attr, None, [16, 16, 1], 32, config_dict
     )
     config = common.Configuration(
         translation_info=translation_info,
         lowering_config=lowering_config,
-        waves_per_eu=2,
     )
     assert dispatch_parser.get_contract_workgroup_sizes(config, "mnk") == [4, 8, 0]
     assert dispatch_parser.get_contract_reduction_sizes(config, "mnk") == [0, 0, 16]

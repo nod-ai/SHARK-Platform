@@ -86,43 +86,45 @@ def test_get_pipeline_config(tuner_ctx: common.TunerContext) -> None:
         subgroup_n_count=1,
     )
     pipeline_attr = iree_codegen.DispatchLoweringPassPipelineAttr.get(
-        iree_codegen.DispatchLoweringPassPipeline.LLVMGPUVectorize
+        iree_codegen.DispatchLoweringPassPipeline.LLVMGPUVectorDistribute
     )
-    pipeline_option = iree_gpu.PipelineOptionsAttr.get()
-    pipeline_option_dict = ir.DictAttr.get(
-        {common.GPU_PIPELINE_OPTIONS: pipeline_option}
+    pipeline_options = iree_gpu.PipelineOptionsAttr.get()
+    waves_per_eu_dict = ir.DictAttr.get({"amdgpu-waves-per-eu": ir.StringAttr.get("2")})
+    config_dict = ir.DictAttr.get(
+        {
+            common.GPU_PIPELINE_OPTIONS_KEY: pipeline_options,
+            common.LLVM_FUNC_ATTRS_KEY: waves_per_eu_dict,
+        }
     )
     translation_info = iree_codegen.TranslationInfoAttr.get(
-        pipeline_attr, None, [16, 16, 1], 32, pipeline_option_dict
+        pipeline_attr, None, [16, 16, 1], 32, config_dict
     )
     config = common.Configuration(
         translation_info=translation_info,
         lowering_config=lowering_config,
-        waves_per_eu=2,
     )
-    config1_str: str = common.get_pipeline_config(config)
-    assert config1_str == ""
+    config1_str: str = str(config.translation_info.configuration["llvm_func_attrs"])
+    assert config1_str == '{"amdgpu-waves-per-eu" = "2"}'
 
-    config.waves_per_eu = 4
-    config2_str: str = common.get_pipeline_config(config)
-    assert config2_str == ', llvm_func_attrs = {"amdgpu-waves-per-eu" = "4"}'
-
-    pipeline_option = iree_gpu.PipelineOptionsAttr.get(prefetch_shared_memory=True)
-    pipeline_option_dict = ir.DictAttr.get(
-        {common.GPU_PIPELINE_OPTIONS: pipeline_option}
+    pipeline_options = iree_gpu.PipelineOptionsAttr.get(prefetch_shared_memory=True)
+    waves_per_eu_dict = ir.DictAttr.get({"amdgpu-waves-per-eu": ir.StringAttr.get("4")})
+    config_dict = ir.DictAttr.get(
+        {
+            common.GPU_PIPELINE_OPTIONS_KEY: pipeline_options,
+            "llvm_func_attrs": waves_per_eu_dict,
+        }
     )
     translation_info = iree_codegen.TranslationInfoAttr.get(
-        pipeline_attr, None, [16, 16, 1], 32, pipeline_option_dict
+        pipeline_attr, None, [16, 16, 1], 32, config_dict
     )
     config = common.Configuration(
         translation_info=translation_info,
         lowering_config=lowering_config,
-        waves_per_eu=4,
     )
-    config3_str = common.get_pipeline_config(config)
+    config2_str: str = str(config.translation_info.configuration)
     assert (
-        config3_str
-        == ', gpu_pipeline_options = #iree_gpu.pipeline_options<prefetch_shared_memory = true>, llvm_func_attrs = {"amdgpu-waves-per-eu" = "4"}'
+        config2_str
+        == '{gpu_pipeline_options = #iree_gpu.pipeline_options<prefetch_shared_memory = true>, llvm_func_attrs = {"amdgpu-waves-per-eu" = "4"}}'
     )
 
 
@@ -226,19 +228,22 @@ def test_get_lowering_config(tuner_ctx: common.TunerContext) -> None:
     )
 
     pipeline_attr = iree_codegen.DispatchLoweringPassPipelineAttr.get(
-        iree_codegen.DispatchLoweringPassPipeline.LLVMGPUVectorize
+        iree_codegen.DispatchLoweringPassPipeline.LLVMGPUVectorDistribute
     )
-    pipeline_option = iree_gpu.PipelineOptionsAttr.get()
-    pipeline_option_dict = ir.DictAttr.get(
-        {common.GPU_PIPELINE_OPTIONS: pipeline_option}
+    pipeline_options = iree_gpu.PipelineOptionsAttr.get()
+    waves_per_eu_dict = ir.DictAttr.get({"amdgpu-waves-per-eu": ir.StringAttr.get("2")})
+    config_dict = ir.DictAttr.get(
+        {
+            common.GPU_PIPELINE_OPTIONS_KEY: pipeline_options,
+            "llvm_func_attrs": waves_per_eu_dict,
+        }
     )
     translation_info = iree_codegen.TranslationInfoAttr.get(
-        pipeline_attr, None, [16, 16, 1], 32, pipeline_option_dict
+        pipeline_attr, None, [16, 16, 1], 32, config_dict
     )
     config = common.Configuration(
         translation_info=translation_info,
         lowering_config=lowering_config,
-        waves_per_eu=2,
     )
 
     assert config.lowering_config.mma_kind is None
