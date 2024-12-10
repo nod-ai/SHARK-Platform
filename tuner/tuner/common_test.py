@@ -217,3 +217,10 @@ def test_get_lowering_config(tuner_ctx: common.TunerContext) -> None:
 
     assert config.lowering_config.mma_kind is None
     assert config.lowering_config.subgroup_count_mn == (1, 1)
+
+
+def test_enum_collision():
+    from iree.compiler.dialects import linalg, vector
+
+    linalg_iter_type_e = linalg._iteratortype(0, None)
+    vector_iter_type_e = vector._vector_iteratortype(0, None)
