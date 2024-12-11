@@ -51,6 +51,12 @@ def apply_configuration(
     ) = lowering_config.subgroup_count_mn
     workgroup_sizes = lowering_config.workgroup_tile_sizes
     reduction_sizes = lowering_config.reduction_tile_sizes
+    gpu_pipeline_options = configuration.translation_info.configuration[
+        GPU_PIPELINE_OPTIONS_KEY
+    ]
+    waves_per_eu = configuration.translation_info.configuration[LLVM_FUNC_ATTRS_KEY][
+        WAVES_PER_EU_KEY
+    ]
     tune_logger.info(f"Applying: {configuration}")
     expr0 = re.compile(
         r"<intrinsic = #iree_gpu\.mma_layout<(.+)>, subgroup_m_count = ([0-9]+), subgroup_n_count = ([0-9]+)>"
@@ -63,11 +69,11 @@ def apply_configuration(
     expr4 = re.compile(r"gpu_pipeline_options = #iree_gpu\.pipeline_options<([^>]*)>")
     expr5 = re.compile(r"\"amdgpu-waves-per-eu\" = \"([0-9])\"")
     repl0 = f"<intrinsic = {intrinsic}, subgroup_m_count = {subgroup_m_count}, subgroup_n_count = {subgroup_n_count}>"
-    repl1 = f'LLVMGPUVectorDistribute workgroup_size = [{", ".join(map(str, configuration.workgroup_size))}] subgroup_size = {configuration.subgroup_size},'
+    repl1 = f'LLVMGPUVectorDistribute workgroup_size = [{", ".join(map(str, configuration.translation_info.workgroup_size))}] subgroup_size = {configuration.translation_info.subgroup_size},'
     repl2 = f"workgroup = {workgroup_sizes}"
     repl3 = f"reduction = {reduction_sizes}"
-    repl4 = f"gpu_pipeline_options = {configuration.gpu_pipeline_options}"
-    repl5 = f'"amdgpu-waves-per-eu" = "{configuration.waves_per_eu}"'
+    repl4 = f"gpu_pipeline_options = {gpu_pipeline_options}"
+    repl5 = f'"amdgpu-waves-per-eu" = {waves_per_eu}'
 
     new_mlir = ""
     for line in template:
@@ -128,15 +134,6 @@ class MmtTuner(DispatchTuner, MmtParser):
     def get_transform_function_mmt(
         self, problem_size: ProblemSize, functionName: str, configuration: Configuration
     ) -> str:
-        lowering_config = configuration.lowering_config
-        intrinsic = lowering_config.mma_kind
-        (
-            subgroup_m_count,
-            subgroup_n_count,
-        ) = lowering_config.subgroup_count_mn
-
-        wg_x, wg_y, wg_z = configuration.workgroup_size
-        extra_config = get_pipeline_config(configuration)
         return f"""
     transform.named_sequence @{functionName}(%matmul: !transform.any_op {{transform.readonly}}) -> (!transform.any_op, !transform.any_param) {{
     %mmt = transform.include @match_mmt_f16_f16_f32 failures(propagate) (%matmul) : (!transform.any_op) -> !transform.any_op
@@ -145,13 +142,8 @@ class MmtTuner(DispatchTuner, MmtParser):
     transform.iree.match.cast_compatible_type %lhs = tensor<{problem_size.lhs_type}> : !transform.any_value
     transform.iree.match.cast_compatible_type %rhs = tensor<{problem_size.rhs_type}> : !transform.any_value
     %config = transform.param.constant #iree_codegen.compilation_info<
-        lowering_config = {configuration.lowering_config}>,
-        translation_info = #iree_codegen.translation_info<LLVMGPUVectorDistribute
-        workgroup_size = [{wg_x}, {wg_y}, {wg_z}] subgroup_size = {configuration.subgroup_size},
-        {{mma_schedule = #iree_gpu.mma_schedule<
-            intrinsic = {intrinsic},
-            subgroup_m_count = {subgroup_m_count}, subgroup_n_count = {subgroup_n_count}>
-        {extra_config}}}>
+        lowering_config = {configuration.lowering_config},
+        translation_info = {configuration.translation_info}
         > -> !transform.any_param
     transform.yield %matmul, %config : !transform.any_op, !transform.any_param
     }}
@@ -197,16 +189,6 @@ class ConvTuner(DispatchTuner, ConvParser):
         filter = f"tensor<{problem_size.rhs_type}>"
         output = f"tensor<{dynamic_batch_output_ty}>"
 
-        lowering_config = configuration.lowering_config
-        intrinsic = lowering_config.mma_kind
-        (
-            subgroup_m_count,
-            subgroup_n_count,
-        ) = lowering_config.subgroup_count_mn
-
-        wg_x, wg_y, wg_z = configuration.workgroup_size
-        extra_config = get_pipeline_config(configuration)
-
         return f"""
     transform.named_sequence @{functionName}(%conv: !transform.any_op {{transform.readonly}})
     -> (!transform.any_op, !transform.any_param) {{
@@ -217,13 +199,8 @@ class ConvTuner(DispatchTuner, ConvParser):
         outs(%out : {output}) -> {output}
     }} : (!transform.any_op) -> (!transform.any_value, !transform.any_value)
         %config = transform.param.constant #iree_codegen.compilation_info<
-        lowering_config = {configuration.lowering_config}>,
-        translation_info = #iree_codegen.translation_info<LLVMGPUVectorDistribute
-        workgroup_size = [{wg_x}, {wg_y}, {wg_z}] subgroup_size = {configuration.subgroup_size},
-            {{mma_schedule = #iree_gpu.mma_schedule<
-                intrinsic = {intrinsic},
-                subgroup_m_count = {subgroup_m_count}, subgroup_n_count = {subgroup_n_count}>
-            {extra_config}}}>
+        lowering_config = {configuration.lowering_config},
+        translation_info = {configuration.translation_info}
         > -> !transform.any_param
     transform.yield %conv, %config : !transform.any_op, !transform.any_param
     }}
@@ -262,16 +239,6 @@ class ContractionTuner(DispatchTuner, ContractionParser):
         functionName: str,
         configuration: Configuration,
     ) -> str:
-        lowering_config = configuration.lowering_config
-        intrinsic = lowering_config.mma_kind
-        (
-            subgroup_m_count,
-            subgroup_n_count,
-        ) = lowering_config.subgroup_count_mn
-
-        wg_x, wg_y, wg_z = configuration.workgroup_size
-        extra_config = get_pipeline_config(configuration)
-
         lhs_dynamic_batch = problem_size.lhs_type
         lhs_dynamic_batch.shape = lhs_dynamic_batch.shape.copy()
         lhs_dynamic_batch.shape[0] = -1
@@ -284,13 +251,8 @@ transform.named_sequence @{functionName}(%generic: !transform.any_op {{transform
 transform.iree.match.cast_compatible_type %lhs = tensor<{lhs_dynamic_batch}> : !transform.any_value
 transform.iree.match.cast_compatible_type %rhs = tensor<{problem_size.rhs_type}> : !transform.any_value
 %config = transform.param.constant #iree_codegen.compilation_info<
-    lowering_config = {configuration.lowering_config}>,
-    translation_info = #iree_codegen.translation_info<LLVMGPUVectorDistribute
-    workgroup_size = [{wg_x}, {wg_y}, {wg_z}] subgroup_size = {configuration.subgroup_size},
-    {{mma_schedule = #iree_gpu.mma_schedule<
-        intrinsic = {intrinsic},
-        subgroup_m_count = {subgroup_m_count}, subgroup_n_count = {subgroup_n_count}>
-    {extra_config}}}>
+    lowering_config = {configuration.lowering_config},
+    translation_info = {configuration.translation_info}
     > -> !transform.any_param
 transform.yield %generic, %config : !transform.any_op, !transform.any_param
 }}
@@ -351,16 +313,6 @@ class BatchMmtTuner(DispatchTuner, BatchMmtParser):
         functionName: str,
         configuration: Configuration,
     ) -> str:
-        lowering_config = configuration.lowering_config
-        intrinsic = lowering_config.mma_kind
-        (
-            subgroup_m_count,
-            subgroup_n_count,
-        ) = lowering_config.subgroup_count_mn
-
-        wg_x, wg_y, wg_z = configuration.workgroup_size
-        extra_config = get_pipeline_config(configuration)
-
         return f"""
 transform.named_sequence @{functionName}(%generic: !transform.any_op {{transform.readonly}}) -> (!transform.any_op, !transform.any_param) {{
 %mmt = transform.include @match_batch_mmt_i8_i8_i32 failures(propagate) (%generic) : (!transform.any_op) -> !transform.any_op
@@ -369,13 +321,8 @@ transform.named_sequence @{functionName}(%generic: !transform.any_op {{transform
 transform.iree.match.cast_compatible_type %lhs = tensor<{problem_size.lhs_type}> : !transform.any_value
 transform.iree.match.cast_compatible_type %rhs = tensor<{problem_size.rhs_type}> : !transform.any_value
 %config = transform.param.constant #iree_codegen.compilation_info<
-    lowering_config = {configuration.lowering_config}>,
-    translation_info = #iree_codegen.translation_info<LLVMGPUVectorDistribute
-    workgroup_size = [{wg_x}, {wg_y}, {wg_z}] subgroup_size = {configuration.subgroup_size},
-    {{mma_schedule = #iree_gpu.mma_schedule<
-        intrinsic = {intrinsic},
-        subgroup_m_count = {subgroup_m_count}, subgroup_n_count = {subgroup_n_count}>
-    {extra_config}}}>
+    lowering_config = {configuration.lowering_config},
+    translation_info = {configuration.translation_info}
     > -> !transform.any_param
 transform.yield %generic, %config : !transform.any_op, !transform.any_param
 }}
@@ -421,16 +368,6 @@ class BatchMatmulTuner(DispatchTuner, BatchMatmulParser):
         input1 = f"tensor<{problem_size.rhs_type}>"
         output = f"tensor<{problem_size.res_type}>"
 
-        lowering_config = configuration.lowering_config
-        intrinsic = lowering_config.mma_kind
-        (
-            subgroup_m_count,
-            subgroup_n_count,
-        ) = lowering_config.subgroup_count_mn
-
-        wg_x, wg_y, wg_z = configuration.workgroup_size
-        extra_config = get_pipeline_config(configuration)
-
         return f"""
     transform.named_sequence @{functionName}(%batch_matmul: !transform.any_op {{transform.readonly}})
     -> (!transform.any_op, !transform.any_param) {{
@@ -441,13 +378,8 @@ class BatchMatmulTuner(DispatchTuner, BatchMatmulParser):
         outs(%out : {output}) -> {output}
     }} : (!transform.any_op) -> (!transform.any_value, !transform.any_value)
         %config = transform.param.constant #iree_codegen.compilation_info<
-        lowering_config = {configuration.lowering_config}>,
-        translation_info = #iree_codegen.translation_info<LLVMGPUPadAndVectorDistribute
-        workgroup_size = [{wg_x}, {wg_y}, {wg_z}] subgroup_size = {configuration.subgroup_size},
-            {{mma_schedule = #iree_gpu.mma_schedule<
-                intrinsic = {intrinsic},
-                subgroup_m_count = {subgroup_m_count}, subgroup_n_count = {subgroup_n_count}>
-            {extra_config}}}>
+        lowering_config = {configuration.lowering_config},
+        translation_info = {configuration.translation_info}
         > -> !transform.any_param
     transform.yield %batch_matmul, %config : !transform.any_op, !transform.any_param
     }}
