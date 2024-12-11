@@ -19,7 +19,7 @@ def round_up_to_multiple_of(x: Number, multiple: Number) -> Number:
 
 def cosine_similarity(
     a: torch.Tensor, b: torch.Tensor, /, *, dim: Optional[Union[int, tuple[int]]] = None
-) -> float:
+) -> torch.Tensor:
     """Compute cosine similarity over dimensions dim.
     If dim is none computes over all dimensions."""
     dot_product = torch.sum(a * b, dim=dim)

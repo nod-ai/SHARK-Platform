@@ -87,26 +87,30 @@ def write_config(request, model_test_dir):
     batch_sizes = request.param["batch_sizes"]
     prefix_sharing_algorithm = request.param["prefix_sharing_algorithm"]
 
+    # Construct the new config filename
     config_path = (
         model_test_dir
         / f"{'_'.join(str(bs) for bs in batch_sizes)}_{prefix_sharing_algorithm}.json"
     )
 
-    config = {
-        "module_name": "module",
-        "module_abi_version": 1,
-        "max_seq_len": 2048,
-        "attn_head_count": 32,
-        "attn_head_dim": 100,
-        "prefill_batch_sizes": batch_sizes,
-        "decode_batch_sizes": batch_sizes,
-        "transformer_block_count": 26,
-        "paged_kv_cache": {
-            "block_seq_stride": 16,
-            "device_block_count": 256,
-            "prefix_sharing_algorithm": prefix_sharing_algorithm,
-        },
-    }
+    # Read the base config file
+    base_config_path = model_test_dir / "config.json"
+    with open(base_config_path, "r") as f:
+        config = json.load(f)
+
+    # Override specific fields
+    config.update(
+        {
+            "prefill_batch_sizes": batch_sizes,
+            "decode_batch_sizes": batch_sizes,
+            "paged_kv_cache": {
+                **config.get(
+                    "paged_kv_cache", {}
+                ),  # Preserve other paged_kv_cache settings
+                "prefix_sharing_algorithm": prefix_sharing_algorithm,
+            },
+        }
+    )
     logger.info(f"Saving edited config to: {config_path}\n")
     logger.info(f"Config: {json.dumps(config, indent=2)}")
     with open(config_path, "w") as f:
