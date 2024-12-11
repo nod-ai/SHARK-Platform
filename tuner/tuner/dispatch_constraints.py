@@ -248,16 +248,9 @@ def generate_solutions(
             iree_codegen.DispatchLoweringPassPipeline.LLVMGPUVectorDistribute
         )
         pipeline_options = iree_gpu.PipelineOptionsAttr.get()
-        waves_per_eu_dict = ir.DictAttr.get(
-            {WAVES_PER_EU_KEY: ir.StringAttr.get(str(lookup(waves_per_eu)))}
+        config_dict = get_translation_info_config(
+            pipeline_options, lookup(waves_per_eu)
         )
-        config_dict = ir.DictAttr.get(
-            {
-                GPU_PIPELINE_OPTIONS_KEY: pipeline_options,
-                LLVM_FUNC_ATTRS_KEY: waves_per_eu_dict,
-            }
-        )
-
         translation_info = iree_codegen.TranslationInfoAttr.get(
             pipeline_attr,
             None,

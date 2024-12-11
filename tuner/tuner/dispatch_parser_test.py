@@ -55,13 +55,7 @@ def test_get_mmt_tile_sizes(tuner_ctx: common.TunerContext) -> None:
         iree_codegen.DispatchLoweringPassPipeline.LLVMGPUVectorDistribute
     )
     pipeline_options = iree_gpu.PipelineOptionsAttr.get()
-    waves_per_eu_dict = ir.DictAttr.get({"amdgpu-waves-per-eu": ir.StringAttr.get("0")})
-    config_dict = ir.DictAttr.get(
-        {
-            common.GPU_PIPELINE_OPTIONS_KEY: pipeline_options,
-            common.LLVM_FUNC_ATTRS_KEY: waves_per_eu_dict,
-        }
-    )
+    config_dict = common.get_translation_info_config(pipeline_options, 0)
     translation_info = iree_codegen.TranslationInfoAttr.get(
         pipeline_attr, None, [], 0, config_dict
     )
@@ -89,13 +83,7 @@ def test_get_conv_tile_sizes(tuner_ctx: common.TunerContext) -> None:
         iree_codegen.DispatchLoweringPassPipeline.LLVMGPUVectorDistribute
     )
     pipeline_options = iree_gpu.PipelineOptionsAttr.get()
-    waves_per_eu_dict = ir.DictAttr.get({"amdgpu-waves-per-eu": ir.StringAttr.get("1")})
-    config_dict = ir.DictAttr.get(
-        {
-            common.GPU_PIPELINE_OPTIONS_KEY: pipeline_options,
-            common.LLVM_FUNC_ATTRS_KEY: waves_per_eu_dict,
-        }
-    )
+    config_dict = common.get_translation_info_config(pipeline_options, 1)
     translation_info = iree_codegen.TranslationInfoAttr.get(
         pipeline_attr, None, [256, 1, 1], 64, config_dict
     )
@@ -122,13 +110,7 @@ def test_get_contract_tile_sizes(tuner_ctx: common.TunerContext) -> None:
         iree_codegen.DispatchLoweringPassPipeline.LLVMGPUVectorDistribute
     )
     pipeline_options = iree_gpu.PipelineOptionsAttr.get()
-    waves_per_eu_dict = ir.DictAttr.get({"amdgpu-waves-per-eu": ir.StringAttr.get("2")})
-    config_dict = ir.DictAttr.get(
-        {
-            common.GPU_PIPELINE_OPTIONS_KEY: pipeline_options,
-            common.LLVM_FUNC_ATTRS_KEY: waves_per_eu_dict,
-        }
-    )
+    config_dict = common.get_translation_info_config(pipeline_options, 2)
     translation_info = iree_codegen.TranslationInfoAttr.get(
         pipeline_attr, None, [16, 16, 1], 32, config_dict
     )

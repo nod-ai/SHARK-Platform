@@ -322,7 +322,7 @@ transform.iree.match.cast_compatible_type %lhs = tensor<{problem_size.lhs_type}>
 transform.iree.match.cast_compatible_type %rhs = tensor<{problem_size.rhs_type}> : !transform.any_value
 %config = transform.param.constant #iree_codegen.compilation_info<
     lowering_config = {configuration.lowering_config},
-    translation_info ={configuration.translation_info}
+    translation_info = {configuration.translation_info}
     > -> !transform.any_param
 transform.yield %generic, %config : !transform.any_op, !transform.any_param
 }}

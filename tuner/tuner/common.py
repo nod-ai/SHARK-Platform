@@ -163,6 +163,31 @@ def get_lowering_config(
     return iree_gpu.LoweringConfigAttr.get(lowering_config_attrs)
 
 
+def get_translation_info_config(
+    pipeline_options: iree_gpu.PipelineOptionsAttr, waves_per_eu: int | str
+) -> ir.DictAttr:
+    if isinstance(waves_per_eu, int):
+        waves_per_eu = str(waves_per_eu)
+    elif not isinstance(waves_per_eu, str):
+        assert (
+            False
+        ), f"waves_per_eu must be an int or str, but got {type(waves_per_eu).__name__}"
+
+    # Create the waves_per_eu dictionary attribute.
+    waves_per_eu_dict = ir.DictAttr.get(
+        {WAVES_PER_EU_KEY: ir.StringAttr.get(waves_per_eu)}
+    )
+
+    config_dict = ir.DictAttr.get(
+        {
+            GPU_PIPELINE_OPTIONS_KEY: pipeline_options,
+            LLVM_FUNC_ATTRS_KEY: waves_per_eu_dict,
+        }
+    )
+
+    return config_dict
+
+
 def read_input_mlir(filename: str) -> list[str]:
     with open(filename, "r") as f:
         return f.readlines()
