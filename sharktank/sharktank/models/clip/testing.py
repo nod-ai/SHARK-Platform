@@ -25,7 +25,7 @@ from .export import (
 from ...transforms.dataset import set_float_dtype
 
 
-def clip_toy_text_model_config(dtype: torch.dtype) -> ClipTextConfig:
+def clip_toy_text_model_config(dtype: Optional[torch.dtype] = None) -> ClipTextConfig:
     num_attention_heads = 5
     vocab_size = 11
     return ClipTextConfig(
@@ -132,7 +132,7 @@ def export_clip_text_model_iree_test_data(
     target_config.dtype = target_dtype
     target_dataset = Dataset(
         root_theta=reference_dataset.root_theta.transform(
-            functools.partial(set_float_dtype, dtype=torch.bfloat16)
+            functools.partial(set_float_dtype, dtype=target_dtype)
         ),
         properties=target_config.to_properties(),
     )

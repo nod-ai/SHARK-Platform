@@ -47,19 +47,18 @@ from sharktank.utils.testing import (
     test_prompts,
 )
 from sharktank.models.clip.export import (
-    export_clip_text_model_mlir,
     export_clip_text_model_dataset_from_hugging_face,
     hugging_face_clip_attention_to_theta,
     hugging_face_clip_encoder_layer_to_theta,
     hugging_face_clip_encoder_to_theta,
     hugging_face_clip_text_model_to_dataset,
     hugging_face_clip_text_model_to_theta,
-    clip_text_model_to_dataset,
 )
 from sharktank.models.clip.testing import (
     make_random_input_token_sequences,
     make_clip_text_model_random_theta,
     export_clip_text_model_iree_test_data,
+    clip_toy_text_model_config,
 )
 from sharktank.models.clip import (
     ClipAttention,
@@ -243,21 +242,7 @@ class ClipTextIreeTest(TempDirTestBase):
         self, reference_dtype: torch.dtype, target_dtype: torch.dtype, atol: float
     ):
         batch_size = 4
-        num_attention_heads = 5
-        vocab_size = 11
-        reference_config = ClipTextConfig(
-            vocab_size=vocab_size,
-            hidden_size=13 * num_attention_heads,
-            intermediate_size=7,
-            projection_dim=3,
-            num_attention_heads=num_attention_heads,
-            max_position_embeddings=17,
-            layer_norm_eps=1e-4,
-            num_hidden_layers=2,
-            bos_token_id=vocab_size - 2,
-            eos_token_id=vocab_size - 1,
-            dtype=reference_dtype,
-        )
+        reference_config = clip_toy_text_model_config(reference_dtype)
         file_artifact_prefix_name = "clip_text_model_toy"
         self.runTestCompareRandomModelIreeAgainstTorch(
             reference_config=reference_config,
@@ -404,21 +389,9 @@ class ClipTextEagerTest(TestCase):
     ):
         torch.set_default_dtype(reference_dtype)
         batch_size = 19
-        tgt_len = 23
-        num_attention_heads = 5
         vocab_size = 11
-        reference_config = transformers.CLIPTextConfig(
-            vocab_size=vocab_size,
-            hidden_size=13 * num_attention_heads,
-            intermediate_size=7,
-            projection_dim=3,
-            num_attention_heads=num_attention_heads,
-            layer_norm_eps=1e-4,
-            num_hidden_layers=2,
-            final_layer_norm=1e-3,
-            bos_token_id=vocab_size - 2,
-            eos_token_id=vocab_size - 1,
-        )
+        config = clip_toy_text_model_config()
+        reference_config = config.to_hugging_face_clip_text_model_config()
         reference_model = HfCLIPTextModel(
             reference_config,
         )
@@ -432,7 +405,9 @@ class ClipTextEagerTest(TestCase):
         )
         model = ClipTextModel(theta, config)
 
-        input_ids = torch.randint(low=0, high=vocab_size, size=[batch_size, tgt_len])
+        input_ids = torch.randint(
+            low=0, high=vocab_size, size=[batch_size, config.max_position_embeddings]
+        )
 
         expected_outputs = reference_model(input_ids=input_ids)
 
@@ -471,16 +446,10 @@ class ClipAttentionTest(TestCase):
     ):
         torch.set_default_dtype(reference_dtype)
         batch_size = 19
-        tgt_len = 23
+        config = clip_toy_text_model_config()
+        reference_config = config.to_hugging_face_clip_text_model_config()
+        tgt_len = config.max_position_embeddings
         src_len = tgt_len
-        num_attention_heads = 2
-        reference_config = transformers.CLIPTextConfig(
-            vocab_size=11,
-            hidden_size=13 * num_attention_heads,
-            intermediate_size=7,
-            projection_dim=3,
-            num_attention_heads=num_attention_heads,
-        )
         reference_model = HfCLIPAttention(
             reference_config,
         )
@@ -495,7 +464,7 @@ class ClipAttentionTest(TestCase):
         model = ClipAttention(theta, config)
 
         reference_hidden_states = make_rand_torch(
-            shape=[batch_size, tgt_len, reference_config.hidden_size],
+            shape=[batch_size, tgt_len, config.hidden_size],
             dtype=reference_dtype,
         )
         reference_attention_mask = make_random_mask(
@@ -551,17 +520,10 @@ class ClipEncoderLayerTest(TestCase):
     ):
         torch.set_default_dtype(reference_dtype)
         batch_size = 19
-        tgt_len = 23
+        config = clip_toy_text_model_config()
+        reference_config = config.to_hugging_face_clip_text_model_config()
+        tgt_len = config.max_position_embeddings
         src_len = tgt_len
-        num_attention_heads = 2
-        reference_config = transformers.CLIPTextConfig(
-            vocab_size=11,
-            hidden_size=13 * num_attention_heads,
-            intermediate_size=7,
-            projection_dim=3,
-            num_attention_heads=num_attention_heads,
-            layer_norm_eps=1e-4,
-        )
         reference_model = HfCLIPEncoderLayer(
             reference_config,
         )
@@ -634,15 +596,8 @@ class ClipEncoderTest(TestCase):
         batch_size = 19
         tgt_len = 23
         src_len = tgt_len
-        num_attention_heads = 5
-        reference_config = transformers.CLIPTextConfig(
-            vocab_size=11,
-            hidden_size=13 * num_attention_heads,
-            intermediate_size=7,
-            projection_dim=3,
-            num_attention_heads=num_attention_heads,
-            layer_norm_eps=1e-4,
-            num_hidden_layers=2,
+        reference_config = (
+            clip_toy_text_model_config().to_hugging_face_clip_text_model_config()
         )
         reference_model = HfCLIPEncoder(
             reference_config,
