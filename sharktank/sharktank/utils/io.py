@@ -6,6 +6,7 @@
 
 from pathlib import Path
 import torch
+from os import PathLike
 
 from iree.turbine.aot import ParameterArchiveBuilder, ParameterArchive
 

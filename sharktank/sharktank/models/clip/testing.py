@@ -80,10 +80,10 @@ def export_clip_toy_text_model_iree_test_data(
     reference_dtype: torch.dtype,
     target_dtypes: list[torch.dtype],
     batch_size: int,
-    target_iree_parameters_output_paths: list[AnyPath],
-    target_mlir_output_paths: list[AnyPath],
-    input_ids_output_path: AnyPath,
-    expected_last_hidden_state_output_path: AnyPath,
+    target_iree_parameters_output_paths: list[PathLike],
+    target_mlir_output_paths: list[PathLike],
+    input_ids_output_path: PathLike,
+    expected_last_hidden_state_output_path: PathLike,
 ):
     reference_config = clip_toy_text_model_config(reference_dtype)
     input_ids = make_random_input_token_sequences(
@@ -103,16 +103,21 @@ def export_clip_toy_text_model_iree_test_data(
             strict=True,
         )
     ):
+        current_input_ids_output_path = None
+        current_expected_last_hidden_state_output_path = None
+        if i == 0:
+            current_input_ids_output_path = input_ids_output_path
+            current_expected_last_hidden_state_output_path = (
+                expected_last_hidden_state_output_path
+            )
         export_clip_text_model_iree_test_data(
             reference_model=reference_model,
             target_dtype=target_dtype,
             input_ids=input_ids,
             target_iree_parameters_output_path=target_iree_parameters_output_path,
             target_mlir_output_path=target_mlir_output_path,
-            input_ids_output_path=input_ids_output_path if i == 0 else None,
-            expected_last_hidden_state_output_path=expected_last_hidden_state_output_path
-            if i == 0
-            else None,
+            input_ids_output_path=current_input_ids_output_path,
+            expected_last_hidden_state_output_path=current_expected_last_hidden_state_output_path,
         )
 
 
@@ -120,10 +125,10 @@ def export_clip_text_model_iree_test_data(
     reference_model: ClipTextModel,
     target_dtype: torch.dtype,
     input_ids: torch.LongTensor,
-    target_mlir_output_path: AnyPath,
-    target_iree_parameters_output_path: AnyPath,
-    input_ids_output_path: Optional[AnyPath] = None,
-    expected_last_hidden_state_output_path: Optional[AnyPath] = None,
+    target_mlir_output_path: PathLike,
+    target_iree_parameters_output_path: PathLike,
+    input_ids_output_path: Optional[PathLike] = None,
+    expected_last_hidden_state_output_path: Optional[PathLike] = None,
 ):
     batch_size = input_ids.shape[0]
     reference_dataset = clip_text_model_to_dataset(reference_model)
