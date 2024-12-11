@@ -58,7 +58,7 @@ python3.11 -m venv 3.11.venv
 source 3.11.venv/bin/activate
 
 # Install 'sharktank' package from nightly releases.
-pip install sharktank -f https://github.com/nod-ai/shark-ai/releases/expanded_assets/dev-wheels
+pip install sharktank -f https://github.com/nod-ai/shark-ai/releases/expanded_assets/dev-wheels --pre
 
 # Test the installation.
 python -c "from sharktank import ops; print('Sanity check passed')"
@@ -75,7 +75,7 @@ python3.11 -m venv 3.11.venv
 source 3.11.venv/bin/activate
 
 # Install 'shortfin' package from nightly releases.
-pip install shortfin -f https://github.com/nod-ai/shark-ai/releases/expanded_assets/dev-wheels
+pip install shortfin -f https://github.com/nod-ai/shark-ai/releases/expanded_assets/dev-wheels --pre
 
 # Test the installation.
 python -c "import shortfin as sf; print('Sanity check passed')"
