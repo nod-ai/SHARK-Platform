@@ -178,7 +178,7 @@ def generate_solutions(
     problem_size: ProblemSize,
     num_subgrups: int,
     mma_intrinsics: list[iree_gpu.MMAIntrinsic],
-) -> Iterator[Configuration]:
+) -> Iterator[iree_codegen.CompilationInfoAttr]:
     M, N, K = problem_size.MNK
     tuner_ctx.logger.info(f"{M},{N},{K}")
     m, n, k = z3.Int("m"), z3.Int("n"), z3.Int("k")
@@ -258,7 +258,9 @@ def generate_solutions(
             lookup(subgroup_size),
             config_dict,
         )
-        config = Configuration(translation_info, lowering_config)
+        compilation_info = iree_codegen.CompilationInfoAttr.get(
+            lowering_config, translation_info
+        )
         solver.add(z3.simplify(z3.Not(z3.And(list(x == model[x] for x in all_vars)))))
         i += 1
-        yield config
+        yield compilation_info

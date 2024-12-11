@@ -59,11 +59,10 @@ def test_get_mmt_tile_sizes(tuner_ctx: common.TunerContext) -> None:
     translation_info = iree_codegen.TranslationInfoAttr.get(
         pipeline_attr, None, [], 0, config_dict
     )
-    config = common.Configuration(
-        translation_info=translation_info,
-        lowering_config=lowering_config,
+    compilation_info = iree_codegen.CompilationInfoAttr.get(
+        lowering_config, translation_info
     )
-    lowering_config = config.lowering_config
+    lowering_config = compilation_info.lowering_config
     assert lowering_config.workgroup_tile_sizes == [128, 320, 0]
     assert lowering_config.reduction_tile_sizes == [0, 0, 32]
 
@@ -87,12 +86,27 @@ def test_get_conv_tile_sizes(tuner_ctx: common.TunerContext) -> None:
     translation_info = iree_codegen.TranslationInfoAttr.get(
         pipeline_attr, None, [256, 1, 1], 64, config_dict
     )
-    config = common.Configuration(
-        translation_info=translation_info,
-        lowering_config=lowering_config,
+    compilation_info = iree_codegen.CompilationInfoAttr.get(
+        lowering_config, translation_info
     )
-    assert config.lowering_config.workgroup_tile_sizes == [1, 1, 464, 320, 1, 1, 0]
-    assert config.lowering_config.reduction_tile_sizes == [0, 0, 0, 0, 0, 0, 16]
+    assert compilation_info.lowering_config.workgroup_tile_sizes == [
+        1,
+        1,
+        464,
+        320,
+        1,
+        1,
+        0,
+    ]
+    assert compilation_info.lowering_config.reduction_tile_sizes == [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        16,
+    ]
 
 
 def test_get_contract_tile_sizes(tuner_ctx: common.TunerContext) -> None:
@@ -114,18 +128,49 @@ def test_get_contract_tile_sizes(tuner_ctx: common.TunerContext) -> None:
     translation_info = iree_codegen.TranslationInfoAttr.get(
         pipeline_attr, None, [16, 16, 1], 32, config_dict
     )
-    config = common.Configuration(
-        translation_info=translation_info,
-        lowering_config=lowering_config,
+    compilation_info = iree_codegen.CompilationInfoAttr.get(
+        lowering_config, translation_info
     )
-    assert dispatch_parser.get_contract_workgroup_sizes(config, "mnk") == [4, 8, 0]
-    assert dispatch_parser.get_contract_reduction_sizes(config, "mnk") == [0, 0, 16]
-    assert dispatch_parser.get_contract_workgroup_sizes(config, "nmk") == [8, 4, 0]
-    assert dispatch_parser.get_contract_reduction_sizes(config, "nmk") == [0, 0, 16]
-    assert dispatch_parser.get_contract_workgroup_sizes(config, "knm") == [0, 8, 4]
-    assert dispatch_parser.get_contract_reduction_sizes(config, "knm") == [16, 0, 0]
-    assert dispatch_parser.get_contract_workgroup_sizes(config, "kkk") == [0, 0, 0]
-    assert dispatch_parser.get_contract_reduction_sizes(config, "kkk") == [16, 16, 16]
+    assert dispatch_parser.get_contract_workgroup_sizes(compilation_info, "mnk") == [
+        4,
+        8,
+        0,
+    ]
+    assert dispatch_parser.get_contract_reduction_sizes(compilation_info, "mnk") == [
+        0,
+        0,
+        16,
+    ]
+    assert dispatch_parser.get_contract_workgroup_sizes(compilation_info, "nmk") == [
+        8,
+        4,
+        0,
+    ]
+    assert dispatch_parser.get_contract_reduction_sizes(compilation_info, "nmk") == [
+        0,
+        0,
+        16,
+    ]
+    assert dispatch_parser.get_contract_workgroup_sizes(compilation_info, "knm") == [
+        0,
+        8,
+        4,
+    ]
+    assert dispatch_parser.get_contract_reduction_sizes(compilation_info, "knm") == [
+        16,
+        0,
+        0,
+    ]
+    assert dispatch_parser.get_contract_workgroup_sizes(compilation_info, "kkk") == [
+        0,
+        0,
+        0,
+    ]
+    assert dispatch_parser.get_contract_reduction_sizes(compilation_info, "kkk") == [
+        16,
+        16,
+        16,
+    ]
 
 
 def test_get_shapes_mmt(tuner_ctx: common.TunerContext) -> None:
