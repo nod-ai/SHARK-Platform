@@ -55,11 +55,15 @@ class MMDITDoubleBlock(ThetaLayer):
         self.add_module("img_attn_qkv", LinearLayer(theta("img_attn.qkv")))
         self.add_module(
             "img_attn_norm_q",
-            RMSNormLayer(theta("img_attn.norm.query_norm"), epsilon=1e-6),
+            RMSNormLayer(
+                theta("img_attn.norm.query_norm"), weight_name="scale", epsilon=1e-6
+            ),
         )
         self.add_module(
             "img_attn_norm_k",
-            RMSNormLayer(theta("img_attn.norm.key_norm"), epsilon=1e-6),
+            RMSNormLayer(
+                theta("img_attn.norm.key_norm"), weight_name="scale", epsilon=1e-6
+            ),
         )
         self.add_module("img_attn_proj", LinearLayer(theta("img_attn.proj")))
 
@@ -70,11 +74,15 @@ class MMDITDoubleBlock(ThetaLayer):
         self.add_module("txt_attn_qkv", LinearLayer(theta("txt_attn.qkv")))
         self.add_module(
             "txt_attn_norm_q",
-            RMSNormLayer(theta("txt_attn.norm.query_norm"), epsilon=1e-6),
+            RMSNormLayer(
+                theta("txt_attn.norm.query_norm"), weight_name="scale", epsilon=1e-6
+            ),
         )
         self.add_module(
             "txt_attn_norm_k",
-            RMSNormLayer(theta("txt_attn.norm.key_norm"), epsilon=1e-6),
+            RMSNormLayer(
+                theta("txt_attn.norm.key_norm"), weight_name="scale", epsilon=1e-6
+            ),
         )
         self.add_module("txt_attn_proj", LinearLayer(theta("txt_attn.proj")))
 
@@ -88,8 +96,8 @@ class MMDITDoubleBlock(ThetaLayer):
         txt_mod1, txt_mod2 = self.txt_mod(vec)
 
         # prepare image for attention
-        img_modulated = ops.layer_norm(img, None, None, eps=1e-6)
-        img_modulated = (1 + img_mod1.scale) * img_modulated + img_mod1.shift
+        img_modulated2 = ops.layer_norm(img, None, None, eps=1e-6)
+        img_modulated = (1 + img_mod1.scale) * img_modulated2 + img_mod1.shift
         img_qkv = self.img_attn_qkv(img_modulated)
         img_qkv_2 = img_qkv.view(
             img_qkv.shape[0], img_qkv.shape[1], 3, self.num_heads, -1
@@ -143,7 +151,7 @@ class MMDITDoubleBlock(ThetaLayer):
         txt_mlp_out3 = self.txt_mlp2(txt_mlp_out2)
         txt = txt + txt_mod2.gate * txt_mlp_out3
 
-        return img, txt
+        return img, txt, img_modulated, img_modulated2
 
 
 class MMDITSingleBlock(ThetaLayer):

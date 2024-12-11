@@ -9,13 +9,9 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 
 import unittest
+import functools
 
 import torch
-
-from diffusers.models.transformers.transformer_flux import (
-    FluxTransformerBlock,
-    FluxSingleTransformerBlock,
-)
 
 from iree.turbine import aot
 from sharktank.layers import (
@@ -27,8 +23,9 @@ from sharktank.layers.testing import (
     make_mmdit_double_block_random_theta,
     make_mmdit_single_block_random_theta,
 )
+from sharktank.transforms.dataset import set_float_dtype
 from sharktank.types.tensors import DefaultPrimitiveTensor
-from sharktank.types.theta import torch_module_to_theta
+from sharktank.types.theta import Dataset, Theta
 from sharktank.utils.math import cosine_similarity
 
 
@@ -63,40 +60,59 @@ class MMDITTest(unittest.TestCase):
         self.hidden_size = 3072
         self.num_heads = 24
         self.batch_size = 3
-        self.dim = 8
-        self.attention_head_dim = 16
         self.dtype = torch.float32
 
-    def testFluxDoubleBlockEagerAgainstHuggingface(self):
-        reference_model: FluxTransformerBlock = FluxTransformerBlock(
-            self.dim, self.num_heads, self.attention_head_dim
-        )
-
-        theta = torch_module_to_theta(reference_model)
+    def testFluxDoubleBlockGolden(self):
+        theta = Dataset.load(
+            "/home/kherndon/goldens/flux.irpa", file_type="irpa"
+        ).root_theta
         theta.rename_tensors_to_paths()
-        theta = theta.transform(functools.partial(set_float_dtype, dtype=self.dtype))
-        model = MMDITDoubleBlock(theta, config)
+        dbl_blks = theta.tensor("double_blocks")
+        blk = dbl_blks["0"]
+        model = MMDITDoubleBlock(Theta(blk), self.num_heads)
 
-        img = torch.rand([self.batch_size, 1024, self.hidden_size])
-        txt = torch.rand([self.batch_size, 512, self.hidden_size])
-        vec = torch.rand([self.batch_size, self.hidden_size])
-        rot = torch.rand([self.batch_size, 1, 1536, 64, 2, 2])
+        img = torch.load("/home/kherndon/goldens/img.pt", weights_only=True)
+        txt = torch.load("/home/kherndon/goldens/txt.pt", weights_only=True)
+        vec = torch.load("/home/kherndon/goldens/vec.pt", weights_only=True)
+        rot = torch.load("/home/kherndon/goldens/rot.pt", weights_only=True)
 
-        expected_outputs = reference_model(img, txt, vec, rot)
-        actual_outputs = model(
+        expected_out1, expected_out2 = torch.load(
+            "/home/kherndon/goldens/out1.pt", weights_only=True
+        ), torch.load("/home/kherndon/goldens/out2.pt", weights_only=True)
+        img_qkv, img_mod = torch.load(
+            "/home/kherndon/goldens/img_qkv.pt", weights_only=True
+        ), torch.load("/home/kherndon/goldens/img_modulated.pt", weights_only=True)
+        img_mod2 = torch.load(
+            "/home/kherndon/goldens/img_modulated2.pt", weights_only=True
+        )
+        eim1s, eim1c = torch.load("/home/kherndon/goldens/im1s.pt"), torch.load(
+            "/home/kherndon/goldens/im1c.pt"
+        )
+        eq, ek, ev = (
+            torch.load("/home/kherndon/goldens/q.pt", weights_only=True),
+            torch.load("/home/kherndon/goldens/k.pt", weights_only=True),
+            torch.load("/home/kherndon/goldens/v.pt", weights_only=True),
+        )
+        out1, out2, mod, mod2 = model(
             DefaultPrimitiveTensor(data=img),
             DefaultPrimitiveTensor(data=txt),
             DefaultPrimitiveTensor(data=vec),
             DefaultPrimitiveTensor(data=rot),
         )
-        actual_outputs = tree_map(
-            lambda t: None if t is None else ops.to(t, dtype=self.dtype),
-            actual_outputs,
+
+        atol = 1e-2
+        torch.testing.assert_close(mod2, img_mod2, atol=0.1, rtol=0.1)
+        torch.testing.assert_close(qkv, img_qkv, atol=0.1, rtol=0.1)
+        torch.testing.assert_close(expected_out1, out1, atol=0.1, rtol=0.1)
+        assert_last_hidden_states_close(
+            expected_out1,
+            out1,
+            atol=atol,
         )
 
         assert_last_hidden_states_close(
-            actual_outputs["last_hidden_state"],
-            expected_outputs["last_hidden_state"],
+            expected_out2,
+            out2,
             atol=atol,
         )
 
