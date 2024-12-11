@@ -447,30 +447,26 @@ class PagedKVCache(BaseKVCache):
         bs, *_ = seq_positions.shape
         assert len(cache_partitions) == self.cache_partition_count
 
-        partition_count = len(cache_partitions)
-
         # [bs, partitions, atten_head_count, attn_head_dim]
-        cache_partitions = ops.cat(cache_partitions, dim=1)
+        # cache_partitions = ops.cat(cache_partitions, dim=1)
+        for idx, cache_partition in enumerate(cache_partitions):
+            # [bs, 1]
+            page_index = seq_positions // self.block_seq_stride
 
-        # [bs, 1]
-        page_index = seq_positions // self.block_seq_stride
+            page_id = ops.gather(page_ids, dim=1, index=page_index.unsqueeze(1))
+            page_offset = (seq_positions % self.block_seq_stride).unsqueeze(1)
 
-        page_id = ops.gather(page_ids, dim=1, index=page_index.unsqueeze(1))
-        page_offset = (seq_positions % self.block_seq_stride).unsqueeze(1)
+            # [1, 1]
+            partitions = torch.tensor(idx).unsqueeze(0)
 
-        # [1, partitions]
-        partitions = torch.arange(0, self.cache_partition_count).unsqueeze(0)
+            # [bs, partitions]
+            transformer_block = torch.full(
+                (bs, 1), transformer_block_index, device=device
+            )
+            partitions = partitions.repeat(bs, 1)
 
-        # [bs, partitions]
-        page_id = page_id.repeat(1, partition_count)
-        transformer_block = torch.full(
-            (bs, partition_count), transformer_block_index, device=device
-        )
-        page_offset = page_offset.repeat(1, partition_count)
-        partitions = partitions.repeat(bs, 1)
-
-        indices = (page_id, transformer_block, partitions, page_offset)
-        page_table.index_put_(indices=indices, values=cache_partitions)
+            indices = (page_id, transformer_block, partitions, page_offset)
+            page_table.index_put_(indices=indices, values=cache_partition)
 
         return
 
@@ -513,21 +509,14 @@ class PagedKVCache(BaseKVCache):
             transformer_block_index * transformer_block_stride
         )
 
-        part_block_views = []
-        subblock_ids_kv = []
         for index, partition in enumerate(cache_partitions):
             part_block_view = partition.unflatten(
                 1, (block_seq_len, self.block_seq_stride)
             )
             part_block_view = part_block_view.flatten(0, 1)
-            part_block_views.append(part_block_view)
 
             subblock_ids = (
                 (base_subblock_ids + index) if index > 0 else base_subblock_ids
             ).flatten(0, 1)
-            subblock_ids_kv.append(subblock_ids)
 
-        subblock_ids = ops.cat(subblock_ids_kv)
-        part_block_view = ops.cat(part_block_views, dim=0)
-
-        subblock_table.index_copy_(0, subblock_ids, part_block_view)
+            subblock_table.index_copy_(0, subblock_ids, part_block_view)
