@@ -6,7 +6,7 @@
 
 import functools
 import torch
-from os import PathLike
+from os import PathLike, makedirs
 from typing import Union, Optional
 from copy import copy
 from iree.turbine.aot.params import ParameterArchiveBuilder
@@ -42,7 +42,9 @@ def clip_toy_text_model_config(dtype: Optional[torch.dtype] = None) -> ClipTextC
     )
 
 
-def export_clip_toy_text_model_default_iree_test_data(output_path_prefix: str):
+def export_clip_toy_text_model_default_iree_test_data(output_dir: PathLike):
+    makedirs(output_dir, exist_ok=True)
+
     # We want to always export the same without interfering with RNG for the rest of
     # the program.
     rng_state = torch.get_rng_state()
@@ -54,10 +56,10 @@ def export_clip_toy_text_model_default_iree_test_data(output_path_prefix: str):
     target_mlir_output_paths = []
     batch_size = 4
     for dtype in target_dtypes:
-        prefix = f"{output_path_prefix}_{dtype_to_serialized_short_name(dtype)}"
+        prefix = output_dir / f"{dtype_to_serialized_short_name(dtype)}"
         target_iree_parameters_output_paths.append(f"{prefix}_parameters.irpa")
         target_mlir_output_paths.append(f"{prefix}.mlir")
-    call_prefix = f"{output_path_prefix}_forward_bs{batch_size}"
+    call_prefix = output_dir / f"forward_bs{batch_size}"
     input_ids_output_path = f"{call_prefix}_arg0_input_ids.irpa"
     expected_last_hidden_state_output_path = (
         f"{call_prefix}_expected_result0_last_hidden_state_"

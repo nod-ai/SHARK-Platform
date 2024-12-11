@@ -6,6 +6,7 @@
 
 from argparse import ArgumentParser
 from typing import Optional
+from pathlib import Path
 
 from .testing import export_clip_toy_text_model_default_iree_test_data
 
@@ -19,11 +20,9 @@ def main(args: Optional[list[str]] = None):
             " The expected output is always in float32 precision."
         )
     )
-    parser.add_argument(
-        "--output-path-prefix", type=str, default=f"clip_toy_text_model"
-    )
+    parser.add_argument("--output-dir", type=str, default=f"clip_toy_text_model")
     args = parser.parse_args(args=args)
-    export_clip_toy_text_model_default_iree_test_data(args.output_path_prefix)
+    export_clip_toy_text_model_default_iree_test_data(Path(args.output_dir))
 
 
 if __name__ == "__main__":

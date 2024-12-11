@@ -8,6 +8,7 @@ from collections import OrderedDict
 import functools
 import iree.compiler
 import os
+from pathlib import Path
 from parameterized import parameterized
 from copy import copy
 import pytest
@@ -72,13 +73,15 @@ from sharktank import ops
 with_clip_data = pytest.mark.skipif("not config.getoption('with_clip_data')")
 
 
-@pytest.mark.usefixtures("caching", "path_prefix")
+@pytest.mark.usefixtures("path_prefix")
 class ClipTextIreeTest(TempDirTestBase):
     def setUp(self):
         super().setUp()
         torch.random.manual_seed(12345)
         if self.path_prefix is None:
-            self.path_prefix = f"{self._temp_dir}/"
+            self.path_prefix = self._temp_dir
+        else:
+            self.path_prefix = Path(self.path_prefix)
 
     @with_clip_data
     def testSmokeExportLargeF32FromHuggingFace(self):
@@ -90,7 +93,10 @@ class ClipTextIreeTest(TempDirTestBase):
             huggingface_repo_id,
         ).download()
         target_dtype_name = dtype_to_serialized_short_name(torch.float32)
-        target_model_path_prefix = f"{self.path_prefix}{huggingface_repo_id_as_path}_text_model_{target_dtype_name}"
+        target_model_path_prefix = (
+            self.path_prefix
+            / f"{huggingface_repo_id_as_path}_text_model_{target_dtype_name}"
+        )
         output_path = f"{target_model_path_prefix}.irpa"
         export_clip_text_model_dataset_from_hugging_face(
             huggingface_repo_id, output_path
@@ -99,7 +105,7 @@ class ClipTextIreeTest(TempDirTestBase):
     def testSmokeExportToyIreeTestData(self):
         from sharktank.models.clip.export_toy_text_model_iree_test_data import main
 
-        main([f"--output-path-prefix={self.path_prefix}clip_toy_text_model"])
+        main([f"--output-dir={self.path_prefix/'clip_toy_text_model'}"])
 
     @with_clip_data
     def testCompareLargeIreeF32AgainstTorchEagerF32(self):
@@ -146,10 +152,10 @@ class ClipTextIreeTest(TempDirTestBase):
         )
         target_dtype_name = dtype_to_serialized_short_name(target_dtype)
         reference_model_path_prefix = (
-            f"{self.path_prefix}{file_artifact_prefix_name}_{reference_dtype_name}"
+            self.path_prefix / f"{file_artifact_prefix_name}_{reference_dtype_name}"
         )
         target_model_path_prefix = (
-            f"{self.path_prefix}{file_artifact_prefix_name}_{target_dtype_name}"
+            self.path_prefix / f"{file_artifact_prefix_name}_{target_dtype_name}"
         )
 
         parameters_path = f"{target_model_path_prefix}.irpa"
@@ -157,26 +163,20 @@ class ClipTextIreeTest(TempDirTestBase):
         batch_size = input_ids.shape[0]
         mlir_path = f"{target_model_path_prefix}.mlir"
 
-        if (
-            not self.caching
-            or not os.path.exists(mlir_path)
-            or not os.path.exists(parameters_path)
-        ):
-            export_clip_text_model_iree_test_data(
-                reference_model=reference_model,
-                target_dtype=target_dtype,
-                input_ids=input_ids,
-                target_mlir_output_path=mlir_path,
-                target_iree_parameters_output_path=parameters_path,
-            )
+        export_clip_text_model_iree_test_data(
+            reference_model=reference_model,
+            target_dtype=target_dtype,
+            input_ids=input_ids,
+            target_mlir_output_path=mlir_path,
+            target_iree_parameters_output_path=parameters_path,
+        )
 
         iree_module_path = f"{target_model_path_prefix}.vmfb"
-        if not self.caching or not os.path.exists(iree_module_path):
-            iree.compiler.compile_file(
-                mlir_path,
-                output_file=iree_module_path,
-                extra_args=["--iree-hal-target-device=hip", "--iree-hip-target=gfx942"],
-            )
+        iree.compiler.compile_file(
+            mlir_path,
+            output_file=iree_module_path,
+            extra_args=["--iree-hal-target-device=hip", "--iree-hip-target=gfx942"],
+        )
 
         reference_result_dict = call_torch_module_function(
             module=reference_model,
