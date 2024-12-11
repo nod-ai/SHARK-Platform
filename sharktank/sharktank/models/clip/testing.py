@@ -15,7 +15,6 @@ from ...layers.configs.llm_configs import ClipTextConfig
 from .clip import ClipTextModel
 from ...types.theta import Theta, Dataset
 from ...types.tensors import dtype_to_serialized_short_name
-from ...utils.typing import AnyPath
 from ...utils.io import save_tensor_as_irpa
 from .export import (
     clip_text_model_to_dataset,

@@ -12,10 +12,10 @@ from transformers.models.clip.modeling_clip import (
     CLIPEncoder as HfCLIPEncoder,
 )
 import torch
+from os import PathLike
 
 from ...types.theta import Theta, Dataset, torch_module_to_theta
 from ...layers.configs import ClipTextConfig
-from ...utils.typing import AnyPath
 from .clip import ClipTextModel
 from iree.turbine.aot import FxProgramsBuilder, export
 
@@ -50,14 +50,14 @@ def clip_text_model_to_dataset(model: ClipTextModel) -> Dataset:
     return Dataset(properties=model.config.to_properties(), root_theta=model.theta)
 
 
-def export_clip_text_model_iree_parameters(model: ClipTextModel, output_path: AnyPath):
+def export_clip_text_model_iree_parameters(model: ClipTextModel, output_path: PathLike):
     dataset = clip_text_model_to_dataset(model)
     dataset.save(output_path)
 
 
 def export_clip_text_model_dataset_from_hugging_face(
-    model_or_name_or_path: Union[AnyPath, transformers.CLIPTextModel],
-    output_path: AnyPath,
+    model_or_name_or_path: Union[PathLike, transformers.CLIPTextModel],
+    output_path: PathLike,
     dtype: Optional[torch.dtype] = None,
 ):
     if isinstance(model_or_name_or_path, transformers.CLIPTextModel):
@@ -72,7 +72,7 @@ def export_clip_text_model_dataset_from_hugging_face(
 
 
 def export_clip_text_model_mlir(
-    model: Union[ClipTextModel, AnyPath],
+    model: Union[ClipTextModel, PathLike],
     batch_sizes: list[int],
     mlir_output_path: str,
 ):
@@ -109,8 +109,8 @@ def export_clip_text_model_mlir(
 def export_clip_text_model_to_iree(
     model: ClipTextModel,
     batch_sizes: list[int],
-    mlir_output_path: AnyPath,
-    parameters_output_path: AnyPath,
+    mlir_output_path: PathLike,
+    parameters_output_path: PathLike,
 ):
     export_clip_text_model_iree_parameters(model, parameters_output_path)
     export_clip_text_model_mlir(

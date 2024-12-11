@@ -9,8 +9,6 @@ import torch
 
 from iree.turbine.aot import ParameterArchiveBuilder, ParameterArchive
 
-from .typing import AnyPath
-
 
 class ShardedArchiveBuilder(ParameterArchiveBuilder):
     """A ParameterArchiveBuilder that can contain subordinate builders for each rank.
@@ -52,14 +50,14 @@ class ShardedArchiveBuilder(ParameterArchiveBuilder):
         return path.with_suffix(f".rank{rank}{path.suffix}")
 
 
-def save_tensor_as_irpa(tensor: torch.Tensor, path: AnyPath):
+def save_tensor_as_irpa(tensor: torch.Tensor, path: PathLike):
     """Save a single tensor into an IRPA file."""
     param_builder = ParameterArchiveBuilder()
     param_builder.add_tensor("", tensor)
     param_builder.save(path)
 
 
-def load_irpa_as_tensor(tensor: torch.Tensor, path: AnyPath, **kwargs):
+def load_irpa_as_tensor(tensor: torch.Tensor, path: PathLike, **kwargs):
     """Load a tensor form an IRPA file that holds only one tensor."""
     params = ParameterArchive(path, **kwargs)
     items = params.items()
