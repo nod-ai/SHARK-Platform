@@ -89,13 +89,7 @@ def test_get_pipeline_config(tuner_ctx: common.TunerContext) -> None:
         iree_codegen.DispatchLoweringPassPipeline.LLVMGPUVectorDistribute
     )
     pipeline_options = iree_gpu.PipelineOptionsAttr.get()
-    waves_per_eu_dict = ir.DictAttr.get({"amdgpu-waves-per-eu": ir.StringAttr.get("2")})
-    config_dict = ir.DictAttr.get(
-        {
-            common.GPU_PIPELINE_OPTIONS_KEY: pipeline_options,
-            common.LLVM_FUNC_ATTRS_KEY: waves_per_eu_dict,
-        }
-    )
+    config_dict = common.get_translation_info_config(pipeline_options, 2)
     translation_info = iree_codegen.TranslationInfoAttr.get(
         pipeline_attr, None, [16, 16, 1], 32, config_dict
     )
@@ -103,17 +97,13 @@ def test_get_pipeline_config(tuner_ctx: common.TunerContext) -> None:
         translation_info=translation_info,
         lowering_config=lowering_config,
     )
-    config1_str: str = str(config.translation_info.configuration["llvm_func_attrs"])
+    config1_str: str = str(
+        config.translation_info.configuration[common.LLVM_FUNC_ATTRS_KEY]
+    )
     assert config1_str == '{"amdgpu-waves-per-eu" = "2"}'
 
     pipeline_options = iree_gpu.PipelineOptionsAttr.get(prefetch_shared_memory=True)
-    waves_per_eu_dict = ir.DictAttr.get({"amdgpu-waves-per-eu": ir.StringAttr.get("4")})
-    config_dict = ir.DictAttr.get(
-        {
-            common.GPU_PIPELINE_OPTIONS_KEY: pipeline_options,
-            "llvm_func_attrs": waves_per_eu_dict,
-        }
-    )
+    config_dict = common.get_translation_info_config(pipeline_options, 4)
     translation_info = iree_codegen.TranslationInfoAttr.get(
         pipeline_attr, None, [16, 16, 1], 32, config_dict
     )
@@ -231,13 +221,7 @@ def test_get_lowering_config(tuner_ctx: common.TunerContext) -> None:
         iree_codegen.DispatchLoweringPassPipeline.LLVMGPUVectorDistribute
     )
     pipeline_options = iree_gpu.PipelineOptionsAttr.get()
-    waves_per_eu_dict = ir.DictAttr.get({"amdgpu-waves-per-eu": ir.StringAttr.get("2")})
-    config_dict = ir.DictAttr.get(
-        {
-            common.GPU_PIPELINE_OPTIONS_KEY: pipeline_options,
-            "llvm_func_attrs": waves_per_eu_dict,
-        }
-    )
+    config_dict = common.get_translation_info_config(pipeline_options, 2)
     translation_info = iree_codegen.TranslationInfoAttr.get(
         pipeline_attr, None, [16, 16, 1], 32, config_dict
     )
