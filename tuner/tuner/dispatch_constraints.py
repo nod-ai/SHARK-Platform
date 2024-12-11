@@ -244,13 +244,21 @@ def generate_solutions(
             subgroup_m_count=lookup(sg_m_cnt),
             subgroup_n_count=lookup(sg_n_cnt),
         )
-        config = Configuration(
-            lookup(subgroup_size),
-            [lookup(wg_x), lookup(wg_y), lookup(wg_z)],
-            lowering_config,
-            iree_gpu.PipelineOptionsAttr.get(),
-            lookup(waves_per_eu),
+        pipeline_attr = iree_codegen.DispatchLoweringPassPipelineAttr.get(
+            iree_codegen.DispatchLoweringPassPipeline.LLVMGPUVectorDistribute
         )
+        pipeline_options = iree_gpu.PipelineOptionsAttr.get()
+        config_dict = get_translation_info_config(
+            pipeline_options, lookup(waves_per_eu)
+        )
+        translation_info = iree_codegen.TranslationInfoAttr.get(
+            pipeline_attr,
+            None,
+            [lookup(wg_x), lookup(wg_y), lookup(wg_z)],
+            lookup(subgroup_size),
+            config_dict,
+        )
+        config = Configuration(translation_info, lowering_config)
         solver.add(z3.simplify(z3.Not(z3.And(list(x == model[x] for x in all_vars)))))
         i += 1
         yield config
