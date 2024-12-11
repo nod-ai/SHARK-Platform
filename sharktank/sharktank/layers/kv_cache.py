@@ -447,8 +447,7 @@ class PagedKVCache(BaseKVCache):
         bs, *_ = seq_positions.shape
         assert len(cache_partitions) == self.cache_partition_count
 
-        # [bs, partitions, atten_head_count, attn_head_dim]
-        # cache_partitions = ops.cat(cache_partitions, dim=1)
+        # [bs, 1, atten_head_count, attn_head_dim]
         for idx, cache_partition in enumerate(cache_partitions):
             # [bs, 1]
             page_index = seq_positions // self.block_seq_stride
@@ -459,7 +458,7 @@ class PagedKVCache(BaseKVCache):
             # [1, 1]
             partitions = torch.tensor(idx).unsqueeze(0)
 
-            # [bs, partitions]
+            # [bs, 1]
             transformer_block = torch.full(
                 (bs, 1), transformer_block_index, device=device
             )
@@ -486,14 +485,6 @@ class PagedKVCache(BaseKVCache):
         page_table = self.unflatten_page_table(state)  # 6D
 
         bs, block_seq_len, *_ = page_ids.shape
-        # Blocks dim 1,2 according to the configured block stride.
-        blocked_shape = [
-            bs,
-            block_seq_len,
-            self.block_seq_stride,
-            self.attn_head_count,
-            self.attn_head_dim,
-        ]
 
         # Reshape the page cache into sub-blocks so that we can index at the
         # granularity of the transformer_block and cache partition.
