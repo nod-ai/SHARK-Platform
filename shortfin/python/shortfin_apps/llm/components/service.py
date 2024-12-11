@@ -29,6 +29,14 @@ PROG_ISOLATIONS = {
     isolation.name.lower(): isolation for isolation in sf.ProgramIsolation
 }
 
+import os
+
+SHORTFIN_DEBUG_LLM_SERVICE = os.getenv(
+    "SHORTFIN_DEBUG_LLM_SERVICE", "False"
+).lower() in ("true", "yes", "1", "y")
+if SHORTFIN_DEBUG_LLM_SERVICE:
+    from .debug_service import pre_invocation_debug_dump
+
 
 class GenerateService:
     """Top level service interface for generating text against a model."""
@@ -438,7 +446,12 @@ class InferenceExecutorProcess(sf.Process):
                 fn,
                 "".join([f"\n  {i}: {ary.shape}" for i, ary in enumerate(args)]),
             )
-            # Invoke. Logits are of shape [bs, bsl, d].
+
+            # pre-invocation args dump
+            if SHORTFIN_DEBUG_LLM_SERVICE:
+                await pre_invocation_debug_dump(executor=self, local_vars=locals())
+
+            # invoke VMFB
             (logits,) = await fn(*args, fiber=self.fiber)
 
             # publish cache pages
