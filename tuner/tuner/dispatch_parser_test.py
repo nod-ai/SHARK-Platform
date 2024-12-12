@@ -15,6 +15,7 @@ from typing import Generator
 from iree.compiler import ir  # type: ignore
 from iree.compiler.dialects import func  # type: ignore
 from iree.compiler.dialects import iree_gpu  # type: ignore
+from iree.compiler.dialects import iree_codegen  # type: ignore
 
 from . import common
 from . import dispatch_parser
@@ -50,14 +51,18 @@ def test_get_mmt_tile_sizes(tuner_ctx: common.TunerContext) -> None:
         subgroup_m_count=1,
         subgroup_n_count=4,
     )
-    config = dispatch_parser.Configuration(
-        subgroup_size=0,
-        workgroup_size=[],
-        lowering_config=lowering_config,
-        gpu_pipeline_options=iree_gpu.PipelineOptionsAttr.get(),
-        waves_per_eu=0,
+    pipeline_attr = iree_codegen.DispatchLoweringPassPipelineAttr.get(
+        iree_codegen.DispatchLoweringPassPipeline.LLVMGPUVectorDistribute
     )
-    lowering_config = config.lowering_config
+    pipeline_options = iree_gpu.PipelineOptionsAttr.get()
+    config_dict = common.get_translation_info_config(pipeline_options, 0)
+    translation_info = iree_codegen.TranslationInfoAttr.get(
+        pipeline_attr, None, [], 0, config_dict
+    )
+    compilation_info = iree_codegen.CompilationInfoAttr.get(
+        lowering_config, translation_info
+    )
+    lowering_config = compilation_info.lowering_config
     assert lowering_config.workgroup_tile_sizes == [128, 320, 0]
     assert lowering_config.reduction_tile_sizes == [0, 0, 32]
 
@@ -73,15 +78,35 @@ def test_get_conv_tile_sizes(tuner_ctx: common.TunerContext) -> None:
         subgroup_m_count=1,
         subgroup_n_count=4,
     )
-    config = dispatch_parser.Configuration(
-        subgroup_size=64,
-        workgroup_size=[256, 1, 1],
-        lowering_config=lowering_config,
-        gpu_pipeline_options=iree_gpu.PipelineOptionsAttr.get(),
-        waves_per_eu=1,
+    pipeline_attr = iree_codegen.DispatchLoweringPassPipelineAttr.get(
+        iree_codegen.DispatchLoweringPassPipeline.LLVMGPUVectorDistribute
     )
-    assert config.lowering_config.workgroup_tile_sizes == [1, 1, 464, 320, 1, 1, 0]
-    assert config.lowering_config.reduction_tile_sizes == [0, 0, 0, 0, 0, 0, 16]
+    pipeline_options = iree_gpu.PipelineOptionsAttr.get()
+    config_dict = common.get_translation_info_config(pipeline_options, 1)
+    translation_info = iree_codegen.TranslationInfoAttr.get(
+        pipeline_attr, None, [256, 1, 1], 64, config_dict
+    )
+    compilation_info = iree_codegen.CompilationInfoAttr.get(
+        lowering_config, translation_info
+    )
+    assert compilation_info.lowering_config.workgroup_tile_sizes == [
+        1,
+        1,
+        464,
+        320,
+        1,
+        1,
+        0,
+    ]
+    assert compilation_info.lowering_config.reduction_tile_sizes == [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        16,
+    ]
 
 
 def test_get_contract_tile_sizes(tuner_ctx: common.TunerContext) -> None:
@@ -95,21 +120,57 @@ def test_get_contract_tile_sizes(tuner_ctx: common.TunerContext) -> None:
         subgroup_m_count=1,
         subgroup_n_count=1,
     )
-    config = dispatch_parser.Configuration(
-        subgroup_size=32,
-        workgroup_size=[16, 16, 1],
-        lowering_config=lowering_config,
-        gpu_pipeline_options=iree_gpu.PipelineOptionsAttr.get(),
-        waves_per_eu=2,
+    pipeline_attr = iree_codegen.DispatchLoweringPassPipelineAttr.get(
+        iree_codegen.DispatchLoweringPassPipeline.LLVMGPUVectorDistribute
     )
-    assert dispatch_parser.get_contract_workgroup_sizes(config, "mnk") == [4, 8, 0]
-    assert dispatch_parser.get_contract_reduction_sizes(config, "mnk") == [0, 0, 16]
-    assert dispatch_parser.get_contract_workgroup_sizes(config, "nmk") == [8, 4, 0]
-    assert dispatch_parser.get_contract_reduction_sizes(config, "nmk") == [0, 0, 16]
-    assert dispatch_parser.get_contract_workgroup_sizes(config, "knm") == [0, 8, 4]
-    assert dispatch_parser.get_contract_reduction_sizes(config, "knm") == [16, 0, 0]
-    assert dispatch_parser.get_contract_workgroup_sizes(config, "kkk") == [0, 0, 0]
-    assert dispatch_parser.get_contract_reduction_sizes(config, "kkk") == [16, 16, 16]
+    pipeline_options = iree_gpu.PipelineOptionsAttr.get()
+    config_dict = common.get_translation_info_config(pipeline_options, 2)
+    translation_info = iree_codegen.TranslationInfoAttr.get(
+        pipeline_attr, None, [16, 16, 1], 32, config_dict
+    )
+    compilation_info = iree_codegen.CompilationInfoAttr.get(
+        lowering_config, translation_info
+    )
+    assert dispatch_parser.get_contract_workgroup_sizes(compilation_info, "mnk") == [
+        4,
+        8,
+        0,
+    ]
+    assert dispatch_parser.get_contract_reduction_sizes(compilation_info, "mnk") == [
+        0,
+        0,
+        16,
+    ]
+    assert dispatch_parser.get_contract_workgroup_sizes(compilation_info, "nmk") == [
+        8,
+        4,
+        0,
+    ]
+    assert dispatch_parser.get_contract_reduction_sizes(compilation_info, "nmk") == [
+        0,
+        0,
+        16,
+    ]
+    assert dispatch_parser.get_contract_workgroup_sizes(compilation_info, "knm") == [
+        0,
+        8,
+        4,
+    ]
+    assert dispatch_parser.get_contract_reduction_sizes(compilation_info, "knm") == [
+        16,
+        0,
+        0,
+    ]
+    assert dispatch_parser.get_contract_workgroup_sizes(compilation_info, "kkk") == [
+        0,
+        0,
+        0,
+    ]
+    assert dispatch_parser.get_contract_reduction_sizes(compilation_info, "kkk") == [
+        16,
+        16,
+        16,
+    ]
 
 
 def test_get_shapes_mmt(tuner_ctx: common.TunerContext) -> None:

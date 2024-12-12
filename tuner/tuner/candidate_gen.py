@@ -41,9 +41,9 @@ tune_logger = logging.getLogger("tune")
 
 def apply_configuration(
     template: list[str],
-    configuration: Configuration,
+    compilation_info: iree_codegen.CompilationInfoAttr,
 ) -> str:
-    lowering_config = configuration.lowering_config
+    lowering_config = compilation_info.lowering_config
     intrinsic = lowering_config.mma_kind
     (
         subgroup_m_count,
@@ -51,7 +51,13 @@ def apply_configuration(
     ) = lowering_config.subgroup_count_mn
     workgroup_sizes = lowering_config.workgroup_tile_sizes
     reduction_sizes = lowering_config.reduction_tile_sizes
-    tune_logger.info(f"Applying: {configuration}")
+    gpu_pipeline_options = compilation_info.translation_info.configuration[
+        GPU_PIPELINE_OPTIONS_KEY
+    ]
+    waves_per_eu = compilation_info.translation_info.configuration[LLVM_FUNC_ATTRS_KEY][
+        WAVES_PER_EU_KEY
+    ]
+    tune_logger.info(f"Applying: {compilation_info}")
     expr0 = re.compile(
         r"<intrinsic = #iree_gpu\.mma_layout<(.+)>, subgroup_m_count = ([0-9]+), subgroup_n_count = ([0-9]+)>"
     )
@@ -63,11 +69,11 @@ def apply_configuration(
     expr4 = re.compile(r"gpu_pipeline_options = #iree_gpu\.pipeline_options<([^>]*)>")
     expr5 = re.compile(r"\"amdgpu-waves-per-eu\" = \"([0-9])\"")
     repl0 = f"<intrinsic = {intrinsic}, subgroup_m_count = {subgroup_m_count}, subgroup_n_count = {subgroup_n_count}>"
-    repl1 = f'LLVMGPUVectorDistribute workgroup_size = [{", ".join(map(str, configuration.workgroup_size))}] subgroup_size = {configuration.subgroup_size},'
+    repl1 = f'LLVMGPUVectorDistribute workgroup_size = [{", ".join(map(str, compilation_info.translation_info.workgroup_size))}] subgroup_size = {compilation_info.translation_info.subgroup_size},'
     repl2 = f"workgroup = {workgroup_sizes}"
     repl3 = f"reduction = {reduction_sizes}"
-    repl4 = f"gpu_pipeline_options = {configuration.gpu_pipeline_options}"
-    repl5 = f'"amdgpu-waves-per-eu" = "{configuration.waves_per_eu}"'
+    repl4 = f"gpu_pipeline_options = {gpu_pipeline_options}"
+    repl5 = f'"amdgpu-waves-per-eu" = {waves_per_eu}'
 
     new_mlir = ""
     for line in template:
@@ -95,7 +101,7 @@ class DispatchTuner(DispatchParser):
         self,
         problem_size: ProblemSize,
         template: list[str],
-        configuration: Configuration,
+        compilation_info: iree_codegen.CompilationInfoAttr,
     ) -> MLIRTransformation:
         """Apply parameter transformations to the operation."""
         pass
@@ -126,17 +132,11 @@ class DispatchTunerRegistry:
 
 class MmtTuner(DispatchTuner, MmtParser):
     def get_transform_function_mmt(
-        self, problem_size: ProblemSize, functionName: str, configuration: Configuration
+        self,
+        problem_size: ProblemSize,
+        functionName: str,
+        compilation_info: iree_codegen.CompilationInfoAttr,
     ) -> str:
-        lowering_config = configuration.lowering_config
-        intrinsic = lowering_config.mma_kind
-        (
-            subgroup_m_count,
-            subgroup_n_count,
-        ) = lowering_config.subgroup_count_mn
-
-        wg_x, wg_y, wg_z = configuration.workgroup_size
-        extra_config = get_pipeline_config(configuration)
         return f"""
     transform.named_sequence @{functionName}(%matmul: !transform.any_op {{transform.readonly}}) -> (!transform.any_op, !transform.any_param) {{
     %mmt = transform.include @match_mmt_f16_f16_f32 failures(propagate) (%matmul) : (!transform.any_op) -> !transform.any_op
@@ -144,15 +144,7 @@ class MmtTuner(DispatchTuner, MmtParser):
     %rhs = transform.get_operand %matmul[1] : (!transform.any_op) -> !transform.any_value
     transform.iree.match.cast_compatible_type %lhs = tensor<{problem_size.lhs_type}> : !transform.any_value
     transform.iree.match.cast_compatible_type %rhs = tensor<{problem_size.rhs_type}> : !transform.any_value
-    %config = transform.param.constant #iree_codegen.compilation_info<
-        lowering_config = {configuration.lowering_config}>,
-        translation_info = #iree_codegen.translation_info<LLVMGPUVectorDistribute
-        workgroup_size = [{wg_x}, {wg_y}, {wg_z}] subgroup_size = {configuration.subgroup_size},
-        {{mma_schedule = #iree_gpu.mma_schedule<
-            intrinsic = {intrinsic},
-            subgroup_m_count = {subgroup_m_count}, subgroup_n_count = {subgroup_n_count}>
-        {extra_config}}}>
-        > -> !transform.any_param
+    %config = transform.param.constant {compilation_info} -> !transform.any_param
     transform.yield %matmul, %config : !transform.any_op, !transform.any_param
     }}
     """
@@ -161,21 +153,23 @@ class MmtTuner(DispatchTuner, MmtParser):
         self,
         problem_size: ProblemSize,
         template: list[str],
-        configuration: Configuration,
+        compilation_info: iree_codegen.CompilationInfoAttr,
     ) -> MLIRTransformation:
         M, N, K = problem_size.MNK
         modified = indent(
             self.get_transform_function_mmt(
-                problem_size, f"match_mmt_{M}x{N}x{K}", configuration
+                problem_size, f"match_mmt_{M}x{N}x{K}", compilation_info
             ),
             "//   ",
         )
         modified += apply_configuration(
             template,
-            configuration,
+            compilation_info,
         )
         embeddable = indent(
-            self.get_transform_function_mmt(problem_size, f"match_op", configuration),
+            self.get_transform_function_mmt(
+                problem_size, f"match_op", compilation_info
+            ),
             "  ",
         )
         return MLIRTransformation(template, modified, embeddable)
@@ -183,7 +177,10 @@ class MmtTuner(DispatchTuner, MmtParser):
 
 class ConvTuner(DispatchTuner, ConvParser):
     def get_transform_function_conv(
-        self, problem_size: ProblemSize, functionName: str, configuration: Configuration
+        self,
+        problem_size: ProblemSize,
+        functionName: str,
+        compilation_info: iree_codegen.CompilationInfoAttr,
     ) -> str:
         dynamic_batch_input_ty = problem_size.lhs_type
         dynamic_batch_input_ty.shape = dynamic_batch_input_ty.shape.copy()
@@ -197,16 +194,6 @@ class ConvTuner(DispatchTuner, ConvParser):
         filter = f"tensor<{problem_size.rhs_type}>"
         output = f"tensor<{dynamic_batch_output_ty}>"
 
-        lowering_config = configuration.lowering_config
-        intrinsic = lowering_config.mma_kind
-        (
-            subgroup_m_count,
-            subgroup_n_count,
-        ) = lowering_config.subgroup_count_mn
-
-        wg_x, wg_y, wg_z = configuration.workgroup_size
-        extra_config = get_pipeline_config(configuration)
-
         return f"""
     transform.named_sequence @{functionName}(%conv: !transform.any_op {{transform.readonly}})
     -> (!transform.any_op, !transform.any_param) {{
@@ -216,15 +203,7 @@ class ConvTuner(DispatchTuner, ConvParser):
         ins(%lhs, %rhs : {input}, {filter})
         outs(%out : {output}) -> {output}
     }} : (!transform.any_op) -> (!transform.any_value, !transform.any_value)
-        %config = transform.param.constant #iree_codegen.compilation_info<
-        lowering_config = {configuration.lowering_config}>,
-        translation_info = #iree_codegen.translation_info<LLVMGPUVectorDistribute
-        workgroup_size = [{wg_x}, {wg_y}, {wg_z}] subgroup_size = {configuration.subgroup_size},
-            {{mma_schedule = #iree_gpu.mma_schedule<
-                intrinsic = {intrinsic},
-                subgroup_m_count = {subgroup_m_count}, subgroup_n_count = {subgroup_n_count}>
-            {extra_config}}}>
-        > -> !transform.any_param
+        %config = transform.param.constant {compilation_info} -> !transform.any_param
     transform.yield %conv, %config : !transform.any_op, !transform.any_param
     }}
     """
@@ -233,23 +212,25 @@ class ConvTuner(DispatchTuner, ConvParser):
         self,
         problem_size: ProblemSize,
         template: list[str],
-        configuration: Configuration,
+        compilation_info: iree_codegen.CompilationInfoAttr,
     ) -> MLIRTransformation:
         conv_dims = ConvDimInfo.from_problem_size(problem_size)
         modified = indent(
             self.get_transform_function_conv(
                 problem_size,
                 f"match_conv_2d_nhwc_hwcf_Bx{conv_dims.oh}x{conv_dims.ow}x{conv_dims.oc}x{conv_dims.fh}x{conv_dims.fw}x{conv_dims.ic}",
-                configuration,
+                compilation_info,
             ),
             "//   ",
         )
         modified += apply_configuration(
             template,
-            configuration,
+            compilation_info,
         )
         embeddable = indent(
-            self.get_transform_function_conv(problem_size, f"match_op", configuration),
+            self.get_transform_function_conv(
+                problem_size, f"match_op", compilation_info
+            ),
             "  ",
         )
         return MLIRTransformation(template, modified, embeddable)
@@ -260,18 +241,8 @@ class ContractionTuner(DispatchTuner, ContractionParser):
         self,
         problem_size: ProblemSize,
         functionName: str,
-        configuration: Configuration,
+        compilation_info: iree_codegen.CompilationInfoAttr,
     ) -> str:
-        lowering_config = configuration.lowering_config
-        intrinsic = lowering_config.mma_kind
-        (
-            subgroup_m_count,
-            subgroup_n_count,
-        ) = lowering_config.subgroup_count_mn
-
-        wg_x, wg_y, wg_z = configuration.workgroup_size
-        extra_config = get_pipeline_config(configuration)
-
         lhs_dynamic_batch = problem_size.lhs_type
         lhs_dynamic_batch.shape = lhs_dynamic_batch.shape.copy()
         lhs_dynamic_batch.shape[0] = -1
@@ -283,15 +254,7 @@ transform.named_sequence @{functionName}(%generic: !transform.any_op {{transform
 %rhs = transform.get_operand %generic[1] : (!transform.any_op) -> !transform.any_value
 transform.iree.match.cast_compatible_type %lhs = tensor<{lhs_dynamic_batch}> : !transform.any_value
 transform.iree.match.cast_compatible_type %rhs = tensor<{problem_size.rhs_type}> : !transform.any_value
-%config = transform.param.constant #iree_codegen.compilation_info<
-    lowering_config = {configuration.lowering_config}>,
-    translation_info = #iree_codegen.translation_info<LLVMGPUVectorDistribute
-    workgroup_size = [{wg_x}, {wg_y}, {wg_z}] subgroup_size = {configuration.subgroup_size},
-    {{mma_schedule = #iree_gpu.mma_schedule<
-        intrinsic = {intrinsic},
-        subgroup_m_count = {subgroup_m_count}, subgroup_n_count = {subgroup_n_count}>
-    {extra_config}}}>
-    > -> !transform.any_param
+%config = transform.param.constant {compilation_info} -> !transform.any_param
 transform.yield %generic, %config : !transform.any_op, !transform.any_param
 }}
 """
@@ -300,23 +263,23 @@ transform.yield %generic, %config : !transform.any_op, !transform.any_param
         self,
         problem_size: ProblemSize,
         template: list[str],
-        configuration: Configuration,
+        compilation_info: iree_codegen.CompilationInfoAttr,
     ) -> MLIRTransformation:
         M, N, K = problem_size.MNK
         modified = indent(
             self.get_transform_function_broadcast_rhs_mmt(
-                problem_size, f"match_broadcast_rhs_mmt_Bx{M}x{N}x{K}", configuration
+                problem_size, f"match_broadcast_rhs_mmt_Bx{M}x{N}x{K}", compilation_info
             ),
             "//   ",
         )
         modified += apply_configuration(
             template,
-            configuration,
+            compilation_info,
         )
 
         embeddable = indent(
             self.get_transform_function_broadcast_rhs_mmt(
-                problem_size, f"match_op", configuration
+                problem_size, f"match_op", compilation_info
             ),
             "  ",
         )
@@ -326,11 +289,11 @@ transform.yield %generic, %config : !transform.any_op, !transform.any_param
         self,
         problem_size: ProblemSize,
         template: list[str],
-        configuration: Configuration,
+        compilation_info: iree_codegen.CompilationInfoAttr,
     ) -> MLIRTransformation:
         if self.is_broadcast_rhs_mmt(template):
             return self.apply_params_broadcast_rhs_mmt(
-                problem_size, template, configuration
+                problem_size, template, compilation_info
             )
 
         # TODO: Generate transform function.
@@ -338,7 +301,7 @@ transform.yield %generic, %config : !transform.any_op, !transform.any_param
             template,
             apply_configuration(
                 template,
-                configuration,
+                compilation_info,
             ),
             "",
         )
@@ -349,18 +312,8 @@ class BatchMmtTuner(DispatchTuner, BatchMmtParser):
         self,
         problem_size: ProblemSize,
         functionName: str,
-        configuration: Configuration,
+        compilation_info: iree_codegen.CompilationInfoAttr,
     ) -> str:
-        lowering_config = configuration.lowering_config
-        intrinsic = lowering_config.mma_kind
-        (
-            subgroup_m_count,
-            subgroup_n_count,
-        ) = lowering_config.subgroup_count_mn
-
-        wg_x, wg_y, wg_z = configuration.workgroup_size
-        extra_config = get_pipeline_config(configuration)
-
         return f"""
 transform.named_sequence @{functionName}(%generic: !transform.any_op {{transform.readonly}}) -> (!transform.any_op, !transform.any_param) {{
 %mmt = transform.include @match_batch_mmt_i8_i8_i32 failures(propagate) (%generic) : (!transform.any_op) -> !transform.any_op
@@ -368,15 +321,7 @@ transform.named_sequence @{functionName}(%generic: !transform.any_op {{transform
 %rhs = transform.get_operand %generic[1] : (!transform.any_op) -> !transform.any_value
 transform.iree.match.cast_compatible_type %lhs = tensor<{problem_size.lhs_type}> : !transform.any_value
 transform.iree.match.cast_compatible_type %rhs = tensor<{problem_size.rhs_type}> : !transform.any_value
-%config = transform.param.constant #iree_codegen.compilation_info<
-    lowering_config = {configuration.lowering_config}>,
-    translation_info = #iree_codegen.translation_info<LLVMGPUVectorDistribute
-    workgroup_size = [{wg_x}, {wg_y}, {wg_z}] subgroup_size = {configuration.subgroup_size},
-    {{mma_schedule = #iree_gpu.mma_schedule<
-        intrinsic = {intrinsic},
-        subgroup_m_count = {subgroup_m_count}, subgroup_n_count = {subgroup_n_count}>
-    {extra_config}}}>
-    > -> !transform.any_param
+%config = transform.param.constant {compilation_info} -> !transform.any_param
 transform.yield %generic, %config : !transform.any_op, !transform.any_param
 }}
 """
@@ -385,24 +330,24 @@ transform.yield %generic, %config : !transform.any_op, !transform.any_param
         self,
         problem_size: ProblemSize,
         template: list[str],
-        configuration: Configuration,
+        compilation_info: iree_codegen.CompilationInfoAttr,
     ) -> MLIRTransformation:
         M, N, K = problem_size.MNK
         B = problem_size.matmul_size.B
         modified = indent(
             self.get_transform_function_batch_mmt(
-                problem_size, f"match_batch_mmt_{B}x{M}x{N}x{K}", configuration
+                problem_size, f"match_batch_mmt_{B}x{M}x{N}x{K}", compilation_info
             ),
             "//   ",
         )
         modified += apply_configuration(
             template,
-            configuration,
+            compilation_info,
         )
 
         embeddable = indent(
             self.get_transform_function_batch_mmt(
-                problem_size, f"match_op", configuration
+                problem_size, f"match_op", compilation_info
             ),
             "  ",
         )
@@ -415,21 +360,11 @@ class BatchMatmulTuner(DispatchTuner, BatchMatmulParser):
         problem_size: ProblemSize,
         tile_dims: str,
         functionName: str,
-        configuration: Configuration,
+        compilation_info: iree_codegen.CompilationInfoAttr,
     ) -> str:
         input0 = f"tensor<{problem_size.lhs_type}>"
         input1 = f"tensor<{problem_size.rhs_type}>"
         output = f"tensor<{problem_size.res_type}>"
-
-        lowering_config = configuration.lowering_config
-        intrinsic = lowering_config.mma_kind
-        (
-            subgroup_m_count,
-            subgroup_n_count,
-        ) = lowering_config.subgroup_count_mn
-
-        wg_x, wg_y, wg_z = configuration.workgroup_size
-        extra_config = get_pipeline_config(configuration)
 
         return f"""
     transform.named_sequence @{functionName}(%batch_matmul: !transform.any_op {{transform.readonly}})
@@ -440,15 +375,7 @@ class BatchMatmulTuner(DispatchTuner, BatchMatmulParser):
         ins(%lhs, %rhs : {input0}, {input1})
         outs(%out : {output}) -> {output}
     }} : (!transform.any_op) -> (!transform.any_value, !transform.any_value)
-        %config = transform.param.constant #iree_codegen.compilation_info<
-        lowering_config = {configuration.lowering_config}>,
-        translation_info = #iree_codegen.translation_info<LLVMGPUPadAndVectorDistribute
-        workgroup_size = [{wg_x}, {wg_y}, {wg_z}] subgroup_size = {configuration.subgroup_size},
-            {{mma_schedule = #iree_gpu.mma_schedule<
-                intrinsic = {intrinsic},
-                subgroup_m_count = {subgroup_m_count}, subgroup_n_count = {subgroup_n_count}>
-            {extra_config}}}>
-        > -> !transform.any_param
+        %config = transform.param.constant {compilation_info} -> !transform.any_param
     transform.yield %batch_matmul, %config : !transform.any_op, !transform.any_param
     }}
     """
@@ -457,7 +384,7 @@ class BatchMatmulTuner(DispatchTuner, BatchMatmulParser):
         self,
         problem_size: ProblemSize,
         template: list[str],
-        configuration: Configuration,
+        compilation_info: iree_codegen.CompilationInfoAttr,
     ) -> MLIRTransformation:
         M, N, K = problem_size.MNK
         modified = indent(
@@ -465,18 +392,18 @@ class BatchMatmulTuner(DispatchTuner, BatchMatmulParser):
                 problem_size,
                 self.tile_dims,
                 f"match_batch_matmul_{problem_size.matmul_size.B}x{M}x{N}x{K}",
-                configuration,
+                compilation_info,
             ),
             "//   ",
         )
         modified += apply_configuration(
             template,
-            configuration,
+            compilation_info,
         )
 
         embeddable = indent(
             self.get_transform_function_batch_matmul(
-                problem_size, self.tile_dims, f"match_op", configuration
+                problem_size, self.tile_dims, f"match_op", compilation_info
             ),
             "  ",
         )

@@ -21,7 +21,7 @@ def parse_tensor_type(tensor_type: str) -> ShapedType:
 
 
 def get_contract_workgroup_sizes(
-    configuration: Configuration, tile_dims: str
+    configuration: iree_codegen.CompilationInfoAttr, tile_dims: str
 ) -> list[int]:
     m, n, _k = configuration.lowering_config.workgroup_tile_sizes
 
@@ -38,7 +38,7 @@ def get_contract_workgroup_sizes(
 
 
 def get_contract_reduction_sizes(
-    configuration: Configuration, tile_dims: str
+    configuration: iree_codegen.CompilationInfoAttr, tile_dims: str
 ) -> list[int]:
     _m, _n, k = configuration.lowering_config.reduction_tile_sizes
     reduction_size = [0] * len(tile_dims)
