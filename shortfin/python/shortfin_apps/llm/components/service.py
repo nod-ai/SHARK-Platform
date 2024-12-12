@@ -30,12 +30,7 @@ PROG_ISOLATIONS = {
 }
 
 import os
-
-SHORTFIN_DEBUG_LLM_SERVICE = os.getenv(
-    "SHORTFIN_DEBUG_LLM_SERVICE", "False"
-).lower() in ("true", "yes", "1", "y")
-if SHORTFIN_DEBUG_LLM_SERVICE:
-    from .debug_service import pre_invocation_debug_dump
+from .service_debug_dumper import INFERENCE_DEBUG_DUMPER
 
 
 class GenerateService:
@@ -448,10 +443,17 @@ class InferenceExecutorProcess(sf.Process):
             )
 
             # pre-invocation args dump
-            if SHORTFIN_DEBUG_LLM_SERVICE:
-                await pre_invocation_debug_dump(executor=self, local_vars=locals())
+            if os.getenv("SHORTFIN_DEBUG_LLM_SERVICE", "False").lower() in (
+                "true",
+                "yes",
+                "1",
+                "y",
+            ):
+                await INFERENCE_DEBUG_DUMPER.pre_invocation_debug_dump(
+                    executor=self, local_vars=locals()
+                )
 
-            # invoke VMFB
+            # Invoke VMFB. Logits are of shape [bs, bsl, d].
             (logits,) = await fn(*args, fiber=self.fiber)
 
             # publish cache pages
