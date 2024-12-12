@@ -30,7 +30,7 @@ PROG_ISOLATIONS = {
 }
 
 import os
-from .service_debug_dumper import INFERENCE_DEBUG_DUMPER
+from .service_debug_dumper import SERVICE_DEBUG_DUMPER
 
 
 class GenerateService:
@@ -449,7 +449,7 @@ class InferenceExecutorProcess(sf.Process):
                 "1",
                 "y",
             ):
-                await INFERENCE_DEBUG_DUMPER.pre_invocation_debug_dump(
+                await SERVICE_DEBUG_DUMPER.pre_invocation_debug_dump(
                     executor=self, local_vars=locals()
                 )
 
