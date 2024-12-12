@@ -246,7 +246,6 @@ class LastLayer(ThetaLayer):
         silu = ops.elementwise(F.silu, vec)
         lin = self.ada_linear(silu)
         shift, scale = lin.chunk(2, dim=1)
-        print(x.shape, shift.shape, scale.shape)
         x = (1 + scale[:, None, :]) * layer_norm(x) + shift[:, None, :]
         x = self.outlinear(x)
         return x
