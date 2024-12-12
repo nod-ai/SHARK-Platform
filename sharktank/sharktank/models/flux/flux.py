@@ -10,11 +10,7 @@ https://github.com/black-forest-labs/flux/blob/main/src/flux/model.py
 """
 
 import math
-from typing import Optional
-
 from dataclasses import dataclass
-from typing import Union
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -128,7 +124,7 @@ class FluxModelV1(ThetaLayer):
         # running on sequences img
         img = self.img_in(img)
         time_in_0 = self.time_in_0(timestep_embedding(timesteps, 256))
-        time_in_silu = ops.elementwise(nn.SiLU(), time_in_0)
+        time_in_silu = ops.elementwise(F.silu, time_in_0)
         vec = self.time_in_1(time_in_silu)
         if self.guidance:
             if guidance is None:
@@ -137,11 +133,11 @@ class FluxModelV1(ThetaLayer):
                 )
             guidance_inp = timestep_embedding(guidance, 256)
             guidance0 = self.guidance_in0(guidance_inp)
-            guidance_silu = ops.elementwise(nn.SiLU(), guidance0)
+            guidance_silu = ops.elementwise(F.silu, guidance0)
             guidance_out = self.guidance_in1(guidance_silu)
             vec = vec + self.guidance_in(guidance_out)
         vector_in_0 = self.vector_in_0(y)
-        vector_in_silu = ops.elementwise(nn.SiLU(), vector_in_0)
+        vector_in_silu = ops.elementwise(F.silu, vector_in_0)
         vector_in_1 = self.vector_in_1(vector_in_silu)
         vec = vec + vector_in_1
 
@@ -247,7 +243,7 @@ class LastLayer(ThetaLayer):
         self.add_module("ada_linear", LinearLayer(theta("ada_linear")))
 
     def forward(self, x: AnyTensor, vec: AnyTensor) -> AnyTensor:
-        silu = ops.elementwise(nn.SiLU(), vec)
+        silu = ops.elementwise(F.silu, vec)
         lin = self.ada_linear(silu)
         shift, scale = lin.chunk(2, dim=1)
         print(x.shape, shift.shape, scale.shape)
