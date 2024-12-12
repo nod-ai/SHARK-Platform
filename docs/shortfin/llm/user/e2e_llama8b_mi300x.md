@@ -22,38 +22,27 @@ python -m venv --prompt shark-ai .venv
 source .venv/bin/activate
 ```
 
-### Install `shortfin`
+## Install stable shark-ai packages
 
-You can install either the `latest stable` version of shortfin by installing
-`shark-ai` or the `nightly` version directly:
-
-#### Stable
+<!-- TODO: Add `sharktank` to `shark-ai` meta package -->
 
 ```bash
-pip install shark-ai[apps]
+pip install shark-ai[apps] sharktank
 ```
 
-#### Nightly
+### Nightly packages
+
+To install nightly packages:
+
+<!-- TODO: Add `sharktank` to `shark-ai` meta package -->
 
 ```bash
-pip install shortfin[apps] --pre -f https://github.com/nod-ai/shark-ai/releases/expanded_assets/dev-wheels
+pip install shark-ai[apps] sharktank \
+    --pre --find-links https://github.com/nod-ai/shark-ai/releases/expanded_assets/dev-wheels
 ```
 
-<!-- TODO: Remove when sharktank added to `shark-ai[apps]` -->
-### Install `sharktank`
-
-Install the `nightly` version of sharktank:
-
-```bash
-pip install sharktank --pre -f https://github.com/nod-ai/shark-ai/releases/expanded_assets/dev-wheels
-```
-
-<!-- TODO: Remove once `sentencepiece` added to nightly `sharktank` -->
-### Install `sentencepiece`
-
-```bash
-pip install sentencepiece
-```
+See also the
+[instructions here](https://github.com/nod-ai/shark-ai/blob/main/docs/nightly_releases.md).
 
 ### Define a directory for export files
 
