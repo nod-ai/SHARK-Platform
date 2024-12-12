@@ -111,12 +111,6 @@ def get_compatible_mfma_intrinsics(
     return list(filter(is_comptible, mma_intrinsics))
 
 
-@dataclass
-class Configuration:
-    translation_info: iree_codegen.TranslationInfoAttr
-    lowering_config: iree_gpu.LoweringConfigAttr
-
-
 # The key name for GPUPipelineOptionsAttr in the translation info config dictionary.
 GPU_PIPELINE_OPTIONS_KEY = "gpu_pipeline_options"
 # The key name for llvm_func_attrs attribute in the translation info config dictionary.

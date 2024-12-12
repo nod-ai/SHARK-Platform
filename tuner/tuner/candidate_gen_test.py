@@ -65,9 +65,8 @@ def test_apply_params_mmt(tuner_ctx: common.TunerContext) -> None:
     translation_info = iree_codegen.TranslationInfoAttr.get(
         pipeline_attr, None, [16, 16, 1], 16, config_dict
     )
-    config = common.Configuration(
-        translation_info=translation_info,
-        lowering_config=lowering_config,
+    compilation_info = iree_codegen.CompilationInfoAttr.get(
+        lowering_config, translation_info
     )
 
     problem_size = common.ProblemSize(
@@ -77,7 +76,9 @@ def test_apply_params_mmt(tuner_ctx: common.TunerContext) -> None:
         common.ShapedType([M, N], tuner_ctx.type.f32),
         common.DispatchKind.mmt,
     )
-    tf_mlir = candidate_gen.MmtTuner().apply_params(problem_size, mlir_template, config)
+    tf_mlir = candidate_gen.MmtTuner().apply_params(
+        problem_size, mlir_template, compilation_info
+    )
 
     modified = tf_mlir.modified
     embeddable = tf_mlir.embeddable
@@ -134,9 +135,8 @@ def test_apply_params_conv(tuner_ctx: common.TunerContext) -> None:
     translation_info = iree_codegen.TranslationInfoAttr.get(
         pipeline_attr, None, [256, 1, 1], 64, config_dict
     )
-    config = common.Configuration(
-        translation_info=translation_info,
-        lowering_config=lowering_config,
+    compilation_info = iree_codegen.CompilationInfoAttr.get(
+        lowering_config, translation_info
     )
 
     problem_size = common.ProblemSize(
@@ -147,7 +147,7 @@ def test_apply_params_conv(tuner_ctx: common.TunerContext) -> None:
         common.DispatchKind.conv,
     )
     tf_mlir = candidate_gen.ConvTuner().apply_params(
-        problem_size, mlir_template, config
+        problem_size, mlir_template, compilation_info
     )
 
     modified = tf_mlir.modified
@@ -208,13 +208,12 @@ def test_apply_params_contract(tuner_ctx: common.TunerContext) -> None:
     translation_info = iree_codegen.TranslationInfoAttr.get(
         pipeline_attr, None, [256, 1, 1], 64, config_dict
     )
-    config = common.Configuration(
-        translation_info=translation_info,
-        lowering_config=lowering_config,
+    compilation_info = iree_codegen.CompilationInfoAttr.get(
+        lowering_config, translation_info
     )
 
     tf_mlir = candidate_gen.ContractionTuner("mk", "nk", tile_dims).apply_params(
-        problem_size, mlir_template, config
+        problem_size, mlir_template, compilation_info
     )
 
     new_mlir = tf_mlir.modified
@@ -268,13 +267,12 @@ def test_apply_params_batch_matmul(tuner_ctx: common.TunerContext) -> None:
     translation_info = iree_codegen.TranslationInfoAttr.get(
         pipeline_attr, None, [128, 2, 1], 64, config_dict
     )
-    config = common.Configuration(
-        translation_info=translation_info,
-        lowering_config=lowering_config,
+    compilation_info = iree_codegen.CompilationInfoAttr.get(
+        lowering_config, translation_info
     )
 
     tf_mlir = candidate_gen.BatchMatmulTuner("mk", "nk", tile_dims).apply_params(
-        problem_size, mlir_template, config
+        problem_size, mlir_template, compilation_info
     )
 
     modified = tf_mlir.modified
@@ -331,13 +329,12 @@ def test_apply_params_batch_mmt_float(tuner_ctx: common.TunerContext) -> None:
     translation_info = iree_codegen.TranslationInfoAttr.get(
         pipeline_attr, None, [128, 2, 1], 64, config_dict
     )
-    config = common.Configuration(
-        translation_info=translation_info,
-        lowering_config=lowering_config,
+    compilation_info = iree_codegen.CompilationInfoAttr.get(
+        lowering_config, translation_info
     )
 
     tf_mlir = candidate_gen.BatchMmtTuner().apply_params(
-        problem_size, mlir_template, config
+        problem_size, mlir_template, compilation_info
     )
 
     modified = tf_mlir.modified
@@ -392,13 +389,12 @@ def test_apply_params_batch_mmt_int(tuner_ctx: common.TunerContext) -> None:
     translation_info = iree_codegen.TranslationInfoAttr.get(
         pipeline_attr, None, [128, 2, 1], 64, config_dict
     )
-    config = common.Configuration(
-        translation_info=translation_info,
-        lowering_config=lowering_config,
+    compilation_info = iree_codegen.CompilationInfoAttr.get(
+        lowering_config, translation_info
     )
 
     tf_mlir = candidate_gen.BatchMmtTuner().apply_params(
-        problem_size, mlir_template, config
+        problem_size, mlir_template, compilation_info
     )
 
     modified = tf_mlir.modified
@@ -477,14 +473,13 @@ def test_apply_params_broadcast_rhs_mmt(tuner_ctx: common.TunerContext) -> None:
     translation_info = iree_codegen.TranslationInfoAttr.get(
         pipeline_attr, None, [128, 2, 1], 64, config_dict
     )
-    config = common.Configuration(
-        translation_info=translation_info,
-        lowering_config=lowering_config,
+    compilation_info = iree_codegen.CompilationInfoAttr.get(
+        lowering_config, translation_info
     )
 
     tf_mlir = candidate_gen.ContractionTuner(
         "mk", "nk", "mnk"
-    ).apply_params_broadcast_rhs_mmt(problem_size, mlir_template, config)
+    ).apply_params_broadcast_rhs_mmt(problem_size, mlir_template, compilation_info)
 
     modified = tf_mlir.modified
     embeddable = tf_mlir.embeddable
