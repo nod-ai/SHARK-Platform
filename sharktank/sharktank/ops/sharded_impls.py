@@ -923,38 +923,62 @@ def repeat_replicated(input: ReplicatedTensor, *sizes: List[int]) -> ReplicatedT
 
 
 @replicate.override(ReplicatedTensor)
-def replicate_replicated(input: ReplicatedTensor, *, devices: list) -> ReplicatedTensor:
-    if input.shard_count != len(devices):
+def replicate_replicated(
+    input: ReplicatedTensor, *, devices: list, count: int
+) -> ReplicatedTensor:
+    if devices is not None and input.shard_count != len(devices):
         raise ValueError(
             f"Number of shards not equal ({input.shard_count} != {len(devices)})"
         )
+    if count is not None and input.shard_count != count:
+        raise ValueError(f"Number of shards not equal ({input.shard_count} != {count})")
     return input
 
 
 @replicate.override(SplitPrimitiveTensor)
-def replicate_split(input: SplitPrimitiveTensor, *, devices: list) -> ReplicatedTensor:
-    if input.shard_count != len(devices):
+def replicate_split(
+    input: SplitPrimitiveTensor, *, devices: list, count: int
+) -> ReplicatedTensor:
+    if devices is not None and input.shard_count != len(devices):
         raise ValueError(
             f"Number of shards not equal ({input.shard_count} != {len(devices)})"
         )
+    if count is not None and input.shard_count != count:
+        raise ValueError(f"Number of shards not equal ({input.shard_count} != {count})")
     return all_gather(input)
 
 
 @replicate.override(UnreducedTensor)
-def replicate_unreduced(input: UnreducedTensor, *, devices: list) -> ReplicatedTensor:
-    if input.shard_count != len(devices):
+def replicate_unreduced(
+    input: UnreducedTensor, *, devices: list, count: int
+) -> ReplicatedTensor:
+    if devices is not None and input.shard_count != len(devices):
         raise ValueError(
             f"Number of shards not equal ({input.shard_count} != {len(devices)})"
         )
+    if count is not None and input.shard_count != count:
+        raise ValueError(f"Number of shards not equal ({input.shard_count} != {count})")
     return all_reduce(input)
 
 
 @replicate.override(Tensor)
-def replicate_unsharded(input, *, devices: list) -> ReplicatedTensor:
+def replicate_unsharded(input, *, devices: list, count: int) -> ReplicatedTensor:
     torch_input = unbox_tensor(input)
     # If we have a torch input replicating we can assume we need to transfer:
-    torch_inputs = [transfer_to_logical_device(torch_input, d.ordinal) for d in devices]
-    return ReplicatedTensor(ts=torch_inputs, devices=devices)
+    if devices is not None:
+        torch_inputs = [
+            transfer_to_logical_device(torch_input, d.ordinal) for d in devices
+        ]
+        return ReplicatedTensor(ts=torch_inputs, devices=devices)
+
+    if count is not None:
+        devices = [DeviceAffinity(i) for i in range(count)]
+        torch_inputs = [
+            transfer_to_logical_device(torch_input, i) for i in range(count)
+        ]
+        return ReplicatedTensor(ts=torch_inputs, devices=devices)
+
+    raise ValueError(f"Devices or count is required")
 
 
 @reshape.override(SplitPrimitiveTensor)

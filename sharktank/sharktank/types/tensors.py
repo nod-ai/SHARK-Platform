@@ -813,9 +813,6 @@ class ShardedTensorBase(ShardedTensor):
 
         self._devices: tuple[DeviceAffinity] = tuple(devices)
 
-        for i, t in enumerate(ts):
-            DeviceTensorTrait(i).set(t)
-
     def assign_affinities(self, affinities):
         assert len(affinities) == len(self._devices)
         self._devices = tuple(affinities)
@@ -893,6 +890,7 @@ class ShardedTensorBase(ShardedTensor):
             t_name = str(i)
             try:
                 t = raw_tensors[t_name]
+                DeviceTensorTrait(i).set(t)
                 ts.append(t)
             except KeyError as e:
                 raise IOError(
@@ -996,7 +994,7 @@ class SplitPrimitiveTensor(ShardedTensorBase):
         number of pieces.
         """
 
-        assert shard_count is None or not isinstance(ts, torch.Tensor)
+        assert shard_count is None or isinstance(ts, torch.Tensor)
         shard_count = shard_count if shard_count is not None else len(ts)
 
         if devices is None:
@@ -1169,9 +1167,6 @@ class ReplicatedTensor(ShardedTensor):
 
         self._devices: tuple[DeviceAffinity] = tuple(devices)
 
-        for d, t in zip(devices, ts):
-            DeviceTensorTrait(d.ordinal, d.queues).set(t)
-
     def assign_affinities(self, affinities):
         assert len(affinities) == len(self._devices)
         self._devices = tuple(affinities)
@@ -1237,6 +1232,9 @@ class ReplicatedTensor(ShardedTensor):
             for i in range(1, shard_count):
                 nt = deepcopy(t)
                 ts.append(nt)
+
+            for i, t in enumerate(ts):
+                DeviceTensorTrait(i).set(t)
 
         except KeyError as e:
             raise IOError(f"Missing component tensor '' in {raw_tensors.keys()}") from e

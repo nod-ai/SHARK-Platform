@@ -9,6 +9,8 @@ from typing import Optional
 from dataclasses import dataclass
 from typing import Union
 
+from iree.turbine.aot import DeviceAffinity
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -62,7 +64,7 @@ class PagedLlamaModelV1(BaseCausalLMModel):
     unsharded result or chain it with other tensor-parallel operations.
     """
 
-    def __init__(self, theta: Theta, config: LlamaModelConfig, devices: list):
+    def __init__(self, theta: Theta, config: LlamaModelConfig, devices: list = None):
         hp = config.hp
         super().__init__(
             theta,
@@ -79,6 +81,9 @@ class PagedLlamaModelV1(BaseCausalLMModel):
         self.activation_dtype = config.activation_dtype
         self.use_hf = config.use_hf
         self.attention_kernel = config.attention_kernel
+
+        if devices is None:
+            devices = [DeviceAffinity(i) for i in range(config.tensor_parallelism_size)]
 
         self.add_module(
             "token_embedding",
