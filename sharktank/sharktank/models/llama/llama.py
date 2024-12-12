@@ -62,7 +62,7 @@ class PagedLlamaModelV1(BaseCausalLMModel):
     unsharded result or chain it with other tensor-parallel operations.
     """
 
-    def __init__(self, theta: Theta, config: LlamaModelConfig):
+    def __init__(self, theta: Theta, config: LlamaModelConfig, devices: list):
         hp = config.hp
         super().__init__(
             theta,
@@ -91,9 +91,9 @@ class PagedLlamaModelV1(BaseCausalLMModel):
                 rope_freq_base=hp.rope_freq_base,
                 max_seqlen=hp.context_length,
                 device=self.device,
+                devices=devices,
                 use_hf=self.use_hf,
                 static_tables=config.static_tables,
-                tensor_parallelism_size=config.tensor_parallelism_size,
             ),
         )
         self.add_module(
@@ -238,8 +238,12 @@ class PagedLlamaModelV1(BaseCausalLMModel):
                 )
                 for _ in range(self.config.tensor_parallelism_size)
             ]
-            xk_temp = SplitPrimitiveTensor(ts=xk_temp_shard, shard_dim=2)
-            xv_temp = SplitPrimitiveTensor(ts=xv_temp_shard, shard_dim=2)
+            xk_temp = SplitPrimitiveTensor(
+                ts=xk_temp_shard, shard_dim=2, devices=tokens.devices
+            )
+            xv_temp = SplitPrimitiveTensor(
+                ts=xv_temp_shard, shard_dim=2, devices=tokens.devices
+            )
 
         h = self.token_embedding(tokens)
         self.trace_tensor("llama.token_embedding", h)

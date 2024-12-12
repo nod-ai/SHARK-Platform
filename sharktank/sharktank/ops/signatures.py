@@ -796,7 +796,7 @@ def _repeat_trampoline(
 
 
 @overridable
-def replicate(input: AnyTensor, count: int) -> ShardedTensor:
+def replicate(input: AnyTensor, devices: list) -> ShardedTensor:
     """Replicate across devices.
 
     Possibly reshards if required."""
@@ -805,11 +805,11 @@ def replicate(input: AnyTensor, count: int) -> ShardedTensor:
 
 @replicate.trampoline
 def _replicate_trampoline(
-    d: SignatureDispatcher, input: AnyTensor, count: int
+    d: SignatureDispatcher, input: AnyTensor, devices: list
 ) -> ShardedTensor:
     tensors = (input,)
     for override in d.find_overrides(tensors):
-        result = override(input, count=count)
+        result = override(input, devices=devices)
         if result is not NotImplemented:
             return override, result
     else:
