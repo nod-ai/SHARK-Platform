@@ -228,6 +228,9 @@ def run_test_sharded_resnet_block_with_iree(
     strict=True,
     raises=AssertionError,
 )
+@pytest.mark.xfail(
+    torch.__version__ >= (2, 5), reason="https://github.com/nod-ai/shark-ai/issues/683"
+)
 def test_sharded_resnet_block_with_iree(
     mlir_path: Optional[Path],
     module_path: Optional[Path],
