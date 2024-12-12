@@ -93,12 +93,11 @@ def test_get_pipeline_config(tuner_ctx: common.TunerContext) -> None:
     translation_info = iree_codegen.TranslationInfoAttr.get(
         pipeline_attr, None, [16, 16, 1], 32, config_dict
     )
-    config = common.Configuration(
-        translation_info=translation_info,
-        lowering_config=lowering_config,
+    compilation_info = iree_codegen.CompilationInfoAttr.get(
+        lowering_config, translation_info
     )
     config1_str: str = str(
-        config.translation_info.configuration[common.LLVM_FUNC_ATTRS_KEY]
+        compilation_info.translation_info.configuration[common.LLVM_FUNC_ATTRS_KEY]
     )
     assert config1_str == '{"amdgpu-waves-per-eu" = "2"}'
 
@@ -107,11 +106,10 @@ def test_get_pipeline_config(tuner_ctx: common.TunerContext) -> None:
     translation_info = iree_codegen.TranslationInfoAttr.get(
         pipeline_attr, None, [16, 16, 1], 32, config_dict
     )
-    config = common.Configuration(
-        translation_info=translation_info,
-        lowering_config=lowering_config,
+    compilation_info = iree_codegen.CompilationInfoAttr.get(
+        lowering_config, translation_info
     )
-    config2_str: str = str(config.translation_info.configuration)
+    config2_str: str = str(compilation_info.translation_info.configuration)
     assert (
         config2_str
         == '{gpu_pipeline_options = #iree_gpu.pipeline_options<prefetch_shared_memory = true>, llvm_func_attrs = {"amdgpu-waves-per-eu" = "4"}}'
@@ -225,10 +223,9 @@ def test_get_lowering_config(tuner_ctx: common.TunerContext) -> None:
     translation_info = iree_codegen.TranslationInfoAttr.get(
         pipeline_attr, None, [16, 16, 1], 32, config_dict
     )
-    config = common.Configuration(
-        translation_info=translation_info,
-        lowering_config=lowering_config,
+    compilation_info = iree_codegen.CompilationInfoAttr.get(
+        lowering_config, translation_info
     )
 
-    assert config.lowering_config.mma_kind is None
-    assert config.lowering_config.subgroup_count_mn == (1, 1)
+    assert compilation_info.lowering_config.mma_kind is None
+    assert compilation_info.lowering_config.subgroup_count_mn == (1, 1)
