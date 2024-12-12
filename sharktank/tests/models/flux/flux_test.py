@@ -21,13 +21,10 @@ import sharktank.ops as ops
 from sharktank.layers.testing import (
     make_mmdit_double_block_random_theta,
     make_mmdit_single_block_random_theta,
+    make_rand_torch,
 )
 from sharktank.types.tensors import DefaultPrimitiveTensor
 from sharktank.types.theta import Theta
-
-
-def make_rand_torch(shape: list[int], dtype: torch.dtype | None = torch.float32):
-    return torch.rand(shape, dtype=dtype) * 2 - 1
 
 
 # TODO: Refactor this to a function that generates random toy weights, possibly
