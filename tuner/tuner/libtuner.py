@@ -39,7 +39,10 @@ import random
 import json
 from abc import ABC, abstractmethod
 import iree.runtime as ireert  # type: ignore
+from iree.compiler import ir  # type: ignore
 from . import candidate_gen
+from . import dispatch_parser
+from .common import *
 
 
 # Default values for num_candidates and devices, change it as needed
@@ -62,6 +65,7 @@ DEVICE_ID_PLACEHOLDER = "!DEVICE_ID!"
 @dataclass
 class CandidateTracker:
     candidate_id: int
+    mlir_path: Optional[Path] = None
     dispatch_mlir_path: Optional[Path] = None
     dispatch_config_path: Optional[Path] = None
     configuration: Optional[candidate_gen.iree_codegen.CompilationInfoAttr] = None
@@ -746,6 +750,7 @@ def append_to_file(lines: list[str], filepath: Path, title: str = "") -> None:
         file.write("\n")
 
 
+# TODO(Max191): Remove in favor of using generate_candidate_specs.
 def generate_candidates(
     args: argparse.Namespace,
     path_config: PathConfig,
@@ -822,6 +827,66 @@ def generate_candidates(
 
     logging.info(f"Generated [{len(candidates)}] candidates")
 
+    return candidates
+
+
+def generate_candidate_specs(
+    args: argparse.Namespace,
+    path_config: PathConfig,
+    candidate_trackers: list[CandidateTracker],
+) -> list[int]:
+    """Generate candidate transform dialect specs for tuning. Returns the list of candidate indexes"""
+    logging.debug("generate_candidate_specs()")
+
+    path_config.specs_dir.mkdir(parents=True, exist_ok=True)
+    tune_logger = logging.getLogger("tune")
+
+    # Generate transform dialect specs.
+    try:
+        with open(args.input_file, "r") as f:
+            mlir_text = f.read()
+        with ir.Context() as ctx:
+            tuner_context = TunerContext(ctx, tune_logger)
+            mlir_module = dispatch_parser.parse_mlir(mlir_text, tuner_context)
+            logging.debug("Captured messages from candidate_gen.py:")
+            config_specs: list[ir.Module] = candidate_gen.generate_configs_and_td_specs(
+                input_module=mlir_module,
+                tuner_context=tuner_context,
+                limit=args.num_candidates,
+                num_subgroups=args.num_subgroups,
+            )
+            logging.debug("candidate_gen.py ends")
+        handle_error(
+            condition=(len(config_specs) <= 1), msg="Failed to generate any candidates"
+        )
+
+        # Create candidate trackers.
+        candidates = []
+        for candidate_num, spec in enumerate(config_specs):
+            candidates.append(candidate_num)
+            # Move the specs to the canonical path_config location.
+            spec_path = path_config.specs_dir / path_config.get_candidate_spec_filename(
+                candidate_num
+            )
+            with open(spec_path, "w") as f:
+                f.write(str(spec))
+            new_candidate = CandidateTracker(
+                mlir_path=args.input_file,
+                candidate_id=candidate_num,
+                spec_path=spec_path,
+            )
+            candidate_trackers.append(new_candidate)
+    except Exception as e:
+        logging.error("An error occurred during candidates generation: %s", str(e))
+        # Capture and log debug messages from candidate_gen.py.
+        tune_logger = logging.getLogger("tune_with_td")
+        for handler in logging.getLogger().handlers:
+            if isinstance(handler, logging.FileHandler):
+                tune_logger.handlers.append(handler)
+        tune_logger.exception("Error in candidate_gen.py:")
+        raise
+
+    logging.info(f"Generated [{len(candidates) - 1}] candidates")
     return candidates
 
 
