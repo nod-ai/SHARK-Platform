@@ -89,6 +89,43 @@ class RotaryEmbeddingLayer(BaseLayer):
                 rotary_embed_table=self.rotary_embed_table,
             )
 
+    def _create_interleaved_tensor(_, dim):
+        """Creates a tensor which indexes an tensor such that
+        it alternates between elements of its first and second
+        half. Intended for use for HuggingFace's rotation
+        implementation.
+
+        Args:
+          dim: Size of tensor
+
+        Returns:
+          Interleaved indexing tensor
+        """
+        first_half = torch.arange(dim // 2)
+        second_half = torch.arange(dim // 2, dim)
+
+        interleaved_tensor = torch.empty(dim, dtype=torch.long)
+        interleaved_tensor[0::2] = first_half
+        interleaved_tensor[1::2] = second_half
+
+        return interleaved_tensor
+
+    def _create_ordering_tensor(_, dim):
+        """Creates a tensor which indexes an tensor such that
+        it reverses the alternation induced by create_interleaved_tesnor.
+        Intended for use for HuggingFace's rotation implementation.
+
+        Args:
+          dim: Size of tensor
+
+        Returns:
+          Ordering indexing tensor
+        """
+        order_tensor = torch.empty(dim, dtype=torch.long)
+        order_tensor[: dim // 2] = torch.arange(0, dim, 2)
+        order_tensor[dim // 2 :] = torch.arange(1, dim, 2)
+        return order_tensor
+
     def forward_unsharded(
         self,
         *,
@@ -98,46 +135,8 @@ class RotaryEmbeddingLayer(BaseLayer):
     ):
         # xq_, xk_ shape: bs, sl, _, dim
         # freqs_cis shape: max_sl, dim
-
-        def create_interleaved_tensor(dim):
-            """Creates a tensor which indexes an tensor such that
-            it alternates between elements of its first and second
-            half. Intended for use for HuggingFace's rotation
-            implementation.
-
-            Args:
-              dim: Size of tensor
-
-            Returns:
-              Interleaved indexing tensor
-            """
-            first_half = torch.arange(dim // 2)
-            second_half = torch.arange(dim // 2, dim)
-
-            interleaved_tensor = torch.empty(dim, dtype=torch.long)
-            interleaved_tensor[0::2] = first_half
-            interleaved_tensor[1::2] = second_half
-
-            return interleaved_tensor
-
-        def create_ordering_tensor(dim):
-            """Creates a tensor which indexes an tensor such that
-            it reverses the alternation induced by create_interleaved_tesnor.
-            Intended for use for HuggingFace's rotation implementation.
-
-            Args:
-              dim: Size of tensor
-
-            Returns:
-              Ordering indexing tensor
-            """
-            order_tensor = torch.empty(dim, dtype=torch.long)
-            order_tensor[: dim // 2] = torch.arange(0, dim, 2)
-            order_tensor[dim // 2 :] = torch.arange(1, dim, 2)
-            return order_tensor
-
         if self.use_hf:
-            xt = xt[..., create_interleaved_tensor(xt.shape[-1])]
+            xt = xt[..., self._create_interleaved_tensor(xt.shape[-1])]
         xt_ = xt
         _, sl, _, _ = xt_.shape
 
@@ -158,7 +157,7 @@ class RotaryEmbeddingLayer(BaseLayer):
         xt_out = ops.view_as_real(xt_)
 
         if self.use_hf:
-            xt_out = xt_out[..., create_ordering_tensor(xt_out.shape[-1])]
+            xt_out = xt_out[..., self._create_ordering_tensor(xt_out.shape[-1])]
 
         return ops.to(xt_out, xt.dtype)
 
@@ -229,9 +228,16 @@ class RotaryEmbeddingLayer(BaseLayer):
         """
         # xq_, xk_ shape: bs, sl, _, dim
         # freqs_cis shape: max_sl, dim
+
+        if self.use_hf:
+            xt = xt[..., self._create_interleaved_tensor(xt.shape[-1])]
+
         xt_ = ops.view_as_complex(xt)
         xt_ = xt_ * mask
         xt_out = ops.view_as_real(xt_)
+
+        if self.use_hf:
+            xt_out = xt_out[..., self._create_ordering_tensor(xt_out.shape[-1])]
 
         return xt_out.type_as(xt)
 

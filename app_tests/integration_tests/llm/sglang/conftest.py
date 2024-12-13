@@ -64,21 +64,6 @@ def pre_process_model(request, tmp_path_factory):
         device_settings,
     )
 
-    config = {
-        "module_name": "module",
-        "module_abi_version": 1,
-        "max_seq_len": 131072,
-        "attn_head_count": 8,
-        "attn_head_dim": 128,
-        "prefill_batch_sizes": [1, 4],
-        "decode_batch_sizes": [1, 4],
-        "transformer_block_count": 32,
-        "paged_kv_cache": {"block_seq_stride": 16, "device_block_count": 256},
-    }
-    config_path = tmp_dir / "config.json"
-    with open(config_path, "w") as f:
-        json.dump(config, f)
-
     return tmp_dir
 
 

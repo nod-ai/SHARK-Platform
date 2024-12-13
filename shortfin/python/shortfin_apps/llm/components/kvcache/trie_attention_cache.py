@@ -90,6 +90,10 @@ class TrieNode:
         """Nodes are equal only if they are the same object."""
         return self is other
 
+    def __lt__(self, other):
+        """Sort nodes by their memory address."""
+        return id(self) < id(other)
+
 
 class TriePagedAttentionCacheAllocation(PageAllocation):
     """Represents a page allocation in the trie-based cache.
