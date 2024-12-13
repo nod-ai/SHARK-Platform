@@ -26,8 +26,17 @@ jobs:
     name: "Unit Tests and Type Checking"
     strategy:
       matrix:
-        version: [3.11]
-        os: [ubuntu-24.04, windows-2022]
+        python-version: ["3.11", "3.12"]
+        torch-version: ["2.3.0+cpu", "2.4.1+cpu", "2.5.1+cpu"]
+        os: [ubuntu-24.04]
+        include:
+          - os: windows-2022
+            python-version: "3.11"
+            torch-version: "2.3.0+cpu"
+        exclude:
+          - python-version: "3.12"
+             # `torch.compile` requires torch>=2.4.0 for Python 3.12+
+            torch-version: "2.3.0+cpu"
       fail-fast: false
     runs-on: ${{matrix.os}}
     defaults:
@@ -42,7 +51,7 @@ jobs:
         id: setup_python
         uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
         with:
-          python-version: ${{matrix.version}}
+          python-version: ${{matrix.python-version}}
 
       - name: Cache Pip Packages
         uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4.1.2
@@ -57,7 +66,7 @@ jobs:
           # Note: We install in three steps in order to satisfy requirements
           # from non default locations first. Installing the PyTorch CPU
           # wheels saves multiple minutes and a lot of bandwidth on runner setup.
-          pip install --no-compile -r pytorch-cpu-requirements.txt
+          pip install --no-compile --pre --index-url https://download.pytorch.org/whl/test/cpu torch==${{matrix.torch-version}}
           pip install --no-compile -r requirements.txt -r sharktank/requirements-tests.txt -e sharktank/
 
           # Install nightly IREE packages.
@@ -77,7 +86,7 @@ jobs:
     name: "Data-dependent Tests"
     strategy:
       matrix:
-        version: [3.11]
+        python-version: [3.11]
         runs-on: [llama-mi300x-3]
       fail-fast: false
     runs-on: ${{matrix.runs-on}}
@@ -94,7 +103,7 @@ jobs:
         id: setup_python
         uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
         with:
-          python-version: ${{matrix.version}}
+          python-version: ${{matrix.python-version}}
 
       - name: Create Python venv
         run: python -m venv ${VENV_DIR}

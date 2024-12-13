@@ -124,6 +124,10 @@ class PagedLlamaAttentionBlockTest(unittest.TestCase):
         torch.__version__ >= (2, 4),
         reason="https://github.com/nod-ai/shark-ai/issues/684",
     )
+    @pytest.mark.skipif(
+        torch.__version__ >= (2, 5),
+        reason="https://github.com/nod-ai/shark-ai/issues/684, error slows down CI",
+    )
     def testExportNondecomposed(self):
         dtype = torch.float32
 
