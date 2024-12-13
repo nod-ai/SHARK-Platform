@@ -23,7 +23,7 @@ concurrency:
 
 jobs:
   test:
-    name: "Unit Tests and Type Checking"
+    name: "Unit Tests"
     strategy:
       matrix:
         python-version: ["3.11", "3.12"]
