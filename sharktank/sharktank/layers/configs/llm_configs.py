@@ -167,7 +167,7 @@ class LlamaModelConfig:
     tensor_parallelism_size: int = 1
 
     # Which attention kernel to use.
-    attention_kernel: str = "decomposed"
+    attention_kernel: str = "torch"
 
     # Indicates if running with HuggingFace implementation and ensures
     # numerical equivalency to HuggingFace's LLaMa if true (by modifying

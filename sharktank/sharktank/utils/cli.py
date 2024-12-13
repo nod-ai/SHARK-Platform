@@ -66,7 +66,7 @@ def add_model_options(parser: argparse.ArgumentParser):
     parser.add_argument(
         "--attention-kernel",
         type=str,
-        default="decomposed",
+        default="torch",
         choices=["decomposed", "torch"],
     )
     parser.add_argument(
