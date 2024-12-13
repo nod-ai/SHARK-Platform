@@ -45,6 +45,12 @@ def main():
         default="4",
     )
     parser.add_argument(
+        "--block-seq-stride",
+        help="Block sequence stride for paged KV cache, must divide evenly into the context length",
+        type=int,
+        default="32",
+    )
+    parser.add_argument(
         "--verbose",
         help="Include verbose logging",
         action="store_true",
@@ -75,6 +81,7 @@ def main():
         static_tables=False,  # Rely on the compiler for hoisting tables.
         kv_cache_type="direct" if args.bs == [1] else "paged",
         attention_kernel=args.attention_kernel,
+        block_seq_stride=args.block_seq_stride,
     )
     llama_config.fake_quant = args.fake_quant
 

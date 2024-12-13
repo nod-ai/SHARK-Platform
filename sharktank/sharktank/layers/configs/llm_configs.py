@@ -142,7 +142,7 @@ class LlamaModelConfig:
 
     # Block sequence stride for a paged KV cache. This must divide evenly
     # into the context length.
-    block_seq_stride: int = 16
+    block_seq_stride: int = 32
 
     # Either "paged" or "direct".
     kv_cache_type: str = "paged"
