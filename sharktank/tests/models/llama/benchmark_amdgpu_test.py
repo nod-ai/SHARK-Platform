@@ -107,7 +107,9 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
         self.prefill_args_bs4_2048_in_tokens_f16 = (
             self.artifacts_dir / "prefill_args_bs4_2048"
         )
-        self.decode_args_f16 = self.artifacts_dir / "decode_args"
+        self.decode_args_bs4_128_in_tokens_stride_32_f16 = (
+            self.artifacts_dir / "decode_args_bs4_128_stride_32"
+        )
         self.prefill_args_fp8 = self.artifacts_dir / "prefill_args_fp8"
         self.decode_args_fp8 = self.artifacts_dir / "decode_args_fp8"
         self.iree_run_prefill_nondecomposed_args_fp16 = [
@@ -126,13 +128,13 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
             f"--input=@{self.prefill_args_bs4_2048_in_tokens_f16}/cs_f16.npy",
             "--benchmark_repetitions=3",
         ]
-        self.iree_run_decode_args = [
+        self.iree_run_decode_args_bs4_128_in_tokens_stride_32_f16 = [
             "--function=decode_bs4",
-            f"--input=@{self.decode_args_f16}/tokens.npy",
-            f"--input=@{self.decode_args_f16}/seq_lens.npy",
-            f"--input=@{self.decode_args_f16}/start_positions.npy",
-            f"--input=@{self.decode_args_f16}/seq_block_ids.npy",
-            f"--input=@{self.decode_args_f16}/cache_state_f16.npy",
+            f"--input=@{self.decode_args_bs4_128_in_tokens_stride_32_f16}/next_tokens.npy",
+            f"--input=@{self.decode_args_bs4_128_in_tokens_stride_32_f16}/seq_lens.npy",
+            f"--input=@{self.decode_args_bs4_128_in_tokens_stride_32_f16}/start_positions.npy",
+            f"--input=@{self.decode_args_bs4_128_in_tokens_stride_32_f16}/seq_block_ids.npy",
+            f"--input=@{self.decode_args_bs4_128_in_tokens_stride_32_f16}/cs_f16.npy",
             "--benchmark_repetitions=3",
         ]
         self.iree_run_prefill_args_fp8 = [
@@ -197,7 +199,7 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
         output_vmfb = self.llama8b_f16_torch_sdpa_artifacts.create_file(
             suffix=".vmfb", prefix=output_file_name
         )
-        self.llama8b_f16_torch_sdpa_artifacts.attention_kernel = "torch"
+        self.llama8b_f16_torch_sdpa_artifacts.block_seq_stride = 16
         export_return_code = self.llama8b_f16_torch_sdpa_artifacts.export_to_mlir(
             mlir_path=output_mlir,
             json_path=output_json,
@@ -220,7 +222,6 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
         )
 
     @skipif_run_quick_llama_test
-    @pytest.mark.xfail(reason="Compile Error", strict=True, raises=IreeCompileException)
     def testBenchmark8B_f16_Non_Decomposed(self):
         output_file_name = self.dir_path_8b / "f16_torch"
         output_mlir = self.llama8b_f16_torch_sdpa_artifacts.create_file(
@@ -232,7 +233,6 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
         output_vmfb = self.llama8b_f16_torch_sdpa_artifacts.create_file(
             suffix=".vmfb", prefix=output_file_name
         )
-        self.llama8b_f16_torch_sdpa_artifacts.attention_kernel = "torch"
         export_return_code = self.llama8b_f16_torch_sdpa_artifacts.export_to_mlir(
             mlir_path=output_mlir,
             json_path=output_json,
@@ -257,7 +257,7 @@ class BenchmarkLlama3_1_8B(BaseBenchmarkTest):
             hip_device_id=self.iree_device,
             vmfb_name=output_vmfb,
             irpa_path=self.irpa_path,
-            args=self.iree_run_decode_args,
+            args=self.iree_run_decode_args_bs4_128_in_tokens_stride_32_f16,
             cwd=self.repo_root,
         )
 
