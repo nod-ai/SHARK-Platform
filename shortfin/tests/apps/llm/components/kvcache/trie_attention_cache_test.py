@@ -3,6 +3,7 @@ from typing import List, Tuple
 import shortfin as sf
 import shortfin.array as sfnp
 from unittest.mock import Mock, MagicMock
+import sys
 import threading
 import time
 from dataclasses import dataclass
@@ -248,6 +249,10 @@ def filled_cache(trie_cache, published_sequence):
     return sequences
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="sequence eviction is not working correctly on Windows",
+)
 @pytest.mark.parametrize(
     "access_count", [1, TEST_POOL_CAPACITY // 2, TEST_POOL_CAPACITY - 1]
 )

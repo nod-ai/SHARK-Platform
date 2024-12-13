@@ -1,11 +1,8 @@
 iree-turbine
 
 # Runtime deps.
-gguf==0.10.0
+gguf>=0.11.0
 numpy<2.0
-
-# Needed for newer gguf versions (TODO: remove when gguf package includes this)
-# sentencepiece>=0.1.98,<=0.2.0
 
 # Model deps.
 huggingface-hub==0.22.2
@@ -17,5 +14,5 @@ datasets
 torch>=2.3.0
 
 # Serving deps.
-fastapi==0.112.2
-uvicorn==0.30.6
+fastapi>=0.112.2
+uvicorn>=0.30.6

@@ -14,11 +14,13 @@ When in question, we draw from the vocabulary and normalization they have done
 (and indeed, can bootstrap these off of GGUF files).
 """
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from typing import Any, Optional
 import torch
 
-__all__ = ["LlamaHParams", "LlamaModelConfig", "T5Config"]
+from ...types.tensors import serialized_name_to_dtype, dtype_to_serialized_name
+
+__all__ = ["ClipTextConfig", "LlamaHParams", "LlamaModelConfig", "T5Config"]
 
 
 @dataclass
@@ -266,3 +268,73 @@ class T5Config:
         all_kwargs.update(kwargs)
 
         return T5Config(**all_kwargs)
+
+
+@dataclass
+class ClipTextConfig:
+    vocab_size: int = 49408
+    hidden_size: int = 512
+    intermediate_size: int = 2048
+    projection_dim: int = 512
+    num_hidden_layers: int = 12
+    num_attention_heads: int = 8
+    max_position_embeddings: int = 77
+    hidden_act: str = "quick_gelu"
+    layer_norm_eps: float = 1e-5
+    # This differs from `CLIPTokenizer`'s default and from openai/clip
+    # See https://github.com/huggingface/transformers/pull/24773#issuecomment-1632287538
+    pad_token_id: int = 1
+    bos_token_id: int = 49406
+    eos_token_id: int = 49407
+    output_attentions: bool = False
+    output_hidden_states: bool = False
+    use_return_dict: bool = True
+    dtype: torch.dtype = torch.float32
+
+    @staticmethod
+    def from_hugging_face_clip_text_model_config(
+        config: "transformers.CLIPTextConfig",
+    ) -> "ClipTextConfig":
+        return ClipTextConfig(
+            vocab_size=config.vocab_size,
+            hidden_size=config.hidden_size,
+            intermediate_size=config.intermediate_size,
+            projection_dim=config.projection_dim,
+            num_hidden_layers=config.num_hidden_layers,
+            num_attention_heads=config.num_attention_heads,
+            max_position_embeddings=config.max_position_embeddings,
+            hidden_act=config.hidden_act,
+            layer_norm_eps=config.layer_norm_eps,
+            pad_token_id=config.pad_token_id,
+            bos_token_id=config.bos_token_id,
+            eos_token_id=config.eos_token_id,
+            output_attentions=config.output_attentions,
+            output_hidden_states=config.output_hidden_states,
+            use_return_dict=config.use_return_dict,
+            dtype=config.torch_dtype or torch.float32,
+        )
+
+    def to_hugging_face_clip_text_model_config(self) -> "transformers.CLIPTextConfig":
+        kwargs = self.to_properties()
+        kwargs["torch_dtype"] = kwargs["dtype"]
+        del kwargs["dtype"]
+        kwargs["return_dict"] = kwargs["use_return_dict"]
+        del kwargs["use_return_dict"]
+        from transformers import CLIPTextConfig
+
+        return CLIPTextConfig(**kwargs)
+
+    @staticmethod
+    def from_properties(properties: dict[str, Any]) -> "ClipTextConfig":
+        kwargs = dict(properties)
+        kwargs.pop("SHARK_DATASET_VERSION")
+        if "dtype" in kwargs and kwargs["dtype"] is not None:
+            kwargs["dtype"] = serialized_name_to_dtype(kwargs["dtype"])
+
+        return ClipTextConfig(**kwargs)
+
+    def to_properties(self) -> dict[str, Any]:
+        res = asdict(self)
+        if self.dtype is not None:
+            res["dtype"] = dtype_to_serialized_name(self.dtype)
+        return res

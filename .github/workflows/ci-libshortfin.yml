@@ -50,7 +50,7 @@ jobs:
           - name: Ubuntu (Clang)(full)
             runs-on: ubuntu-24.04
             cmake-options:
-              -DCMAKE_C_COMPILER=clang-18 -DCMAKE_CXX_COMPILER=clang++-18 -DCMAKE_LINKER_TYPE=LLD
+              -DCMAKE_C_COMPILER=clang-18 -DCMAKE_CXX_COMPILER=clang++-18 -DCMAKE_LINKER_TYPE=LLD -DSHORTFIN_ENABLE_TOKENIZERS=ON
             additional-packages: clang lld
           - name: Ubuntu (Clang)(host-only)
             runs-on: ubuntu-24.04
@@ -87,6 +87,14 @@ jobs:
     - name: (Windows) Configure MSVC
       if: "runner.os == 'Windows'"
       uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+
+    - name: Setup Rust
+      # For now, `SHORTFIN_ENABLE_TOKENIZERS` is only enabled for 'Ubuntu (Clang)(full)'.
+      # TODO(#620): Enable on Windows.
+      if: ${{ matrix.name == 'Ubuntu (Clang)(full)'}}
+      uses: dtolnay/rust-toolchain@315e265cd78dad1e1dcf3a5074f6d6c47029d5aa # master branch (Nov 18, 2024)
+      with:
+        toolchain: stable
 
     - name: Checkout IREE repo
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2

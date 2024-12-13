@@ -18,11 +18,18 @@ from collections.abc import Iterable
 import gc
 
 from ..types import *
+from .math import cosine_similarity
 
 # Range of torch.rand() is [0,1)
 # Range of torch.rand() * 2 - 1 is [-1, 1), includes negative values
 def make_rand_torch(shape: list[int], dtype: Optional[torch.dtype] = torch.float32):
     return torch.rand(shape, dtype=dtype) * 2 - 1
+
+
+def make_random_mask(shape: tuple[int], dtype: Optional[torch.dtype] = None):
+    mask = make_rand_torch(shape=shape, dtype=dtype)
+    mask = (mask >= 0).to(dtype=dtype)
+    return mask
 
 
 class TempDirTestBase(unittest.TestCase):
@@ -178,6 +185,36 @@ def assert_iterables_equal(
         ), f"Iterables not equal at index {i} for elements {v1} and {v2}"
 
 
+def assert_text_encoder_state_close(
+    actual: torch.Tensor, expected: torch.Tensor, atol: float
+):
+    """The cosine similarity has been suggested to compare encoder states.
+
+    Dehua Peng, Zhipeng Gui, Huayi Wu -
+    Interpreting the Curse of Dimensionality from Distance Concentration and Manifold
+    Effect (2023)
+
+    shows that cosine and all Minkowski distances suffer from the curse of
+    dimensionality.
+    The cosine similarity ignores the vector magnitudes. We can probably come up with a
+    better metric, but this is maybe good enough.
+
+    The functions expects that the last dimension is the features per token.
+    It will compute the cosine similarity for each token.
+    """
+    cosine_similarity_per_token = cosine_similarity(
+        actual,
+        expected,
+        dim=-1,
+    )
+    torch.testing.assert_close(
+        cosine_similarity_per_token,
+        torch.ones_like(cosine_similarity_per_token),
+        atol=atol,
+        rtol=0,
+    )
+
+
 SHARKTANK_TEST_SKIP_ENV_VAR = "SHARKTANK_TEST_SKIP"
 
 
@@ -196,3 +233,11 @@ def skip(*decorator_args, **decorator_kwargs):
         return test_item
 
     return decorator
+
+
+test_prompts = [
+    "Studies have been shown that owning a dog is good for you",
+    "The horse went into the river",
+    "We need at least one sentence long enough so that it spans more than one padding block which by default is of size 16.",
+    "Make the batch size 4",
+]
