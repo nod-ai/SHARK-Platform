@@ -60,6 +60,10 @@ jobs:
           path: ${{ env.PIP_CACHE_DIR }}
           key: pip-${{ steps.setup_python.outputs.python-version }}-${{ hashFiles('*requirements*.txt','sharktank/requirements*.txt') }}
 
+      - name: Install numpy
+        if: ${{ matrix.os == 'windows-2022' && matrix.torch-version == '2.3.0' }}
+        run: pip install "numpy<2.0"
+
       - name: Install pip deps
         run: |
           python -m pip install --no-compile --upgrade pip
