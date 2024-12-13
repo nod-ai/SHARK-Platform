@@ -178,3 +178,24 @@ jobs:
         run: |
           pytest -v sharktank/ -m punet_quick \
             --durations=0
+
+  # Depends on other jobs to provide an aggregate job status.
+  # TODO(#584): move test_with_data and test_integration to a pkgci integration test workflow?
+  ci_sharktank_summary:
+    if: always()
+    runs-on: ubuntu-24.04
+    needs:
+      - test
+    steps:
+      - name: Getting failed jobs
+        run: |
+          echo '${{ toJson(needs) }}'
+          FAILED_JOBS="$(echo '${{ toJson(needs) }}' \
+            | jq --raw-output \
+            'map_values(select(.result!="success" and .result!="skipped")) | keys | join(",")' \
+          )"
+          echo "failed-jobs=${FAILED_JOBS}" >> $GITHUB_OUTPUT
+          if [[ "${FAILED_JOBS}" != "" ]]; then
+            echo "The following jobs failed: ${FAILED_JOBS}"
+            exit 1
+          fi
