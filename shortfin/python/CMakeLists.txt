@@ -36,6 +36,9 @@ endif()
 target_link_libraries(shortfin_python_extension
   PRIVATE ${SHORTFIN_LINK_LIBRARY_NAME}
 )
+target_link_libraries(shortfin_python_extension
+  PRIVATE Eigen3::Eigen
+)
 
 function(shortfin_python_stubs build_type)
   nanobind_add_stub(

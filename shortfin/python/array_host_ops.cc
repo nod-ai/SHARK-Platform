@@ -6,6 +6,7 @@
 
 #include "./lib_ext.h"
 #include "./utils.h"
+#include "Eigen/Core"
 #include "shortfin/array/api.h"
 #include "shortfin/support/logging.h"
 #include "xtensor/xrandom.hpp"
@@ -191,6 +192,7 @@ struct ConvertFunctor {
   }
       switch (dtype) {
         SF_STORE_CASE(float16, half_float::half);
+        SF_STORE_CASE(bfloat16, Eigen::bfloat16);
         SF_STORE_CASE(float32, float);
         SF_STORE_CASE(float64, double);
         SF_STORE_CASE(uint8, uint8_t);
@@ -210,6 +212,7 @@ struct ConvertFunctor {
 
     switch (input.dtype()) {
       SF_UNARY_THUNK_CASE(float16, half_float::half);
+      SF_UNARY_THUNK_CASE(bfloat16, Eigen::bfloat16);
       SF_UNARY_THUNK_CASE(float32, float);
       SF_UNARY_THUNK_CASE(float64, double);
       SF_UNARY_THUNK_CASE(uint8, uint8_t);

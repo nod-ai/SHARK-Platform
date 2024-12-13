@@ -35,6 +35,7 @@ shortfin_public_library(
     shortfin_public_defs
     spdlog::spdlog
     fmt::fmt
+    eigen
     xtensor
     xtl
     iree_defs

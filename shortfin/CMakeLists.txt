@@ -166,18 +166,31 @@ if(SHORTFIN_BUNDLE_DEPS)
     GIT_TAG        3634f2ded19e0cf38208c8b86cea9e1d7c8e397d # v0.25.0
   )
 
+  ## eigen: required for bfloat16 support
+  FetchContent_Declare(
+    eigen
+    GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
+    GIT_TAG master
+    GIT_SHALLOW TRUE
+    GIT_PROGRESS TRUE)
+  set(EIGEN_BUILD_TESTING OFF)
+  set(EIGEN_MPL2_ONLY ON)
+  set(EIGEN_BUILD_PKGCONFIG OFF)
+  set(EIGEN_BUILD_DOC OFF)
+
   # In order to bundle libraries without conflict, we have to tweak settings.
   shortfin_push_bundled_lib_options()
   # Enable spdlog shared library options so we can export it.
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSPDLOG_SHARED_LIB -Dspdlog_EXPORTS")
   message(STATUS "Fetching bundled projects")
   list(APPEND CMAKE_MESSAGE_INDENT "  ")
-  FetchContent_MakeAvailable(fmt spdlog xtl xtensor)
+  FetchContent_MakeAvailable(fmt spdlog xtl xtensor eigen)
   shortfin_pop_bundled_lib_options()
   list(POP_BACK CMAKE_MESSAGE_INDENT)
 else()
   find_package(spdlog)
   find_package(xtensor)
+  find_package(eigen)
 endif()
 
 ################################################################################
