@@ -4,11 +4,14 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-from typing import Callable, Any
+from typing import Callable, Optional, Any
 import torch
+from os import PathLike
+import iree.turbine.aot as aot
 from iree.turbine.aot import DeviceAffinity, FxProgramsBuilder
 from torch.utils._pytree import tree_structure, tree_unflatten, tree_flatten
 from .types.tensors import ShardedTensor
+from .layers import BaseLayer
 from torch.utils._pytree import PyTree, _is_leaf
 import functools
 
@@ -172,3 +175,37 @@ def export(
         )
 
     assert False, "TODO: implement the case when not using an FxProgramsBuilder"
+
+
+def export_static_model_mlir(
+    model: BaseLayer,
+    output_path: PathLike,
+    function_batch_size_pairs: Optional[dict[Optional[str], list[int]]] = None,
+    batch_sizes: Optional[list[int]] = None,
+):
+    assert not (function_batch_size_pairs is not None and batch_sizes is not None)
+
+    if batch_sizes is not None:
+        function_batch_size_pairs = {None: batch_sizes}
+
+    if function_batch_size_pairs is None and batch_sizes is None:
+        function_batch_size_pairs = {None: batch_sizes}
+
+    fxb = FxProgramsBuilder(model)
+
+    for function, batch_sizes in function_batch_size_pairs.items():
+        for batch_size in batch_sizes:
+            args, kwargs = model.sample_inputs(batch_size, function)
+
+            @fxb.export_program(
+                name=f"{function or 'forward'}_bs{batch_size}",
+                args=args,
+                kwargs=kwargs,
+                dynamic_shapes=None,
+                strict=False,
+            )
+            def _(model, **kwargs):
+                return model(**kwargs)
+
+    output = aot.export(fxb)
+    output.save_mlir(output_path)

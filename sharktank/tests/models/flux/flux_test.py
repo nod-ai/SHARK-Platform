@@ -5,17 +5,16 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 import logging
-
-logging.basicConfig(level=logging.DEBUG)
-
 import unittest
-
 import torch
-
-from iree.turbine import aot
+import pytest
 from sharktank.models.flux.flux import (
     FluxModelV1,
     FluxParams,
+)
+from sharktank.models.flux.export import (
+    export_flux_transformer_model_mlir,
+    export_flux_transformer_from_hugging_face,
 )
 import sharktank.ops as ops
 from sharktank.layers.testing import (
@@ -24,11 +23,14 @@ from sharktank.layers.testing import (
 from sharktank.types.tensors import DefaultPrimitiveTensor
 from sharktank.types.theta import Dataset, Theta
 from sharktank.utils.testing import TempDirTestBase
+from sharktank.utils.hf_datasets import get_dataset
+
+logging.basicConfig(level=logging.DEBUG)
+with_flux_data = pytest.mark.skipif("not config.getoption('with_flux_data')")
 
 
 # TODO: Refactor this to a function that generates random toy weights, possibly
 # to another file
-dtype = torch.float32
 in_channels = 64
 in_channels2 = 128
 hidden_size = 3072
@@ -45,7 +47,7 @@ patch_size = 1
 out_channels = 64
 
 
-def make_random_theta():
+def make_random_theta(dtype: torch.dtype):
     return Theta(
         {
             "img_in.weight": DefaultPrimitiveTensor(  #
@@ -60,34 +62,34 @@ def make_random_theta():
             "txt_in.bias": DefaultPrimitiveTensor(  #
                 data=make_rand_torch((hidden_size,), dtype=dtype)
             ),
-            "time_in.0.weight": DefaultPrimitiveTensor(  #
+            "time_in.in_layer.weight": DefaultPrimitiveTensor(  #
                 data=make_rand_torch((hidden_size, time_dim), dtype=dtype)
             ),
-            "time_in.0.bias": DefaultPrimitiveTensor(  #
+            "time_in.in_layer.bias": DefaultPrimitiveTensor(  #
                 data=make_rand_torch((hidden_size,), dtype=dtype)
             ),
-            "time_in.1.weight": DefaultPrimitiveTensor(  #
+            "time_in.out_layer.weight": DefaultPrimitiveTensor(  #
                 data=make_rand_torch((hidden_size, hidden_size), dtype=dtype)
             ),
-            "time_in.1.bias": DefaultPrimitiveTensor(  #
+            "time_in.out_layer.bias": DefaultPrimitiveTensor(  #
                 data=make_rand_torch((hidden_size,), dtype=dtype)
             ),
-            "vector_in.0.weight": DefaultPrimitiveTensor(  #
+            "vector_in.in_layer.weight": DefaultPrimitiveTensor(  #
                 data=make_rand_torch((hidden_size, vec_dim), dtype=dtype)
             ),
-            "vector_in.0.bias": DefaultPrimitiveTensor(  #
+            "vector_in.in_layer.bias": DefaultPrimitiveTensor(  #
                 data=make_rand_torch((hidden_size,), dtype=dtype)
             ),
-            "vector_in.1.weight": DefaultPrimitiveTensor(  #
+            "vector_in.out_layer.weight": DefaultPrimitiveTensor(  #
                 data=make_rand_torch((hidden_size, hidden_size), dtype=dtype)
             ),
-            "vector_in.1.bias": DefaultPrimitiveTensor(  #
+            "vector_in.out_layer.bias": DefaultPrimitiveTensor(  #
                 data=make_rand_torch((hidden_size,), dtype=dtype)
             ),
-            "double_blocks.0.img_attn.norm.key_norm.weight": DefaultPrimitiveTensor(  #
+            "double_blocks.0.img_attn.norm.key_norm.scale": DefaultPrimitiveTensor(  #
                 data=make_rand_torch((in_channels2,), dtype=dtype)
             ),
-            "double_blocks.0.img_attn.norm.query_norm.weight": DefaultPrimitiveTensor(  #
+            "double_blocks.0.img_attn.norm.query_norm.scale": DefaultPrimitiveTensor(  #
                 data=make_rand_torch((in_channels2,), dtype=dtype)
             ),
             "double_blocks.0.img_attn.proj.bias": DefaultPrimitiveTensor(
@@ -120,10 +122,10 @@ def make_random_theta():
             "double_blocks.0.img_mod.lin.weight": DefaultPrimitiveTensor(
                 data=make_rand_torch((mlp_hidden_size3, hidden_size), dtype=dtype)
             ),
-            "double_blocks.0.txt_attn.norm.key_norm.weight": DefaultPrimitiveTensor(  #
+            "double_blocks.0.txt_attn.norm.key_norm.scale": DefaultPrimitiveTensor(  #
                 data=make_rand_torch((in_channels2,), dtype=dtype)
             ),
-            "double_blocks.0.txt_attn.norm.query_norm.weight": DefaultPrimitiveTensor(  #
+            "double_blocks.0.txt_attn.norm.query_norm.scale": DefaultPrimitiveTensor(  #
                 data=make_rand_torch((in_channels2,), dtype=dtype)
             ),
             "double_blocks.0.txt_attn.proj.bias": DefaultPrimitiveTensor(
@@ -156,10 +158,10 @@ def make_random_theta():
             "double_blocks.0.txt_mod.lin.weight": DefaultPrimitiveTensor(
                 data=make_rand_torch((mlp_hidden_size3, hidden_size), dtype=dtype)
             ),
-            "single_blocks.0.attn.norm.key_norm.weight": DefaultPrimitiveTensor(  #
+            "single_blocks.0.norm.key_norm.scale": DefaultPrimitiveTensor(  #
                 data=make_rand_torch((in_channels2,), dtype=dtype)
             ),
-            "single_blocks.0.attn.norm.query_norm.weight": DefaultPrimitiveTensor(  #
+            "single_blocks.0.norm.query_norm.scale": DefaultPrimitiveTensor(  #
                 data=make_rand_torch((in_channels2,), dtype=dtype)
             ),
             "single_blocks.0.attn.proj.bias": DefaultPrimitiveTensor(
@@ -180,26 +182,26 @@ def make_random_theta():
             "single_blocks.0.linear2.weight": DefaultPrimitiveTensor(
                 data=make_rand_torch((hidden_size, mlp_hidden_size4), dtype=dtype)
             ),
-            "single_blocks.0.mod.lin.bias": DefaultPrimitiveTensor(
+            "single_blocks.0.modulation.lin.bias": DefaultPrimitiveTensor(
                 data=make_rand_torch((mlp_hidden_size,), dtype=dtype)
             ),
-            "single_blocks.0.mod.lin.weight": DefaultPrimitiveTensor(
+            "single_blocks.0.modulation.lin.weight": DefaultPrimitiveTensor(
                 data=make_rand_torch((mlp_hidden_size, hidden_size), dtype=dtype)
             ),
-            "last_layer.outlinear.weight": DefaultPrimitiveTensor(  #
+            "final_layer.linear.weight": DefaultPrimitiveTensor(  #
                 data=make_rand_torch(
                     (patch_size * patch_size * out_channels, hidden_size), dtype=dtype
                 )
             ),
-            "last_layer.outlinear.bias": DefaultPrimitiveTensor(  #
+            "final_layer.linear.bias": DefaultPrimitiveTensor(  #
                 data=make_rand_torch(
                     (patch_size * patch_size * out_channels,), dtype=dtype
                 )
             ),
-            "last_layer.ada_linear.weight": DefaultPrimitiveTensor(  #
+            "final_layer.adaLN_modulation.1.weight": DefaultPrimitiveTensor(  #
                 data=make_rand_torch((hidden_size * 2, hidden_size), dtype=dtype)
             ),
-            "last_layer.ada_linear.bias": DefaultPrimitiveTensor(  #
+            "final_layer.adaLN_modulation.1.bias": DefaultPrimitiveTensor(  #
                 data=make_rand_torch((hidden_size * 2,), dtype=dtype)
             ),
         }
@@ -214,7 +216,8 @@ class FluxTest(TempDirTestBase):
         self.num_heads = 24
         self.batch_size = 5
 
-    def testExport(self):
+    def testExportBfloat16SingleLayer(self):
+        dtype = torch.bfloat16
         params = FluxParams(
             in_channels=64,
             out_channels=64,
@@ -230,32 +233,26 @@ class FluxTest(TempDirTestBase):
             qkv_bias=True,
             guidance_embed=False,
         )
-        theta = make_random_theta()
+        theta = make_random_theta(dtype)
         theta = self.save_load_theta(theta)
         flux = FluxModelV1(
             theta=theta,
             params=params,
         )
 
-        img = torch.rand([self.batch_size, 1024, 64])
-        img_ids = torch.rand([self.batch_size, 1024, 3])
-        txt = torch.rand([self.batch_size, 512, 4096])
-        txt_ids = torch.rand([self.batch_size, 512, 3])
-        timesteps = torch.rand([self.batch_size])
-        y = torch.rand([self.batch_size, 768])
-
-        flux.forward(img, img_ids, txt, txt_ids, timesteps, y)
-        fxb = aot.FxProgramsBuilder(flux)
-
-        @fxb.export_program(
-            name="flux", args=(img, img_ids, txt, txt_ids, timesteps, y), strict=False
+        export_flux_transformer_model_mlir(
+            flux,
+            output_path=self._temp_dir / "model.mlir",
+            batch_sizes=[self.batch_size],
         )
-        def _(model, img, img_ids, txt, txt_ids, timesteps, y) -> torch.Tensor:
-            return model.forward(img, img_ids, txt, txt_ids, timesteps, y)
 
-        output = aot.export(fxb)
-        output.verify()
-        asm = str(output.mlir_module)
+    @with_flux_data
+    def testExportSchnellFromHuggingFace(self):
+        export_flux_transformer_from_hugging_face(
+            "black-forest-labs/FLUX.1-schnell/black-forest-labs-transformer",
+            mlir_output_path=self._temp_dir / "model.mlir",
+            parameters_output_path=self._temp_dir / "parameters.irpa",
+        )
 
     def save_load_theta(self, theta: Theta):
         # Roundtrip to disk to avoid treating parameters as constants that would appear
