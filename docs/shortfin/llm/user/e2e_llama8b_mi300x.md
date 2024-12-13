@@ -22,31 +22,27 @@ python -m venv --prompt shark-ai .venv
 source .venv/bin/activate
 ```
 
-### Install `shark-ai`
+## Install stable shark-ai packages
 
-You can install either the `latest stable` version of `shark-ai`
-or the `nightly` version:
-
-#### Stable
+<!-- TODO: Add `sharktank` to `shark-ai` meta package -->
 
 ```bash
-pip install shark-ai
+pip install shark-ai[apps] sharktank
 ```
 
-#### Nightly
+### Nightly packages
+
+To install nightly packages:
+
+<!-- TODO: Add `sharktank` to `shark-ai` meta package -->
 
 ```bash
-pip install sharktank -f https://github.com/nod-ai/shark-ai/releases/expanded_assets/dev-wheels
-pip install shortfin -f https://github.com/nod-ai/shark-ai/releases/expanded_assets/dev-wheels
+pip install shark-ai[apps] sharktank \
+    --pre --find-links https://github.com/nod-ai/shark-ai/releases/expanded_assets/dev-wheels
 ```
 
-#### Install dataclasses-json
-
-<!-- TODO: This should be included in release: -->
-
-```bash
-pip install dataclasses-json
-```
+See also the
+[instructions here](https://github.com/nod-ai/shark-ai/blob/main/docs/nightly_releases.md).
 
 ### Define a directory for export files
 
@@ -78,8 +74,8 @@ This example uses the `llama8b_f16.gguf` and `tokenizer.json` files
 that were downloaded in the previous step.
 
 ```bash
-export MODEL_PARAMS_PATH=$EXPORT_DIR/llama3.1-8b/llama8b_f16.gguf
-export TOKENIZER_PATH=$EXPORT_DIR/llama3.1-8b/tokenizer.json
+export MODEL_PARAMS_PATH=$EXPORT_DIR/meta-llama-3.1-8b-instruct.f16.gguf
+export TOKENIZER_PATH=$EXPORT_DIR/tokenizer.json
 ```
 
 #### General env vars
@@ -91,8 +87,6 @@ The following env vars can be copy + pasted directly:
 export MLIR_PATH=$EXPORT_DIR/model.mlir
 # Path to export config.json file
 export OUTPUT_CONFIG_PATH=$EXPORT_DIR/config.json
-# Path to export edited_config.json file
-export EDITED_CONFIG_PATH=$EXPORT_DIR/edited_config.json
 # Path to export model.vmfb file
 export VMFB_PATH=$EXPORT_DIR/model.vmfb
 # Batch size for kvcache
@@ -108,7 +102,7 @@ to export our model to `.mlir` format.
 
 ```bash
 python -m sharktank.examples.export_paged_llm_v1 \
-  --irpa-file=$MODEL_PARAMS_PATH \
+  --gguf-file=$MODEL_PARAMS_PATH \
   --output-mlir=$MLIR_PATH \
   --output-config=$OUTPUT_CONFIG_PATH \
   --bs=$BS
@@ -137,37 +131,6 @@ iree-compile $MLIR_PATH \
  -o $VMFB_PATH
 ```
 
-## Write an edited config
-
-We need to write a config for our model with a slightly edited structure
-to run with shortfin. This will work for the example in our docs.
-You may need to modify some of the parameters for a specific model.
-
-### Write edited config
-
-```bash
-cat > $EDITED_CONFIG_PATH << EOF
-{
-    "module_name": "module",
-    "module_abi_version": 1,
-    "max_seq_len": 131072,
-    "attn_head_count": 8,
-    "attn_head_dim": 128,
-    "prefill_batch_sizes": [
-        $BS
-    ],
-    "decode_batch_sizes": [
-        $BS
-    ],
-    "transformer_block_count": 32,
-    "paged_kv_cache": {
-        "block_seq_stride": 16,
-        "device_block_count": 256
-    }
-}
-EOF
-```
-
 ## Running the `shortfin` LLM server
 
 We should now have all of the files that we need to run the shortfin LLM server.
@@ -178,15 +141,14 @@ Verify that you have the following in your specified directory ($EXPORT_DIR):
 ls $EXPORT_DIR
 ```
 
-- edited_config.json
+- config.json
+- meta-llama-3.1-8b-instruct.f16.gguf
+- model.mlir
 - model.vmfb
+- tokenizer_config.json
+- tokenizer.json
 
-### Launch server:
-
-<!-- #### Set the target device
-
-TODO: Add instructions on targeting different devices,
-when `--device=hip://$DEVICE` is supported -->
+### Launch server
 
 #### Run the shortfin server
 
@@ -209,7 +171,7 @@ Run the following command to launch the Shortfin LLM Server in the background:
 ```bash
 python -m shortfin_apps.llm.server \
    --tokenizer_json=$TOKENIZER_PATH \
-   --model_config=$EDITED_CONFIG_PATH \
+   --model_config=$OUTPUT_CONFIG_PATH \
    --vmfb=$VMFB_PATH \
    --parameters=$MODEL_PARAMS_PATH \
    --device=hip > shortfin_llm_server.log 2>&1 &
@@ -252,7 +214,7 @@ port = 8000 # Change if running on a different port
 generate_url = f"http://localhost:{port}/generate"
 
 def generation_request():
-    payload = {"text": "What is the capital of the United States?", "sampling_params": {"max_completion_tokens": 50}}
+    payload = {"text": "Name the capital of the United States.", "sampling_params": {"max_completion_tokens": 50}}
     try:
         resp = requests.post(generate_url, json=payload)
         resp.raise_for_status()  # Raises an HTTPError for bad responses
