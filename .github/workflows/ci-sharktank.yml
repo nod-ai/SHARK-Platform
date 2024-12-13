@@ -23,7 +23,7 @@ concurrency:
 
 jobs:
   test:
-    name: "Unit Tests"
+    name: "Unit Tests (${{ matrix.os }}, ${{ matrix.python-version }}, ${{ matrix.torch-version }})"
     strategy:
       matrix:
         python-version: ["3.11", "3.12"]
