@@ -92,7 +92,7 @@ class ExportArtifacts:
         iree_hal_target_backends: str,
         attention_kernel: str,
         tensor_parallelism_size: int,
-        block_seq_stride: int,
+        block_seq_stride: Optional[int] = None,
     ):
         self.sharktank_dir = str(
             Path(os.path.dirname(os.path.abspath(__file__))).parent.parent.parent
