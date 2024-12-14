@@ -432,7 +432,9 @@ class BenchmarkLlama3_1_70B(BaseBenchmarkTest):
             "--benchmark_repetitions=3",
         ]
 
-    @pytest.mark.xfail(reason="Compile Error", strict=True, raises=IreeCompileException)
+    @pytest.mark.xfail(
+        reason="Benchmarking Error", strict=True, raises=IreeBenchmarkException
+    )
     def testBenchmark70B_f16_TP8_Non_Decomposed(self):
         output_file_name = self.dir_path_70b / "f16_torch"
         output_mlir = self.llama70b_f16_torch_sdpa_artifacts.create_file(
