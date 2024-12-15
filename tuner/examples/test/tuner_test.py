@@ -7,6 +7,52 @@
 from tuner import libtuner
 
 
+class TestTuner(libtuner.TuningClient):
+    def __init__(self):
+        self.compile_flags = [
+            "--iree-hip-target=gfx942",
+            "--compile-from=executable-sources",
+        ]
+
+    def get_iree_compile_flags(self) -> list[str]:
+        return self.compile_flags
+
+    # TODO(Max191): Remove the following unused abstract functions once they
+    # are removed from the TuningClient definition.
+    def get_dispatch_benchmark_timeout_s(self) -> int:
+        return 0
+
+    def get_dispatch_compile_timeout_s(self) -> int:
+        return 0
+
+    def get_dispatch_compile_command(
+        self, candidate_tracker: libtuner.CandidateTracker
+    ) -> list[str]:
+        return []
+
+    def get_dispatch_benchmark_command(
+        self,
+        candidate_tracker: libtuner.CandidateTracker,
+    ) -> list[str]:
+        return []
+
+    def get_model_compile_timeout_s(self) -> int:
+        return 0
+
+    def get_model_compile_command(
+        self, candidate_tracker: libtuner.CandidateTracker
+    ) -> list[str]:
+        return []
+
+    def get_model_benchmark_timeout_s(self) -> int:
+        return 0
+
+    def get_model_benchmark_command(
+        self, candidate_tracker: libtuner.CandidateTracker
+    ) -> list[str]:
+        return []
+
+
 def main():
     args = libtuner.parse_arguments()
 
@@ -32,6 +78,12 @@ def main():
     print(f"Stored candidate specs in {path_config.specs_dir}\n")
     if stop_after_phase == libtuner.ExecutionPhases.generate_candidates:
         return
+
+    test_tuner = TestTuner()
+    print("Compiling candidates...")
+    candidates = libtuner.compile(
+        args, path_config, candidates, candidate_trackers, test_tuner
+    )
 
     print("Check the detailed execution logs in:")
     print(path_config.run_log.resolve())

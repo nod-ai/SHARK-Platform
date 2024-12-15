@@ -79,6 +79,9 @@ class DispatchTuner(libtuner.TuningClient):
     ) -> list[str]:
         return []
 
+    def get_iree_compile_flags(self) -> list[str]:
+        return []
+
 
 def main():
     args = libtuner.parse_arguments()
