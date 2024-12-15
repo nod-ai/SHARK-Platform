@@ -39,6 +39,7 @@ import random
 import json
 from abc import ABC, abstractmethod
 import iree.runtime as ireert  # type: ignore
+import iree.compiler as ireec  # type: ignore
 from iree.compiler import ir  # type: ignore
 from . import candidate_gen
 from . import dispatch_parser
@@ -62,6 +63,8 @@ device_id = None
 DEVICE_ID_PLACEHOLDER = "!DEVICE_ID!"
 
 
+# TODO(Max191): Remove most of the fields here after refactoring is complete,
+# since many of them will be unused.
 @dataclass
 class CandidateTracker:
     candidate_id: int
@@ -70,6 +73,7 @@ class CandidateTracker:
     dispatch_config_path: Optional[Path] = None
     configuration: Optional[candidate_gen.iree_codegen.CompilationInfoAttr] = None
     compilation_successful: Optional[bool] = None
+    compiled_vmfb_path: Optional[Path] = None
     compiled_dispatch_path: Optional[Path] = None
     compiled_dispatch_hash: Optional[str] = None
     first_benchmark_time: Optional[float] = None
@@ -155,11 +159,18 @@ class PathConfig:
     def get_candidate_spec_filename(self, candidate_id: int) -> str:
         return f"{candidate_id}_spec.mlir"
 
+    def get_candidate_vmfb_filename(self, candidate_id: int) -> str:
+        return f"{candidate_id}.vmfb"
+
     def get_compiled_model_index(self, file_path: Path) -> int:
         return int(file_path.stem.split("_")[-1])
 
 
 class TuningClient(ABC):
+    @abstractmethod
+    def get_iree_compile_flags(self) -> list[str]:
+        pass
+
     @abstractmethod
     def get_dispatch_compile_command(
         self, candidate_tracker: CandidateTracker
@@ -199,6 +210,12 @@ class TuningClient(ABC):
     @abstractmethod
     def get_model_benchmark_timeout_s(self) -> int:
         pass
+
+
+@dataclass
+class CompilePack:
+    tuning_client: TuningClient
+    candidate_tracker: CandidateTracker
 
 
 @dataclass
@@ -381,8 +398,12 @@ class ExecutionPhases(str, Enum):
     benchmark_models = "benchmark-models"
 
 
-def parse_arguments() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Autotune script")
+def parse_arguments(
+    initial_parser: Optional[argparse.ArgumentParser] = None,
+) -> argparse.Namespace:
+    parser = initial_parser
+    if parser is None:
+        parser = argparse.ArgumentParser(description="Autotune script")
 
     # Required arguments
     required_args = parser.add_argument_group("Required Options")
@@ -596,6 +617,75 @@ def run_command(run_pack: RunPack) -> RunResult:
         print("Ctrl+C detected, terminating child processes...")
 
     return RunResult(result, is_timeout)
+
+
+def strip_compilation_info(input_path: Path) -> str:
+    # Strip compilation info from the source and save the stripped IR
+    strip_command = [
+        f"iree-opt",
+        f"{input_path}",
+        f"--iree-codegen-strip-compilation-info",
+    ]
+    try:
+        result = subprocess.run(
+            strip_command,
+            capture_output=True,
+            text=True,
+        )
+        stripped_mlir = result.stdout
+    except subprocess.CalledProcessError as e:
+        print(e.output)
+        cmd = " ".join(strip_command)
+        logging.error(f"Command '{cmd}' returned non-zero exit status {e.returncode}.")
+        logging.error(f"Command '{cmd}' failed with error: {e.stderr}")
+        raise
+    except KeyboardInterrupt:
+        print("Ctrl+C detected, terminating child processes...")
+        return ""
+    return stripped_mlir
+
+
+def run_iree_compile_command(compile_pack: CompilePack) -> Optional[int]:
+    candidate_tracker = compile_pack.candidate_tracker
+    tuning_client = compile_pack.tuning_client
+
+    # Strip compilation info from the source and save the stripped IR
+    input_path = candidate_tracker.mlir_path
+    assert input_path is not None, "expected input mlir_path"
+    stripped_mlir = strip_compilation_info(input_path)
+
+    # Compile to vmfb.
+    assert candidate_tracker.spec_path is not None, "expected candidate spec path"
+    td_spec_path = candidate_tracker.spec_path.as_posix()
+    logging.debug(
+        f"Compiling candidate {candidate_tracker.candidate_id} with spec: td_spec_path"
+    )
+    extra_flags = [
+        "--iree-codegen-tuning-spec-path=" + td_spec_path,
+    ]
+    extra_flags.extend(tuning_client.get_iree_compile_flags())
+    assert candidate_tracker.compiled_vmfb_path is not None, "expected output vmfb path"
+    output_path = candidate_tracker.compiled_vmfb_path.as_posix()
+    crash_dump_path = output_path + ".crash_report.mlir"
+    # TODO(Max191): Make the device in `traget_backends` a command line option
+    # instead of hardcoding in ireec.compile_str.
+    try:
+        ireec.compile_str(
+            input_str=stripped_mlir,
+            target_backends=["rocm"],
+            output_file=output_path,
+            extra_args=extra_flags,
+            crash_reproducer_path=crash_dump_path,
+        )
+    except ireec.CompilerToolError as e:
+        logging.info(f"Compilation returned non-zero exit status.")
+        logging.debug(e)
+        return None
+    except KeyboardInterrupt:
+        print("Ctrl+C detected, terminating child processes...")
+        return None
+
+    return candidate_tracker.candidate_id
 
 
 def run_command_wrapper(task_pack: TaskPack) -> TaskResult:
@@ -843,8 +933,10 @@ def generate_candidate_specs(
 
     # Generate transform dialect specs.
     try:
-        with open(args.input_file, "r") as f:
-            mlir_text = f.read()
+        # Strip compilation info before generating td_specs, since the generated
+        # td_specs can end up matching against the compilation info from the
+        # source mlir.
+        mlir_text = strip_compilation_info(args.input_file)
         with ir.Context() as ctx:
             tuner_context = TunerContext(ctx, tune_logger)
             mlir_module = dispatch_parser.parse_mlir(mlir_text, tuner_context)
@@ -908,6 +1000,70 @@ def collision_handler(index_hash_list: list[tuple[int, str]]) -> tuple[bool, lis
     return collision_detected, unique_indexes
 
 
+def compile(
+    args: argparse.Namespace,
+    path_config: PathConfig,
+    candidates: list[int],
+    candidate_trackers: list[CandidateTracker],
+    tuning_client: TuningClient,
+    input_file: Optional[Path] = None,
+) -> list[int]:
+    logging.debug("compile()")
+
+    if not candidates:
+        logging.warning("No model candidates to compile.")
+        return []
+
+    # Set the source and output file paths for compilation of each candidate.
+    # If `input_file` is not None, then replace the currently tracked mlir_path
+    # with the passed input mlir file.
+    path_config.compiled_dir.mkdir(parents=True, exist_ok=True)
+    for i in candidates:
+        vmfb_file_name = path_config.get_candidate_vmfb_filename(
+            candidate_trackers[i].candidate_id
+        )
+        vmfb_path = path_config.compiled_dir / vmfb_file_name
+        candidate_trackers[i].compiled_vmfb_path = vmfb_path
+        if input_file is not None:
+            candidate_trackers[i].mlir_path = input_file
+    if input_file is not None:
+        candidate_trackers[0].mlir_path = input_file
+
+    # Run compilation for all candidates.
+    task_list = [
+        CompilePack(
+            tuning_client=tuning_client, candidate_tracker=candidate_trackers[i]
+        )
+        for i in candidates
+    ]
+    num_worker = min(args.max_cpu_workers, len(task_list))
+    compiled_candidates = multiprocess_progress_wrapper(
+        num_worker=num_worker, task_list=task_list, function=run_iree_compile_command
+    )
+    compiled_candidates = [c for c in compiled_candidates if c is not None]
+    success_rate = float(len(compiled_candidates)) / float(len(candidates))
+    logging.info(
+        f"Successfully compiled [{len(compiled_candidates)}] candidates. Success rate: {success_rate}"
+    )
+
+    # Remove duplicate vmfbs from the candidate list.
+    compiled_candidate_hashes = []
+    for candidate_id in compiled_candidates:
+        candidate_vmfb = candidate_trackers[candidate_id].compiled_vmfb_path
+        hash_val = calculate_md5(candidate_vmfb)
+        compiled_candidate_hashes.append((candidate_id, hash_val))
+    collision_detected, unique_compiled_candidates = collision_handler(
+        compiled_candidate_hashes
+    )
+    if collision_detected:
+        compiled_candidates = unique_compiled_candidates
+
+    logging.info(f"Produced [{len(compiled_candidates)}] unique vmfbs")
+    return compiled_candidates
+
+
+# TODO(Max191): Remove in favor of using `compile` for both model and dispatch
+# tuning.
 def compile_dispatches(
     args: argparse.Namespace,
     path_config: PathConfig,
@@ -1172,6 +1328,8 @@ def benchmark_dispatches(
     return top_candidates
 
 
+# TODO(Max191): Remove in favor of using `compile` for both model and dispatch
+# tuning.
 def compile_models(
     args: argparse.Namespace,
     path_config: PathConfig,

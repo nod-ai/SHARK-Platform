@@ -15,6 +15,19 @@ from .dispatch_constraints import *
 from .dispatch_parser import *
 
 
+def get_placeholder_spec(context: ir.Context) -> ir.Module:
+    spec_text = f"""
+        module attributes {{ transform.with_named_sequence }} {{
+            transform.named_sequence
+            @__kernel_config(%variant_op: !transform.any_op {{transform.readonly}}) -> !transform.any_op
+                attributes {{ iree_codegen.tuning_spec_entrypoint }} {{
+                transform.yield %variant_op : !transform.any_op
+            }}
+        }}
+        """
+    return ir.Module.parse(spec_text, context)
+
+
 # TODO(Max191): Use python bindings to build the transform dialect spec module
 # instead of using string formatting.
 def build_td_spec(
@@ -51,11 +64,13 @@ def build_td_spec(
             }}
 
             // Entry Point
-            transform.named_sequence @__kernel_config(%variant_op: !transform.any_op {{transform.consumed}}) {{
-                transform.foreach_match in %variant_op
+            transform.named_sequence
+            @__kernel_config(%variant_op: !transform.any_op {{transform.consumed}}) -> !transform.any_op
+                attributes {{ iree_codegen.tuning_spec_entrypoint }} {{
+                %res = transform.foreach_match in %variant_op
                     @{func_name} -> @apply_op_config
-                : (!transform.any_op) -> (!transform.any_op)
-                transform.yield
+                : (!transform.any_op) -> !transform.any_op
+                transform.yield %res : !transform.any_op
             }}
         }}
         """
