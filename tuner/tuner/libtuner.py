@@ -18,6 +18,7 @@ and implement a complete tuning loop for a specific model.
 """
 
 
+import math
 import sys
 import shutil
 import subprocess
@@ -172,6 +173,10 @@ class TuningClient(ABC):
         pass
 
     @abstractmethod
+    def get_iree_benchmark_module_flags(self) -> list[str]:
+        pass
+
+    @abstractmethod
     def get_dispatch_compile_command(
         self, candidate_tracker: CandidateTracker
     ) -> list[str]:
@@ -196,6 +201,10 @@ class TuningClient(ABC):
         pass
 
     @abstractmethod
+    def get_benchmark_timeout_s(self) -> int:
+        pass
+
+    @abstractmethod
     def get_dispatch_compile_timeout_s(self) -> int:
         pass
 
@@ -214,6 +223,12 @@ class TuningClient(ABC):
 
 @dataclass
 class CompilePack:
+    tuning_client: TuningClient
+    candidate_tracker: CandidateTracker
+
+
+@dataclass
+class BenchmarkPack:
     tuning_client: TuningClient
     candidate_tracker: CandidateTracker
 
@@ -252,6 +267,13 @@ class ParsedDisptachBenchmarkResult:
     benchmark_time_in_seconds: float
     candidate_mlir: Path
     candidate_spec_mlir: Path
+
+
+@dataclass
+class BenchmarkResult:
+    candidate_id: int
+    time: float
+    device_id: str
 
 
 @dataclass
@@ -686,6 +708,89 @@ def run_iree_compile_command(compile_pack: CompilePack) -> Optional[int]:
         return None
 
     return candidate_tracker.candidate_id
+
+
+def run_iree_benchmark_module_command(benchmark_pack: BenchmarkPack):
+    candidate_tracker = benchmark_pack.candidate_tracker
+    candidate_id = candidate_tracker.candidate_id
+    tuning_client = benchmark_pack.tuning_client
+
+    # Load the candidate's vmfb and create vm_module.
+    vmfb_path = candidate_tracker.compiled_vmfb_path
+    assert vmfb_path is not None, "expected compiled_vmfb_path"
+    with open(vmfb_path, "rb") as f:
+        vmfb_buffer = f.read()
+
+    rt_config = ireert.Config(device_id)
+    device = rt_config.device
+    vm_instance = rt_config.vm_instance
+    vm_module = ireert.VmModule.copy_buffer(vm_instance, vmfb_buffer)
+
+    # Parse the flags passed from the tuning client and create a kwargs dict
+    # for the benchmark_module function.
+    extra_flags = {}
+    func_name = None
+    for flag in tuning_client.get_iree_benchmark_module_flags():
+        assert flag[:2] == "--", "iree_benchmark_module_flags should begin with '--'"
+        split_key_value = flag[2:].split("=")
+        assert (
+            len(split_key_value) == 2
+        ), "iree_benchmark_module_flags should have the format --<key>=<value>"
+        key = split_key_value[0]
+        value = split_key_value[1]
+        # Allow the tuning client to pass `--function=@func_name`.
+        if key == "function":
+            func_name = value
+            continue
+        # Other flags become normal kwargs.
+        extra_flags[key] = value
+
+    # Benchmark the module.
+    try:
+        timeout = tuning_client.get_benchmark_timeout_s()
+        benchmark_results = ireert.benchmark.benchmark_module(
+            vm_module,
+            entry_function=func_name,
+            device=device,
+            timeout=timeout,
+            **extra_flags,
+        )
+    except ireert.benchmark.BenchmarkTimeoutError as e:
+        logging.warning(
+            f"Benchmark of candidate {candidate_id} timed out after {timeout} seconds."
+        )
+        return BenchmarkResult(
+            candidate_id=candidate_id,
+            time=math.inf,
+            device_id=str(device_id),
+        )
+    except KeyboardInterrupt:
+        print("Ctrl+C detected, terminating child processes...")
+
+    times = []
+    for benchmark_result in benchmark_results:
+        benchmark_name = benchmark_result.benchmark_name
+        # With multiple benchmark results, there will be `real_time_mean`, but
+        # not with single iteration benchmark results, so ignore the mean time
+        # and compute the mean of `real_time`, since the number of iterations
+        # is up to the tuning client.
+        if benchmark_name.split("/")[-1] == "real_time":
+            time_and_unit = benchmark_result.time.split(" ")
+            assert (
+                len(time_and_unit) == 2
+            ), "expected the benchmark time to be the time and unit separated by a space."
+            time_us = IREEBenchmarkResult.unit_to_microseconds(
+                real_time=float(time_and_unit[0]),
+                time_unit=time_and_unit[1],
+            )
+            times.append(time_us)
+    mean_benchmark_time = sum(times) / float(len(times))
+    logging.debug(f"Benchmark time of candidate {candidate_id}: {mean_benchmark_time}")
+    return BenchmarkResult(
+        candidate_id=candidate_id,
+        time=mean_benchmark_time,
+        device_id=str(device_id),
+    )
 
 
 def run_command_wrapper(task_pack: TaskPack) -> TaskResult:
@@ -1251,6 +1356,7 @@ def generate_dryrun_model_benchmark_results(
     return candidate_results, baseline_results
 
 
+# TODO(Max191): Remove this function in favor of `benchmark`.
 def benchmark_dispatches(
     args: argparse.Namespace,
     path_config: PathConfig,
@@ -1323,6 +1429,70 @@ def benchmark_dispatches(
     append_to_file(
         dump_list, filepath=path_config.output_unilog, title="Top Candidates Results"
     )
+
+    top_candidates = [result.candidate_id for result in best_results]
+    return top_candidates
+
+
+def benchmark(
+    args: argparse.Namespace,
+    path_config: PathConfig,
+    compiled_candidates: list[int],
+    candidate_trackers: list[CandidateTracker],
+    tuning_client: TuningClient,
+    num_candidates: Optional[int] = None,
+):
+    logging.debug("benchmark()")
+
+    task_list = [
+        BenchmarkPack(
+            tuning_client=tuning_client, candidate_tracker=candidate_trackers[i]
+        )
+        for i in compiled_candidates
+        if i != 0
+    ]
+    worker_context_queue = create_worker_context_queue(args.devices)
+    candidate_results = multiprocess_progress_wrapper(
+        num_worker=len(args.devices),
+        task_list=task_list,
+        function=run_iree_benchmark_module_command,
+        initializer=init_worker_context,
+        initializer_inputs=(worker_context_queue,),
+    )
+
+    # Benchmarking baselines on each involved device.
+    worker_context_queue = create_worker_context_queue(args.devices)
+    baseline_task_list = [
+        BenchmarkPack(
+            tuning_client=tuning_client, candidate_tracker=candidate_trackers[0]
+        )
+    ] * len(args.devices)
+    baseline_results = multiprocess_progress_wrapper(
+        num_worker=len(args.devices),
+        task_list=baseline_task_list,
+        function=run_iree_benchmark_module_command,
+        initializer=init_worker_context,
+        initializer_inputs=(worker_context_queue,),
+    )
+    baseline_times_by_device = {}
+    for r in baseline_results:
+        baseline_times_by_device[r.device_id] = r.time
+
+    # Select top candidates
+    def get_speedup(result: BenchmarkResult) -> float:
+        return result.time / baseline_times_by_device[result.device_id]
+
+    num_top_candidates = len(candidate_results)
+    if num_candidates is not None:
+        num_top_candidates = num_candidates
+    best_results = sorted(candidate_results, key=get_speedup)[:num_top_candidates]
+    logging.info(f"Selected top[{len(best_results)}]:")
+
+    for r in best_results:
+        speedup = round(get_speedup(r) * 100, 2)
+        logging.info(
+            f"Candidate {r.candidate_id} time: {r.time} ({speedup}% of baseline)"
+        )
 
     top_candidates = [result.candidate_id for result in best_results]
     return top_candidates
@@ -1533,6 +1703,7 @@ def parse_model_benchmark_results(
     return dump_list
 
 
+# TODO(Max191): Remove this function in favor of `benchmark`.
 def benchmark_models(
     args: argparse.Namespace,
     path_config: PathConfig,

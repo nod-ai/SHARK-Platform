@@ -4,6 +4,8 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
+import argparse
+from pathlib import Path
 from tuner import libtuner
 
 
@@ -13,9 +15,16 @@ class TestTuner(libtuner.TuningClient):
             "--iree-hip-target=gfx942",
             "--compile-from=executable-sources",
         ]
+        self.benchmark_flags = ["--benchmark_repetitions=3", "--input=1"]
 
     def get_iree_compile_flags(self) -> list[str]:
         return self.compile_flags
+
+    def get_iree_benchmark_module_flags(self) -> list[str]:
+        return self.benchmark_flags
+
+    def get_benchmark_timeout_s(self) -> int:
+        return 10
 
     # TODO(Max191): Remove the following unused abstract functions once they
     # are removed from the TuningClient definition.
@@ -54,11 +63,29 @@ class TestTuner(libtuner.TuningClient):
 
 
 def main():
-    args = libtuner.parse_arguments()
+    # Custom arguments for the test file.
+    parser = argparse.ArgumentParser(description="Autotune test script")
+    test_args = parser.add_argument_group("Example Test Options")
+    test_args.add_argument(
+        "test_model_file", type=Path, help="Path to the model file to benchmark (.mlir)"
+    )
+    test_args.add_argument(
+        "test_num_dispatch_candidates",
+        type=int,
+        help="Number of dispatch candidates to keep for model benchmarks.",
+    )
+    test_args.add_argument(
+        "test_num_model_candidates",
+        type=int,
+        help="Number of model candidates to keep for model benchmarks.",
+    )
+    # Remaining arguments come from libtuner
+    args = libtuner.parse_arguments(parser)
 
     path_config = libtuner.PathConfig()
     path_config.base_dir.mkdir(parents=True, exist_ok=True)
     path_config.output_unilog.touch()
+    # TODO(Max191): Make candidate_trackers internal to TuningClient.
     candidate_trackers: list[libtuner.CandidateTracker] = []
     stop_after_phase: str = args.stop_after
 
@@ -66,10 +93,13 @@ def main():
     libtuner.setup_logging(args, path_config)
     print(path_config.run_log, end="\n\n")
 
-    if not args.dry_run:
-        print("Validating devices")
-        libtuner.validate_devices(args.devices)
-        print("Validation successful!\n")
+    # TODO(Max191): Some bug seems to be causing OOM errors in benchmarking
+    # when device validation happens, so this is commented for now. Uncomment
+    # when the bug is fixed.
+    # if not args.dry_run:
+    #     print("Validating devices")
+    #     libtuner.validate_devices(args.devices)
+    #     print("Validation successful!\n")
 
     print("Generating candidates...")
     candidates = libtuner.generate_candidate_specs(
@@ -81,9 +111,36 @@ def main():
 
     test_tuner = TestTuner()
     print("Compiling candidates...")
-    candidates = libtuner.compile(
+    compiled_candidates = libtuner.compile(
         args, path_config, candidates, candidate_trackers, test_tuner
     )
+
+    print("Benchmarking compiled candidates...")
+    top_candidates = libtuner.benchmark(
+        args,
+        path_config,
+        compiled_candidates,
+        candidate_trackers,
+        test_tuner,
+        args.test_num_dispatch_candidates,
+    )
+
+    print("Compiling models with top candidates...")
+    compiled_model_candidates = libtuner.compile(
+        args, path_config, top_candidates, candidate_trackers, test_tuner
+    )
+
+    print("Benchmarking compiled model candidates...")
+    top_model_candidates = libtuner.benchmark(
+        args,
+        path_config,
+        compiled_model_candidates,
+        candidate_trackers,
+        test_tuner,
+        args.test_num_model_candidates,
+    )
+
+    print(f"Top model candidates: {top_model_candidates}")
 
     print("Check the detailed execution logs in:")
     print(path_config.run_log.resolve())
