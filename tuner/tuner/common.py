@@ -79,6 +79,14 @@ class MatmulSize:
 
 
 @dataclass
+class ContractionDimensions:
+    batch: list[int]
+    m: list[int]
+    n: list[int]
+    k: list[int]
+
+
+@dataclass
 class ProblemSize:
     matmul_size: MatmulSize
     lhs_type: ShapedType
@@ -98,13 +106,12 @@ def get_compatible_mfma_intrinsics(
     def is_comptible(mma_intrinsic: iree_gpu.MMAIntrinsic) -> bool:
         mma_attr = iree_gpu.MMAIntrinsicAttr.get(mma_intrinsic).mma
         a_type, b_type, c_type = mma_attr.abc_element_types
-        if problem_size.res_type.element_type != c_type:
+        if not isinstance(problem_size.res_type.element_type, type(c_type)):
             return False
         if problem_size.dispatch_kind != DispatchKind.batch_matmul:
-            if (
-                problem_size.lhs_type.element_type != a_type
-                or problem_size.rhs_type.element_type != b_type
-            ):
+            if not isinstance(
+                problem_size.lhs_type.element_type, type(a_type)
+            ) or not isinstance(problem_size.rhs_type.element_type, type(b_type)):
                 return False
         return True
 
