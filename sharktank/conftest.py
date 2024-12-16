@@ -89,6 +89,15 @@ def pytest_addoption(parser):
     )
 
     parser.addoption(
+        "--with-clip-data",
+        action="store_true",
+        default=False,
+        help=(
+            "Enable tests that use CLIP data like models that is not a part of the source "
+            "code. The user is expected to provide the data"
+        ),
+    )
+    parser.addoption(
         "--with-t5-data",
         action="store_true",
         default=False,

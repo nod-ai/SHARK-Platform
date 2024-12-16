@@ -4,12 +4,10 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
+import hashlib
 import json
 import logging
-import os
-from pathlib import Path
 import pytest
-import shutil
 
 pytest.importorskip("transformers")
 from ..utils import (
@@ -24,6 +22,8 @@ from ..utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+MODEL_DIR_CACHE = {}
 
 
 @pytest.fixture(scope="module")
@@ -46,58 +46,77 @@ def model_test_dir(request, tmp_path_factory):
         "Preparing model artifacts..." + start_log_group("Preparing model artifacts")
     )
 
+    param_key = hashlib.md5(str(request.param).encode()).hexdigest()
+    if (directory := MODEL_DIR_CACHE.get(param_key)) is not None:
+        logger.info(
+            f"Reusing existing model artifacts directory: {directory}" + end_log_group()
+        )
+        yield MODEL_DIR_CACHE[param_key]
+        return
+
     repo_id = request.param["repo_id"]
     model_file = request.param["model_file"]
     tokenizer_id = request.param["tokenizer_id"]
     settings = request.param["settings"]
     batch_sizes = request.param["batch_sizes"]
+    tmp_dir = tmp_path_factory.mktemp("cpu_llm_server_test")
+
+    # Download model if it doesn't exist
+    model_path = tmp_dir / model_file
+    download_huggingface_model(tmp_dir, repo_id, model_file)
+
+    # Set up tokenizer if it doesn't exist
+    download_tokenizer(tmp_dir, tokenizer_id)
+
+    # Export model
+    mlir_path = tmp_dir / "model.mlir"
+    config_path = tmp_dir / "config.json"
+    export_paged_llm_v1(mlir_path, config_path, model_path, batch_sizes)
+
+    # Compile model
+    vmfb_path = tmp_dir / "model.vmfb"
+    compile_model(mlir_path, vmfb_path, settings)
+
+    logger.info("Model artifacts setup successfully" + end_log_group())
+    MODEL_DIR_CACHE[param_key] = tmp_dir
+    yield tmp_dir
+
+
+@pytest.fixture(scope="module")
+def write_config(request, model_test_dir):
+    batch_sizes = request.param["batch_sizes"]
     prefix_sharing_algorithm = request.param["prefix_sharing_algorithm"]
 
-    tmp_dir = tmp_path_factory.mktemp("cpu_llm_server_test")
-    hf_home = os.environ.get("HF_HOME", None)
-    hf_home = Path(hf_home) if hf_home is not None else tmp_dir
-    try:
-        # Download model if it doesn't exist
-        model_path = hf_home / model_file
-        download_huggingface_model(hf_home, repo_id, model_file)
+    # Construct the new config filename
+    config_path = (
+        model_test_dir
+        / f"{'_'.join(str(bs) for bs in batch_sizes)}_{prefix_sharing_algorithm}.json"
+    )
 
-        # Set up tokenizer if it doesn't exist
-        download_tokenizer(hf_home, tokenizer_id)
+    # Read the base config file
+    base_config_path = model_test_dir / "config.json"
+    with open(base_config_path, "r") as f:
+        config = json.load(f)
 
-        # Export model
-        mlir_path = tmp_dir / "model.mlir"
-        config_path = tmp_dir / "config.json"
-        export_paged_llm_v1(mlir_path, config_path, model_path, batch_sizes)
-
-        # Compile model
-        vmfb_path = tmp_dir / "model.vmfb"
-        compile_model(mlir_path, vmfb_path, settings)
-
-        # Write config
-        edited_config_path = tmp_dir / "edited_config.json"
-        config = {
-            "module_name": "module",
-            "module_abi_version": 1,
-            "max_seq_len": 2048,
-            "attn_head_count": 32,
-            "attn_head_dim": 100,
+    # Override specific fields
+    config.update(
+        {
             "prefill_batch_sizes": batch_sizes,
             "decode_batch_sizes": batch_sizes,
-            "transformer_block_count": 26,
             "paged_kv_cache": {
-                "block_seq_stride": 16,
-                "device_block_count": 256,
+                **config.get(
+                    "paged_kv_cache", {}
+                ),  # Preserve other paged_kv_cache settings
                 "prefix_sharing_algorithm": prefix_sharing_algorithm,
             },
         }
-        logger.info(f"Saving edited config to: {edited_config_path}\n")
-        logger.info(f"Config: {json.dumps(config, indent=2)}")
-        with open(edited_config_path, "w") as f:
-            json.dump(config, f)
-        logger.info("Model artifacts setup successfully" + end_log_group())
-        yield hf_home, tmp_dir
-    finally:
-        shutil.rmtree(tmp_dir)
+    )
+    logger.info(f"Saving edited config to: {config_path}\n")
+    logger.info(f"Config: {json.dumps(config, indent=2)}")
+    with open(config_path, "w") as f:
+        json.dump(config, f)
+
+    yield config_path
 
 
 @pytest.fixture(scope="module")
@@ -106,7 +125,7 @@ def available_port():
 
 
 @pytest.fixture(scope="module")
-def llm_server(request, model_test_dir, available_port):
+def llm_server(request, model_test_dir, write_config, available_port):
     """Start the LLM server.
 
     Args:
@@ -120,14 +139,15 @@ def llm_server(request, model_test_dir, available_port):
         subprocess.Popen: The server process that was started.
     """
     logger.info("Starting LLM server..." + start_log_group("Starting LLM server"))
-    hf_home, tmp_dir = model_test_dir
+    tmp_dir = model_test_dir
+    config_path = write_config
+
     model_file = request.param["model_file"]
     settings = request.param["settings"]
 
-    tokenizer_path = hf_home / "tokenizer.json"
-    config_path = tmp_dir / "edited_config.json"
+    tokenizer_path = tmp_dir / "tokenizer.json"
     vmfb_path = tmp_dir / "model.vmfb"
-    parameters_path = hf_home / model_file
+    parameters_path = tmp_dir / model_file
 
     # Start llm server
     server_process = start_llm_server(

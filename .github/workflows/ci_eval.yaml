@@ -106,6 +106,8 @@ jobs:
             iree-base-compiler iree-base-runtime --src deps \
             -e "git+https://github.com/iree-org/iree-turbine.git#egg=iree-turbine"
 
+          pip freeze
+
       - name: Run perplexity test with Torch
         run: |
           source ${VENV_DIR}/bin/activate

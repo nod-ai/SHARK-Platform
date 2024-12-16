@@ -59,7 +59,7 @@ jobs:
 
       - name: Install pip deps
         run: |
-          source ${VENV_DIR}/bin/activate
+          source ${VENV_DIR}/bin/activate          
           python -m pip install --no-compile --upgrade pip
           pip install sharktank -f https://github.com/nod-ai/SHARK-Platform/releases/expanded_assets/dev-wheels --upgrade --pre
           pip install shortfin -f https://github.com/nod-ai/shark-ai/releases/expanded_assets/dev-wheels --upgrade --pre

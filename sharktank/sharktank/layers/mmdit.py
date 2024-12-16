@@ -41,7 +41,7 @@ def attention(q, k, v, pe):
         q=q, k=k, v=v, a=None, is_causal=True, scale=None
     )
     x = ops.permute(x, (0, 2, 1, 3))
-    x = x.view(x.shape[0], x.shape[1], -1)
+    x = x.reshape(x.shape[0], x.shape[1], -1)
 
     return x
 
@@ -144,3 +144,45 @@ class MMDITDoubleBlock(ThetaLayer):
         txt = txt + txt_mod2.gate * txt_mlp_out3
 
         return img, txt
+
+
+class MMDITSingleBlock(ThetaLayer):
+    def __init__(self, theta, num_heads: int):
+        super().__init__(theta)
+
+        self.num_heads = num_heads
+        self.add_module("mod", ModulationLayer(theta("mod"), double=False))
+        self.add_module(
+            "attn_norm_q", RMSNormLayer(theta("attn.norm.query_norm"), epsilon=1e-6)
+        )
+        self.add_module(
+            "attn_norm_k", RMSNormLayer(theta("attn.norm.key_norm"), epsilon=1e-6)
+        )
+        self.add_module("attn_proj", LinearLayer(theta("attn.proj")))
+
+        self.add_module("linear1", LinearLayer(theta("linear1")))
+        self.add_module("linear2", LinearLayer(theta("linear2")))
+        # TODO: There should be a way to refactor out the following two constants and just reference model shapes
+        self.hidden_size = 3072
+        self.mlp_hidden_dim = 3072
+
+    def forward(self, x: Tensor, vec: Tensor, pe: Tensor) -> tuple[Tensor, Tensor]:
+        mod, _ = self.mod(vec)
+        x_norm = ops.layer_norm(x, None, None, eps=1e-6)
+        x_mod = (1 + mod.scale) * x_norm + mod.shift
+        x_lin = self.linear1(x_mod)
+        qkv, mlp = torch.split(
+            x_lin, [3 * self.hidden_size, 4 * self.mlp_hidden_dim], dim=-1
+        )
+
+        qkv_2 = qkv.view(qkv.shape[0], qkv.shape[1], 3, self.num_heads, -1)  #
+        qkv_3 = ops.permute(qkv_2, (2, 0, 3, 1, 4))
+        q, k, v = qkv_3
+        q, k = qk_norm(q, k, v, self.attn_norm_q, self.attn_norm_k)
+
+        # compute attention
+        attn = attention(q, k, v, pe=pe)
+        # compute activation in mlp stream, cat again and run second linear layer
+        gelu = ops.elementwise(F.gelu, mlp)
+        output = self.linear2(torch.cat((attn, gelu), 2))
+        return x + mod.gate * output
