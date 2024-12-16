@@ -46,6 +46,8 @@ Before installing `shark-ai` install a torch version that fulfills your needs.
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
 ```
 
+Next install shark-ai:
+
 ```bash
 pip install shark-ai[apps]
 ```
