@@ -157,9 +157,9 @@ def getMMAAttr(
         a_type, b_type, c_type = mma_attr.abc_element_types
         mnk = mma_attr.mnk_shape
         if (
-            a_type == lhs_type
-            and b_type == rhs_type
-            and c_type == output_type
+            isinstance(a_type, type(lhs_type))
+            and isinstance(b_type, type(rhs_type))
+            and isinstance(c_type, type(output_type))
             and m == mnk[0]
             and n == mnk[1]
             and k == mnk[2]
