@@ -2,7 +2,7 @@ iree-turbine
 
 # Runtime deps.
 gguf>=0.11.0
-numpy<2.0
+numpy
 
 # Model deps.
 huggingface-hub==0.22.2
