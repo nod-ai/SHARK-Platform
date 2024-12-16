@@ -33,6 +33,9 @@ jobs:
           - os: windows-2022
             python-version: "3.11"
             torch-version: "2.3.0"
+          - os: windows-2022
+            python-version: "3.12"
+            torch-version: "2.4.1"
         exclude:
           - python-version: "3.12"
              # `torch.compile` requires torch>=2.4.0 for Python 3.12+
