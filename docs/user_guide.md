@@ -34,13 +34,20 @@ Setup your Python environment with the following commands:
 # Set up a virtual environment to isolate packages from other envs.
 python3.11 -m venv 3.11.venv
 source 3.11.venv/bin/activate
-
-# Optional: faster installation of torch with just CPU support.
-# See other options at https://pytorch.org/get-started/locally/
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
 ```
 
 ## Install SHARK and its dependencies
+
+First install a torch version that fulfills your needs:
+
+```bash
+# Fast installation of torch with just CPU support.
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+```
+
+For other options, see https://pytorch.org/get-started/locally/.
+
+Next install shark-ai:
 
 ```bash
 pip install shark-ai[apps]
