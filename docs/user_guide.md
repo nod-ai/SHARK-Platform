@@ -38,7 +38,7 @@ source 3.11.venv/bin/activate
 
 ## Install SHARK and its dependencies
 
-Before installing `shark-ai` install a torch version that fulfills your needs.
+First install a torch version that fulfills your needs:
 
 ```bash
 # Fast installation of torch with just CPU support.
