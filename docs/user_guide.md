@@ -42,9 +42,10 @@ First install a torch version that fulfills your needs:
 
 ```bash
 # Fast installation of torch with just CPU support.
-# See other options at https://pytorch.org/get-started/locally/
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
 ```
+
+For other options, see https://pytorch.org/get-started/locally/.
 
 Next install shark-ai:
 
