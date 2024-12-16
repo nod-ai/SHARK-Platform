@@ -142,7 +142,7 @@ def get_tokenizer(args) -> tokenizer.InferenceTokenizer:
         return tokenizer.fake_tokenizer()
 
     if args.tokenizer_config_json is not None:
-        data_files = {"tokenizer_config.json": args.tokenizer_config_json}
+        data_files = {"tokenizer_config.json": [args.tokenizer_config_json]}
     else:
         data_files = get_input_data_files(args)
 
