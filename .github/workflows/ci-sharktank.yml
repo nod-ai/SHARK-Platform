@@ -207,7 +207,6 @@ jobs:
             | jq --raw-output \
             'map_values(select(.result!="success" and .result!="skipped")) | keys | join(",")' \
           )"
-          echo "failed-jobs=${FAILED_JOBS}" >> $GITHUB_OUTPUT
           if [[ "${FAILED_JOBS}" != "" ]]; then
             echo "The following jobs failed: ${FAILED_JOBS}"
             exit 1
