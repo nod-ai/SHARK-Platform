@@ -193,7 +193,9 @@ class ServiceDebugDumper:
                             except Exception as e:
                                 f.write(f"\nHistogram computation failed: {str(e)}\n")
                     else:
-                        f.write("Skipping additional statistics due to NaN/Inf values\n")
+                        f.write(
+                            "Skipping additional statistics due to NaN/Inf values\n"
+                        )
 
                     f.write("\nArray contents:\n")
                     if arr.size <= 64:
