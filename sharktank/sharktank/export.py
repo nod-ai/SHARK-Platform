@@ -183,6 +183,20 @@ def export_static_model_mlir(
     function_batch_size_pairs: Optional[dict[Optional[str], list[int]]] = None,
     batch_sizes: Optional[list[int]] = None,
 ):
+    """Export a model with no dynamic dimensions.
+
+    For the set of provided function name batch sizes pair, the resulting MLIR will
+    have function names with the below format.
+    ```
+    <function_name>_bs<batch_size>
+    ```
+
+    If `batch_sizes` is given then it defaults to a single function with named
+    "forward".
+
+    The model is required to implement method `sample_inputs`.
+    """
+
     assert not (function_batch_size_pairs is not None and batch_sizes is not None)
 
     if batch_sizes is not None:
