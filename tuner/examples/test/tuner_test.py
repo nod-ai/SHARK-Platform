@@ -11,10 +11,7 @@ from tuner import libtuner
 
 class TestTuner(libtuner.TuningClient):
     def __init__(self):
-        self.compile_flags = [
-            "--iree-hip-target=gfx942",
-            "--compile-from=executable-sources",
-        ]
+        self.compile_flags = ["--compile-from=executable-sources"]
         self.benchmark_flags = ["--benchmark_repetitions=3", "--input=1"]
 
     def get_iree_compile_flags(self) -> list[str]:
@@ -96,10 +93,10 @@ def main():
     # TODO(Max191): Some bug seems to be causing OOM errors in benchmarking
     # when device validation happens, so this is commented for now. Uncomment
     # when the bug is fixed.
-    # if not args.dry_run:
-    #     print("Validating devices")
-    #     libtuner.validate_devices(args.devices)
-    #     print("Validation successful!\n")
+    if not args.dry_run:
+        print("Validating devices")
+        libtuner.validate_devices(args.devices)
+        print("Validation successful!\n")
 
     print("Generating candidates...")
     candidates = libtuner.generate_candidate_specs(
@@ -126,11 +123,25 @@ def main():
     )
 
     print("Compiling models with top candidates...")
+    test_tuner.compile_flags = [
+        "--iree-hal-target-backends=rocm",
+        "--iree-hip-target=gfx942",
+    ]
     compiled_model_candidates = libtuner.compile(
-        args, path_config, top_candidates, candidate_trackers, test_tuner
+        args,
+        path_config,
+        top_candidates,
+        candidate_trackers,
+        test_tuner,
+        args.test_model_file,
     )
 
     print("Benchmarking compiled model candidates...")
+    test_tuner.benchmark_flags = [
+        "--benchmark_repetitions=3",
+        "--input=2048x2048xf16",
+        "--input=2048x2048xf16",
+    ]
     top_model_candidates = libtuner.benchmark(
         args,
         path_config,
