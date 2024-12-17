@@ -61,6 +61,16 @@ def main():
         help="Enables strictness during export",
         action="store_true",
     )
+    parser.add_argument(
+        "--use-queue-affinities",
+        help="Enables queue affinities for multidevice",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--attention-dtype",
+        help="DType to use for kvs in the model",
+        default="float32",
+    )
 
     cli.add_quantization_options(parser)
     cli.add_model_options(parser)
@@ -74,7 +84,7 @@ def main():
         if "tensor_parallelism_size" in dataset.properties
         else 1
     )
-
+    attention_dtype = getattr(torch, args.attention_dtype)
     llama_config = LlamaModelConfig(
         hp,
         tensor_parallelism_size=tensor_parallelism_size,
@@ -83,6 +93,7 @@ def main():
         kv_cache_type="direct" if args.bs == [1] else "paged",
         attention_kernel=args.attention_kernel,
         block_seq_stride=args.block_seq_stride,
+        attention_dtype=attention_dtype,
     )
     llama_config.fake_quant = args.fake_quant
 
