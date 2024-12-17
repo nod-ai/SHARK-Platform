@@ -49,7 +49,7 @@ def main():
         "--block-seq-stride",
         help="Block sequence stride for paged KV cache, must divide evenly into the context length",
         type=int,
-        default="16",
+        default="32",
     )
     parser.add_argument(
         "--verbose",

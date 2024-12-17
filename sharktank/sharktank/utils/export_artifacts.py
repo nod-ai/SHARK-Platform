@@ -92,7 +92,7 @@ class ExportArtifacts:
         iree_hal_target_backends: str,
         attention_kernel: str,
         tensor_parallelism_size: int,
-        block_seq_stride: Optional[int] = None,
+        block_seq_stride: int,
     ):
         self.sharktank_dir = str(
             Path(os.path.dirname(os.path.abspath(__file__))).parent.parent.parent
@@ -180,14 +180,13 @@ class ExportArtifacts:
             f"--output-mlir={mlir_path}",
             f"--output-config={json_path}",
             f"--bs={str(self.batch_size)}",
+            f"--block-seq-stride={self.block_seq_stride}",
         ]
         if skip_decode:
             export_args.append("--skip-decode")
         if self.attention_kernel in ["decomposed", "torch"]:
             export_args.append("--attention-kernel")
             export_args.append(self.attention_kernel)
-        if self.block_seq_stride:
-            export_args.append(f"--block-seq-stride={self.block_seq_stride}")
 
         cwd = self.sharktank_dir
         cmd = subprocess.list2cmdline(export_args)
