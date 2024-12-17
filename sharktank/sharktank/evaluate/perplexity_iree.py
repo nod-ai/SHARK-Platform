@@ -440,7 +440,7 @@ def main(argv):
         "--block-seq-stride",
         help="Block sequence stride for paged KV cache, must divide evenly into the context length",
         type=int,
-        default="32",
+        default=32,
     )
     parser.add_argument("--iree-device", help="List an IREE device (e.g., 'hip://0')")
     parser.add_argument(
