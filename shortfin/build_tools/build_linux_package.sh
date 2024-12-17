@@ -44,12 +44,9 @@ SHORTFIN_ENABLE_TRACING="${SHORTFIN_ENABLE_TRACING:-ON}"
 
 if [[ "${ARCH}" == "x86_64" ]]; then
   MANYLINUX_DOCKER_IMAGE="${MANYLINUX_DOCKER_IMAGE:-ghcr.io/nod-ai/manylinux_x86_64@sha256:4acf83343706d1e37252d6001ded3c97a73bc38620580f855b4e65e35ddc5681}"
-  # TODO(#679): Enable tokenizers by default
-  SHORTFIN_ENABLE_TOKENIZERS="${SHORTFIN_ENABLE_TOKENIZERS:-OFF}"
 else
   # TODO: publish a multi-platform manylinux image and include more deps in all platforms (rust, ccache, etc.)
   MANYLINUX_DOCKER_IMAGE="${MANYLINUX_DOCKER_IMAGE:-quay.io/pypa/manylinux_2_28_${ARCH}:latest}"
-  SHORTFIN_ENABLE_TOKENIZERS="${SHORTFIN_ENABLE_TOKENIZERS:-OFF}"
 fi
 
 function run_on_host() {
@@ -77,7 +74,6 @@ function run_on_host() {
     -e "OVERRIDE_PYTHON_VERSIONS=${PYTHON_VERSIONS}" \
     -e "OUTPUT_DIR=${OUTPUT_DIR}" \
     -e "SHORTFIN_ENABLE_TRACING=${SHORTFIN_ENABLE_TRACING}" \
-    -e "SHORTFIN_ENABLE_TOKENIZERS=${SHORTFIN_ENABLE_TOKENIZERS}" \
     ${extra_args} \
     "${MANYLINUX_DOCKER_IMAGE}" \
     -- ${THIS_DIR}/${SCRIPT_NAME}
