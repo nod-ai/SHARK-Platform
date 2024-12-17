@@ -9,6 +9,8 @@
 https://github.com/black-forest-labs/flux/blob/main/src/flux/model.py
 """
 
+from typing import Any, Optional
+from collections import OrderedDict
 import math
 from dataclasses import dataclass
 import torch
@@ -45,6 +47,46 @@ class FluxParams:
     qkv_bias: bool
     guidance_embed: bool
 
+    @staticmethod
+    def from_hugging_face_properties(properties: dict[str, Any]) -> "FluxParams":
+        p = properties["hparams"]
+
+        in_channels = p["in_channels"]
+        out_channels = p["in_channels"]
+        vec_in_dim = p["pooled_projection_dim"]
+        context_in_dim = p["joint_attention_dim"]
+        mlp_ratio = 4.0
+        hidden_size = vec_in_dim * int(mlp_ratio)
+        num_heads = p["num_attention_heads"]
+        depth = p["num_layers"]
+        depth_single_blocks = p["num_single_layers"]
+
+        # TODO: figure out relation between hidden_size, num_heads and
+        # attention_head_dim.
+        # diffusers.FluxTransformer2DModel also hardcodes this.
+        axes_dim = [16, 56, 56]
+        assert sum(axes_dim) == p["attention_head_dim"]
+
+        theta = 10_000
+        qkv_bias = True
+        guidance_embed = p["guidance_embeds"]
+
+        return FluxParams(
+            in_channels=in_channels,
+            out_channels=out_channels,
+            vec_in_dim=vec_in_dim,
+            context_in_dim=context_in_dim,
+            mlp_ratio=mlp_ratio,
+            hidden_size=hidden_size,
+            num_heads=num_heads,
+            depth=depth,
+            depth_single_blocks=depth_single_blocks,
+            axes_dim=axes_dim,
+            theta=theta,
+            qkv_bias=qkv_bias,
+            guidance_embed=guidance_embed,
+        )
+
 
 class FluxModelV1(ThetaLayer):
     """FluxModel adapted from Black Forest Lab's implementation."""
@@ -71,16 +113,12 @@ class FluxModelV1(ThetaLayer):
             dim=pe_dim, theta=params.theta, axes_dim=params.axes_dim
         )
         self.add_module("img_in", LinearLayer(theta("img_in")))
-        # TODO: Refactor this pattern to an MLPEmbedder like src implementatio
-        self.add_module("time_in_0", LinearLayer(theta("time_in.0")))
-        self.add_module("time_in_1", LinearLayer(theta("time_in.1")))
-        self.add_module("vector_in_0", LinearLayer(theta("vector_in.0")))
-        self.add_module("vector_in_1", LinearLayer(theta("vector_in.1")))
+        self.add_module("time_in", MLPEmbedder(theta("time_in")))
+        self.add_module("vector_in", MLPEmbedder(theta("vector_in")))
         self.guidance = False
         if params.guidance_embed:
             self.guidance = True
-            self.add_module("guidance_in_0", LinearLayer(theta("guidance_in.0")))
-            self.add_module("guidance_in_1", LinearLayer(theta("guidance_in.1")))
+            self.add_module("guidance_in", MLPEmbedder(theta("guidance_in")))
         self.add_module("txt_in", LinearLayer(theta("txt_in")))
 
         self.double_blocks = nn.ModuleList(
@@ -104,8 +142,8 @@ class FluxModelV1(ThetaLayer):
         )
 
         self.add_module(
-            "last_layer",
-            LastLayer(theta("last_layer")),
+            "final_layer",
+            LastLayer(theta("final_layer")),
         )
 
     def forward(
@@ -123,23 +161,14 @@ class FluxModelV1(ThetaLayer):
 
         # running on sequences img
         img = self.img_in(img)
-        time_in_0 = self.time_in_0(timestep_embedding(timesteps, 256))
-        time_in_silu = ops.elementwise(F.silu, time_in_0)
-        vec = self.time_in_1(time_in_silu)
+        vec = self.time_in(timestep_embedding(timesteps, 256))
         if self.guidance:
             if guidance is None:
                 raise ValueError(
                     "Didn't get guidance strength for guidance distilled model."
                 )
-            guidance_inp = timestep_embedding(guidance, 256)
-            guidance0 = self.guidance_in0(guidance_inp)
-            guidance_silu = ops.elementwise(F.silu, guidance0)
-            guidance_out = self.guidance_in1(guidance_silu)
-            vec = vec + self.guidance_in(guidance_out)
-        vector_in_0 = self.vector_in_0(y)
-        vector_in_silu = ops.elementwise(F.silu, vector_in_0)
-        vector_in_1 = self.vector_in_1(vector_in_silu)
-        vec = vec + vector_in_1
+            vec = vec + self.guidance_in(timestep_embedding(guidance, 256))
+        vec = vec + self.vector_in(y)
 
         txt = self.txt_in(txt)
 
@@ -154,8 +183,35 @@ class FluxModelV1(ThetaLayer):
             img = block(img, vec=vec, pe=pe)
         img = img[:, txt.shape[1] :, ...]
 
-        img = self.last_layer(img, vec)  # (N, T, patch_size ** 2 * out_channels)
+        img = self.final_layer(img, vec)  # (N, T, patch_size ** 2 * out_channels)
         return img
+
+    def sample_inputs(
+        self, batch_size: int = 1, function: Optional[str] = None
+    ) -> tuple[tuple[AnyTensor], OrderedDict[str, AnyTensor]]:
+        if not (function is None or function == "forward"):
+            raise ValueError(f'Only function "forward" is supported. Got "{function}"')
+
+        # TODO: do not hardcode these but derive the required shapes from the config.
+        img = torch.rand([batch_size, 1024, 64])
+        img_ids = torch.rand([batch_size, 1024, 3])
+        txt = torch.rand([batch_size, 512, 4096])
+        txt_ids = torch.rand([batch_size, 512, 3])
+        timesteps = torch.rand([batch_size])
+        y = torch.rand([batch_size, 768])
+
+        args = tuple()
+        kwargs = OrderedDict(
+            (
+                ("img", img),
+                ("img_ids", img_ids),
+                ("txt", txt),
+                ("txt_ids", txt_ids),
+                ("timesteps", timesteps),
+                ("y", y),
+            )
+        )
+        return args, kwargs
 
 
 ################################################################################
@@ -216,6 +272,18 @@ def rope(pos: AnyTensor, dim: int, theta: int) -> AnyTensor:
     return out.float()
 
 
+class MLPEmbedder(ThetaLayer):
+    def __init__(self, theta: Theta):
+        super().__init__(theta)
+        self.in_layer = LinearLayer(theta("in_layer"))
+        self.out_layer = LinearLayer(theta("out_layer"))
+
+    def forward(self, x: AnyTensor) -> AnyTensor:
+        x = self.in_layer(x)
+        x = ops.elementwise(torch.nn.functional.silu, x)
+        return self.out_layer(x)
+
+
 class EmbedND(torch.nn.Module):
     def __init__(self, dim: int, theta: int, axes_dim: list[int]):
         super().__init__()
@@ -239,13 +307,15 @@ class LastLayer(ThetaLayer):
         theta: Theta,
     ):
         super().__init__(theta)
-        self.add_module("outlinear", LinearLayer(theta("outlinear")))
-        self.add_module("ada_linear", LinearLayer(theta("ada_linear")))
+        self.add_module(
+            "adaLN_modulation_linear", LinearLayer(theta("adaLN_modulation.1"))
+        )
+        self.add_module("linear", LinearLayer(theta("linear")))
 
     def forward(self, x: AnyTensor, vec: AnyTensor) -> AnyTensor:
         silu = ops.elementwise(F.silu, vec)
-        lin = self.ada_linear(silu)
+        lin = self.adaLN_modulation_linear(silu)
         shift, scale = lin.chunk(2, dim=1)
         x = (1 + scale[:, None, :]) * layer_norm(x) + shift[:, None, :]
-        x = self.outlinear(x)
+        x = self.linear(x)
         return x

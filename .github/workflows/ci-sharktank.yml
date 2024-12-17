@@ -136,15 +136,19 @@ jobs:
           pip install --no-compile -r requirements.txt -r sharktank/requirements-tests.txt -e sharktank/
 
       - name: Run tests
-      # TODO: unify with-t5-data and with-clip-data flags into a single flag
-      # and make it possible to run only tests that require data.
+      # TODO: unify with-*-data flags into a single flag and make it possible to run
+      # only tests that require data.
+      # We would still want the separate flags as we may endup with data being
+      # scattered on different CI machines.
         run: |
           source ${VENV_DIR}/bin/activate
           pytest \
-          --with-clip-data \
+            --with-clip-data \
+            --with-flux-data \
             --with-t5-data \
             sharktank/tests/models/clip/clip_test.py \
             sharktank/tests/models/t5/t5_test.py \
+            sharktank/tests/models/flux/flux_test.py \
             --durations=0
 
 

@@ -55,11 +55,15 @@ class MMDITDoubleBlock(ThetaLayer):
         self.add_module("img_attn_qkv", LinearLayer(theta("img_attn.qkv")))
         self.add_module(
             "img_attn_norm_q",
-            RMSNormLayer(theta("img_attn.norm.query_norm"), epsilon=1e-6),
+            RMSNormLayer(
+                theta("img_attn.norm.query_norm"), weight_name="scale", epsilon=1e-6
+            ),
         )
         self.add_module(
             "img_attn_norm_k",
-            RMSNormLayer(theta("img_attn.norm.key_norm"), epsilon=1e-6),
+            RMSNormLayer(
+                theta("img_attn.norm.key_norm"), weight_name="scale", epsilon=1e-6
+            ),
         )
         self.add_module("img_attn_proj", LinearLayer(theta("img_attn.proj")))
 
@@ -70,11 +74,15 @@ class MMDITDoubleBlock(ThetaLayer):
         self.add_module("txt_attn_qkv", LinearLayer(theta("txt_attn.qkv")))
         self.add_module(
             "txt_attn_norm_q",
-            RMSNormLayer(theta("txt_attn.norm.query_norm"), epsilon=1e-6),
+            RMSNormLayer(
+                theta("txt_attn.norm.query_norm"), weight_name="scale", epsilon=1e-6
+            ),
         )
         self.add_module(
             "txt_attn_norm_k",
-            RMSNormLayer(theta("txt_attn.norm.key_norm"), epsilon=1e-6),
+            RMSNormLayer(
+                theta("txt_attn.norm.key_norm"), weight_name="scale", epsilon=1e-6
+            ),
         )
         self.add_module("txt_attn_proj", LinearLayer(theta("txt_attn.proj")))
 
@@ -151,14 +159,15 @@ class MMDITSingleBlock(ThetaLayer):
         super().__init__(theta)
 
         self.num_heads = num_heads
-        self.add_module("mod", ModulationLayer(theta("mod"), double=False))
+        self.add_module("mod", ModulationLayer(theta("modulation"), double=False))
         self.add_module(
-            "attn_norm_q", RMSNormLayer(theta("attn.norm.query_norm"), epsilon=1e-6)
+            "attn_norm_q",
+            RMSNormLayer(theta("norm.query_norm"), weight_name="scale", epsilon=1e-6),
         )
         self.add_module(
-            "attn_norm_k", RMSNormLayer(theta("attn.norm.key_norm"), epsilon=1e-6)
+            "attn_norm_k",
+            RMSNormLayer(theta("norm.key_norm"), weight_name="scale", epsilon=1e-6),
         )
-        self.add_module("attn_proj", LinearLayer(theta("attn.proj")))
 
         self.add_module("linear1", LinearLayer(theta("linear1")))
         self.add_module("linear2", LinearLayer(theta("linear2")))
