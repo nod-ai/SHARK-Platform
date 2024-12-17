@@ -35,6 +35,7 @@ from iree.compiler.dialects import iree_codegen  # type: ignore
 from .common import *
 from .dispatch_constraints import *
 from .dispatch_parser import *
+from .spec_builder import *
 
 tune_logger = logging.getLogger("tune")
 
@@ -106,6 +107,15 @@ class DispatchTuner(DispatchParser):
         """Apply parameter transformations to the operation."""
         pass
 
+    @abstractmethod
+    def get_td_spec(
+        self,
+        ir_module: ir.Module,
+        compilation_info: iree_codegen.CompilationInfoAttr,
+    ) -> ir.Module:
+        """Generate a transform dialect spec that applies the compilation info attr."""
+        pass
+
 
 class DispatchTunerRegistry:
     def __init__(self):
@@ -128,6 +138,68 @@ class DispatchTunerRegistry:
             if dispatch_tuner.supports(op_name):
                 return dispatch_tuner
         assert False, "Dispatch kind not supported"
+
+
+class ContractionOpInterfaceTuner(DispatchTuner, ContractionOpInterfaceParser):
+    def apply_params(
+        self,
+        problem_size: ProblemSize,
+        template: list[str],
+        compilation_info: iree_codegen.CompilationInfoAttr,
+    ) -> MLIRTransformation:
+        raise NotImplementedError
+
+    def get_td_spec(
+        self,
+        ir_module: ir.Module,
+        compilation_info: iree_codegen.CompilationInfoAttr,
+    ) -> ir.Module:
+        contraction_op: ir.Operation = self.get_contraction_operation(ir_module)
+        lhs_type = ir.ShapedType(contraction_op.operands[0].type)
+        rhs_type = ir.ShapedType(contraction_op.operands[1].type)
+        acc_type = ir.ShapedType(contraction_op.operands[2].type)
+        M = acc_type.get_dim_size(0)
+        N = acc_type.get_dim_size(1)
+        K = lhs_type.get_dim_size(1)
+        # TODO(Max191): Get the function name from the func.func in the input module.
+        func_name = f"match_contraction_{M}x{N}x{K}_{lhs_type.element_type}x{rhs_type.element_type}x{acc_type.element_type}"
+        return build_td_spec(
+            ir_module.context, contraction_op, compilation_info, func_name
+        )
+
+
+class ConvolutionOpInterfaceTuner(DispatchTuner, ConvolutionOpInterfaceParser):
+    def apply_params(
+        self,
+        problem_size: ProblemSize,
+        template: list[str],
+        compilation_info: iree_codegen.CompilationInfoAttr,
+    ) -> MLIRTransformation:
+        raise NotImplementedError
+
+    def get_td_spec(
+        self,
+        ir_module: ir.Module,
+        compilation_info: iree_codegen.CompilationInfoAttr,
+    ) -> ir.Module:
+        conv_op: ir.Operation = self.get_conv_operation(ir_module)
+        assert (
+            conv_op.name == "linalg.conv_2d_nhwc_hwcf"
+        ), "expected linalg.conv_2d_nhwc_hwcf"
+        lhs_type = ir.ShapedType(conv_op.operands[0].type)
+        rhs_type = ir.ShapedType(conv_op.operands[1].type)
+        acc_type = ir.ShapedType(conv_op.operands[2].type)
+        N = acc_type.get_dim_size(0)
+        H = acc_type.get_dim_size(1)
+        W = acc_type.get_dim_size(2)
+        C = rhs_type.get_dim_size(2)
+        P = rhs_type.get_dim_size(0)
+        Q = rhs_type.get_dim_size(1)
+        F = rhs_type.get_dim_size(3)
+        conv_type = conv_op.name.split(".")[-1]
+        # TODO(Max191): Get the function name from the func.func in the input module.
+        func_name = f"match_{conv_type}_{N}x{H}x{W}x{C}x{P}x{Q}x{F}_{lhs_type.element_type}x{rhs_type.element_type}x{acc_type.element_type}"
+        return build_td_spec(ir_module.context, conv_op, compilation_info, func_name)
 
 
 class MmtTuner(DispatchTuner, MmtParser):
@@ -173,6 +245,13 @@ class MmtTuner(DispatchTuner, MmtParser):
             "  ",
         )
         return MLIRTransformation(template, modified, embeddable)
+
+    def get_td_spec(
+        self,
+        ir_module: ir.Module,
+        compilation_info: iree_codegen.CompilationInfoAttr,
+    ) -> ir.Module:
+        raise NotImplementedError
 
 
 class ConvTuner(DispatchTuner, ConvParser):
@@ -234,6 +313,13 @@ class ConvTuner(DispatchTuner, ConvParser):
             "  ",
         )
         return MLIRTransformation(template, modified, embeddable)
+
+    def get_td_spec(
+        self,
+        ir_module: ir.Module,
+        compilation_info: iree_codegen.CompilationInfoAttr,
+    ) -> ir.Module:
+        raise NotImplementedError
 
 
 class ContractionTuner(DispatchTuner, ContractionParser):
@@ -306,6 +392,13 @@ transform.yield %generic, %config : !transform.any_op, !transform.any_param
             "",
         )
 
+    def get_td_spec(
+        self,
+        ir_module: ir.Module,
+        compilation_info: iree_codegen.CompilationInfoAttr,
+    ) -> ir.Module:
+        raise NotImplementedError
+
 
 class BatchMmtTuner(DispatchTuner, BatchMmtParser):
     def get_transform_function_batch_mmt(
@@ -352,6 +445,13 @@ transform.yield %generic, %config : !transform.any_op, !transform.any_param
             "  ",
         )
         return MLIRTransformation(template, modified, embeddable)
+
+    def get_td_spec(
+        self,
+        ir_module: ir.Module,
+        compilation_info: iree_codegen.CompilationInfoAttr,
+    ) -> ir.Module:
+        raise NotImplementedError
 
 
 class BatchMatmulTuner(DispatchTuner, BatchMatmulParser):
@@ -409,6 +509,13 @@ class BatchMatmulTuner(DispatchTuner, BatchMatmulParser):
         )
         return MLIRTransformation(template, modified, embeddable)
 
+    def get_td_spec(
+        self,
+        ir_module: ir.Module,
+        compilation_info: iree_codegen.CompilationInfoAttr,
+    ) -> ir.Module:
+        raise NotImplementedError
+
 
 @dataclass
 class OpWalkResult:
@@ -452,6 +559,7 @@ def get_default_output_dir() -> str:
     return "tuning_" + datetime.now().strftime("%Y_%m_%d_%H_%M")
 
 
+# TODO(https://github.com/nod-ai/shark-ai/issues/453): Remove in favor of using tune_with_td.
 def tune(
     input: str,  # Path to the mlir file to be tuned
     output: str = "",  # Path to the output directory, auto creates one if not given
@@ -525,6 +633,53 @@ def tune(
 
         tune_logger.info(f"Generated {len(configs)} candidates")
         tune_logger.info(f"Configurations .pkl is stored in {output}/configs.pkl")
+
+
+def generate_configs_and_td_specs(
+    input_module: ir.Module,  # Path to the mlir file to be tuned
+    tuner_context: TunerContext,
+    limit: int = 4096,  # Max candidates to be generated
+    num_subgroups: int = 4,  # GPU spec, used to determine candidate generation constraints
+) -> list[ir.Module]:
+    dispatch_tuner_registry = DispatchTunerRegistry()
+    dispatch_tuner_registry.register(
+        [
+            ContractionOpInterfaceTuner(),
+            ConvolutionOpInterfaceTuner(),
+        ]
+    )
+
+    walk_result: OpWalkResult = walk_mlir_op(input_module, dispatch_tuner_registry)
+
+    dispatch_tuner = walk_result.dispatch_tuner
+    assert dispatch_tuner, "No suitable dispatch tuner found"
+    problem_size: ProblemSize = dispatch_tuner.get_shapes(
+        str(input_module).splitlines()
+    )
+    tune_logger.debug(str(problem_size))
+
+    # Index 0 is reserved for default config, so it gets no td spec.
+    with ir.Location.unknown() as loc:
+        empty_module = ir.Module.create(loc)
+    config_specs: list[ir.Module] = [empty_module]
+
+    # Get the MMA intrinisic intructions supported by the target.
+    variant_op_list = iree_codegen.get_executable_variant_ops(input_module)
+    assert len(variant_op_list) == 1, "Expect one executable variant op"
+    variant_op = variant_op_list[0]
+    mma_list = iree_codegen.query_mma_intrinsics(variant_op)
+    for i, config in enumerate(
+        generate_solutions(tuner_context, problem_size, num_subgroups, mma_list)
+    ):
+        if i >= limit:
+            break
+        tune_logger.info(f"Solution #{i+1}: {config}")
+        td_spec_module = dispatch_tuner.get_td_spec(input_module, config)
+        assert td_spec_module, "Failed to generate transform dialect spec"
+        config_specs.append(td_spec_module)
+
+    tune_logger.info(f"Generated {len(config_specs)} tuning specs")
+    return config_specs
 
 
 def main():

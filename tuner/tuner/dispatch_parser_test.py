@@ -16,6 +16,7 @@ from iree.compiler import ir  # type: ignore
 from iree.compiler.dialects import func  # type: ignore
 from iree.compiler.dialects import iree_gpu  # type: ignore
 from iree.compiler.dialects import iree_codegen  # type: ignore
+from iree.compiler.dialects import linalg  # type: ignore
 
 from . import common
 from . import dispatch_parser
@@ -38,6 +39,103 @@ def test_parse_tensor_type(tuner_ctx: common.TunerContext) -> None:
     assert dispatch_parser.parse_tensor_type("tensor<123xi8>") == common.ShapedType(
         [123], tuner_ctx.type.i8
     )
+
+
+CONTRACTION_TEMPLATE = r"""
+builtin.module{{
+    func.func @test(%arg0: {lhs_type}, %arg1: {rhs_type}) -> {res_type} {{
+        %cst = arith.constant 0.000000e+00 : f32
+        %0 = tensor.empty() : {res_type}
+        %1 = linalg.fill ins(%cst : f32) outs(%0 : {res_type}) -> {res_type}
+        %2 = linalg.generic {{
+            indexing_maps = [
+                {lhs_map},
+                {rhs_map},
+                {res_map}],
+            iterator_types = {iterator_types}}}
+            {{root_op}}
+            ins(%arg0, %arg1 : {lhs_type}, {rhs_type})
+            outs(%1 : {res_type}) {{
+        ^bb0(%in: f16, %in_0: f16, %out: f32):
+            %3 = arith.extf %in : f16 to f32
+            %4 = arith.extf %in_0 : f16 to f32
+            %5 = arith.mulf %3, %4 : f32
+            %6 = arith.addf %out, %5 : f32
+            linalg.yield %6 : f32
+        }} -> {res_type}
+        return %2 : {res_type}
+    }}
+}}"""
+
+
+def test_get_contraction_operation(tuner_ctx: common.TunerContext) -> None:
+    context = tuner_ctx.mlir_ctx
+
+    with ir.Location.unknown():
+        transpose_b_str = CONTRACTION_TEMPLATE.format(
+            lhs_type=ir.RankedTensorType.get([16, 64], ir.F16Type.get()),
+            rhs_type=ir.RankedTensorType.get([32, 64], ir.F16Type.get()),
+            res_type=ir.RankedTensorType.get([16, 32], ir.F32Type.get()),
+            lhs_map="affine_map<(d0, d1, d2) -> (d0, d2)>",
+            rhs_map="affine_map<(d0, d1, d2) -> (d1, d2)>",
+            res_map="affine_map<(d0, d1, d2) -> (d0, d1)>",
+            iterator_types='["parallel", "parallel", "reduction"]',
+        )
+    module = ir.Module.parse(transpose_b_str, context)
+    parser = dispatch_parser.ContractionOpInterfaceParser()
+    mmt_op = parser.get_contraction_operation(module)
+    assert mmt_op is not None
+    assert isinstance(mmt_op.opview, linalg.GenericOp)
+    shapes: common.ProblemSize = parser.get_shapes(transpose_b_str.splitlines())
+    assert shapes.matmul_size.B == 1
+    assert shapes.matmul_size.M == 16
+    assert shapes.matmul_size.N == 32
+    assert shapes.matmul_size.K == 64
+    assert shapes.lhs_type.shape == [16, 64]
+    assert isinstance(shapes.lhs_type.element_type, ir.F16Type)
+    assert shapes.rhs_type.shape == [32, 64]
+    assert isinstance(shapes.rhs_type.element_type, ir.F16Type)
+    assert shapes.res_type.shape == [16, 32]
+    assert isinstance(shapes.res_type.element_type, ir.F32Type)
+
+    with ir.Location.unknown():
+        bmm_transposed_inputs_str = CONTRACTION_TEMPLATE.format(
+            lhs_type=ir.RankedTensorType.get([5, 8, 128], ir.F16Type.get()),
+            rhs_type=ir.RankedTensorType.get([128, 40, 5], ir.F16Type.get()),
+            res_type=ir.RankedTensorType.get([5, 40, 8], ir.F32Type.get()),
+            lhs_map="affine_map<(d0, d1, d2, d3) -> (d0, d1, d3)>",
+            rhs_map="affine_map<(d0, d1, d2, d3) -> (d3, d2, d0)>",
+            res_map="affine_map<(d0, d1, d2, d3) -> (d0, d2, d1)>",
+            iterator_types='["parallel", "parallel", "parallel", "reduction"]',
+        )
+    module = ir.Module.parse(bmm_transposed_inputs_str, context)
+    mmt_op = parser.get_contraction_operation(module)
+    shapes = parser.get_shapes(bmm_transposed_inputs_str.splitlines())
+    assert shapes.matmul_size.B == 5
+    assert shapes.matmul_size.M == 8
+    assert shapes.matmul_size.N == 40
+    assert shapes.matmul_size.K == 128
+
+
+def test_get_conv_operation(tuner_ctx: common.TunerContext) -> None:
+    context = tuner_ctx.mlir_ctx
+    module_str = """
+        builtin.module{
+            func.func @test(%arg0: tensor<2x34x34x16xi8>, %arg1: tensor<3x3x16x16xi8>) -> tensor<2x32x32x16xi32> {
+                %cst = arith.constant 0 : i32
+                %0 = tensor.empty() : tensor<2x32x32x16xi32>
+                %1 = linalg.fill ins(%cst : i32) outs(%0 : tensor<2x32x32x16xi32>) -> tensor<2x32x32x16xi32>
+                %2 = linalg.conv_2d_nhwc_hwcf {root_op}
+                    ins(%arg0, %arg1 : tensor<2x34x34x16xi8>, tensor<3x3x16x16xi8>)
+                    outs(%1 : tensor<2x32x32x16xi32>) -> tensor<2x32x32x16xi32>
+                return %2 : tensor<2x32x32x16xi32>
+            }
+        }"""
+    module = ir.Module.parse(module_str, context)
+    parser = dispatch_parser.ConvolutionOpInterfaceParser()
+    conv_op = parser.get_conv_operation(module)
+    assert conv_op is not None
+    assert isinstance(conv_op.opview, linalg.Conv2DNhwcHwcfOp)
 
 
 def test_get_mmt_tile_sizes(tuner_ctx: common.TunerContext) -> None:
