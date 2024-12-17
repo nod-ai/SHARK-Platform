@@ -36,7 +36,10 @@ from sharktank.utils.iree import (
 import iree.compiler
 from collections import OrderedDict
 
+with_vae_data = pytest.mark.skipif("not config.getoption('with_vae_data')")
 
+
+@with_vae_data
 class VaeSDXLDecoderTest(unittest.TestCase):
     def setUp(self):
         hf_model_id = "stabilityai/stable-diffusion-xl-base-1.0"
