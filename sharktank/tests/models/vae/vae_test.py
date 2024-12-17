@@ -18,7 +18,7 @@ from sharktank.models.vae.tools.run_vae import export_vae
 from sharktank.models.vae.tools.sample_data import get_random_inputs
 
 from sharktank.models.punet.tools.sample_data import load_inputs, save_outputs
-from sharktank.models.punet.tools.import_hf_dataset import import_hf_config
+from sharktank.tools.import_hf_dataset import import_hf_dataset
 from iree.turbine.aot import FxProgramsBuilder, export, decompositions
 from sharktank.utils.hf_datasets import get_dataset
 import unittest
@@ -62,13 +62,13 @@ class VaeSDXLDecoderTest(unittest.TestCase):
             filename="vae/vae.safetensors",
         )
         torch.manual_seed(12345)
-        f32_dataset = import_hf_config(
+        f32_dataset = import_hf_dataset(
             "sdxl_vae/vae/config.json",
-            "sdxl_vae/vae/diffusion_pytorch_model.safetensors",
+            ["sdxl_vae/vae/diffusion_pytorch_model.safetensors"],
         )
         f32_dataset.save("sdxl_vae/vae_f32.irpa", io_report_callback=print)
-        f16_dataset = import_hf_config(
-            "sdxl_vae/vae/config.json", "sdxl_vae/vae/vae.safetensors"
+        f16_dataset = import_hf_dataset(
+            "sdxl_vae/vae/config.json", ["sdxl_vae/vae/vae.safetensors"]
         )
         f16_dataset.save("sdxl_vae/vae_f16.irpa", io_report_callback=print)
 
