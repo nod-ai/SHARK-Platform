@@ -110,8 +110,7 @@ class ContractionOpInterfaceParser(DispatchParser):
     # TODO(Max191): Pass the ir_module directly instead of the template str.
     def get_shapes(self, template: list[str]) -> ProblemSize:
         matcher = ContractionOpInterfaceMatcher()
-        with ir.Context() as ctx:
-            ir_module = ir.Module.parse("\n".join(template), ctx)
+        ir_module = ir.Module.parse("\n".join(template))
         contraction_op = match_root_op(ir_module, matcher)
         assert contraction_op is not None, f"contraction op not found"
         cdims = matcher.contraction_dimensions
@@ -161,8 +160,7 @@ class ConvolutionOpInterfaceParser(DispatchParser):
 
     # TODO(Max191): Pass the ir_module directly instead of the template str.
     def get_shapes(self, template: list[str]) -> ProblemSize:
-        with ir.Context() as ctx:
-            ir_module = ir.Module.parse("\n".join(template), ctx)
+        ir_module = ir.Module.parse("\n".join(template))
         conv_op = match_root_op(ir_module, NamedOpMatcher(self.supported_ops))
         assert conv_op is not None, f"convolution op not found"
         lhs_type = ir.RankedTensorType(conv_op.operands[0].type)
