@@ -146,9 +146,11 @@ jobs:
             --with-clip-data \
             --with-flux-data \
             --with-t5-data \
+            --with-vae-data \
             sharktank/tests/models/clip/clip_test.py \
             sharktank/tests/models/t5/t5_test.py \
             sharktank/tests/models/flux/flux_test.py \
+            sharktank/tests/models/vae/vae_test.py \
             --durations=0
 
 
