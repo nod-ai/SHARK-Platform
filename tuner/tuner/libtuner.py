@@ -19,6 +19,7 @@ and implement a complete tuning loop for a specific model.
 
 
 import math
+import signal
 import sys
 import shutil
 import subprocess
@@ -665,20 +666,16 @@ def strip_compilation_info(input_path: Path) -> str:
         f"{input_path}",
         f"--iree-codegen-strip-compilation-info",
     ]
-    try:
-        result = subprocess.run(
-            strip_command,
-            capture_output=True,
-            text=True,
+    result = run_command(
+        RunPack(
+            command=strip_command,
+            check=True,
         )
-        stripped_mlir = result.stdout
-    except subprocess.CalledProcessError as e:
-        print(e.output)
-        cmd = " ".join(strip_command)
-        logging.error(f"Command '{cmd}' returned non-zero exit status {e.returncode}.")
-        logging.error(f"Command '{cmd}' failed with error: {e.stderr}")
-        raise
-    return stripped_mlir
+    )
+    assert (
+        result.process_res is not None
+    ), "expected result from stripping compilation info"
+    return result.process_res.stdout
 
 
 def run_iree_compile_command(compile_pack: CompilePack) -> Optional[int]:
@@ -713,9 +710,6 @@ def run_iree_compile_command(compile_pack: CompilePack) -> Optional[int]:
     except ireec.CompilerToolError as e:
         logging.info(f"Compilation returned non-zero exit status.")
         logging.debug(e)
-        return None
-    except KeyboardInterrupt:
-        print("Ctrl+C detected, terminating child processes...")
         return None
 
     return candidate_tracker.candidate_id
@@ -779,8 +773,6 @@ def run_iree_benchmark_module_command(benchmark_pack: BenchmarkPack):
             time=math.inf,
             device_id=str(device_id),
         )
-    except KeyboardInterrupt:
-        print("Ctrl+C detected, terminating child processes...")
 
     times = []
     for benchmark_result in benchmark_results:
@@ -844,9 +836,11 @@ def multiprocess_progress_wrapper(
     initializer_inputs = initializer_inputs or ()
 
     # Create a multiprocessing pool
+    sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
     with multiprocessing.Pool(
         num_worker, initializer, initializer_inputs
     ) as worker_pool:
+        signal.signal(signal.SIGINT, sigint_handler)
         # Use tqdm to create a progress bar
         with tqdm(total=len(task_list)) as pbar:
             try:

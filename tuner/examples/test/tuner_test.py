@@ -64,17 +64,19 @@ def main():
     parser = argparse.ArgumentParser(description="Autotune test script")
     test_args = parser.add_argument_group("Example Test Options")
     test_args.add_argument(
-        "test_model_file", type=Path, help="Path to the model file to benchmark (.mlir)"
+        "test_model_file", type=Path, help="Path to the model file to tune (.mlir)"
     )
     test_args.add_argument(
-        "test_num_dispatch_candidates",
+        "--test_num_dispatch_candidates",
         type=int,
+        default=None,
         help="Number of dispatch candidates to keep for model benchmarks.",
     )
     test_args.add_argument(
-        "test_num_model_candidates",
+        "--test_num_model_candidates",
         type=int,
-        help="Number of model candidates to keep for model benchmarks.",
+        default=None,
+        help="Number of model candidates to produce after tuning.",
     )
     # Remaining arguments come from libtuner
     args = libtuner.parse_arguments(parser)
