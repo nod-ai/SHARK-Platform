@@ -39,9 +39,12 @@ def get_ops_from_module(module: ir.Module, fn):
     return ops
 
 
+ROOT_OP_ATTR_NAME = "root_op"
+
+
 def is_root_op(op: ir.Operation) -> bool:
     for attr in op.opview.attributes:
-        if attr.name == "root_op":
+        if attr.name == ROOT_OP_ATTR_NAME:
             return True
     return False
 
