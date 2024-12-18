@@ -39,6 +39,11 @@ To install nightly packages:
 ```bash
 pip install shark-ai[apps] sharktank \
     --pre --find-links https://github.com/nod-ai/shark-ai/releases/expanded_assets/dev-wheels
+pip install -f https://iree.dev/pip-release-links.html --pre --upgrade \
+    iree-base-compiler \
+    iree-base-runtime \
+    iree-turbine \
+    "numpy<2.0"
 ```
 
 See also the
