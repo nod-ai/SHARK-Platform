@@ -78,6 +78,12 @@ def main():
         default=None,
         help="Number of model candidates to produce after tuning.",
     )
+    test_args.add_argument(
+        "--test_hip_target",
+        type=str,
+        default="gfx942",
+        help="Hip target for tuning.",
+    )
     # Remaining arguments come from libtuner
     args = libtuner.parse_arguments(parser)
 
@@ -127,7 +133,7 @@ def main():
     print("Compiling models with top candidates...")
     test_tuner.compile_flags = [
         "--iree-hal-target-backends=rocm",
-        "--iree-hip-target=gfx942",
+        f"--iree-hip-target={args.test_hip_target}",
     ]
     compiled_model_candidates = libtuner.compile(
         args,
