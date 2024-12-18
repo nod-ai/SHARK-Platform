@@ -24,6 +24,9 @@ For this tutorial, you will need to meet the following prerequisites:
     - You can check out [pyenv](https://github.com/pyenv/pyenv)
     as a good tool to be able to manage multiple versions of python
     on the same system.
+
+### Shortfin LLM Server
+
 - A running `shortfin` LLM server. Directions on launching the llm server on one system can be found [here](https://github.com/nod-ai/shark-ai/blob/main/docs/shortfin/llm/user/e2e_llama8b_mi300x.md) and for launching
 on a kubernetes cluster, please look [here](https://github.com/nod-ai/shark-ai/blob/main/docs/shortfin/llm/user/e2e_llama8b_k8s.md)
   - We will use the shortfin server as the `backend` to generate completions
