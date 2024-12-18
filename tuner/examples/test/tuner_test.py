@@ -11,6 +11,7 @@ from tuner import libtuner
 
 class TestTuner(libtuner.TuningClient):
     def __init__(self):
+        super().__init__()
         self.compile_flags = ["--compile-from=executable-sources"]
         self.benchmark_flags = ["--benchmark_repetitions=3", "--input=1"]
 
@@ -107,14 +108,14 @@ def main():
         print("Validation successful!\n")
 
     print("Generating candidates...")
+    test_tuner = TestTuner()
     candidates = libtuner.generate_candidate_specs(
-        args, path_config, candidate_trackers
+        args, path_config, candidate_trackers, test_tuner
     )
     print(f"Stored candidate specs in {path_config.specs_dir}\n")
     if stop_after_phase == libtuner.ExecutionPhases.generate_candidates:
         return
 
-    test_tuner = TestTuner()
     print("Compiling candidates...")
     compiled_candidates = libtuner.compile(
         args, path_config, candidates, candidate_trackers, test_tuner

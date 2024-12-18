@@ -170,6 +170,11 @@ class PathConfig:
 
 
 class TuningClient(ABC):
+    def __init__(self):
+        mlir_ctx = ir.Context()
+        logger = logging.getLogger("tune")
+        self.tuner_context = TunerContext(mlir_ctx, logger)
+
     @abstractmethod
     def get_iree_compile_flags(self) -> list[str]:
         pass
@@ -225,13 +230,14 @@ class TuningClient(ABC):
 
 @dataclass
 class CompilePack:
-    tuning_client: TuningClient
+    iree_compile_flags: list[str]
     candidate_tracker: CandidateTracker
 
 
 @dataclass
 class BenchmarkPack:
-    tuning_client: TuningClient
+    iree_benchmark_module_flags: list[str]
+    benchmark_timeout: int
     candidate_tracker: CandidateTracker
 
 
@@ -680,7 +686,6 @@ def strip_compilation_info(input_path: Path) -> str:
 
 def run_iree_compile_command(compile_pack: CompilePack) -> Optional[int]:
     candidate_tracker = compile_pack.candidate_tracker
-    tuning_client = compile_pack.tuning_client
 
     # Compile to vmfb.
     assert candidate_tracker.spec_path, "expected candidate spec path"
@@ -691,7 +696,7 @@ def run_iree_compile_command(compile_pack: CompilePack) -> Optional[int]:
     extra_flags = [
         f"--iree-codegen-tuning-spec-path={td_spec_path}",
     ]
-    extra_flags += tuning_client.get_iree_compile_flags()
+    extra_flags += compile_pack.iree_compile_flags
     assert candidate_tracker.compiled_vmfb_path, "expected output vmfb path"
     output_path = candidate_tracker.compiled_vmfb_path.as_posix()
     crash_dump_path = f"{output_path}.crash_report.mlir"
@@ -718,7 +723,6 @@ def run_iree_compile_command(compile_pack: CompilePack) -> Optional[int]:
 def run_iree_benchmark_module_command(benchmark_pack: BenchmarkPack):
     candidate_tracker = benchmark_pack.candidate_tracker
     candidate_id = candidate_tracker.candidate_id
-    tuning_client = benchmark_pack.tuning_client
 
     # Load the candidate's vmfb and create vm_module.
     vmfb_path = candidate_tracker.compiled_vmfb_path
@@ -734,7 +738,7 @@ def run_iree_benchmark_module_command(benchmark_pack: BenchmarkPack):
     extra_flags = {}
     func_name = None
     inputs = []
-    for flag in tuning_client.get_iree_benchmark_module_flags():
+    for flag in benchmark_pack.iree_benchmark_module_flags:
         assert flag[:2] == "--", "iree_benchmark_module_flags should begin with '--'"
         split_key_value = flag[2:].split("=")
         assert (
@@ -755,7 +759,7 @@ def run_iree_benchmark_module_command(benchmark_pack: BenchmarkPack):
 
     # Benchmark the module.
     try:
-        timeout = tuning_client.get_benchmark_timeout_s()
+        timeout = benchmark_pack.benchmark_timeout
         benchmark_results = ireert.benchmark.benchmark_module(
             vm_module,
             entry_function=func_name,
@@ -1038,6 +1042,7 @@ def generate_candidate_specs(
     args: argparse.Namespace,
     path_config: PathConfig,
     candidate_trackers: list[CandidateTracker],
+    tuning_client: TuningClient,
 ) -> list[int]:
     """Generate candidate transform dialect specs for tuning. Returns the list of candidate indexes"""
     logging.debug("generate_candidate_specs()")
@@ -1052,17 +1057,16 @@ def generate_candidate_specs(
         # td_specs can end up matching against the compilation info from the
         # source mlir.
         mlir_text = strip_compilation_info(path_config.template_mlir)
-        with ir.Context() as ctx:
-            tuner_context = TunerContext(ctx, tune_logger)
-            mlir_module = dispatch_parser.parse_mlir(mlir_text, tuner_context)
+        mlir_module = dispatch_parser.parse_mlir(mlir_text, tuning_client.tuner_context)
+        with tuning_client.tuner_context.mlir_ctx:
             logging.debug("Captured messages from candidate_gen.py:")
             config_specs: list[ir.Module] = candidate_gen.generate_configs_and_td_specs(
                 input_module=mlir_module,
-                tuner_context=tuner_context,
+                tuner_context=tuning_client.tuner_context,
                 limit=args.num_candidates,
                 num_subgroups=args.num_subgroups,
             )
-            logging.debug("candidate_gen.py ends")
+        logging.debug("candidate_gen.py ends")
         handle_error(
             condition=(len(config_specs) <= 1), msg="Failed to generate any candidates"
         )
@@ -1137,10 +1141,10 @@ def compile(
     # Strip compilation info and root_op attribute from the source and save
     # the stripped IR, since the TD specs do not expect these attributes.
     stripped_mlir = strip_compilation_info(path_config.template_mlir)
-    with ir.Context():
-        stripped_module = ir.Module.parse(stripped_mlir)
-        strip_root_op_attr(stripped_module)
-        stripped_mlir = str(stripped_module)
+    context = tuning_client.tuner_context.mlir_ctx
+    stripped_module = ir.Module.parse(stripped_mlir, context=context)
+    strip_root_op_attr(stripped_module)
+    stripped_mlir = str(stripped_module)
     with open(path_config.template_mlir, "w") as f:
         f.write(stripped_mlir)
 
@@ -1158,14 +1162,16 @@ def compile(
     # Run compilation for all candidates.
     task_list = [
         CompilePack(
-            tuning_client=tuning_client, candidate_tracker=candidate_trackers[i]
+            iree_compile_flags=tuning_client.get_iree_compile_flags(),
+            candidate_tracker=candidate_trackers[i],
         )
         for i in candidates
     ]
     if 0 not in candidates:
         task_list.append(
             CompilePack(
-                tuning_client=tuning_client, candidate_tracker=candidate_trackers[0]
+                iree_compile_flags=tuning_client.get_iree_compile_flags(),
+                candidate_tracker=candidate_trackers[0],
             )
         )
     num_worker = min(args.max_cpu_workers, len(task_list))
@@ -1473,7 +1479,9 @@ def benchmark(
 
     task_list = [
         BenchmarkPack(
-            tuning_client=tuning_client, candidate_tracker=candidate_trackers[i]
+            iree_benchmark_module_flags=tuning_client.get_iree_benchmark_module_flags(),
+            benchmark_timeout=tuning_client.get_benchmark_timeout_s(),
+            candidate_tracker=candidate_trackers[i],
         )
         for i in compiled_candidates
         if i != 0
@@ -1491,7 +1499,9 @@ def benchmark(
     worker_context_queue = create_worker_context_queue(args.devices)
     baseline_task_list = [
         BenchmarkPack(
-            tuning_client=tuning_client, candidate_tracker=candidate_trackers[0]
+            iree_benchmark_module_flags=tuning_client.get_iree_benchmark_module_flags(),
+            benchmark_timeout=tuning_client.get_benchmark_timeout_s(),
+            candidate_tracker=candidate_trackers[0],
         )
     ] * len(args.devices)
     baseline_results = multiprocess_progress_wrapper(
