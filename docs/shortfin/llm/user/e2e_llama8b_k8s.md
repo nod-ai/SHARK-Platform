@@ -16,7 +16,7 @@ behind a load balancer on MI300X GPU.
 
 ### Deploy shortfin llama app service
 
-Please edit the following file to fetch the correct artifacts and serve the intended configuration of the llama3 model for your use case [here](https://github.com/nod-ai/shark-ai/tree/main/shortfin/python/shortfin_apps/llm/k8s/llama-app-deployment.yaml).
+Save [llama-app-deployment.yaml](https://github.com/nod-ai/shark-ai/tree/main/shortfin/python/shortfin_apps/llm/k8s/llama-app-deployment.yaml) locally and edit it to include your artifacts and intended configuration.
 
 To deploy llama app:
 

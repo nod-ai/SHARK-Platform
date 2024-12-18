@@ -20,8 +20,6 @@ spec:
         # update to your artifacts and change cli flags for instantiation of server to match your intended llama configuration
         args:
         - |
-          rocminfo &&
-          echo "ROCm is working!" &&
           sudo apt update &&
           curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash &&
           sudo apt install git -y &&
