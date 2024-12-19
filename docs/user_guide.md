@@ -17,6 +17,7 @@ Officially we support Python versions: 3.11, 3.12, 3.13
 The rest of this guide assumes you are using Python 3.11.
 
 ### Install Python
+
 To install Python 3.11 on Ubuntu:
 
 ```bash
