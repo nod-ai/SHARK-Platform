@@ -334,7 +334,8 @@ def main():
 
     bsizes = []
     for bs in args.bs:
-        generate_batch_prefill(bs)
+        if not args.skip_prefill:
+            generate_batch_prefill(bs)
         if not args.skip_decode:
             generate_batch_decode(bs)
         bsizes.append(bs)
