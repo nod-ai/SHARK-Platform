@@ -67,7 +67,6 @@ class PagedLlamaModelV1(BaseCausalLMModel):
         super().__init__(
             theta,
             context_length=config.hp.context_length,
-            static_tables=config.static_tables,
             device=config.device,
             activation_dtype=config.activation_dtype,
             attention_dtype=config.attention_dtype,
@@ -92,7 +91,6 @@ class PagedLlamaModelV1(BaseCausalLMModel):
                 max_seqlen=hp.context_length,
                 device=self.device,
                 use_hf=self.use_hf,
-                static_tables=config.static_tables,
                 tensor_parallelism_size=config.tensor_parallelism_size,
             ),
         )
