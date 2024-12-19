@@ -456,12 +456,25 @@ class PagedKVCache(BaseKVCache):
             page_offset = (seq_positions % self.block_seq_stride).unsqueeze(1)
 
             # [1, 1]
-            partitions = torch.tensor(idx).unsqueeze(0)
+            if isinstance(seq_positions, ReplicatedTensor):
+                partitions = [
+                    torch.tensor(idx).unsqueeze(0)
+                    for _ in range(seq_positions.shard_count)
+                ]
 
-            # [bs, 1]
-            transformer_block = torch.full(
-                (bs, 1), transformer_block_index, device=device
-            )
+                transformer_block = [
+                    torch.full((bs, 1), transformer_block_index, device=device)
+                    for _ in range(seq_positions.shard_count)
+                ]
+
+                partitions = ReplicatedTensor(ts=partitions)
+                transformer_block = ReplicatedTensor(ts=transformer_block)
+            else:
+                partitions = torch.tensor(idx).unsqueeze(0)
+                transformer_block = torch.full(
+                    (bs, 1), transformer_block_index, device=device
+                )
+
             partitions = partitions.repeat(bs, 1)
 
             indices = (page_id, transformer_block, partitions, page_offset)
