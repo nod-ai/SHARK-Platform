@@ -1,39 +1,53 @@
-# LLama 8b GPU instructions on MI300X
+# Llama end to end serving instructions
 
-## Setup
+## Introduction
 
-We will use an example with `llama_8b_f16` in order to describe the
-process of exporting a model for use in the shortfin llm server with an
-MI300 GPU.
+This guide demonstrates how to serve the
+[Llama family](https://www.llama.com/) of Large Language Models (LLMs) using
+shark-ai.
 
-### Pre-Requisites
+* By the end of this guide you will have a server running locally and you will
+  be able to send HTTP requests containing chat prompts and receive chat
+  responses back.
 
-- Python >= 3.11 is recommended for this flow
-    - You can check out [pyenv](https://github.com/pyenv/pyenv)
-    as a good tool to be able to manage multiple versions of python
-    on the same system.
+* We will demonstrate the development flow using a version of the
+  [Llama-3.1-8B-Instruct](https://huggingface.co/meta-llama/Llama-3.1-8B-Instruct)
+  model, quantized to fp16. Other models in the
+  [Llama 3.1 family](https://huggingface.co/collections/meta-llama/llama-31-669fc079a0c406a149a5738f)
+  are supported as well.
+
+Overview:
+
+1. Setup, installing dependencies and configuring the environment
+2. Download model files then compile the model for our accelerator(s) of choice
+3. Start a server using the compiled model files
+4. Send chat requests to the server and receive chat responses back
+
+## 1. Setup
+
+### Pre-requisites
+
+- An installed
+  [AMD Instinct™ MI300X Series Accelerator](https://www.amd.com/en/products/accelerators/instinct/mi300/mi300x.html)
+    - Other accelerators should work too, but shark-ai is currently most
+      optimized on MI300X
+- Compatible versions of Linux and ROCm (see the [ROCm compatability matrix](https://rocm.docs.amd.com/en/latest/compatibility/compatibility-matrix.html))
+- Python >= 3.11
 
 ### Create virtual environment
 
-To start, create a new virtual environment:
+To start, create a new
+[virtual environment](https://docs.python.org/3/library/venv.html):
 
 ```bash
 python -m venv --prompt shark-ai .venv
 source .venv/bin/activate
 ```
 
-## Install stable shark-ai packages
+### Install Python packages
 
-First install a torch version that fulfills your needs:
-
-```bash
-# Fast installation of torch with just CPU support.
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-```
-
-For other options, see https://pytorch.org/get-started/locally/.
-
-Next install shark-ai:
+Install `shark-ai`, which includes the `sharktank` model development toolkit
+and the `shortfin` serving framework:
 
 ```bash
 pip install shark-ai[apps]
@@ -43,17 +57,28 @@ pip install shark-ai[apps]
 > To switch from the stable release channel to the nightly release channel,
 > see [`nightly_releases.md`](../../../nightly_releases.md).
 
-### Define a directory for export files
-
-Create a new directory for us to export files like
-`model.mlir`, `model.vmfb`, etc.
+The `sharktank` project contains implementations of popular LLMs optimized for
+ahead of time compilation and serving via `shortfin`. These implementations are
+built using PyTorch, so install a `torch` version that fulfills your needs by
+following either https://pytorch.org/get-started/locally/ or our recommendation:
 
 ```bash
-mkdir $PWD/export
-export EXPORT_DIR=$PWD/export
+# Fast installation of torch with just CPU support.
+pip install torch --index-url https://download.pytorch.org/whl/cpu
 ```
 
-### Download llama3_8b_fp16.gguf
+### Prepare a working directory
+
+Create a new directory for model files and compilation artifacts:
+
+```bash
+export EXPORT_DIR=$PWD/export
+mkdir -p $EXPORT_DIR
+```
+
+## 2. Download and compile the model
+
+### Download `llama3_8b_fp16.gguf`
 
 We will use the `hf_datasets` module in `sharktank` to download a
 LLama3.1 8b f16 model.
@@ -64,10 +89,10 @@ python -m sharktank.utils.hf_datasets llama3_8B_fp16 --local-dir $EXPORT_DIR
 
 ### Define environment variables
 
-Define the following environment variables to make running
-this example a bit easier:
+We'll first define some environment variables that are shared between the
+following steps.
 
-#### Model/Tokenizer vars
+#### Model/tokenizer variables
 
 This example uses the `llama8b_f16.gguf` and `tokenizer.json` files
 that were downloaded in the previous step.
@@ -77,51 +102,40 @@ export MODEL_PARAMS_PATH=$EXPORT_DIR/meta-llama-3.1-8b-instruct.f16.gguf
 export TOKENIZER_PATH=$EXPORT_DIR/tokenizer.json
 ```
 
-#### General env vars
+#### General environment variables
 
-The following env vars can be copy + pasted directly:
+These variables configure the model export and compilation process:
 
 ```bash
-# Path to export model.mlir file
 export MLIR_PATH=$EXPORT_DIR/model.mlir
-# Path to export config.json file
 export OUTPUT_CONFIG_PATH=$EXPORT_DIR/config.json
-# Path to export model.vmfb file
 export VMFB_PATH=$EXPORT_DIR/model.vmfb
-# Batch size for kvcache
-export BS=1,4
+export EXPORT_BATCH_SIZES=1,4
 # NOTE: This is temporary, until multi-device is fixed
 export ROCR_VISIBLE_DEVICES=1
 ```
 
-## Export to MLIR
+### Export to MLIR using sharktank
 
-We will now use the `sharktank.examples.export_paged_llm_v1` script
-to export our model to `.mlir` format.
+We will now use the
+[`sharktank.examples.export_paged_llm_v1`](https://github.com/nod-ai/shark-ai/blob/main/sharktank/sharktank/examples/export_paged_llm_v1.py)
+script to export an optimized implementation of the LLM from PyTorch to the
+`.mlir` format that our compiler can work with:
 
 ```bash
 python -m sharktank.examples.export_paged_llm_v1 \
   --gguf-file=$MODEL_PARAMS_PATH \
   --output-mlir=$MLIR_PATH \
   --output-config=$OUTPUT_CONFIG_PATH \
-  --bs=$BS
+  --bs=$EXPORT_BATCH_SIZES
 ```
 
-## Compiling to `.vmfb`
+### Compile using IREE to a `.vmfb` file
 
-Now that we have generated a `model.mlir` file,
-we can compile it to `.vmfb` format, which is required for running
-the `shortfin` LLM server.
-
-We will use the
+Now that we have generated a `model.mlir` file, we can compile it to the `.vmfb`
+format, which is required for running the `shortfin` LLM server. We will use the
 [iree-compile](https://iree.dev/developers/general/developer-overview/#iree-compile)
 tool for compiling our model.
-
-### Compile for MI300
-
-**NOTE: This command is specific to MI300 GPUs.
-For other `--iree-hip-target` GPU options,
-look [here](https://iree.dev/guides/deployment-configurations/gpu-rocm/#compile-a-program)**
 
 ```bash
 iree-compile $MLIR_PATH \
@@ -130,26 +144,31 @@ iree-compile $MLIR_PATH \
  -o $VMFB_PATH
 ```
 
-## Running the `shortfin` LLM server
+> [!NOTE]
+> The `--iree-hip-target=gfx942` option will generate code for MI300 series
+> GPUs. To compile for other targets, see
+> [the options here](https://iree.dev/guides/deployment-configurations/gpu-rocm/#compile-a-program).
 
-We should now have all of the files that we need to run the shortfin LLM server.
+### Check exported files
 
-Verify that you have the following in your specified directory ($EXPORT_DIR):
+We should now have all of the files that we need to run the shortfin LLM server:
 
 ```bash
-ls $EXPORT_DIR
+ls -1A $EXPORT_DIR
 ```
 
-- config.json
-- meta-llama-3.1-8b-instruct.f16.gguf
-- model.mlir
-- model.vmfb
-- tokenizer_config.json
-- tokenizer.json
+Expected output:
 
-### Launch server
+```
+config.json
+meta-llama-3.1-8b-instruct.f16.gguf
+model.mlir
+model.vmfb
+tokenizer_config.json
+tokenizer.json
+```
 
-#### Run the shortfin server
+## 3. Run the `shortfin` LLM server
 
 Now that we are finished with setup, we can start the Shortfin LLM Server.
 
@@ -184,18 +203,16 @@ when you see the following logs outputted to terminal:
 cat shortfin_llm_server.log
 ```
 
-#### Expected output
+Expected output:
 
-```text
+```
 [2024-10-24 15:40:27.440] [info] [on.py:62] Application startup complete.
 [2024-10-24 15:40:27.444] [info] [server.py:214] Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
 ```
 
-## Test the server
+## 4. Test the server
 
-We can now test our LLM server.
-
-First let's confirm that it is running:
+We can now test our LLM server. First let's confirm that it is running:
 
 ```bash
 curl -i http://localhost:8000/health
@@ -216,6 +233,8 @@ curl http://localhost:8000/generate \
         "sampling_params": {"max_completion_tokens": 50}
     }'
 ```
+
+The response should come back as `Washington, D.C.!`.
 
 ### Send requests from Python
 
@@ -242,7 +261,7 @@ generation_request()
 
 ## Cleanup
 
-When done, you can stop the shortfin_llm_server by killing the process:
+When done, you can stop the `shortfin_llm_server` by killing the process:
 
 ```bash
 kill -9 $shortfin_process
