@@ -24,25 +24,24 @@ source .venv/bin/activate
 
 ## Install stable shark-ai packages
 
-<!-- TODO: Add `sharktank` to `shark-ai` meta package -->
+First install a torch version that fulfills your needs:
 
 ```bash
-pip install shark-ai[apps] sharktank
+# Fast installation of torch with just CPU support.
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
 ```
 
-### Nightly packages
+For other options, see https://pytorch.org/get-started/locally/.
 
-To install nightly packages:
-
-<!-- TODO: Add `sharktank` to `shark-ai` meta package -->
+Next install shark-ai:
 
 ```bash
-pip install shark-ai[apps] sharktank \
-    --pre --find-links https://github.com/nod-ai/shark-ai/releases/expanded_assets/dev-wheels
+pip install shark-ai[apps]
 ```
 
-See also the
-[instructions here](https://github.com/nod-ai/shark-ai/blob/main/docs/nightly_releases.md).
+> [!TIP]
+> To switch from the stable release channel to the nightly release channel,
+> see [`nightly_releases.md`](../../../nightly_releases.md).
 
 ### Define a directory for export files
 
@@ -192,25 +191,41 @@ cat shortfin_llm_server.log
 [2024-10-24 15:40:27.444] [info] [server.py:214] Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
 ```
 
-## Verify server
+## Test the server
 
-We can now verify our LLM server by sending a simple request:
+We can now test our LLM server.
 
-### Open python shell
+First let's confirm that it is running:
 
 ```bash
-python
+curl -i http://localhost:8000/health
+
+# HTTP/1.1 200 OK
+# date: Thu, 19 Dec 2024 19:40:43 GMT
+# server: uvicorn
+# content-length: 0
 ```
 
-### Send request
+Next, let's send a generation request:
+
+```bash
+curl http://localhost:8000/generate \
+    -H "Content-Type: application/json" \
+    -d '{
+        "text": "Name the capital of the United States.",
+        "sampling_params": {"max_completion_tokens": 50}
+    }'
+```
+
+### Send requests from Python
+
+You can also send HTTP requests from Python like so:
 
 ```python
+import os
 import requests
 
-import os
-
 port = 8000 # Change if running on a different port
-
 generate_url = f"http://localhost:{port}/generate"
 
 def generation_request():
@@ -225,16 +240,16 @@ def generation_request():
 generation_request()
 ```
 
-After you receive the request, you can exit the python shell:
-
-```bash
-quit()
-```
-
 ## Cleanup
 
-When done, you can kill the shortfin_llm_server by killing the process:
+When done, you can stop the shortfin_llm_server by killing the process:
 
 ```bash
 kill -9 $shortfin_process
+```
+
+If you want to find the process again:
+
+```bash
+ps -f | grep shortfin
 ```
