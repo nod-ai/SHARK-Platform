@@ -136,6 +136,7 @@ class RotaryEmbeddingLayer(BaseLayer):
             freqs_cis.shape[0] >= sl
         ), f"Sequence length longer than embedding table ({sl} vs {freqs_cis.shape[0]})"
 
+        freqs_cis = ops.repeat(freqs_cis[None, :, :], (xt_.shape[0], 1, 1))
         xt_out = kernels.apply_rotary_embedding(xt_.to(freqs_cis.dtype), freqs_cis)
 
         if self.use_hf:
@@ -175,7 +176,7 @@ class RotaryEmbeddingLayer(BaseLayer):
             else:
                 freqs_cis = self._compute_rotary_embed_table(positions_seq.flatten())
 
-        return freqs_cis
+        return freqs_cis.unsqueeze(1)
 
     def apply_batched_mask(
         self,

@@ -44,10 +44,11 @@ class apply_rotary_embedding(CustomOp):
         sl = input.type.shape[1]
         sl = "D" if sl < 0 else sl
         heads = input.type.shape[2]
+        dims = input.type.shape[3]
 
         template_file = "rotary_embedding.mlir"
         target_function_name = (
-            f"sharktank_rotary_embedding_{bs}_{sl}_{heads}_{input_dtype}"
+            f"sharktank_rotary_embedding_{bs}_{sl}_{heads}_{dims}_{input_dtype}"
         )
 
         # Template params.
@@ -63,6 +64,7 @@ class apply_rotary_embedding(CustomOp):
             bs=bs,
             sl=sl,
             heads=heads,
+            dims=dims,
             dtype=str(input_dtype),
         )
         kb.yield_results(*call_function(target_function, *kb.arg_bindings))

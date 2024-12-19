@@ -9,7 +9,7 @@
 
 module {
 
-util.func private @sharktank_rotary_embedding_{{bs}}_{{sl}}_{{heads}}_{{dtype}}(%input: !input_tensor_type, %table: !table_tensor_type) -> !input_tensor_type {
+util.func private @sharktank_rotary_embedding_{{bs}}_{{sl}}_{{heads}}_{{dims}}_{{dtype}}(%input: !input_tensor_type, %table: !table_tensor_type) -> !input_tensor_type {
 
   %c0 = arith.constant 0 : index
   %c1 = arith.constant 1 : index
@@ -22,16 +22,12 @@ util.func private @sharktank_rotary_embedding_{{bs}}_{{sl}}_{{heads}}_{{dtype}}(
   %d2 = tensor.dim %input, %c2 : !input_tensor_type
   %d3 = tensor.dim %input, %c3 : !input_tensor_type
 
-  %dim = tensor.dim %table, %c1 : !table_tensor_type
-  %hdim = arith.divui %dim, %c2 : index
-
-
   %empty_dyn = tensor.empty(%d0, %d1, %d2, %d3) : tensor<?x?x?x?x{{dtype}}>
   %empty = tensor.cast %empty_dyn : tensor<?x?x?x?x{{dtype}}> to {{input_tensor_type}}
 
   %result = linalg.generic {
       indexing_maps = [
-                       affine_map<(d0, d1, d2, d3) -> (d1, d3)>,
+                       affine_map<(d0, d1, d2, d3) -> (d0, d1, d3)>,
                        affine_map<(d0, d1, d2, d3) -> (d0, d1, d2, d3)>
                        ],
       iterator_types = ["parallel", "parallel", "parallel", "parallel"]}
