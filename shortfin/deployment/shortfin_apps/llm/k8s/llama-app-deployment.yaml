@@ -34,7 +34,7 @@ spec:
           wget https://sharkpublic.blob.core.windows.net/sharkpublic/stephen/llama3.1_8b/tokenizer.json -O shark_artifacts/tokenizer.json &&
           pip install --pre  shortfin[apps] -f https://github.com/nod-ai/shark-ai/releases/expanded_assets/dev-wheels &&
           pip install pandas &&
-          python -m shortfin_apps.llm.server --tokenizer_json=shark_artifacts/tokenizer.json --model_config=shark_artifacts/config.json --vmfb=shark_artifacts/model.vmfb --parameters=shark_artifacts/meta-llama-3.1-8b-instruct.f16.gguf --device_ids 0 --device=hip;
+          python -m shortfin_apps.llm.server --tokenizer_json=shark_artifacts/tokenizer.json --model_config=shark_artifacts/config.json --vmfb=shark_artifacts/model.vmfb --parameters=shark_artifacts/meta-llama-3.1-8b-instruct.f16.gguf --device=hip;
         resources:
           # change number of gpus required here based on your llama configuration
           requests:
