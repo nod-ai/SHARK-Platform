@@ -118,14 +118,18 @@ class DispatchTuner(DispatchParser):
 
 
 class DispatchTunerRegistry:
-    def __init__(self):
+    def __init__(self, check_translation_info=True):
+        self.check_translation_info = check_translation_info
         self.registry = set()
 
     def register(self, dispatch_tuners: list[DispatchTuner]) -> None:
         for dispatch_tuner in dispatch_tuners:
             self.registry.add(dispatch_tuner)
 
+    # TODO(Max191): Remove translation info validation.
     def validate_translation(self, attrs: list[ir.NamedAttribute]) -> bool:
+        if not self.check_translation_info:
+            return True
         for attr in attrs:
             if (attr.name == "translation_info") and (
                 "LLVMGPUVectorDistribute" in str(attr.attr)
@@ -641,7 +645,7 @@ def generate_configs_and_td_specs(
     limit: int = 4096,  # Max candidates to be generated
     num_subgroups: int = 4,  # GPU spec, used to determine candidate generation constraints
 ) -> list[ir.Module]:
-    dispatch_tuner_registry = DispatchTunerRegistry()
+    dispatch_tuner_registry = DispatchTunerRegistry(check_translation_info=False)
     dispatch_tuner_registry.register(
         [
             ContractionOpInterfaceTuner(),
@@ -658,10 +662,8 @@ def generate_configs_and_td_specs(
     )
     tune_logger.debug(str(problem_size))
 
-    # Index 0 is reserved for default config, so it gets no td spec.
-    with ir.Location.unknown() as loc:
-        empty_module = ir.Module.create(loc)
-    config_specs: list[ir.Module] = [empty_module]
+    # Index 0 is reserved for default config, so it gets a placeholder spec.
+    config_specs: list[ir.Module] = [get_placeholder_spec(input_module.context)]
 
     # Get the MMA intrinisic intructions supported by the target.
     variant_op_list = iree_codegen.get_executable_variant_ops(input_module)

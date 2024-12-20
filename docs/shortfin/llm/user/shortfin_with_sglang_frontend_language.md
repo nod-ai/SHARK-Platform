@@ -27,7 +27,7 @@ For this tutorial, you will need to meet the following prerequisites:
 
 ### Shortfin LLM Server
 
-- A running `shortfin` LLM server. Directions on launching the llm server on one system can be found [here](https://github.com/nod-ai/shark-ai/blob/main/docs/shortfin/llm/user/e2e_llama8b_mi300x.md) and for launching
+- A running `shortfin` LLM server. Directions on launching the llm server on one system can be found [here](./llama_end_to_end.md) and for launching
 on a kubernetes cluster, please look [here](https://github.com/nod-ai/shark-ai/blob/main/docs/shortfin/llm/user/e2e_llama8b_k8s.md)
   - We will use the shortfin server as the `backend` to generate completions
     from SGLang's `frontend language`. In this tutorial, you can think of
