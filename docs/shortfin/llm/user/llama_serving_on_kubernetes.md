@@ -16,6 +16,7 @@ behind a load balancer on MI300X GPU.
 
 ### Deploy shortfin llama app service
 
+To generate the artifacts required for this k8s deployment, please follow [llama_serving.md](./llama_serving.md) until you have have all of the files that we need to run the shortfin LLM server.
 Save [llama-app-deployment.yaml](../../../../shortfin/deployment/shortfin_apps/llm/k8s/llama-app-deployment.yaml) locally and edit it to include your artifacts and intended configuration.
 
 To deploy llama app:
