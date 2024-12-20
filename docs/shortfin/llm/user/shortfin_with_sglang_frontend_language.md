@@ -35,7 +35,7 @@ For this tutorial, you will need to meet the following prerequisites:
 
 ## Install/Start `shortfin` LLM server
 
-Follow the steps [here](https://github.com/nod-ai/shark-ai/blob/main/docs/shortfin/llm/user/e2e_llama8b_mi300x.md)
+Follow the steps [here](https://github.com/nod-ai/shark-ai/blob/main/docs/shortfin/llm/user/llama_end_to_end.md)
 to export a model with `sharktank` and start a `shortfin` LLM server
 with that model.
 
