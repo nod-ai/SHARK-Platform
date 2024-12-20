@@ -16,7 +16,8 @@ spec:
       - name: shark-llama-app-container
         image: rocm/dev-ubuntu-22.04:6.3
         command: ["/bin/bash", "-c"]
-        # update to your artifacts and change cli flags for instantiation of server to match your intended llama configuration
+        # update to artifacts you generated form llama_serving.md (this is an example with the base llama3.1 8b tp1 artifacts)
+        # change cli flags for instantiation of server to match your intended llama configuration
         args:
         - |
           sudo apt update &&
