@@ -30,7 +30,7 @@ To retrieve external IP for targetting the llama app load balancer:
 kubectl get service shark-llama-app-service
 ```
 
-Now, you can use the external IP for sglang integration or just sending image generation requests.
+Now, you can use the external IP for sglang integration or just sending text generation requests.
 
 ### Delete shortfin llama app service
 
