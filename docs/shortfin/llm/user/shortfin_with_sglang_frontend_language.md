@@ -28,7 +28,7 @@ For this tutorial, you will need to meet the following prerequisites:
 ### Shortfin LLM Server
 
 - A running `shortfin` LLM server. Directions on launching the llm server on one system can be found in [Llama end to end serving instructions](./llama_end_to_end.md) and for launching
-on a kubernetes cluster, see [LLama 8b GPU instructions on Kubernetes](./e2e_llama8b_k8s.md)
+on a kubernetes cluster, see [Llama 8b GPU instructions on Kubernetes](./e2e_llama8b_k8s.md)
   - We will use the shortfin server as the `backend` to generate completions
     from SGLang's `frontend language`. In this tutorial, you can think of
     `sglang` as the client and `shortfin` as the server.
