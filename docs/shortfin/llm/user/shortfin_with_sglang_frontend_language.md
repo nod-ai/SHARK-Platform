@@ -4,15 +4,15 @@ This doc includes basic steps for hooking up sglang with a running Shortfin serv
 
 ## Current Support Status
 
-| Feature     | Description | Enabled    | Reference |
-| ----------- | ----------- | ---------- | ------------ |
-| `gen`       | Generate shortfin completion, given a prompt | ✅ | [Shortfin Implementation](https://github.com/nod-ai/sglang/blob/main/python/sglang/lang/backend/shortfin.py) |
-| `streaming` | Stream shortfin completion, given a prompt | ✅ | [Streaming](https://sgl-project.github.io/frontend/frontend.html#streaming) |
-| `run_batch` | Run batch of disjoint requests with continous batching | ✅ | [Batching](https://sgl-project.github.io/frontend/frontend.html#batching) |
-| `fork`      | Generate sections of the same prompt in parallel | ✅ | [Fork Docs](https://sgl-project.github.io/frontend/frontend.html#parallelism) |
-| `choices`   | Given set of choices, generate response based on best log probs | ❌ | [Choices Methods](https://sgl-project.github.io/frontend/choices_methods.html#choices-methods-in-sglang) |
-| `image`     | Pass image as part of multi-modal prompt | ❌ | [sgl.image](https://sgl-project.github.io/frontend/frontend.html#multi-modality) |
-| `regex`     | Specify regular expression as decoding constraint | ❌ | [Regex](https://sgl-project.github.io/frontend/frontend.html#constrained-decoding) |
+| Feature     | Description                                                     | Enabled | Reference                                                                                                    |
+| ----------- | --------------------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------ |
+| `gen`       | Generate shortfin completion, given a prompt                    | ✅       | [Shortfin Implementation](https://github.com/nod-ai/sglang/blob/main/python/sglang/lang/backend/shortfin.py) |
+| `streaming` | Stream shortfin completion, given a prompt                      | ✅       | [Streaming](https://sgl-project.github.io/frontend/frontend.html#streaming)                                  |
+| `run_batch` | Run batch of disjoint requests with continous batching          | ✅       | [Batching](https://sgl-project.github.io/frontend/frontend.html#batching)                                    |
+| `fork`      | Generate sections of the same prompt in parallel                | ✅       | [Fork Docs](https://sgl-project.github.io/frontend/frontend.html#parallelism)                                |
+| `choices`   | Given set of choices, generate response based on best log probs | ❌       | [Choices Methods](https://sgl-project.github.io/frontend/choices_methods.html#choices-methods-in-sglang)     |
+| `image`     | Pass image as part of multi-modal prompt                        | ❌       | [sgl.image](https://sgl-project.github.io/frontend/frontend.html#multi-modality)                             |
+| `regex`     | Specify regular expression as decoding constraint               | ❌       | [Regex](https://sgl-project.github.io/frontend/frontend.html#constrained-decoding)                           |
 
 ## Prerequisites
 
@@ -32,6 +32,14 @@ on a kubernetes cluster, see [LLama 8b GPU instructions on Kubernetes](./e2e_lla
   - We will use the shortfin server as the `backend` to generate completions
     from SGLang's `frontend language`. In this tutorial, you can think of
     `sglang` as the client and `shortfin` as the server.
+
+After the `shortfin` LLM Server has started, we must obtain the base_url.
+We will store this in our environment in order to send request to `shortfin`
+ through the `sglang` client examples below.
+
+```bash
+export SHORTFIN_BASE_URL="SHORTFIN_BASE_URL" # example: http://localhost:8000
+```
 
 ## Install sglang
 
@@ -72,11 +80,15 @@ python
 You can copy and paste the following example into your interpreter:
 
 ```python
+import os
+
 import sglang as sgl
 
 from sglang.lang.chat_template import get_chat_template
 
-backend = sgl.Shortfin(chat_template=get_chat_template("llama-3-instruct"), base_url="http://10.158.231.134:80", ) # Change base_url if running at different address
+SHORTFIN_BASE_URL = os.environ["SHORTFIN_BASE_URL"]
+
+backend = sgl.Shortfin(chat_template=get_chat_template("llama-3-instruct"), base_url=SHORTFIN_BASE_URL)
 
 sgl.set_default_backend(backend)
 
@@ -98,10 +110,14 @@ for m in state.messages():
 We can stream our request for a more responsive feel. Let's invoke a `streaming` Q&A from our server:
 
 ```python
+import os
+
 import sglang as sgl
 from sglang.lang.chat_template import get_chat_template
 
-backend = sgl.Shortfin(chat_template=get_chat_template("llama-3-instruct"), base_url="http://10.158.231.134:80")  # Change base_url if running at a different address
+SHORTFIN_BASE_URL = os.environ["SHORTFIN_BASE_URL"]
+
+backend = sgl.Shortfin(chat_template=get_chat_template("llama-3-instruct"), base_url=SHORTFIN_BASE_URL)
 
 sgl.set_default_backend(backend)
 
@@ -138,11 +154,15 @@ We can also send different pieces of the same prompt in parallel using the `fork
 flow with the SGLang [Frontend Language](https://sgl-project.github.io/frontend/frontend.html):
 
 ```python
+import os
+
 import sglang as sgl
 
 from sglang.lang.chat_template import get_chat_template
 
-backend = sgl.Shortfin(chat_template=get_chat_template("llama-3-instruct"), base_url="http://10.158.231.134:80") # Change base_url if running at different address
+SHORTFIN_BASE_URL = os.environ["SHORTFIN_BASE_URL"]
+
+backend = sgl.Shortfin(chat_template=get_chat_template("llama-3-instruct"), base_url=SHORTFIN_BASE_URL)
 
 sgl.set_default_backend(backend)
 
@@ -171,11 +191,14 @@ With **Shortfin** + SGLang, we can also easily send requests as a batch.
 Let's now invoke a `batched` Q&A flow with the SGLang [Batching](https://sgl-project.github.io/frontend/frontend.html#batching):
 
 ```python
+import os
+
 import sglang as sgl
 from sglang.lang.chat_template import get_chat_template
 
-# Initialize the backend with the specified chat template and base URL
-backend = sgl.Shortfin(chat_template=get_chat_template("llama-3-instruct"), base_url="http://10.158.231.134:80")  # Change base_url if running at a different address
+SHORTFIN_BASE_URL = os.environ["SHORTFIN_BASE_URL"]
+
+backend = sgl.Shortfin(chat_template=get_chat_template("llama-3-instruct"), base_url=SHORTFIN_BASE_URL)
 
 # Set the default backend for sglang
 sgl.set_default_backend(backend)
