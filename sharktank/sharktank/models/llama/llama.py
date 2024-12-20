@@ -124,7 +124,7 @@ class PagedLlamaModelV1(BaseCausalLMModel):
         tokens: Union[torch.Tensor, ReplicatedTensor],
         *,
         # [1, 1, batch_seq_len, batch_seq_len]
-        attention_mask: Union[torch.Tensor, ReplicatedTensor],
+        attention_mask: Optional[Union[torch.Tensor, ReplicatedTensor]],
         # [bs, batch_seq_len // block_seq_stride]
         seq_block_ids: Union[torch.Tensor, ReplicatedTensor],
         cache_state: list[Union[torch.Tensor, SplitPrimitiveTensor]],
