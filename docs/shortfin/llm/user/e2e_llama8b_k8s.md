@@ -1,4 +1,4 @@
-# LLama 8b GPU instructions on Kubernetes
+# Llama 8b GPU instructions on Kubernetes
 
 ## Setup
 
