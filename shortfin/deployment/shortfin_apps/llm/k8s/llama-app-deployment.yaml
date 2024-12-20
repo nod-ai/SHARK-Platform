@@ -1,17 +1,16 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  # please change name to include your amd username to reduce conflict
   name: shark-llama-app-deployment
 spec:
   replicas: 4 # number of server instances
   selector:
     matchLabels:
-      app: shark-llama-app # please change name to include your amd username
+      app: shark-llama-app
   template:
     metadata:
       labels:
-        app: shark-llama-app # please change name to include your amd username
+        app: shark-llama-app
     spec:
       containers:
       - name: shark-llama-app-container
@@ -48,13 +47,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: shark-llama-app-service # please change name to include your amd username
-  # specific to OCI in how we expose the load balancer (only AMD network available currently)
-  annotations:
-    service.beta.kubernetes.io/oci-load-balancer-internal: "true"
+  name: shark-llama-app-service
 spec:
   selector:
-    app: shark-llama-app # please change name to include your amd username
+    app: shark-llama-app
   ports:
   - protocol: TCP
     port: 80 # external port
