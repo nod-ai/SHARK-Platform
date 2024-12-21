@@ -64,6 +64,20 @@ You can verify the installation/setup through the following examples:
 - [Fork Example](#fork-example)
 - [Multi-Turn Q&A Batching Example](#multi-turn-qa-batch-example)
 
+In these examples, we will set our `max_tokens` to 50 when generating completions.
+This details how many tokens we want to generate for each completion.
+
+We can modify the arguments passed to `sgl.gen` to alter the outputs of our
+`shortfin` LLM server. Specifically:
+
+- `max_tokens` - The maximum number of tokens to generate for completion.
+                 We may obtain longer responses by increasing this value,
+                 and shorter responses by decreasing it.
+- `temperature` - We can include a temperature parameter to control the
+                  randomness of the generated completions. A higher value
+                  will result in more randomness, while a lower value will
+                  result in more deterministic completions.
+
 ## Multi-Turn Q&A example
 
 Now that we have sglang installed, we can run an example to show a multi-turn
